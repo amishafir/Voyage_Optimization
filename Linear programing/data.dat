@@ -1,0 +1,13 @@
+ETA = 14;
+
+num_segments = 2;
+num_speeds = 5;   // speed granularity
+ 
+ 
+l = [20, 10];  // length of segments in miles
+L = [1,1];      // mininal speed at segment i, SOG terms
+U = [2.65,5];   // maximal speed at segment i, SOG terms
+
+s = [12,12.5,13,13.5,14];  // possible speeds 
+f =  [[ 0.8, 1.5, 2.1, 2.6, 3.1 ], [ 0.9, 1.7, 2.4, 2.9, 3.5] ];  // SWS at segment i given speed s[k]
+FCR = [1 2 3.5 5.5 8];  // fuel consumption when steaming at S[k]
