@@ -2,20 +2,49 @@
 
 import yaml
 import numpy as np
-from utility_functions import calculate_speed_over_ground, calculate_travel_time, calculate_fuel_consumption_rate
+import math
+from utility_functions import calculate_speed_over_ground as utility_calculate_sog, calculate_travel_time, calculate_fuel_consumption_rate
 
 
 
 def calculate_fuel_consumption_rate(speed):
     return 0.000706 * speed**3
 
-def calculate_speed_over_ground(speed):
-    return speed
+def calculate_speed_over_ground(speed, segment_data=None, ship_parameters=None):
+    
+    # Extract weather parameters from segment data
+    ship_heading_deg = segment_data.get('ship_heading', 0.0)
+    wind_dir_deg = segment_data.get('wind_dir', 0.0)
+    beaufort_scale = segment_data.get('beaufort', 3)
+    wave_height = segment_data.get('wave_height', 1.0)
+    current_dir_deg = segment_data.get('current_dir', 0.0)
+    current_speed = segment_data.get('current_speed', 0.0)
+    
+    # Convert degrees to radians for utility function
+    ship_heading_rad = math.radians(ship_heading_deg)
+    wind_dir_rad = math.radians(wind_dir_deg)
+    current_dir_rad = math.radians(current_dir_deg)
+    
+    # Use the comprehensive SOG calculation from utility_functions.py
+    sog = utility_calculate_sog(
+        ship_speed=speed,
+        ocean_current=current_speed,
+        current_direction=current_dir_rad,
+        ship_heading=ship_heading_rad,
+        wind_direction=wind_dir_rad,
+        beaufort_scale=beaufort_scale,
+        wave_height=wave_height,
+        ship_parameters=ship_parameters
+    )
+    
+    return sog
 
 
-def CreateNode(Node, speed,node_index):
-
-    SOG = calculate_speed_over_ground(speed)
+def CreateNode(Node, speed, node_index, ship_parameters=None):
+    segment_data = Node['weather_forecasts_list'][0][Node['current_segment']]
+    
+    # Calculate SOG using weather data and utility functions
+    SOG = calculate_speed_over_ground(speed, segment_data, ship_parameters)
     
     # Make copies to avoid modifying the original lists
     cumulative_segment_list = Node['cumulative_segment_list'].copy()
@@ -77,11 +106,12 @@ def CreateNode(Node, speed,node_index):
     return NewNode
 
 
-def CreateNodes(Node,speed_values,node_index):
+def CreateNodes(Node, speed_values, node_index, ship_parameters=None):
+
     New_Nodes = []  
     
     for i, speed in enumerate(speed_values):
-        new_node = CreateNode(Node, speed,node_index)
+        new_node = CreateNode(Node, speed, node_index, ship_parameters)
         if new_node is not None:
             New_Nodes.append(new_node)
     print(f"Total new nodes created: {len(New_Nodes)}")

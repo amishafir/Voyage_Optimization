@@ -175,179 +175,179 @@ forecasts:
         current_dir: 135
         current_speed: 0.49
         current_angle: 135
-      - id: 6
-        distance: 287.34
-        ship_heading: 140.84
-        wind_dir: 86
-        beaufort: 4
-        wave_height: 1.5
-        current_dir: 113
-        current_speed: 0.22
-        current_angle: 113
-      - id: 7
-        distance: 284.40
-        ship_heading: 136.42
-        wind_dir: 353
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 338
-        current_speed: 0.54
-        current_angle: 338
-      - id: 8
-        distance: 233.25
-        ship_heading: 110.37
-        wind_dir: 35
-        beaufort: 5
-        wave_height: 2.5
-        current_dir: 290
-        current_speed: 1.25
-        current_angle: 290
-      - id: 9
-        distance: 301.80
-        ship_heading: 102.57
-        wind_dir: 269
-        beaufort: 4
-        wave_height: 1.5
-        current_dir: 270
-        current_speed: 0.28
-        current_angle: 270
-      - id: 10
-        distance: 315.70
-        ship_heading: 82.83
-        wind_dir: 174
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 93
-        current_speed: 0.72
-        current_angle: 93
-      - id: 11
-        distance: 293.80
-        ship_heading: 84.87
-        wind_dir: 60
-        beaufort: 1
-        wave_height: 0.1
-        current_dir: 185
-        current_speed: 0.62
-        current_angle: 185
-      - id: 12
-        distance: 288.42
-        ship_heading: 142.39
-        wind_dir: 315
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 90
-        current_speed: 0.30
-        current_angle: 90
+  #     - id: 6
+  #       distance: 287.34
+  #       ship_heading: 140.84
+  #       wind_dir: 86
+  #       beaufort: 4
+  #       wave_height: 1.5
+  #       current_dir: 113
+  #       current_speed: 0.22
+  #       current_angle: 113
+  #     - id: 7
+  #       distance: 284.40
+  #       ship_heading: 136.42
+  #       wind_dir: 353
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 338
+  #       current_speed: 0.54
+  #       current_angle: 338
+  #     - id: 8
+  #       distance: 233.25
+  #       ship_heading: 110.37
+  #       wind_dir: 35
+  #       beaufort: 5
+  #       wave_height: 2.5
+  #       current_dir: 290
+  #       current_speed: 1.25
+  #       current_angle: 290
+  #     - id: 9
+  #       distance: 301.80
+  #       ship_heading: 102.57
+  #       wind_dir: 269
+  #       beaufort: 4
+  #       wave_height: 1.5
+  #       current_dir: 270
+  #       current_speed: 0.28
+  #       current_angle: 270
+  #     - id: 10
+  #       distance: 315.70
+  #       ship_heading: 82.83
+  #       wind_dir: 174
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 93
+  #       current_speed: 0.72
+  #       current_angle: 93
+  #     - id: 11
+  #       distance: 293.80
+  #       ship_heading: 84.87
+  #       wind_dir: 60
+  #       beaufort: 1
+  #       wave_height: 0.1
+  #       current_dir: 185
+  #       current_speed: 0.62
+  #       current_angle: 185
+  #     - id: 12
+  #       distance: 288.42
+  #       ship_heading: 142.39
+  #       wind_dir: 315
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 90
+  #       current_speed: 0.30
+  #       current_angle: 90
 
-  - forecast_window:
-      start: 140
-      end: 280
-    segments_table:
-      - id: 1
-        distance: 223.86
-        ship_heading: 61.25
-        wind_dir: 139
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 245
-        current_speed: 0.30
-        current_angle: 245
-      - id: 2
-        distance: 282.54
-        ship_heading: 121.53
-        wind_dir: 207
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 248
-        current_speed: 0.72
-        current_angle: 248
-      - id: 3
-        distance: 303.18
-        ship_heading: 117.61
-        wind_dir: 9
-        beaufort: 4
-        wave_height: 1.5
-        current_dir: 158
-        current_speed: 0.73
-        current_angle: 158
-      - id: 4
-        distance: 298.44
-        ship_heading: 139.03
-        wind_dir: 201
-        beaufort: 4
-        wave_height: 1.5
-        current_dir: 178
-        current_speed: 0.21
-        current_angle: 178
-      - id: 5
-        distance: 280.51
-        ship_heading: 143.63
-        wind_dir: 88
-        beaufort: 5
-        wave_height: 2.5
-        current_dir: 135
-        current_speed: 0.49
-        current_angle: 135
-      - id: 6
-        distance: 287.34
-        ship_heading: 140.84
-        wind_dir: 86
-        beaufort: 4
-        wave_height: 1.5
-        current_dir: 113
-        current_speed: 0.22
-        current_angle: 113
-      - id: 7
-        distance: 284.40
-        ship_heading: 136.42
-        wind_dir: 353
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 338
-        current_speed: 0.54
-        current_angle: 338
-      - id: 8
-        distance: 233.25
-        ship_heading: 110.37
-        wind_dir: 35
-        beaufort: 5
-        wave_height: 2.5
-        current_dir: 290
-        current_speed: 1.25
-        current_angle: 290
-      - id: 9
-        distance: 301.80
-        ship_heading: 102.57
-        wind_dir: 269
-        beaufort: 4
-        wave_height: 1.5
-        current_dir: 270
-        current_speed: 0.28
-        current_angle: 270
-      - id: 10
-        distance: 315.70
-        ship_heading: 82.83
-        wind_dir: 174
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 93
-        current_speed: 0.72
-        current_angle: 93
-      - id: 11
-        distance: 293.80
-        ship_heading: 84.87
-        wind_dir: 60
-        beaufort: 1
-        wave_height: 0.1
-        current_dir: 185
-        current_speed: 0.62
-        current_angle: 185
-      - id: 12
-        distance: 288.42
-        ship_heading: 142.39
-        wind_dir: 315
-        beaufort: 3
-        wave_height: 1.0
-        current_dir: 90
-        current_speed: 0.30
+  # - forecast_window:
+  #     start: 140
+  #     end: 280
+  #   segments_table:
+  #     - id: 1
+  #       distance: 223.86
+  #       ship_heading: 61.25
+  #       wind_dir: 139
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 245
+  #       current_speed: 0.30
+  #       current_angle: 245
+  #     - id: 2
+  #       distance: 282.54
+  #       ship_heading: 121.53
+  #       wind_dir: 207
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 248
+  #       current_speed: 0.72
+  #       current_angle: 248
+  #     - id: 3
+  #       distance: 303.18
+  #       ship_heading: 117.61
+  #       wind_dir: 9
+  #       beaufort: 4
+  #       wave_height: 1.5
+  #       current_dir: 158
+  #       current_speed: 0.73
+  #       current_angle: 158
+  #     - id: 4
+  #       distance: 298.44
+  #       ship_heading: 139.03
+  #       wind_dir: 201
+  #       beaufort: 4
+  #       wave_height: 1.5
+  #       current_dir: 178
+  #       current_speed: 0.21
+  #       current_angle: 178
+  #     - id: 5
+  #       distance: 280.51
+  #       ship_heading: 143.63
+  #       wind_dir: 88
+  #       beaufort: 5
+  #       wave_height: 2.5
+  #       current_dir: 135
+  #       current_speed: 0.49
+  #       current_angle: 135
+  #     - id: 6
+  #       distance: 287.34
+  #       ship_heading: 140.84
+  #       wind_dir: 86
+  #       beaufort: 4
+  #       wave_height: 1.5
+  #       current_dir: 113
+  #       current_speed: 0.22
+  #       current_angle: 113
+  #     - id: 7
+  #       distance: 284.40
+  #       ship_heading: 136.42
+  #       wind_dir: 353
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 338
+  #       current_speed: 0.54
+  #       current_angle: 338
+  #     - id: 8
+  #       distance: 233.25
+  #       ship_heading: 110.37
+  #       wind_dir: 35
+  #       beaufort: 5
+  #       wave_height: 2.5
+  #       current_dir: 290
+  #       current_speed: 1.25
+  #       current_angle: 290
+  #     - id: 9
+  #       distance: 301.80
+  #       ship_heading: 102.57
+  #       wind_dir: 269
+  #       beaufort: 4
+  #       wave_height: 1.5
+  #       current_dir: 270
+  #       current_speed: 0.28
+  #       current_angle: 270
+  #     - id: 10
+  #       distance: 315.70
+  #       ship_heading: 82.83
+  #       wind_dir: 174
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 93
+  #       current_speed: 0.72
+  #       current_angle: 93
+  #     - id: 11
+  #       distance: 293.80
+  #       ship_heading: 84.87
+  #       wind_dir: 60
+  #       beaufort: 1
+  #       wave_height: 0.1
+  #       current_dir: 185
+  #       current_speed: 0.62
+  #       current_angle: 185
+  #     - id: 12
+  #       distance: 288.42
+  #       ship_heading: 142.39
+  #       wind_dir: 315
+  #       beaufort: 3
+  #       wave_height: 1.0
+  #       current_dir: 90
+  #       current_speed: 0.30
         current_angle: 90

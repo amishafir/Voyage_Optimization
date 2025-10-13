@@ -11,6 +11,6 @@ ship_parameters:
 
 
 speed_constraints:
-  max_speed: 12.2       # knots
-  min_speed: 11.8     # knots
-  speed_granularity: 0.4 # knots
+  max_speed: 12.8       # knots
+  min_speed: 12.7     # knots
+  speed_granularity: 0.1 # knots

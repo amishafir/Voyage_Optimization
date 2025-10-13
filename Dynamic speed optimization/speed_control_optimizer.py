@@ -7,7 +7,8 @@ from tqdm import tqdm
 
 class optimizer:
     def __init__(self):
-        self.ship_parameters = self.load_ship_parameters()
+        self.ship_parameters_data = self.load_ship_parameters()
+        self.ship_parameters = self.ship_parameters_data.get('ship_parameters', {})
         self.speed_values = self.load_speed_values()
         self.weather_forecasts = self.load_weather_forecasts()
         self.cumulative_segment_list = self.create_cumulative_segment_list()
@@ -100,8 +101,8 @@ class optimizer:
     def load_speed_values(self):
         """Load speed values from ship parameters YAML file"""
         try:
-            # Extract speed constraints from ship parameters
-            speed_constraints = self.ship_parameters.get('speed_constraints', {})
+            # Extract speed constraints from ship parameters data
+            speed_constraints = self.ship_parameters_data.get('speed_constraints', {})
             min_speed = speed_constraints.get('min_speed')
             max_speed = speed_constraints.get('max_speed')
             speed_granularity = speed_constraints.get('speed_granularity', 1.0)
@@ -182,7 +183,7 @@ class optimizer:
         while i < len(Graph):
             Node = Graph[i]
             if len(Node['cumulative_segment_list']) > 0:
-                new_nodes = CreateNodes(Node, self.speed_values,i)
+                new_nodes = CreateNodes(Node, self.speed_values, i, self.ship_parameters)
                 Graph.extend(new_nodes)
                 print(f"Graph now contains {len(Graph)} nodes")
                 i += 1
