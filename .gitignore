@@ -1,0 +1,36 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# API cache
+.cache.sqlite
+.cache/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ship_env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Excel temp files
+~$*.xlsx
+
+# Output files (generated, not source)
+*.xlsx
+!output_example.xlsx
+
+# Logs
+*.log
