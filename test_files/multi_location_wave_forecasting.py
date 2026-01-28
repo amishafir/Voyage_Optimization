@@ -222,32 +222,47 @@ def write_combined_excel(excel_path, all_runs_data):
             # Also write as hourly_forecast for consistency with test output format
             summary_df.to_excel(writer, sheet_name='hourly_forecast', index=False)
 
-        # Write hourly forecast for each waypoint (from most recent run)
+        # Write hourly forecast for each waypoint (accumulated from ALL runs)
         if all_runs_data:
-            latest_run = all_runs_data[-1]
-            for wp_data in latest_run["waypoints"]:
-                if "error" in wp_data:
-                    continue
+            # Collect hourly data for each waypoint across all runs
+            waypoint_hourly_data = {wp["id"]: [] for wp in WAYPOINTS}
 
-                waypoint = wp_data["waypoint"]
-                hourly_data = wp_data["hourly_data"].copy()
+            for run_data in all_runs_data:
+                sample_time = run_data["sample_time"]
+                for wp_data in run_data["waypoints"]:
+                    if "error" in wp_data:
+                        continue
+                    if wp_data["hourly_data"].empty:
+                        continue
 
-                # Convert timezone-aware datetime
-                if hourly_data["time"].dt.tz is not None:
-                    hourly_data["time"] = hourly_data["time"].dt.tz_localize(None)
+                    waypoint = wp_data["waypoint"]
+                    hourly_data = wp_data["hourly_data"].copy()
 
-                hourly_data["waypoint_id"] = waypoint["id"]
-                hourly_data["waypoint_name"] = waypoint["name"]
-                hourly_data["latitude"] = waypoint["lat"]
-                hourly_data["longitude"] = waypoint["lon"]
+                    # Convert timezone-aware datetime
+                    if hourly_data["time"].dt.tz is not None:
+                        hourly_data["time"] = hourly_data["time"].dt.tz_localize(None)
 
-                # Reorder columns
-                cols = ["waypoint_id", "waypoint_name", "latitude", "longitude", "time",
-                        "wave_height (m)", "ocean_current_velocity (km/h)", "ocean_current_direction (°)"]
-                hourly_data = hourly_data[cols]
+                    # Add sample_time to track when this forecast was retrieved
+                    hourly_data["sample_time"] = sample_time
+                    hourly_data["waypoint_id"] = waypoint["id"]
+                    hourly_data["waypoint_name"] = waypoint["name"]
+                    hourly_data["latitude"] = waypoint["lat"]
+                    hourly_data["longitude"] = waypoint["lon"]
 
-                sheet_name = f"wp_{waypoint['id']:02d}"
-                hourly_data.to_excel(writer, sheet_name=sheet_name, index=False)
+                    waypoint_hourly_data[waypoint["id"]].append(hourly_data)
+
+            # Write accumulated data for each waypoint
+            for wp in WAYPOINTS:
+                if waypoint_hourly_data[wp["id"]]:
+                    combined_hourly = pd.concat(waypoint_hourly_data[wp["id"]], ignore_index=True)
+
+                    # Reorder columns with sample_time first
+                    cols = ["sample_time", "waypoint_id", "waypoint_name", "latitude", "longitude", "time",
+                            "wave_height (m)", "ocean_current_velocity (km/h)", "ocean_current_direction (°)"]
+                    combined_hourly = combined_hourly[cols]
+
+                    sheet_name = f"wp_{wp['id']:02d}"
+                    combined_hourly.to_excel(writer, sheet_name=sheet_name, index=False)
 
 
 def read_existing_data(excel_path):
