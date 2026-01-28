@@ -1,5 +1,283 @@
 # Speed Control Optimizer Analysis
 
+## Voyage Optimization Strategies - Evolution Flow
+
+This section presents the progression from the research paper methodology through implementation strategies to future simulation capabilities.
+
+---
+
+### Strategy Comparison Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    VOYAGE OPTIMIZATION STRATEGIES                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │  RESEARCH   │    │   LINEAR    │    │  DYNAMIC    │    │   FUTURE    │  │
+│  │   PAPER     │ ─► │ PROGRAMMING │ ─► │ PROGRAMMING │ ─► │ SIMULATION  │  │
+│  │  (Theory)   │    │    (LP)     │    │    (DP)     │    │ (Validation)│  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│                                                                              │
+│  • Mathematical    • Static weather   • Time-varying    • Real weather     │
+│    formulation     • One speed/segment  weather         • Compare methods  │
+│  • SOG equations   • ETA constraint   • Graph-based     • Ensemble data    │
+│  • Resistance      • Binary variables • Optimal path    • Fuel savings     │
+│    coefficients    • PuLP/Gurobi      • 6-hour windows  • Uncertainty      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 1. Research Paper Approach (Theoretical Foundation)
+
+**Source:** "Ship Speed Optimization Considering Ocean Currents to Enhance Environmental Sustainability in Maritime Shipping"
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 RESEARCH PAPER METHODOLOGY                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  INPUT:                                                          │
+│  ├── Ship parameters (length, beam, Cb, displacement)           │
+│  ├── Weather data (wind direction φ, Beaufort BN, wave height)  │
+│  ├── Current data (direction γ, speed Vc)                       │
+│  └── Ship heading β per segment                                 │
+│                                                                  │
+│  CALCULATIONS:                                                   │
+│  ├── Weather direction angle: θ = |φ - β|         (Eq. 9)       │
+│  ├── Direction reduction coeff: Cβ (Table 2)                    │
+│  ├── Speed reduction coeff: CU (Table 3)                        │
+│  ├── Ship form coeff: Cform (Table 4)                           │
+│  ├── Speed loss: ΔV = Cβ × CU × Cform            (Eq. 7)        │
+│  ├── Weather-corrected speed: Vw = SWS - ΔV      (Eq. 8)        │
+│  └── SOG via vector synthesis: Vg = f(Vw, Vc, γ) (Eq. 14-16)   │
+│                                                                  │
+│  OUTPUT:                                                         │
+│  └── Speed Over Ground (SOG) given SWS and conditions           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Equations:**
+- FCR = 0.000706 × SWS³ (fuel consumption rate, kg/hour)
+- Total Fuel = Σ(FCR × segment_time)
+- Segment Time = Distance / SOG
+
+---
+
+### 2. Linear Programming Strategy (Static Optimization)
+
+**Implementation:** `/Linear programing/ship_speed_optimization_pulp.py`
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              LINEAR PROGRAMMING (LP) APPROACH                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ASSUMPTIONS:                                                    │
+│  ├── Weather is CONSTANT per segment (static)                   │
+│  ├── One speed decision per segment                             │
+│  ├── Pre-computed SOG lookup table: f[segment][speed]           │
+│  └── Fixed ETA constraint                                       │
+│                                                                  │
+│  DECISION VARIABLES:                                             │
+│  └── x[i][j] ∈ {0,1} : select speed j for segment i             │
+│                                                                  │
+│  OBJECTIVE:                                                      │
+│  └── Minimize: Σᵢ Σⱼ (FCR[j] × distance[i] / SOG[i][j]) × x[i][j]│
+│                                                                  │
+│  CONSTRAINTS:                                                    │
+│  ├── Σⱼ x[i][j] = 1  ∀i         (one speed per segment)         │
+│  ├── Σᵢ Σⱼ (d[i]/SOG[i][j]) × x[i][j] ≤ ETA  (arrival time)    │
+│  └── L[i] ≤ speed[i] ≤ U[i]      (speed bounds)                 │
+│                                                                  │
+│  SOLVER: PuLP (open-source) or Gurobi (commercial)              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Data Structure (voyage_data.py):**
+```python
+SEGMENT_DATA = [
+    # [segment_id, wind_dir, beaufort, wave_height, current_dir, current_speed]
+    [1, 139, 3, 1.0, 245, 0.30],
+    [2, 207, 3, 1.0, 248, 0.72],
+    # ... 12 segments total
+]
+SEGMENT_DISTANCES = [223.86, 282.54, 303.18, ...]  # nautical miles
+SEGMENT_HEADINGS = [61.25, 121.53, 117.61, ...]    # degrees
+```
+
+**Limitations:**
+- Cannot adapt to changing weather during segment traversal
+- Single forecast snapshot for entire voyage
+- No rolling horizon capability
+
+---
+
+### 3. Dynamic Programming Strategy (Time-Varying Optimization)
+
+**Implementation:** `/Dynamic speed optimization/speed_control_optimizer.py`
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│           DYNAMIC PROGRAMMING (DP) APPROACH                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ASSUMPTIONS:                                                    │
+│  ├── Weather VARIES over time (6-hour windows)                  │
+│  ├── Speed can change at any time/distance point                │
+│  ├── Graph-based state space (time × distance)                  │
+│  └── Optimal substructure property                              │
+│                                                                  │
+│  STATE SPACE:                                                    │
+│  ├── Nodes: (time, distance) pairs                              │
+│  ├── Arcs: speed choices connecting nodes                       │
+│  └── Arc cost: fuel consumption for that transition             │
+│                                                                  │
+│  ALGORITHM:                                                      │
+│  ├── Build 2D graph (time rows × distance columns)              │
+│  ├── For each node, compute arcs to reachable nodes             │
+│  ├── Arc fuel = FCR(SWS) × travel_time                          │
+│  ├── Propagate minimum fuel cost (Dijkstra-like)                │
+│  └── Backtrack from destination for optimal path                │
+│                                                                  │
+│  TIME WINDOWS:                                                   │
+│  ├── 6-hour blocks with distinct weather conditions             │
+│  ├── Weather changes at window boundaries                       │
+│  └── Speed policy adapts to new conditions                      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Graph Structure:**
+```
+Distance →
+     0      100     200     300    ...    3400 nm
+   ┌────────────────────────────────────────────┐
+ 0 │ ●───────●───────●───────●─────────────────●│
+   │ │╲      │╲      │╲      │                  │
+ 6 │ ●───────●───────●───────●─────────────────●│
+   │ │╲      │╲      │╲      │      Time       │
+12 │ ●───────●───────●───────●───── Window ────●│
+   │ │╲      │╲      │╲      │                  │
+18 │ ●───────●───────●───────●─────────────────●│
+ ↓ └────────────────────────────────────────────┘
+Time (hours)
+
+● = Node (state)
+─ = Arc (speed choice)
+╲ = Alternative arc (different speed)
+```
+
+**Advantages over LP:**
+- Adapts to weather changes during voyage
+- Can re-optimize at each time window
+- Captures temporal dynamics of weather systems
+
+---
+
+### 4. Future Simulation Framework (Validation & Comparison)
+
+**Purpose:** Validate optimization strategies using real weather data from Open-Meteo API
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              SIMULATION FRAMEWORK (PLANNED)                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  DATA SOURCES:                                                   │
+│  ├── multi_location_wave_forecast.xlsx (13 waypoints)           │
+│  ├── multi_location_wind_forecast.xlsx (13 waypoints)           │
+│  ├── 12 API calls × 168 hours = 2,016 rows per waypoint         │
+│  └── Ensemble of forecasts for uncertainty quantification       │
+│                                                                  │
+│  SIMULATION MODES:                                               │
+│  ├── Mode A: Dynamic DP with time-varying weather               │
+│  ├── Mode B: Static LP with average weather                     │
+│  ├── Mode C: Constant speed baseline (12 knots)                 │
+│  └── Mode D: Segment-static (one speed per segment)             │
+│                                                                  │
+│  PROCESS:                                                        │
+│  ├── 1. Convert API data → weather_forecasts.yaml format        │
+│  ├── 2. Run each optimization mode                              │
+│  ├── 3. Simulate voyage with ACTUAL weather                     │
+│  ├── 4. Calculate fuel consumption for each mode                │
+│  └── 5. Compare results and quantify savings                    │
+│                                                                  │
+│  METRICS:                                                        │
+│  ├── Total fuel consumption (kg)                                │
+│  ├── Voyage time (hours)                                        │
+│  ├── Fuel efficiency (kg/nm)                                    │
+│  ├── CO2 emissions (kg)                                         │
+│  └── Fuel savings vs baseline (%)                               │
+│                                                                  │
+│  ENSEMBLE ANALYSIS:                                              │
+│  ├── Multiple forecasts → uncertainty bounds                    │
+│  ├── Confidence-weighted speed decisions                        │
+│  └── Risk-adjusted routing options                              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### End-to-End Data Flow
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         COMPLETE DATA PIPELINE                                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐ │
+│  │  Open-Meteo │     │   Excel     │     │    YAML     │     │  Optimizer  │ │
+│  │     API     │ ──► │   Output    │ ──► │   Config    │ ──► │   Input     │ │
+│  └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘ │
+│                                                                               │
+│  • Wind speed        • wp_01-wp_13      • 6-hour windows   • Graph nodes     │
+│  • Wind direction    • 168 hours each   • 12 segments      • Arc costs       │
+│  • Wave height       • sample_time      • Converted units  • Fuel calc       │
+│  • Current velocity  • Accumulated      • Ship heading     • Path finding    │
+│  • Current direction   forecasts        • Beaufort number                    │
+│                                                                               │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐ │
+│  │  Optimizer  │     │  Simulate   │     │   Compare   │     │   Report    │ │
+│  │   Output    │ ──► │   Voyage    │ ──► │   Methods   │ ──► │   Results   │ │
+│  └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘ │
+│                                                                               │
+│  • Speed schedule    • Track position   • DP vs LP         • Fuel savings % │
+│  • Per time window   • Apply weather    • DP vs Constant   • Time impact    │
+│  • Optimal path      • Accumulate fuel  • DP vs Static     • Visualizations │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Strategy Comparison Matrix
+
+| Feature | Research Paper | LP Strategy | DP Strategy | Simulation |
+|---------|---------------|-------------|-------------|------------|
+| Weather | Equations only | Static/segment | Time-varying | Real API data |
+| Decisions | Manual calc | 1 per segment | Per time+distance | Validate all |
+| Time dimension | None | Implicit (ETA) | Explicit (windows) | Actual timeline |
+| Adaptability | None | None | High | Retrospective |
+| Complexity | O(1) | O(n×m) | O(t×d×s) | O(methods×runs) |
+| Implementation | utility_functions.py | ship_speed_optimization_pulp.py | speed_control_optimizer.py | Future work |
+| Data source | Table 8 (paper) | voyage_data.py | weather_forecasts.yaml | Open-Meteo API |
+
+**Legend:**
+- n = segments, m = speed options
+- t = time steps, d = distance steps, s = speeds
+- methods = optimization approaches to compare
+- runs = simulation iterations
+
+---
+
 ## Overview
 
 `/Dynamic speed optimization/speed_control_optimizer.py` is a **dynamic programming graph-based optimizer** for ship voyage speed control. It finds the optimal speed policy to minimize fuel consumption while considering time-varying weather conditions.
