@@ -352,6 +352,155 @@ With 12 API calls over 3 hours:
 
 ---
 
+### Ensemble-Based Robust Optimization
+
+#### From Validation to Optimization: New Paradigm
+
+**Traditional Approach (Single Forecast):**
+```
+One forecast → Optimize → One speed schedule → Hope it works
+```
+
+**New Approach (Multi-Forecast Ensemble):**
+```
+12 forecasts → Quantify uncertainty → Robust optimization → Confident decisions
+```
+
+#### How Multi-Forecast Data Enables Better Optimization
+
+##### 1. Ensemble-Based Robust Optimization
+
+Instead of optimizing for ONE forecast, optimize for a speed that performs well across ALL forecasts:
+
+```python
+# Traditional: Optimize for single forecast
+optimal_speed = minimize_fuel(forecast_run_1)
+
+# New: Find speed that's robust across all forecasts
+optimal_speed = minimize(
+    mean_fuel(all_12_forecasts) + λ * variance_fuel(all_12_forecasts)
+)
+```
+
+##### 2. Scenario Tree Optimization
+
+Build probability-weighted scenarios from forecast spread:
+
+```
+                    ┌─ Scenario A (30%): Low waves, favorable current
+                    │
+Hour 0 ────────────┼─ Scenario B (50%): Medium conditions
+                    │
+                    └─ Scenario C (20%): High waves, adverse current
+
+Optimize for: Expected fuel = Σ P(scenario) × Fuel(scenario)
+```
+
+##### 3. Rolling Horizon / Model Predictive Control (MPC)
+
+Simulate re-optimizing as new forecasts arrive:
+
+```
+Time 0:00  → Plan with Run 1 forecast  → Execute hours 0-0.25
+Time 0:15  → Plan with Run 2 forecast  → Execute hours 0.25-0.5
+Time 0:30  → Plan with Run 3 forecast  → Execute hours 0.5-0.75
+...
+Result: Continuously improving plan as forecast accuracy increases
+```
+
+##### 4. Confidence-Bounded Optimization
+
+Use forecast spread to set bounds:
+
+```python
+for each segment, time_window:
+    forecasts = [run1.wave, run2.wave, ..., run12.wave]
+
+    mean_wave = np.mean(forecasts)
+    std_wave = np.std(forecasts)
+
+    # Optimize for expected conditions
+    target_speed = optimize(mean_wave)
+
+    # But verify it works for worst case
+    worst_case = mean_wave + 2 * std_wave
+    assert fuel(target_speed, worst_case) < max_acceptable_fuel
+```
+
+#### Data Structure for Uncertainty-Aware Optimization
+
+```python
+# Per segment, per time window:
+optimization_input = {
+    'segment_1': {
+        'window_0_6': {
+            'forecasts': [
+                {'sample_time': '10:44', 'wave': 1.2, 'wind': 15, 'current': 0.8},
+                {'sample_time': '10:59', 'wave': 1.3, 'wind': 14, 'current': 0.7},
+                # ... 12 forecasts total
+            ],
+            'ensemble_mean': {'wave': 1.25, 'wind': 14.5, 'current': 0.75},
+            'ensemble_std': {'wave': 0.11, 'wind': 1.2, 'current': 0.08},
+            'confidence': 0.85,  # Based on forecast agreement
+        }
+    }
+}
+```
+
+#### Optimization Objectives
+
+| Objective | Formula | When to Use |
+|-----------|---------|-------------|
+| **Expected Fuel** | E[Fuel] = Σ P(s) × Fuel(s) | Risk-neutral |
+| **Worst-Case Fuel** | max(Fuel across scenarios) | Risk-averse |
+| **Mean-Variance** | E[Fuel] + λ × Var[Fuel] | Balanced |
+| **CVaR** | Expected fuel in worst 10% | Tail risk |
+
+#### Implementation Strategy
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                UNCERTAINTY-AWARE OPTIMIZATION                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Step 1: Build Forecast Ensemble                                │
+│  ├── Extract forecasts for each (segment, time_window)          │
+│  ├── Calculate mean, std, confidence                            │
+│  └── Identify high-uncertainty segments                         │
+│                                                                  │
+│  Step 2: Generate Scenarios                                     │
+│  ├── Optimistic: mean - std                                     │
+│  ├── Expected: mean                                             │
+│  ├── Pessimistic: mean + std                                    │
+│  └── Assign probabilities (e.g., 25%, 50%, 25%)                │
+│                                                                  │
+│  Step 3: Optimize for Each Scenario                             │
+│  ├── Run DP optimizer for each scenario                         │
+│  └── Get optimal speed schedule per scenario                    │
+│                                                                  │
+│  Step 4: Find Robust Solution                                   │
+│  ├── Option A: Use expected scenario speeds                     │
+│  ├── Option B: Min-max regret (minimize worst-case loss)        │
+│  └── Option C: Weighted average of scenario speeds              │
+│                                                                  │
+│  Step 5: Validate via Simulation                                │
+│  ├── Test robust solution against all 12 forecasts              │
+│  └── Compare to single-forecast optimization                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Expected Benefits
+
+| Metric | Single Forecast | Ensemble Optimization |
+|--------|-----------------|----------------------|
+| Average fuel | Baseline | Similar |
+| Fuel variance | High | **-40% to -60%** |
+| Worst-case fuel | High | **-10% to -20%** |
+| On-time arrival | ~85% | **>95%** |
+
+---
+
 ## Overview
 
 `/Dynamic speed optimization/speed_control_optimizer.py` is a **dynamic programming graph-based optimizer** for ship voyage speed control. It finds the optimal speed policy to minimize fuel consumption while considering time-varying weather conditions.
