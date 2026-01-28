@@ -278,6 +278,80 @@ Time (hours)
 
 ---
 
+### DP Optimizer vs Simulation: Key Distinctions
+
+#### Fundamental Differences
+
+| Aspect | DP (Optimizer) | Simulation |
+|--------|----------------|------------|
+| **Purpose** | Find optimal speed policy | Validate & compare strategies |
+| **Timing** | Pre-voyage planning | Post-hoc evaluation |
+| **Weather** | Forecast (predicted) | Actual (realized) |
+| **Question** | "What SHOULD we do?" | "How DID it perform?" |
+| **Output** | Speed schedule | Fuel consumption, metrics |
+
+#### DP Optimizer (Planning Phase)
+
+```
+Input:  Forecasted weather (before voyage)
+        ↓
+Process: Build graph, find minimum-cost path
+        ↓
+Output: Optimal speed schedule
+        ↓
+Assumption: Forecast ≈ Reality (uses predicted conditions)
+```
+
+#### Simulation (Evaluation Phase)
+
+```
+Input:  Speed schedule (from DP, LP, or baseline)
+      + Actual weather (during/after voyage)
+        ↓
+Process: Apply schedule, calculate real fuel burn
+        ↓
+Output: Actual performance metrics
+        ↓
+Assumption: None - uses realized conditions
+```
+
+#### Why This Matters: Forecast vs Actual
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    FORECAST vs ACTUAL                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  DP plans using:     Forecast hour 24 → wave = 1.5m             │
+│  Ship sails, actual: Reality hour 24 → wave = 2.1m              │
+│                                                                  │
+│  Result: Speed was optimized for 1.5m waves                     │
+│          but ship encountered 2.1m waves                        │
+│          → Actual fuel ≠ Planned fuel                           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Multi-Forecast Data Enables Both Approaches
+
+With 12 API calls over 3 hours:
+
+1. **Use Run 1 forecast** → DP optimizer creates speed plan
+2. **Use Run 12 forecast** → "Actual" conditions (most recent = most accurate)
+3. **Simulate** → Apply Run 1 plan to Run 12 conditions
+4. **Measure** → How much did forecast error cost in fuel?
+
+#### Simulation Scenarios
+
+| Scenario | Plan Based On | Evaluated Against | Purpose |
+|----------|---------------|-------------------|---------|
+| Perfect foresight | Run 12 forecast | Run 12 forecast | Theoretical best |
+| Realistic | Run 1 forecast | Run 12 forecast | Real-world performance |
+| Ensemble | Average of all runs | Run 12 forecast | Robust planning |
+| Worst case | Most pessimistic | Run 12 forecast | Risk assessment |
+
+---
+
 ## Overview
 
 `/Dynamic speed optimization/speed_control_optimizer.py` is a **dynamic programming graph-based optimizer** for ship voyage speed control. It finds the optimal speed policy to minimize fuel consumption while considering time-varying weather conditions.
