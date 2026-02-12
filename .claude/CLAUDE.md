@@ -262,17 +262,27 @@ node.waypoint_info = {
 | 11 | WP 11 | WP 12 | 293.8 |
 | 12 | WP 12 | Port B | 288.8 |
 
-### Speed Control Optimizer Analysis
+### Pipeline Flow
 
-For detailed analysis of the dynamic programming optimizer, voyage strategies comparison, and simulation framework, see:
+For the complete optimization pipeline structure, see:
 
-**[.claude/speed_control_optimizer_analysis.md](.claude/speed_control_optimizer_analysis.md)**
+**[.claude/pipeline_flow.md](.claude/pipeline_flow.md)**
 
 Contents:
-- Voyage optimization strategies evolution (Research Paper → LP → DP → Simulation)
-- Strategy comparison matrix (LP vs DP approaches)
-- Time window integration (6-hour windows)
-- Multi-forecast ensemble techniques
-- Voyage simulation & comparison framework
-- Data transformation pipeline (API → YAML format)
-- Uncertainty-aware optimization methods
+- 5-stage pipeline (Collection → Transform → Optimize → Simulate → Compare)
+- 3 strategies: Static Deterministic, Dynamic Deterministic, Dynamic Stochastic
+- Data structure specifications
+- File locations and current status
+
+### Pickle Data Structure
+
+For detailed documentation of the weather data pickle file, see:
+
+**[.claude/pickle_data_structure.md](.claude/pickle_data_structure.md)**
+
+Contents:
+- Node class structure and fields
+- Integer sample time keys (0, 1, 2, ...)
+- Data access patterns for each approach
+- Forecast horizon and resume logic
+- Validation checks

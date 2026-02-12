@@ -47,8 +47,8 @@ MARINE_API_URL = "https://marine-api.open-meteo.com/v1/marine"
 
 # Schedule Configuration
 INTERVAL_MINUTES = 60  # 1 hour
-TOTAL_RUNS = 2  # 2 hours
-DURATION_HOURS = 2
+TOTAL_RUNS = 72  # 72 hours (3 days)
+DURATION_HOURS = 72
 
 # Output Configuration
 SCRIPT_DIR = Path(__file__).parent.absolute()
@@ -307,23 +307,33 @@ def fetch_all_data_for_waypoint(client, waypoint, sample_time, voyage_start_time
 # PICKLE FILE HANDLING
 # ============================================================================
 
-def save_nodes_to_pickle(nodes, filepath):
-    """Save list of Node objects to pickle file."""
+def save_data_to_pickle(nodes, voyage_start_time, filepath):
+    """Save nodes and voyage_start_time to pickle file."""
+    data = {
+        'nodes': nodes,
+        'voyage_start_time': voyage_start_time
+    }
     with open(filepath, 'wb') as f:
-        pickle.dump(nodes, f)
+        pickle.dump(data, f)
 
 
-def load_nodes_from_pickle(filepath):
-    """Load list of Node objects from pickle file."""
+def load_data_from_pickle(filepath):
+    """Load nodes and voyage_start_time from pickle file."""
     if not os.path.exists(filepath):
-        return None
+        return None, None
 
     try:
         with open(filepath, 'rb') as f:
-            return pickle.load(f)
+            data = pickle.load(f)
+        # Handle both old format (list) and new format (dict)
+        if isinstance(data, dict):
+            return data.get('nodes'), data.get('voyage_start_time')
+        else:
+            # Old format - just nodes list
+            return data, None
     except Exception as e:
         print(f"Warning: Could not load existing pickle file: {e}")
-        return None
+        return None, None
 
 
 def initialize_nodes(waypoints):
@@ -378,15 +388,16 @@ def main():
         sys.exit(1)
 
     # Load existing data or initialize new nodes
-    nodes = load_nodes_from_pickle(OUTPUT_PATH)
+    nodes, saved_voyage_start_time = load_data_from_pickle(OUTPUT_PATH)
     if nodes is not None and len(nodes) == len(waypoints):
         completed_runs = len(nodes[0].Actual_weather_conditions) if nodes[0].Actual_weather_conditions else 0
         print(f"Resuming: {completed_runs}/{TOTAL_RUNS} runs already completed")
-        if nodes[0].Actual_weather_conditions:
-            first_sample_hours = min(nodes[0].Actual_weather_conditions.keys())
-            voyage_start_time = datetime.now() - pd.Timedelta(hours=first_sample_hours)
+        if saved_voyage_start_time is not None:
+            voyage_start_time = saved_voyage_start_time
         else:
+            # Fallback for old format - start fresh timing
             voyage_start_time = datetime.now()
+            print("Warning: No saved voyage_start_time, using current time")
     else:
         nodes = initialize_nodes(waypoints)
         completed_runs = 0
@@ -413,6 +424,9 @@ def main():
         failed = 0
         start_time = time.time()
 
+        # Use clean integer sample time (hours from start)
+        sample_hour = run_count - 1  # 0, 1, 2, 3, ...
+
         for i, (wp, node) in enumerate(zip(waypoints, nodes)):
             time_from_start, actual, predicted, error = fetch_all_data_for_waypoint(
                 client, wp, sample_time, voyage_start_time
@@ -423,15 +437,16 @@ def main():
                 if failed <= 5:  # Only show first 5 errors
                     print(f"  ✗ [{i+1}/{len(waypoints)}] {wp['name']}: {error}")
             else:
-                # Store actual conditions
-                node.Actual_weather_conditions[time_from_start] = actual
+                # Store actual conditions with clean integer key
+                node.Actual_weather_conditions[sample_hour] = actual
 
-                # Store predicted conditions
-                sample_hours = time_from_start
+                # Store predicted conditions with clean integer sample_hour
                 for forecast_hours, weather in predicted.items():
-                    if forecast_hours not in node.Predicted_weather_conditions:
-                        node.Predicted_weather_conditions[forecast_hours] = {}
-                    node.Predicted_weather_conditions[forecast_hours][sample_hours] = weather
+                    # Round forecast_hours to nearest integer for cleaner keys
+                    forecast_hour_key = round(forecast_hours)
+                    if forecast_hour_key not in node.Predicted_weather_conditions:
+                        node.Predicted_weather_conditions[forecast_hour_key] = {}
+                    node.Predicted_weather_conditions[forecast_hour_key][sample_hour] = weather
 
                 successful += 1
 
@@ -444,7 +459,7 @@ def main():
 
         # Save to pickle after each run
         print("\nSaving to pickle file...")
-        save_nodes_to_pickle(nodes, OUTPUT_PATH)
+        save_data_to_pickle(nodes, voyage_start_time, OUTPUT_PATH)
         print(f"✓ Data saved to {OUTPUT_PATH}")
 
         elapsed_total = (time.time() - start_time) / 60
