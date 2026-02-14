@@ -100,6 +100,19 @@ Detailed reference material is available on-demand via skills:
 | `/waypoint-interpolation` | Intermediate waypoint generation (13 -> 3,388), output files, statistics |
 | `/weather-collection` | Pickle collection script, run/deploy commands, data structure tree |
 | `/remote-server` | TAU server connection details, SSH/SCP commands, tmux workflows |
+| `/lp-optimizer` | LP architecture: data flow, SOG matrix, PuLP model, hardcoded values |
+| `/dp-optimizer` | DP architecture: graph classes, Dijkstra, known bugs, SWS inverse |
+| `/research-paper` | Paper equations (7-16), Tables 2-4, coefficient lookups, validation targets |
+
+## Pipeline Porting Agents
+
+For implementing the new pipeline (`pipeline/`), use these specialized agents:
+
+| Agent | Purpose |
+|-------|---------|
+| `lp-porter` | Port LP optimizer to `pipeline/static_det/` (transform + optimize) |
+| `dp-porter` | Port DP optimizer to `pipeline/dynamic_det/` and `dynamic_stoch/` |
+| `physics-porter` | Consolidate `utility_functions.py` into `pipeline/shared/physics.py` |
 
 ## Project Planning
 
