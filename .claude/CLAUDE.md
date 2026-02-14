@@ -39,10 +39,7 @@ python3 test_forecasting.py
 
 ### Remote Server Execution
 
-```bash
-cd remote_server_scripts
-./run_remote_python.sh <script_name.py>
-```
+Use the `remote-server` agent for all server operations (deploy, run, check status, download). Quick reference: `/remote-server`
 
 ## Architecture
 
@@ -88,6 +85,7 @@ Multi-location scripts produce Excel files with 14 sheets:
 - **Integer time keys only**: Sample hours are `0, 1, 2, ...` (int), never floats or strings
 - **Local Node class per producer**: Each producer defines its own Node class (not imported from class.py)
 - **`Linear programing/`**: Note the single "m" — legacy spelling, do not rename
+- **`remote_server_scripts/`**: Deprecated — use the `remote-server` agent instead
 
 ## Reference Skills
 
@@ -101,6 +99,7 @@ Detailed reference material is available on-demand via skills:
 | `/beaufort-scale` | Beaufort thresholds (BN 0-12), conversion formula, C1-C6 coefficients |
 | `/waypoint-interpolation` | Intermediate waypoint generation (13 -> 3,388), output files, statistics |
 | `/weather-collection` | Pickle collection script, run/deploy commands, data structure tree |
+| `/remote-server` | TAU server connection details, SSH/SCP commands, tmux workflows |
 
 ## Project Planning
 
