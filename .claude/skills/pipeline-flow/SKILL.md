@@ -1,5 +1,7 @@
 # Voyage Optimization Pipeline Flow
 
+> **Note**: This skill describes the original pipeline design. For the current configurable pipeline architecture (HDF5, CLI, per-approach configs), see `docs/WBS_next_phases.md`.
+
 ## Overview
 
 A structured pipeline for comparing voyage optimization strategies. One data collection feeds multiple optimization approaches, all evaluated against actual weather conditions.
