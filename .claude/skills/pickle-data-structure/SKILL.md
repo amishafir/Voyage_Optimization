@@ -235,7 +235,7 @@ for decision_hour in range(72):
 
 - 3,388 nodes
 - 72 actual samples per node
-- ~168 forecast hours × ~72 sample times per forecast
+- ~168 forecast hours x ~72 sample times per forecast
 - ~6 weather fields per dict
 
 Estimated size: **150-200 MB**
