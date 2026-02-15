@@ -35,3 +35,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Pipeline runtime data
+pipeline/data/*
+!pipeline/data/.gitkeep
+pipeline/output/*
+!pipeline/output/.gitkeep

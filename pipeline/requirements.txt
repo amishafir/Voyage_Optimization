@@ -1,0 +1,7 @@
+numpy
+pandas
+PyYAML
+pulp
+h5py
+tables
+matplotlib
