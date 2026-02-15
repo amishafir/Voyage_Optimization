@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import logging
 import os
 import sys
 
@@ -24,7 +25,14 @@ def load_config(config_path):
 
 
 def cmd_collect(args, config):
-    print("collect: Not implemented yet")
+    if args.route:
+        config["collection"]["route"] = args.route
+    if args.hours:
+        config["collection"]["hours"] = args.hours
+    if args.interval_nm:
+        config["collection"]["interval_nm"] = args.interval_nm
+    from collect.collector import collect
+    collect(config)
 
 
 def cmd_run(args, config):
@@ -36,13 +44,22 @@ def cmd_compare(args, config):
 
 
 def cmd_convert_pickle(args, config):
-    print(f"convert-pickle {args.pickle_path} -> {args.hdf5_path}: Not implemented yet")
+    from collect.waypoints import load_route_config
+    from shared.hdf5_io import import_from_pickle
+    route_config = load_route_config(config)
+    import_from_pickle(args.pickle_path, args.hdf5_path, route_config)
 
 
 def main():
     # Resolve config path relative to this file
     base_dir = os.path.dirname(os.path.abspath(__file__))
     default_config = os.path.join(base_dir, "config", "experiment.yaml")
+
+    # Ensure pipeline dir is on sys.path for `from shared...` / `from collect...`
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     parser = argparse.ArgumentParser(
         prog="pipeline",
