@@ -10,7 +10,7 @@ The pipeline's transform layers unpack dicts before calling physics.
 """
 
 import math
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 # Constants from the paper and maritime engineering
 GRAVITY = 9.81          # m/s²
@@ -487,3 +487,66 @@ def calculate_sws_from_sog(
     if best_sws is not None and best_error < 0.1:
         return best_sws
     return target_sog
+
+
+# ---------------------------------------------------------------------------
+# Ship heading from GPS coordinates
+# ---------------------------------------------------------------------------
+
+def calculate_ship_heading(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Initial bearing (heading) from point 1 to point 2.
+
+    Uses the forward azimuth formula:
+        θ = atan2(sin(Δλ)·cos(φ2), cos(φ1)·sin(φ2) - sin(φ1)·cos(φ2)·cos(Δλ))
+
+    Args:
+        lat1: Latitude of origin in degrees.
+        lon1: Longitude of origin in degrees.
+        lat2: Latitude of destination in degrees.
+        lon2: Longitude of destination in degrees.
+
+    Returns:
+        Bearing in degrees [0, 360).
+    """
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_lambda = math.radians(lon2 - lon1)
+
+    x = math.sin(d_lambda) * math.cos(phi2)
+    y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(d_lambda)
+
+    bearing = math.degrees(math.atan2(x, y))
+    return bearing % 360
+
+
+# ---------------------------------------------------------------------------
+# Load ship parameters from config
+# ---------------------------------------------------------------------------
+
+def load_ship_parameters(config: dict) -> Dict:
+    """
+    Build ship_parameters dict from experiment.yaml config.
+
+    Maps config keys (with units) to the names expected by
+    calculate_speed_over_ground().
+
+    Args:
+        config: Full experiment config dict.
+
+    Returns:
+        Dict with keys: length, beam, draft, displacement,
+        block_coefficient, rated_power, max_speed, min_speed.
+    """
+    ship = config["ship"]
+    speed_range = ship["speed_range_knots"]
+    return {
+        "length": ship["length_m"],
+        "beam": ship["beam_m"],
+        "draft": ship["draft_m"],
+        "displacement": ship["displacement_tonnes"],
+        "block_coefficient": ship["block_coefficient"],
+        "rated_power": ship["rated_power_kw"],
+        "max_speed": speed_range[1],
+        "min_speed": speed_range[0],
+    }
