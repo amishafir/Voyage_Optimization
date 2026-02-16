@@ -19,7 +19,7 @@ static_det:
   enabled: true
   segments: 12                      # Aggregate to N segments
   weather_snapshot: 0               # Which hour of actual weather to use
-  optimizer: pulp                   # pulp or gurobi
+  optimizer: gurobi                 # pulp or gurobi
   speed_choices: 21                 # Number of discrete speeds between min-max
 
 dynamic_det:
