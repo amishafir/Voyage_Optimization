@@ -111,7 +111,7 @@ For implementing the new pipeline (`pipeline/`), use these specialized agents:
 | Agent | Purpose |
 |-------|---------|
 | `lp-porter` | Port LP optimizer to `pipeline/static_det/` (transform + optimize) |
-| `dp-porter` | Port DP optimizer to `pipeline/dynamic_det/` and `dynamic_stoch/` |
+| `dp-porter` | Port DP optimizer to `pipeline/dynamic_det/` and `dynamic_rh/` |
 | `physics-porter` | Consolidate `utility_functions.py` into `pipeline/shared/physics.py` |
 
 ## Project Planning

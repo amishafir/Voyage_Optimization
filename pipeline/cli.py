@@ -121,6 +121,91 @@ def _run_static_det(config):
     print()
 
 
+def _run_dynamic_det(config):
+    """Run dynamic deterministic pipeline: transform -> optimize -> simulate -> metrics."""
+    from dynamic_det.transform import transform
+    from dynamic_det.optimize import optimize
+    from shared.simulation import simulate_voyage
+    from shared.metrics import compute_result_metrics, build_result_json, save_result
+
+    hdf5_path = _find_hdf5(config)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(base_dir, "output")
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 1. Transform
+    print("--- Transform ---")
+    t_out = transform(hdf5_path, config)
+
+    # 2. Optimize
+    print("--- Optimize ---")
+    planned = optimize(t_out, config)
+    if planned.get("status") not in ("Optimal", "Feasible"):
+        print(f"DP solver status: {planned.get('status')} -- aborting.")
+        return
+
+    # 3. Simulate
+    print("--- Simulate ---")
+    simulated = simulate_voyage(
+        planned["speed_schedule"], hdf5_path, config,
+        sample_hour=config["dynamic_det"]["forecast_origin"],
+    )
+
+    # 4. Metrics
+    total_dist = sum(t_out["distances"])
+    metrics = compute_result_metrics(planned, simulated, total_dist)
+
+    # 5. Save time series CSV
+    ts_path = os.path.join(output_dir, "timeseries_dynamic_det.csv")
+    simulated["time_series"].to_csv(ts_path, index=False)
+    print(f"Time series saved: {ts_path}")
+
+    # 6. Build and save result JSON
+    result = build_result_json(
+        approach="dynamic_det",
+        config=config,
+        planned=planned,
+        simulated=simulated,
+        metrics=metrics,
+        time_series_file=ts_path,
+    )
+    json_path = os.path.join(output_dir, "result_dynamic_det.json")
+    save_result(result, json_path)
+
+    # 7. Print summary
+    print()
+    print("=" * 60)
+    print("DYNAMIC DETERMINISTIC — RESULTS")
+    print("=" * 60)
+    print(f"  Planned fuel:    {planned['planned_fuel_kg']:>10.2f} kg")
+    print(f"  Planned time:    {planned['planned_time_h']:>10.2f} h")
+    print(f"  Simulated fuel:  {simulated['total_fuel_kg']:>10.2f} kg")
+    print(f"  Simulated time:  {simulated['total_time_h']:>10.2f} h")
+    print(f"  Fuel gap:        {metrics['fuel_gap_percent']:>10.2f} %")
+    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} kg/nm")
+    print(f"  Avg SOG:         {metrics['avg_sog_knots']:>10.2f} knots")
+    print(f"  CO2 emissions:   {simulated['co2_emissions_kg']:>10.2f} kg")
+    print(f"  Solve time:      {planned['computation_time_s']:>10.3f} s")
+    print(f"  Result JSON:     {json_path}")
+    print("=" * 60)
+
+    # Print first/last 5 legs of schedule (278 legs is too many to show all)
+    sched = planned["speed_schedule"]
+    print()
+    print(f"{'Leg':>4}  {'Node':>5}  {'Seg':>3}  {'Dist':>8}  {'SWS':>6}  {'SOG':>8}  {'Time':>7}  {'Fuel':>8}")
+    print(f"{'#':>4}  {'ID':>5}  {'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(kg)':>8}")
+    print("-" * 60)
+    show = sched[:5] + [None] + sched[-5:] if len(sched) > 12 else sched
+    for s in show:
+        if s is None:
+            print(f"{'...':>4}  {'...':>5}  {'...':>3}  {'...':>8}  {'...':>6}  {'...':>8}  {'...':>7}  {'...':>8}")
+            continue
+        print(f"{s['leg']:>4}  {s['node_id']:>5}  {s['segment']:>3}  {s['distance_nm']:>8.1f}  "
+              f"{s['sws_knots']:>6.1f}  {s['sog_knots']:>8.3f}  "
+              f"{s['time_h']:>7.4f}  {s['fuel_kg']:>8.4f}")
+    print()
+
+
 def cmd_run(args, config):
     approach = args.approach
     if approach == "static_det":
@@ -129,13 +214,13 @@ def cmd_run(args, config):
         if config.get("static_det", {}).get("enabled", True):
             _run_static_det(config)
         if config.get("dynamic_det", {}).get("enabled", True):
-            print("run dynamic_det: Not implemented yet")
-        if config.get("dynamic_stoch", {}).get("enabled", True):
-            print("run dynamic_stoch: Not implemented yet")
+            _run_dynamic_det(config)
+        if config.get("dynamic_rh", {}).get("enabled", True):
+            print("run dynamic_rh: Not implemented yet")
     elif approach == "dynamic_det":
-        print("run dynamic_det: Not implemented yet")
-    elif approach == "dynamic_stoch":
-        print("run dynamic_stoch: Not implemented yet")
+        _run_dynamic_det(config)
+    elif approach == "dynamic_rh":
+        print("run dynamic_rh: Not implemented yet")
 
 
 def cmd_compare(args, config):
@@ -182,7 +267,7 @@ def main():
     sp_run = subparsers.add_parser("run", help="Run an optimization approach")
     sp_run.add_argument(
         "approach",
-        choices=["static_det", "dynamic_det", "dynamic_stoch", "all"],
+        choices=["static_det", "dynamic_det", "dynamic_rh", "all"],
         help="Which approach to run",
     )
 

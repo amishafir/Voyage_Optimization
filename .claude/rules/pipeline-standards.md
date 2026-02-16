@@ -12,7 +12,7 @@
 ## Config Access
 
 - All configuration comes from `experiment.yaml` (loaded by `cli.py` and passed as `config` dict)
-- Approach-specific config: `config['static_det']`, `config['dynamic_det']`, `config['dynamic_stoch']`
+- Approach-specific config: `config['static_det']`, `config['dynamic_det']`, `config['dynamic_rh']`
 - Ship params: `config['ship']`
 - Route: `config['collection']['route']` -> loads `config/routes/<name>.yaml`
 - **No hardcoded** ship parameters, speed ranges, segment counts, file paths, or ETA values
@@ -44,7 +44,7 @@ All approaches must produce result JSONs matching the contract in `docs/WBS_next
 |----------|-----------|
 | Static Deterministic | `/actual_weather` WHERE `sample_hour = config.weather_snapshot` |
 | Dynamic Deterministic | `/predicted_weather` WHERE `sample_hour = config.forecast_origin` |
-| Dynamic Stochastic | `/predicted_weather` WHERE `sample_hour = decision_hour` (per re-plan) |
+| Dynamic Rolling Horizon | `/predicted_weather` WHERE `sample_hour = decision_hour` (per re-plan) |
 
 ## Weather Dict Field Names
 

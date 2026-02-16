@@ -27,10 +27,12 @@ dynamic_det:
   time_window_hours: 6              # Graph time resolution
   forecast_origin: 0                # Use forecasts from this sample hour
   speed_granularity: 0.1            # Knots between speed choices
-  time_granularity: 1               # Hours between time nodes
+  time_granularity: 0.1             # Hours between DP time slots (finer = more accurate ETA)
   distance_granularity: 1           # NM between distance nodes
+  nodes: all                        # "all" (279 interpolated) or "original" (13 waypoints)
+  time_windows: all                 # "all" (time-varying forecast) or 1 (single snapshot at forecast_origin)
 
-dynamic_stoch:
+dynamic_rh:
   enabled: true
   time_window_hours: 6
   replan_frequency_hours: 6         # Re-plan every N hours

@@ -16,7 +16,7 @@ Weather API (Open-Meteo) → Collection → HDF5 → Transform → Optimize → 
 |----------|-------------------|---------------------------|-------------|
 | Static Deterministic (LP) | `actual_weather` where `sample_hour=0` | `node.Actual_weather_conditions[0]` | None |
 | Dynamic Deterministic (DP) | `predicted_weather` where `sample_hour=0` | `node.Predicted_weather_conditions[t][0]` | None |
-| Dynamic Stochastic (DP) | `predicted_weather` where `sample_hour=decision_hour` | `node.Predicted_weather_conditions[future_t][decision_hour]` | At decision points |
+| Dynamic Rolling Horizon (DP) | `predicted_weather` where `sample_hour=decision_hour` | `node.Predicted_weather_conditions[future_t][decision_hour]` | At decision points |
 
 ## Critical Gotchas
 

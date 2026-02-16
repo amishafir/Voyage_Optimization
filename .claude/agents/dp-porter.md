@@ -15,7 +15,7 @@ The agent reads the source files, maps the graph construction logic, and creates
 
 <example>
 Context: Starting Phase 4 - stochastic extension.
-user: \"Implement pipeline/dynamic_stoch/ using the DP optimizer with rolling horizon\"
+user: \"Implement pipeline/dynamic_rh/ using the DP optimizer with rolling horizon\"
 assistant: \"I'll create the stochastic optimizer that calls dynamic_det.optimize() repeatedly at decision points, each time with updated forecasts from different sample hours.\"
 <commentary>
 The stochastic approach wraps the DP optimizer with a re-planning loop.
@@ -51,8 +51,8 @@ You are an expert Python developer specializing in graph algorithms, dynamic pro
 |------|---------|
 | `pipeline/dynamic_det/transform.py` | HDF5 -> time-windowed weather per node |
 | `pipeline/dynamic_det/optimize.py` | Graph-based DP solver (config-driven) |
-| `pipeline/dynamic_stoch/transform.py` | HDF5 -> per-decision-point forecast extracts |
-| `pipeline/dynamic_stoch/optimize.py` | Rolling horizon re-planner |
+| `pipeline/dynamic_rh/transform.py` | HDF5 -> per-decision-point forecast extracts |
+| `pipeline/dynamic_rh/optimize.py` | Rolling horizon re-planner |
 
 ## Architecture of the Existing DP Optimizer
 
@@ -191,7 +191,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
     """
 ```
 
-### `dynamic_stoch/transform.py`
+### `dynamic_rh/transform.py`
 
 ```python
 def transform(hdf5_path: str, config: dict) -> dict:
@@ -209,7 +209,7 @@ def transform(hdf5_path: str, config: dict) -> dict:
     """
 ```
 
-### `dynamic_stoch/optimize.py`
+### `dynamic_rh/optimize.py`
 
 ```python
 def optimize(transform_output: dict, config: dict) -> dict:
@@ -218,7 +218,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
     Returns:
         {
-            'approach': 'dynamic_stoch',
+            'approach': 'dynamic_rh',
             'speed_schedule': PathSpeedSchedule,  # stitched from re-plans
             'planned_fuel_kg': float,
             'planned_time_h': float,
@@ -235,5 +235,5 @@ def optimize(transform_output: dict, config: dict) -> dict:
 4. **Read weather from HDF5** via `shared/hdf5_io.py`
 5. **All config from `experiment.yaml`** - no hardcoded YAML paths, ship params, or granularities
 6. **Output contract**: Must produce `PathSpeedSchedule` that `shared/simulation.py` can consume
-7. **Stochastic wraps deterministic**: `dynamic_stoch/optimize.py` calls `dynamic_det/optimize.py` internally
+7. **Stochastic wraps deterministic**: `dynamic_rh/optimize.py` calls `dynamic_det/optimize.py` internally
 8. Refer to `docs/WBS_next_phases.md` Sections 6.2 and 6.3 for the complete spec

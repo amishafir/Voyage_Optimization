@@ -120,9 +120,9 @@ while sws_high - sws_low > tolerance:
 
 This function is NOT in `utility_functions.py` — it's inline in the optimizer. The new pipeline puts it in `shared/physics.py`.
 
-## Stochastic Extension
+## Rolling Horizon Extension
 
-The dynamic stochastic approach is NOT in the existing code. It will be built as a wrapper:
+The dynamic rolling horizon approach is NOT in the existing code. It will be built as a wrapper:
 
 ```
 For each decision_point (every N hours):

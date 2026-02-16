@@ -12,7 +12,7 @@ A structured pipeline for comparing voyage optimization strategies. One data col
 |----------|--------------|-------------------|-------------|-----------|
 | **Static Deterministic** | Constant (single value) | Assumes perfect | No | LP |
 | **Dynamic Deterministic** | Time-varying | Assumes perfect | No | DP |
-| **Dynamic Stochastic** | Time-varying | Acknowledges uncertainty | Yes | DP |
+| **Dynamic Rolling Horizon** | Time-varying | Acknowledges uncertainty | Yes | DP |
 
 ### Static Deterministic (Baseline / LP)
 - Weather: Static (same everywhere, entire voyage)
@@ -26,7 +26,7 @@ A structured pipeline for comparing voyage optimization strategies. One data col
 - Planning: Once before departure
 - Optimizer: DP
 
-### Dynamic Stochastic
+### Dynamic Rolling Horizon
 - Weather: Dynamic (varies by location + time)
 - Forecast: Stochastic (forecast evolves, has uncertainty)
 - Planning: Multiple times during voyage (rolling horizon)
@@ -80,13 +80,13 @@ A structured pipeline for comparing voyage optimization strategies. One data col
 │       - Use time-varying forecast                           │
 │       - Execute fixed plan                                  │
 │                                                             │
-│     Strategy C: Dynamic Stochastic (rolling horizon)        │
+│     Strategy C: Dynamic Rolling Horizon (rolling horizon)        │
 │       - Re-plan at decision points during voyage            │
 │       - Use latest available forecast                       │
 │       - Execute next segment, repeat                        │
 │                                                             │
 │  All strategies executed against ACTUAL weather             │
-│  Output: voyage_results_{static_det, dyn_det, dyn_stoch}    │
+│  Output: voyage_results_{static_det, dyn_det, dyn_rh}    │
 └─────────────────────────┬───────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -197,9 +197,9 @@ Node:
 |----------|-----------|-------------|-------------|
 | Static Deterministic | LP | None | Baseline - static weather, plan once |
 | Dynamic Deterministic | DP | None | Time-varying weather, plan once |
-| Dynamic Stochastic | DP | At decision points | Rolling horizon re-planning |
+| Dynamic Rolling Horizon | DP | At decision points | Rolling horizon re-planning |
 
-**Dynamic Stochastic Decision Points:**
+**Dynamic Rolling Horizon Decision Points:**
 - Option A: Every N hours (e.g., 6h)
 - Option B: At each original waypoint (13 points)
 - TBD based on analysis
@@ -226,7 +226,7 @@ Node:
 
 **Key Questions Answered:**
 1. Value of dynamic weather modeling? (Dynamic Det. vs Static Det.)
-2. Value of adapting to forecast uncertainty? (Dynamic Stoch. vs Dynamic Det.)
+2. Value of adapting to forecast uncertainty? (Dynamic RH. vs Dynamic Det.)
 3. When is re-planning most valuable? (high forecast uncertainty periods)
 
 ---
@@ -266,4 +266,4 @@ Dynamic speed optimization/
 | Comparison | Tests the value of... |
 |------------|----------------------|
 | Dynamic Det. vs Static Det. | Modeling weather as time-varying |
-| Dynamic Stoch. vs Dynamic Det. | Adapting to forecast uncertainty |
+| Dynamic RH. vs Dynamic Det. | Adapting to forecast uncertainty |

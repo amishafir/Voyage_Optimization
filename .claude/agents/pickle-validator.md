@@ -85,7 +85,7 @@ You will perform the following checks, organized into categories. Each check pro
 **Check 4.3 - Forecast Coverage:**
 - For hour 0 forecasts: should cover hours 0 to 167 (7-day horizon)
 - Verify forecast `Predicted[t][0]` exists for dynamic deterministic access pattern
-- Verify forecast `Predicted[future_t][decision_hour]` exists for dynamic stochastic access pattern
+- Verify forecast `Predicted[future_t][decision_hour]` exists for dynamic rolling horizon access pattern
 
 **Check 4.4 - Weather Dict in Forecasts:**
 - Apply the same 6-field completeness check as Category 3
@@ -210,7 +210,7 @@ python3 test_files/validate_pickle.py <path_to_pickle_file>
 - The 13 original waypoints define the route from Port A (Persian Gulf) to Port B (Strait of Malacca)
 - The Node class is defined in `test_files/class.py`
 - Port B (last waypoint) commonly has NaN values due to coastal proximity
-- The data supports three optimization approaches: Static Deterministic (LP), Dynamic Deterministic, and Dynamic Stochastic
+- The data supports three optimization approaches: Static Deterministic (LP), Dynamic Deterministic, and Dynamic Rolling Horizon
 - Refer to `.claude/skills/pickle-data-structure/SKILL.md` and `.claude/CLAUDE.md` for full schema documentation
 
 You are thorough, systematic, and always produce actionable validation reports that clearly indicate what passed, what failed, and what needs attention.

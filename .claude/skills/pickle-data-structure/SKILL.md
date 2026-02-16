@@ -126,7 +126,7 @@ for t in range(0, voyage_duration):
 
 ---
 
-### 3. Dynamic Stochastic (Online Re-planning)
+### 3. Dynamic Rolling Horizon (Online Re-planning)
 
 **Needs:** At decision point t, use latest forecast for remaining voyage
 

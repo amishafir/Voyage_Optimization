@@ -6,7 +6,7 @@ the segment-averaged weather used by the LP optimizer.  This reveals
 the fuel gap caused by spatial averaging.
 
 Reused by all three optimization strategies (static_det, dynamic_det,
-dynamic_stoch).
+dynamic_rh).
 """
 
 import logging
@@ -59,10 +59,13 @@ def simulate_voyage(
 
     num_nodes = len(merged)
 
-    # Map segment -> SWS from the schedule
-    seg_sws = {}
-    for entry in speed_schedule:
-        seg_sws[entry["segment"]] = entry["sws_knots"]
+    # Detect schedule type: per-leg (node_id) vs per-segment
+    if speed_schedule and "node_id" in speed_schedule[0]:
+        leg_sws = {entry["node_id"]: entry["sws_knots"] for entry in speed_schedule}
+        seg_sws = None
+    else:
+        leg_sws = None
+        seg_sws = {entry["segment"]: entry["sws_knots"] for entry in speed_schedule}
 
     # ------------------------------------------------------------------
     # 2. Walk through consecutive waypoint pairs
@@ -77,7 +80,10 @@ def simulate_voyage(
         node_b = merged.iloc[idx + 1]
 
         segment = int(node_a["segment"])
-        sws = seg_sws.get(segment)
+        if leg_sws is not None:
+            sws = leg_sws.get(int(node_a["node_id"]))
+        else:
+            sws = seg_sws.get(segment)
         if sws is None:
             continue  # safety
 
