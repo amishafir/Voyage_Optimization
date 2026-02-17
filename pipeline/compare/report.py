@@ -33,16 +33,22 @@ def generate_report(comparison_df, forecast_errors, figure_paths, results, save_
     # 3. Key findings
     sections.append(_key_findings_section(comparison_df, results))
 
-    # 4. Forecast error summary
+    # 4. Theoretical bounds
+    sections.append(_bounds_section(results))
+
+    # 5. Forecast error summary
     sections.append(_forecast_error_section(forecast_errors))
 
-    # 5. Decision points / re-planning
+    # 6. Decision points / re-planning
     decision_points = None
     if "dynamic_rh" in results:
         decision_points = results["dynamic_rh"].get("decision_points")
     sections.append(_decision_points_section(decision_points))
 
-    # 6. Figures
+    # 7. Replan frequency sweep
+    sections.append(_replan_sweep_section(results))
+
+    # 8. Figures
     sections.append(_figures_section(figure_paths, save_dir))
 
     report = "\n\n".join(s for s in sections if s)
@@ -250,6 +256,85 @@ def _decision_points_section(decision_points):
     return "\n".join(lines)
 
 
+def _bounds_section(results):
+    """Generate theoretical bounds analysis."""
+    lines = ["## Theoretical Bounds"]
+
+    has_lower = "lower_bound" in results
+    has_upper = "upper_bound" in results
+
+    if not has_lower and not has_upper:
+        lines.append("\nNo bounds data available (run `sensitivity` first).")
+        return "\n".join(lines)
+
+    if has_lower:
+        lb_fuel = results["lower_bound"]["simulated"]["total_fuel_kg"]
+        lines.append(f"\n- **Lower bound** (perfect information): {lb_fuel:.2f} kg")
+    if has_upper:
+        ub_fuel = results["upper_bound"]["simulated"]["total_fuel_kg"]
+        lines.append(f"- **Upper bound** (constant speed, no optimization): {ub_fuel:.2f} kg")
+
+    if has_lower and has_upper:
+        span = ub_fuel - lb_fuel
+        lines.append(f"- **Optimization span**: {span:.2f} kg ({span / ub_fuel * 100:.1f}% of upper bound)")
+
+        # Show where each core approach falls
+        lines.append("")
+        core_approaches = ["static_det", "dynamic_det", "dynamic_rh"]
+        core_labels = {"static_det": "Static LP", "dynamic_det": "Dynamic DP",
+                       "dynamic_rh": "Rolling Horizon"}
+        for approach in core_approaches:
+            if approach not in results:
+                continue
+            fuel = results[approach]["simulated"]["total_fuel_kg"]
+            if span > 0:
+                position = (fuel - lb_fuel) / span * 100
+                captured = 100 - position
+                lines.append(f"- **{core_labels[approach]}**: {fuel:.2f} kg "
+                             f"({captured:.1f}% of optimization potential captured)")
+
+    return "\n".join(lines)
+
+
+def _replan_sweep_section(results):
+    """Generate replan frequency sensitivity summary."""
+    lines = ["## Replan Frequency Sensitivity"]
+
+    sweep = {}
+    for approach, r in results.items():
+        if approach.startswith("dynamic_rh_replan_"):
+            suffix = approach.replace("dynamic_rh_replan_", "").rstrip("h")
+            try:
+                freq = int(suffix)
+            except ValueError:
+                continue
+            sweep[freq] = r["simulated"]["total_fuel_kg"]
+
+    if not sweep:
+        lines.append("\nNo replan sweep data available (run `sensitivity` first).")
+        return "\n".join(lines)
+
+    freqs = sorted(sweep.keys())
+    lines.append("")
+    lines.append("| Replan Freq (h) | Sim Fuel (kg) |")
+    lines.append("| --- | --- |")
+    for freq in freqs:
+        lines.append(f"| {freq} | {sweep[freq]:.2f} |")
+
+    # Diminishing returns analysis
+    if len(freqs) >= 2:
+        best_fuel = sweep[freqs[0]]
+        worst_fuel = sweep[freqs[-1]]
+        delta = worst_fuel - best_fuel
+        lines.append(f"\n- Range: {delta:.2f} kg between {freqs[0]}h and {freqs[-1]}h replan")
+        if worst_fuel > 0:
+            lines.append(f"- Relative impact: {delta / worst_fuel * 100:.2f}%")
+        lines.append("- More frequent replanning uses fresher forecasts, reducing fuel; "
+                      "diminishing returns beyond a certain point.")
+
+    return "\n".join(lines)
+
+
 def _figures_section(figure_paths, save_dir):
     """Generate markdown image references."""
     if not figure_paths:
@@ -263,9 +348,11 @@ def _figures_section(figure_paths, save_dir):
         "fuel_comparison": "Planned vs simulated total fuel by approach",
         "forecast_error": "Forecast error (RMSE) as a function of lead time",
         "replan_evolution": "Rolling Horizon re-planning: optimizer convergence over time",
+        "replan_sensitivity": "Fuel consumption vs replan frequency with theoretical bounds",
     }
 
-    for name in ["speed_profiles", "fuel_curves", "fuel_comparison", "forecast_error", "replan_evolution"]:
+    for name in ["speed_profiles", "fuel_curves", "fuel_comparison",
+                  "forecast_error", "replan_evolution", "replan_sensitivity"]:
         if name not in figure_paths or figure_paths[name] is None:
             continue
         # Use relative path from report location

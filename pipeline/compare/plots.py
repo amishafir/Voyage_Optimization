@@ -19,11 +19,21 @@ STYLES = {
     "static_det":  {"color": "#2196F3", "label": "Static LP",       "ls": "-"},
     "dynamic_det": {"color": "#FF9800", "label": "Dynamic DP",      "ls": "--"},
     "dynamic_rh":  {"color": "#4CAF50", "label": "Rolling Horizon", "ls": "-."},
+    "lower_bound": {"color": "#8BC34A", "label": "Lower Bound",     "ls": ":"},
+    "upper_bound": {"color": "#F44336", "label": "Upper Bound",     "ls": ":"},
 }
+
+# Auto-assign colors for sweep variants and other unknown approaches
+_AUTO_COLORS = ["#9C27B0", "#00BCD4", "#FF5722", "#795548", "#607D8B",
+                "#E91E63", "#009688", "#CDDC39", "#3F51B5", "#FFC107"]
 
 
 def _style(approach):
-    return STYLES.get(approach, {"color": "gray", "label": approach, "ls": ":"})
+    if approach in STYLES:
+        return STYLES[approach]
+    # Auto-generate a style for unknown approaches (e.g. sweep variants)
+    idx = hash(approach) % len(_AUTO_COLORS)
+    return {"color": _AUTO_COLORS[idx], "label": approach, "ls": "--"}
 
 
 def _save(fig, save_dir, name):
@@ -63,9 +73,7 @@ def plot_speed_profiles(time_series, save_dir):
     for x in _segment_boundaries(first_df):
         ax.axvline(x, color="lightgray", linewidth=0.5, zorder=0)
 
-    for approach in ["static_det", "dynamic_det", "dynamic_rh"]:
-        if approach not in time_series:
-            continue
+    for approach in sorted(time_series.keys()):
         df = time_series[approach]
         s = _style(approach)
         ax.plot(
@@ -95,9 +103,7 @@ def plot_fuel_curves(time_series, save_dir):
     """
     fig, ax = plt.subplots(figsize=(12, 5))
 
-    for approach in ["static_det", "dynamic_det", "dynamic_rh"]:
-        if approach not in time_series:
-            continue
+    for approach in sorted(time_series.keys()):
         df = time_series[approach]
         s = _style(approach)
         ax.plot(
@@ -125,7 +131,7 @@ def plot_fuel_comparison(results, save_dir):
     Returns:
         Path to saved PNG.
     """
-    approaches = [a for a in ["static_det", "dynamic_det", "dynamic_rh"] if a in results]
+    approaches = sorted(results.keys())
     labels = [_style(a)["label"] for a in approaches]
     planned = [results[a]["planned"]["total_fuel_kg"] for a in approaches]
     simulated = [results[a]["simulated"]["total_fuel_kg"] for a in approaches]
@@ -248,3 +254,62 @@ def plot_replan_evolution(decision_points, save_dir):
     fig.tight_layout()
 
     return _save(fig, save_dir, "replan_evolution")
+
+
+def plot_replan_sensitivity(results, save_dir):
+    """Figure 6: Simulated fuel vs replan frequency, with reference lines.
+
+    Args:
+        results: dict {approach: result_dict} — must contain sweep variants.
+        save_dir: directory to save the figure.
+
+    Returns:
+        Path to saved PNG, or None if no sweep data.
+    """
+    # Extract sweep results
+    sweep = {}
+    for approach, r in results.items():
+        if approach.startswith("dynamic_rh_replan_"):
+            # Parse frequency from "dynamic_rh_replan_6h"
+            suffix = approach.replace("dynamic_rh_replan_", "").rstrip("h")
+            try:
+                freq = int(suffix)
+            except ValueError:
+                continue
+            sweep[freq] = r["simulated"]["total_fuel_kg"]
+
+    if not sweep:
+        logger.info("No replan sweep data, skipping sensitivity plot")
+        return None
+
+    freqs = sorted(sweep.keys())
+    fuels = [sweep[f] for f in freqs]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(freqs, fuels, "o-", color="#4CAF50", markersize=6, linewidth=1.5,
+            label="RH sweep", zorder=5)
+
+    # Reference lines for other approaches
+    ref_approaches = [
+        ("upper_bound", "#F44336", "Upper Bound"),
+        ("lower_bound", "#8BC34A", "Lower Bound"),
+        ("static_det", "#2196F3", "Static LP"),
+        ("dynamic_det", "#FF9800", "Dynamic DP"),
+    ]
+    for ref_key, color, label in ref_approaches:
+        if ref_key in results:
+            fuel = results[ref_key]["simulated"]["total_fuel_kg"]
+            ax.axhline(fuel, color=color, linestyle=":", linewidth=1.2, alpha=0.8)
+            ax.annotate(f"{label} ({fuel:.1f})",
+                        xy=(freqs[-1], fuel),
+                        xytext=(5, 0), textcoords="offset points",
+                        fontsize=8, color=color, va="center")
+
+    ax.set_xlabel("Replan Frequency (hours)")
+    ax.set_ylabel("Simulated Fuel (kg)")
+    ax.set_title("Replan Frequency Sensitivity")
+    ax.set_xticks(freqs)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    return _save(fig, save_dir, "replan_sensitivity")

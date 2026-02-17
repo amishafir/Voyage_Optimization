@@ -318,6 +318,14 @@ def cmd_compare(args, config):
         print(f"\nReport: {report_path}")
 
 
+def cmd_sensitivity(args, config):
+    from compare.sensitivity import run_sensitivity
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(base_dir, "output")
+    hdf5_path = _find_hdf5(config)
+    run_sensitivity(config, output_dir, hdf5_path)
+
+
 def cmd_convert_pickle(args, config):
     from collect.waypoints import load_route_config
     from shared.hdf5_io import import_from_pickle
@@ -365,6 +373,9 @@ def main():
     # compare
     subparsers.add_parser("compare", help="Compare results across approaches")
 
+    # sensitivity
+    subparsers.add_parser("sensitivity", help="Run bounds and sensitivity experiments")
+
     # convert-pickle
     sp_convert = subparsers.add_parser("convert-pickle", help="Convert legacy pickle to HDF5")
     sp_convert.add_argument("pickle_path", help="Path to input pickle file")
@@ -387,6 +398,7 @@ def main():
         "collect": cmd_collect,
         "run": cmd_run,
         "compare": cmd_compare,
+        "sensitivity": cmd_sensitivity,
         "convert-pickle": cmd_convert_pickle,
     }
     dispatch[args.command](args, config)

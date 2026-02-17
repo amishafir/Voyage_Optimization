@@ -61,9 +61,7 @@ def build_comparison_table(results):
         pd.DataFrame with columns for planned/simulated fuel, time, metrics, etc.
     """
     rows = []
-    for approach in ["static_det", "dynamic_det", "dynamic_rh"]:
-        if approach not in results:
-            continue
+    for approach in sorted(results.keys()):
         r = results[approach]
         planned = r.get("planned", {})
         simulated = r.get("simulated", {})
@@ -188,6 +186,7 @@ def run_comparison(config, output_dir, hdf5_path):
         plot_fuel_curves,
         plot_forecast_error,
         plot_replan_evolution,
+        plot_replan_sensitivity,
         plot_speed_profiles,
     )
     from compare.report import generate_report
@@ -238,6 +237,11 @@ def run_comparison(config, output_dir, hdf5_path):
         decision_points = results["dynamic_rh"].get("decision_points")
     if decision_points:
         figure_paths["replan_evolution"] = plot_replan_evolution(decision_points, fig_dir)
+
+    # Replan sensitivity plot (if sweep results exist)
+    has_sweep = any(a.startswith("dynamic_rh_replan_") for a in results)
+    if has_sweep:
+        figure_paths["replan_sensitivity"] = plot_replan_sensitivity(results, fig_dir)
 
     # 5. Generate report
     report_path = generate_report(
