@@ -185,6 +185,7 @@ def run_comparison(config, output_dir, hdf5_path):
         plot_fuel_comparison,
         plot_fuel_curves,
         plot_forecast_error,
+        plot_horizon_sensitivity,
         plot_replan_evolution,
         plot_replan_sensitivity,
         plot_speed_profiles,
@@ -242,6 +243,12 @@ def run_comparison(config, output_dir, hdf5_path):
     has_sweep = any(a.startswith("dynamic_rh_replan_") for a in results)
     if has_sweep:
         figure_paths["replan_sensitivity"] = plot_replan_sensitivity(results, fig_dir)
+
+    # Horizon sensitivity plot (if horizon sweep results exist)
+    has_horizon = any(a.startswith("dynamic_det_horizon_") or a.startswith("dynamic_rh_horizon_")
+                      for a in results)
+    if has_horizon:
+        figure_paths["horizon_sensitivity"] = plot_horizon_sensitivity(results, fig_dir)
 
     # 5. Generate report
     report_path = generate_report(

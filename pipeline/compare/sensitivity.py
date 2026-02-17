@@ -213,6 +213,128 @@ def run_replan_sweep(config, hdf5_path, output_dir, frequencies=None):
     return results
 
 
+def run_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
+    """Run dynamic_det and dynamic_rh at multiple forecast horizons.
+
+    Truncates forecast data to simulate having shorter-range forecasts
+    (e.g. 3-day or 5-day instead of 7-day).
+
+    Args:
+        horizons: List of forecast horizon caps in hours.
+            Default: [72, 120, 168] (3, 5, 7 days)
+
+    Returns:
+        List of result dicts.
+    """
+    from dynamic_det.transform import transform as dd_transform
+    from dynamic_det.optimize import optimize as dd_optimize
+    from dynamic_rh.transform import transform as rh_transform
+    from dynamic_rh.optimize import optimize as rh_optimize
+
+    if horizons is None:
+        horizons = [72, 120, 168]
+
+    # Relax ETA slightly — the nominal ETA is tight (DP barely fits at 280h
+    # with full forecast). Shorter horizons lose favorable weather windows,
+    # causing infeasibility. A small buffer ensures all horizons are comparable.
+    nominal_eta = config["ship"]["eta_hours"]
+    relaxed_eta = int(nominal_eta * 1.02)
+
+    results = []
+    for horizon in horizons:
+        days = horizon / 24
+
+        # --- Dynamic Det at this horizon ---
+        cfg = copy.deepcopy(config)
+        cfg["dynamic_det"]["max_forecast_horizon"] = horizon
+        cfg["ship"]["eta_hours"] = relaxed_eta
+        approach_name = f"dynamic_det_horizon_{horizon}h"
+
+        print(f"\n--- Horizon Sweep: {horizon}h ({days:.0f}d) — Dynamic Det ---")
+
+        print(f"  Transform...")
+        t_out = dd_transform(hdf5_path, cfg)
+
+        print(f"  Optimize (DP, horizon={horizon}h)...")
+        planned = dd_optimize(t_out, cfg)
+        if planned.get("status") not in ("Optimal", "Feasible"):
+            logger.warning("Horizon sweep %dh dynamic_det: status=%s",
+                           horizon, planned.get("status"))
+        else:
+            print(f"  Simulate...")
+            simulated = simulate_voyage(
+                planned["speed_schedule"], hdf5_path, cfg,
+                sample_hour=cfg["dynamic_det"]["forecast_origin"],
+            )
+
+            total_dist = sum(t_out["distances"])
+            metrics = compute_result_metrics(planned, simulated, total_dist)
+
+            ts_path = os.path.join(output_dir, f"timeseries_{approach_name}.csv")
+            simulated["time_series"].to_csv(ts_path, index=False)
+
+            result = build_result_json(
+                approach=approach_name,
+                config=cfg,
+                planned=planned,
+                simulated=simulated,
+                metrics=metrics,
+                time_series_file=ts_path,
+            )
+            json_path = os.path.join(output_dir, f"result_{approach_name}.json")
+            save_result(result, json_path)
+
+            print(f"  {approach_name}: {simulated['total_fuel_kg']:.2f} kg fuel")
+            results.append(result)
+
+        # --- Rolling Horizon at this horizon ---
+        cfg_rh = copy.deepcopy(config)
+        cfg_rh["dynamic_det"]["max_forecast_horizon"] = horizon
+        cfg_rh["ship"]["eta_hours"] = relaxed_eta
+        approach_name_rh = f"dynamic_rh_horizon_{horizon}h"
+
+        print(f"\n--- Horizon Sweep: {horizon}h ({days:.0f}d) — Rolling Horizon ---")
+
+        print(f"  Transform...")
+        t_out_rh = rh_transform(hdf5_path, cfg_rh)
+
+        print(f"  Optimize (RH, horizon={horizon}h)...")
+        planned_rh = rh_optimize(t_out_rh, cfg_rh)
+        if planned_rh.get("status") not in ("Optimal", "Feasible"):
+            logger.warning("Horizon sweep %dh dynamic_rh: status=%s",
+                           horizon, planned_rh.get("status"))
+            continue
+
+        print(f"  Simulate...")
+        simulated_rh = simulate_voyage(
+            planned_rh["speed_schedule"], hdf5_path, cfg_rh,
+            sample_hour=0,
+        )
+
+        total_dist_rh = sum(t_out_rh["distances"])
+        metrics_rh = compute_result_metrics(planned_rh, simulated_rh, total_dist_rh)
+
+        ts_path_rh = os.path.join(output_dir, f"timeseries_{approach_name_rh}.csv")
+        simulated_rh["time_series"].to_csv(ts_path_rh, index=False)
+
+        result_rh = build_result_json(
+            approach=approach_name_rh,
+            config=cfg_rh,
+            planned=planned_rh,
+            simulated=simulated_rh,
+            metrics=metrics_rh,
+            time_series_file=ts_path_rh,
+        )
+        result_rh["decision_points"] = planned_rh.get("decision_points", [])
+        json_path_rh = os.path.join(output_dir, f"result_{approach_name_rh}.json")
+        save_result(result_rh, json_path_rh)
+
+        print(f"  {approach_name_rh}: {simulated_rh['total_fuel_kg']:.2f} kg fuel")
+        results.append(result_rh)
+
+    return results
+
+
 def run_sensitivity(config, output_dir, hdf5_path):
     """Top-level orchestrator for all sensitivity experiments.
 
@@ -228,23 +350,27 @@ def run_sensitivity(config, output_dir, hdf5_path):
     print("=" * 60)
 
     # 1. Lower bound
-    print("\n[1/3] Lower bound (perfect information)...")
+    print("\n[1/4] Lower bound (perfect information)...")
     lb = run_lower_bound(config, hdf5_path, output_dir)
 
     # 2. Upper bound
-    print("\n[2/3] Upper bound (constant speed)...")
+    print("\n[2/4] Upper bound (constant speed)...")
     ub = run_upper_bound(config, hdf5_path, output_dir)
 
     # 3. Replan sweep
-    print("\n[3/3] Replan frequency sweep...")
+    print("\n[3/4] Replan frequency sweep...")
     sweep = run_replan_sweep(config, hdf5_path, output_dir)
+
+    # 4. Forecast horizon sweep
+    print("\n[4/4] Forecast horizon sweep...")
+    horizon = run_horizon_sweep(config, hdf5_path, output_dir)
 
     # Summary table
     print("\n" + "=" * 60)
     print("SENSITIVITY SUMMARY")
     print("=" * 60)
-    print(f"{'Approach':<30}  {'Sim Fuel (kg)':>14}  {'Sim Time (h)':>13}")
-    print("-" * 60)
+    print(f"{'Approach':<35}  {'Sim Fuel (kg)':>14}  {'Sim Time (h)':>13}")
+    print("-" * 65)
 
     all_results = []
     if lb:
@@ -252,12 +378,13 @@ def run_sensitivity(config, output_dir, hdf5_path):
     if ub:
         all_results.append(ub)
     all_results.extend(sweep)
+    all_results.extend(horizon)
 
     for r in all_results:
         name = r["approach"]
         fuel = r["simulated"]["total_fuel_kg"]
         time_h = r["simulated"]["voyage_time_h"]
-        print(f"{name:<30}  {fuel:>14.2f}  {time_h:>13.2f}")
+        print(f"{name:<35}  {fuel:>14.2f}  {time_h:>13.2f}")
 
-    print("=" * 60)
+    print("=" * 65)
     return output_dir

@@ -48,7 +48,10 @@ def generate_report(comparison_df, forecast_errors, figure_paths, results, save_
     # 7. Replan frequency sweep
     sections.append(_replan_sweep_section(results))
 
-    # 8. Figures
+    # 8. Forecast horizon sweep
+    sections.append(_horizon_sweep_section(results))
+
+    # 9. Figures
     sections.append(_figures_section(figure_paths, save_dir))
 
     report = "\n\n".join(s for s in sections if s)
@@ -335,6 +338,60 @@ def _replan_sweep_section(results):
     return "\n".join(lines)
 
 
+def _horizon_sweep_section(results):
+    """Generate forecast horizon sensitivity summary."""
+    lines = ["## Forecast Horizon Sensitivity"]
+
+    dd_sweep = {}
+    rh_sweep = {}
+    for approach, r in results.items():
+        if approach.startswith("dynamic_det_horizon_"):
+            suffix = approach.replace("dynamic_det_horizon_", "").rstrip("h")
+            try:
+                dd_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+            except ValueError:
+                continue
+        elif approach.startswith("dynamic_rh_horizon_"):
+            suffix = approach.replace("dynamic_rh_horizon_", "").rstrip("h")
+            try:
+                rh_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+            except ValueError:
+                continue
+
+    if not dd_sweep and not rh_sweep:
+        lines.append("\nNo forecast horizon sweep data available (run `sensitivity` first).")
+        return "\n".join(lines)
+
+    all_horizons = sorted(set(list(dd_sweep.keys()) + list(rh_sweep.keys())))
+
+    lines.append("")
+    lines.append("| Horizon (h) | Days | DP Fuel (kg) | RH Fuel (kg) |")
+    lines.append("| --- | --- | --- | --- |")
+    for h in all_horizons:
+        dd_val = f"{dd_sweep[h]:.2f}" if h in dd_sweep else "N/A"
+        rh_val = f"{rh_sweep[h]:.2f}" if h in rh_sweep else "N/A"
+        lines.append(f"| {h} | {h / 24:.0f} | {dd_val} | {rh_val} |")
+
+    # Analysis
+    if len(all_horizons) >= 2:
+        shortest = all_horizons[0]
+        longest = all_horizons[-1]
+        if shortest in dd_sweep and longest in dd_sweep:
+            dd_delta = dd_sweep[shortest] - dd_sweep[longest]
+            lines.append(f"\n- **Dynamic DP**: {dd_delta:+.2f} kg from "
+                         f"{longest}h to {shortest}h horizon "
+                         f"({dd_delta / dd_sweep[longest] * 100:+.2f}%)")
+        if shortest in rh_sweep and longest in rh_sweep:
+            rh_delta = rh_sweep[shortest] - rh_sweep[longest]
+            lines.append(f"- **Rolling Horizon**: {rh_delta:+.2f} kg from "
+                         f"{longest}h to {shortest}h horizon "
+                         f"({rh_delta / rh_sweep[longest] * 100:+.2f}%)")
+
+        lines.append(f"- Shortest horizon tested: {shortest}h ({shortest / 24:.0f} days)")
+
+    return "\n".join(lines)
+
+
 def _figures_section(figure_paths, save_dir):
     """Generate markdown image references."""
     if not figure_paths:
@@ -349,10 +406,12 @@ def _figures_section(figure_paths, save_dir):
         "forecast_error": "Forecast error (RMSE) as a function of lead time",
         "replan_evolution": "Rolling Horizon re-planning: optimizer convergence over time",
         "replan_sensitivity": "Fuel consumption vs replan frequency with theoretical bounds",
+        "horizon_sensitivity": "Fuel consumption vs forecast horizon (3, 5, 7 day forecasts)",
     }
 
     for name in ["speed_profiles", "fuel_curves", "fuel_comparison",
-                  "forecast_error", "replan_evolution", "replan_sensitivity"]:
+                  "forecast_error", "replan_evolution", "replan_sensitivity",
+                  "horizon_sensitivity"]:
         if name not in figure_paths or figure_paths[name] is None:
             continue
         # Use relative path from report location

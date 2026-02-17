@@ -99,6 +99,13 @@ def transform(hdf5_path: str, config: dict) -> dict:
     all_predicted = read_predicted(hdf5_path)
     logger.info("Read %d total predicted rows", len(all_predicted))
 
+    # Cap forecast horizon if configured (for sensitivity experiments)
+    max_horizon = dd_cfg.get("max_forecast_horizon")
+    if max_horizon is not None:
+        all_predicted = all_predicted[all_predicted["forecast_hour"] <= int(max_horizon)]
+        logger.info("Forecast horizon capped at %dh (%d rows)",
+                     max_horizon, len(all_predicted))
+
     available_sample_hours = sorted(int(s) for s in all_predicted["sample_hour"].unique())
 
     weather_grids = {}

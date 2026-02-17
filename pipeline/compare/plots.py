@@ -313,3 +313,78 @@ def plot_replan_sensitivity(results, save_dir):
     ax.grid(True, alpha=0.3)
 
     return _save(fig, save_dir, "replan_sensitivity")
+
+
+def plot_horizon_sensitivity(results, save_dir):
+    """Figure 7: Simulated fuel vs forecast horizon for DP and RH.
+
+    Args:
+        results: dict {approach: result_dict} — must contain horizon sweep variants.
+        save_dir: directory to save the figure.
+
+    Returns:
+        Path to saved PNG, or None if no horizon sweep data.
+    """
+    dd_sweep = {}
+    rh_sweep = {}
+    for approach, r in results.items():
+        if approach.startswith("dynamic_det_horizon_"):
+            suffix = approach.replace("dynamic_det_horizon_", "").rstrip("h")
+            try:
+                dd_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+            except ValueError:
+                continue
+        elif approach.startswith("dynamic_rh_horizon_"):
+            suffix = approach.replace("dynamic_rh_horizon_", "").rstrip("h")
+            try:
+                rh_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+            except ValueError:
+                continue
+
+    if not dd_sweep and not rh_sweep:
+        logger.info("No horizon sweep data, skipping plot")
+        return None
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    if dd_sweep:
+        horizons = sorted(dd_sweep.keys())
+        fuels = [dd_sweep[h] for h in horizons]
+        days = [h / 24 for h in horizons]
+        ax.plot(days, fuels, "s-", color="#FF9800", markersize=6, linewidth=1.5,
+                label="Dynamic DP", zorder=5)
+
+    if rh_sweep:
+        horizons = sorted(rh_sweep.keys())
+        fuels = [rh_sweep[h] for h in horizons]
+        days = [h / 24 for h in horizons]
+        ax.plot(days, fuels, "o-", color="#4CAF50", markersize=6, linewidth=1.5,
+                label="Rolling Horizon", zorder=5)
+
+    # Reference lines
+    ref_approaches = [
+        ("upper_bound", "#F44336", "Upper Bound"),
+        ("lower_bound", "#8BC34A", "Lower Bound"),
+        ("static_det", "#2196F3", "Static LP"),
+    ]
+    for ref_key, color, label in ref_approaches:
+        if ref_key in results:
+            fuel = results[ref_key]["simulated"]["total_fuel_kg"]
+            ax.axhline(fuel, color=color, linestyle=":", linewidth=1.2, alpha=0.8)
+            # Place label at rightmost x
+            x_max = max(
+                max((h / 24 for h in dd_sweep), default=0),
+                max((h / 24 for h in rh_sweep), default=0),
+            )
+            ax.annotate(f"{label} ({fuel:.1f})",
+                        xy=(x_max, fuel),
+                        xytext=(5, 0), textcoords="offset points",
+                        fontsize=8, color=color, va="center")
+
+    ax.set_xlabel("Forecast Horizon (days)")
+    ax.set_ylabel("Simulated Fuel (kg)")
+    ax.set_title("Forecast Horizon Sensitivity")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    return _save(fig, save_dir, "horizon_sensitivity")

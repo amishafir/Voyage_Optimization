@@ -154,6 +154,13 @@ def transform(hdf5_path: str, config: dict) -> dict:
             logger.info("Single time window: filtered to forecast_hour=0 (%d rows)",
                          len(predicted))
 
+        # Cap forecast horizon if configured (for sensitivity experiments)
+        max_horizon = dd_cfg.get("max_forecast_horizon")
+        if max_horizon is not None:
+            predicted = predicted[predicted["forecast_hour"] <= int(max_horizon)]
+            logger.info("Forecast horizon capped at %dh (%d rows)",
+                         max_horizon, len(predicted))
+
         for _, row in predicted.iterrows():
             nid = int(row["node_id"])
             if nid not in active_node_ids:
