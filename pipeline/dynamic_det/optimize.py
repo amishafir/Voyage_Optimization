@@ -46,6 +46,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
     max_fh = transform_output["max_forecast_hour"]
     node_meta = transform_output["node_metadata"]
     ship_params = transform_output["ship_params"]
+    time_offset = transform_output.get("time_offset", 0)
 
     dd_cfg = config["dynamic_det"]
     dt = dd_cfg["time_granularity"]  # hours per time slot
@@ -91,7 +92,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
             current_hour = t * dt
 
             # Forecast hour: clamp to available range (persistence fallback)
-            fh = min(int(round(current_hour)), max_fh)
+            fh = min(int(round(current_hour + time_offset)), max_fh)
 
             # Look up weather for this node at this forecast hour
             node_wx = weather_grid.get(nid, {})
@@ -192,7 +193,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
         # Recompute SOG for the schedule record
         current_hour = t_prev * dt
-        fh = min(int(round(current_hour)), max_fh)
+        fh = min(int(round(current_hour + time_offset)), max_fh)
         node_wx = weather_grid.get(nid, {})
         wx = node_wx.get(fh)
         if wx is None:
