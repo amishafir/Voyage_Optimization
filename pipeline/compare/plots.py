@@ -1,0 +1,250 @@
+"""
+Matplotlib figure generation for cross-approach comparison.
+
+All figures are saved as PNG files. Uses Agg backend for headless environments.
+"""
+
+import logging
+import os
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+STYLES = {
+    "static_det":  {"color": "#2196F3", "label": "Static LP",       "ls": "-"},
+    "dynamic_det": {"color": "#FF9800", "label": "Dynamic DP",      "ls": "--"},
+    "dynamic_rh":  {"color": "#4CAF50", "label": "Rolling Horizon", "ls": "-."},
+}
+
+
+def _style(approach):
+    return STYLES.get(approach, {"color": "gray", "label": approach, "ls": ":"})
+
+
+def _save(fig, save_dir, name):
+    path = os.path.join(save_dir, f"{name}.png")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Saved figure: %s", path)
+    return path
+
+
+def _segment_boundaries(df):
+    """Return cumulative distances where segment changes."""
+    boundaries = []
+    prev_seg = None
+    for _, row in df.iterrows():
+        seg = row.get("segment")
+        if seg is not None and seg != prev_seg and prev_seg is not None:
+            boundaries.append(row["cum_distance_nm"])
+        prev_seg = seg
+    return boundaries
+
+
+def plot_speed_profiles(time_series, save_dir):
+    """Figure 1: SWS vs cumulative distance, one line per approach.
+
+    Args:
+        time_series: dict {approach: DataFrame}
+        save_dir: directory to save the figure
+
+    Returns:
+        Path to saved PNG.
+    """
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    # Draw segment boundaries from first available time series
+    first_df = next(iter(time_series.values()))
+    for x in _segment_boundaries(first_df):
+        ax.axvline(x, color="lightgray", linewidth=0.5, zorder=0)
+
+    for approach in ["static_det", "dynamic_det", "dynamic_rh"]:
+        if approach not in time_series:
+            continue
+        df = time_series[approach]
+        s = _style(approach)
+        ax.plot(
+            df["cum_distance_nm"], df["sws_knots"],
+            color=s["color"], linestyle=s["ls"], label=s["label"],
+            linewidth=1.2, alpha=0.9,
+        )
+
+    ax.set_xlabel("Cumulative Distance (nm)")
+    ax.set_ylabel("Ship Water Speed (knots)")
+    ax.set_title("Speed Profiles by Approach")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    return _save(fig, save_dir, "speed_profiles")
+
+
+def plot_fuel_curves(time_series, save_dir):
+    """Figure 2: Cumulative fuel vs cumulative distance, one line per approach.
+
+    Args:
+        time_series: dict {approach: DataFrame}
+        save_dir: directory to save the figure
+
+    Returns:
+        Path to saved PNG.
+    """
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    for approach in ["static_det", "dynamic_det", "dynamic_rh"]:
+        if approach not in time_series:
+            continue
+        df = time_series[approach]
+        s = _style(approach)
+        ax.plot(
+            df["cum_distance_nm"], df["cum_fuel_kg"],
+            color=s["color"], linestyle=s["ls"], label=s["label"],
+            linewidth=1.2, alpha=0.9,
+        )
+
+    ax.set_xlabel("Cumulative Distance (nm)")
+    ax.set_ylabel("Cumulative Fuel (kg)")
+    ax.set_title("Fuel Consumption Curves")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    return _save(fig, save_dir, "fuel_curves")
+
+
+def plot_fuel_comparison(results, save_dir):
+    """Figure 3: Grouped bar chart — planned vs simulated fuel per approach.
+
+    Args:
+        results: dict {approach: result_dict}
+        save_dir: directory to save the figure
+
+    Returns:
+        Path to saved PNG.
+    """
+    approaches = [a for a in ["static_det", "dynamic_det", "dynamic_rh"] if a in results]
+    labels = [_style(a)["label"] for a in approaches]
+    planned = [results[a]["planned"]["total_fuel_kg"] for a in approaches]
+    simulated = [results[a]["simulated"]["total_fuel_kg"] for a in approaches]
+    gaps = [results[a]["metrics"]["fuel_gap_percent"] for a in approaches]
+
+    x = np.arange(len(approaches))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    bars1 = ax.bar(x - width / 2, planned, width, label="Planned", color="#64B5F6", edgecolor="white")
+    bars2 = ax.bar(x + width / 2, simulated, width, label="Simulated", color="#EF5350", edgecolor="white")
+
+    # Annotate fuel gap above each pair
+    for i, gap in enumerate(gaps):
+        y_max = max(planned[i], simulated[i])
+        ax.annotate(
+            f"{gap:+.2f}%",
+            xy=(x[i], y_max),
+            xytext=(0, 8),
+            textcoords="offset points",
+            ha="center", fontsize=9,
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("Total Fuel (kg)")
+    ax.set_title("Planned vs Simulated Fuel Consumption")
+    ax.legend()
+    ax.grid(True, axis="y", alpha=0.3)
+
+    return _save(fig, save_dir, "fuel_comparison")
+
+
+def plot_forecast_error(forecast_errors_df, save_dir):
+    """Figure 4: RMSE vs lead time for wind speed, wave height, current velocity.
+
+    Args:
+        forecast_errors_df: DataFrame with lead_time_h, field, rmse, mae columns.
+            None to skip.
+        save_dir: directory to save the figure
+
+    Returns:
+        Path to saved PNG, or None if skipped.
+    """
+    if forecast_errors_df is None or forecast_errors_df.empty:
+        logger.info("No forecast error data, skipping plot")
+        return None
+
+    fields = ["wind_speed_10m_kmh", "wave_height_m", "ocean_current_velocity_kmh"]
+    field_labels = {
+        "wind_speed_10m_kmh": ("Wind Speed RMSE", "km/h"),
+        "wave_height_m": ("Wave Height RMSE", "m"),
+        "ocean_current_velocity_kmh": ("Current Velocity RMSE", "km/h"),
+    }
+
+    available = [f for f in fields if f in forecast_errors_df["field"].values]
+    if not available:
+        return None
+
+    fig, axes = plt.subplots(1, len(available), figsize=(5 * len(available), 4), squeeze=False)
+
+    for i, field in enumerate(available):
+        ax = axes[0, i]
+        subset = forecast_errors_df[forecast_errors_df["field"] == field].sort_values("lead_time_h")
+        label, unit = field_labels[field]
+        ax.plot(subset["lead_time_h"], subset["rmse"], "o-", markersize=3, linewidth=1.2)
+        ax.set_xlabel("Lead Time (h)")
+        ax.set_ylabel(f"RMSE ({unit})")
+        ax.set_title(label)
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Forecast Error vs Lead Time", fontsize=13, y=1.02)
+    fig.tight_layout()
+
+    return _save(fig, save_dir, "forecast_error")
+
+
+def plot_replan_evolution(decision_points, save_dir):
+    """Figure 5: Re-planning evolution — DP planned fuel and elapsed fuel vs decision hour.
+
+    Args:
+        decision_points: list of dicts from RH result's decision_points field.
+            None or empty to skip.
+        save_dir: directory to save the figure
+
+    Returns:
+        Path to saved PNG, or None if skipped.
+    """
+    if not decision_points:
+        logger.info("No decision points, skipping replan evolution plot")
+        return None
+
+    df = pd.DataFrame(decision_points)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
+
+    # Top: DP planned total fuel at each decision point
+    ax1.plot(
+        df["decision_hour"], df["dp_planned_fuel_kg"],
+        "o-", color="#4CAF50", markersize=4, linewidth=1.2,
+        label="DP planned total fuel",
+    )
+    ax1.set_ylabel("DP Planned Fuel (kg)")
+    ax1.set_title("Optimizer Estimate Convergence")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # Bottom: Elapsed fuel
+    ax2.plot(
+        df["decision_hour"], df["elapsed_fuel_kg"],
+        "s-", color="#FF9800", markersize=4, linewidth=1.2,
+        label="Elapsed fuel (actual)",
+    )
+    ax2.set_xlabel("Decision Hour")
+    ax2.set_ylabel("Elapsed Fuel (kg)")
+    ax2.set_title("Fuel Consumed at Each Re-plan Point")
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+
+    return _save(fig, save_dir, "replan_evolution")

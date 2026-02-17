@@ -309,7 +309,13 @@ def cmd_run(args, config):
 
 
 def cmd_compare(args, config):
-    print("compare: Not implemented yet")
+    from compare.compare import run_comparison
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(base_dir, "output")
+    hdf5_path = _find_hdf5(config)
+    report_path = run_comparison(config, output_dir, hdf5_path)
+    if report_path:
+        print(f"\nReport: {report_path}")
 
 
 def cmd_convert_pickle(args, config):
