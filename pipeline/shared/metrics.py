@@ -84,6 +84,7 @@ def build_result_json(
             "voyage_time_h": round(simulated["total_time_h"], 4),
             "arrival_deviation_h": round(simulated["arrival_deviation_h"], 4),
             "speed_changes": simulated.get("speed_changes", 0),
+            "sws_violations": simulated.get("sws_violations", 0),
             "co2_emissions_kg": round(simulated["co2_emissions_kg"], 4),
         },
         "metrics": metrics,

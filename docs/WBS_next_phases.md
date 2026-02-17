@@ -57,7 +57,13 @@ A configurable research pipeline for comparing voyage optimization strategies. A
                 figures/ tables/ report.md
 ```
 
-**Key design principle**: The three approaches share the **input** (same HDF5 data) and the **output contract** (same result JSON format), but transform and optimize logic is approach-specific. No false uniformity.
+**Key design principles**:
+
+1. The three approaches share the **input** (same HDF5 data) and the **output contract** (same result JSON format), but transform and optimize logic is approach-specific. No false uniformity.
+
+2. **The decision variable is always SOG (Speed Over Ground)**, not SWS. Each optimizer outputs a SOG schedule — the speed the ship commits to achieving at each segment or leg. During execution (simulation), the ship adjusts SWS (engine power) to maintain the target SOG under actual weather conditions. Time is deterministic (`distance / SOG`); fuel varies because `FCR = f(SWS)` and the required SWS depends on actual weather.
+
+3. **Execution model**: The ship arrives at each planned waypoint at the planned time (unless engine speed limits are violated). The fuel gap between planned and simulated comes purely from the difference between planning weather and actual weather — not from arrival time drift.
 
 ---
 
@@ -298,20 +304,29 @@ All HDF5 read/write. Library: PyTables (`tables`) for appendable table pattern.
 
 ### 5.3 `shared/simulation.py`
 
-Forward simulation engine. Given a speed schedule + actual weather, simulate the voyage.
+SOG-target simulation engine. The ship targets the planned SOG at each leg and adjusts SWS (engine speed) to achieve it under actual weather conditions.
 
 ```python
-def simulate_voyage(speed_schedule, actual_weather_df, metadata_df, ship_params) -> SimulationResult
+def simulate_voyage(speed_schedule, hdf5_path, config, sample_hour) -> dict
 ```
 
+**Execution model** (SOG-target):
+1. For each leg, read the planned SOG from the schedule
+2. Read actual weather at that node
+3. Compute required SWS via `calculate_sws_from_sog()` (binary search inverse)
+4. Clamp SWS to engine limits `[min_speed, max_speed]` — if clamped, recompute achievable SOG
+5. Compute fuel: `FCR(actual_SWS) * (distance / actual_SOG)`
+6. Time is deterministic: `distance / target_SOG` (unless SWS was clamped)
+
 **Auto-detects schedule type**:
-- Per-segment (from LP): entries have `segment` key -> `segment -> SWS` lookup
-- Per-leg (from DP): entries have `node_id` key -> `node_id -> SWS` lookup
+- Per-segment (from LP): entries have `segment` key -> `segment -> SOG` lookup
+- Per-leg (from DP): entries have `node_id` key -> `node_id -> SOG` lookup
 
 **SimulationResult** includes:
-- `time_series` DataFrame (hour, distance, sws, sog, fcr, cumulative_fuel, weather)
-- `total_fuel_kg`, `total_time_hours`, `arrival_deviation_hours`
-- `speed_changes` (plan stability count)
+- `time_series` DataFrame (node_id, planned_sog, actual_sog, planned_sws, actual_sws, distance, time, fuel, cumulative)
+- `total_fuel_kg`, `total_time_h`, `arrival_deviation_h`
+- `speed_changes` (count of SOG transitions in the plan)
+- `sws_violations` (count of legs where required SWS exceeded engine limits)
 
 ### 5.4 `shared/metrics.py`
 
@@ -347,8 +362,8 @@ def simulate_voyage(speed_schedule, actual_weather_df, metadata_df, ship_params)
 | | |
 |---|---|
 | **Reads** | Transform output dict |
-| **Logic** | PuLP LP: binary `x[i,k]` variables, minimize fuel, ETA constraint, one-speed-per-segment, SOG bounds. Port of `ship_speed_optimization_pulp.py`. |
-| **Produces** | `SegmentSpeedSchedule`: one SWS per segment, planned fuel/time |
+| **Logic** | PuLP LP: binary `x[i,k]` variables, minimize fuel, ETA constraint, one-speed-per-segment, SOG bounds. Port of `ship_speed_optimization_pulp.py`. Internally iterates over SWS candidates and selects the one whose resulting SOG minimizes fuel under the ETA constraint. |
+| **Produces** | `SegmentSpeedSchedule`: one SOG per segment (with corresponding planning-SWS), planned fuel/time. The SOG is the decision that the ship will execute. |
 | **Config** | `static_det.optimizer` (pulp/gurobi) |
 
 ### 6.2 Dynamic Deterministic (DP)
@@ -370,8 +385,8 @@ def simulate_voyage(speed_schedule, actual_weather_df, metadata_df, ship_params)
 | | |
 |---|---|
 | **Reads** | Transform output dict + config |
-| **Logic** | Forward Bellman DP: `cost[node][time_slot]` = min fuel to reach state. For each (node, time_slot), try all 21 speeds, compute SOG/travel_time/fuel, advance to next node. Uses `math.ceil` for conservative time slot tracking. Backtracks from best arrival to extract per-leg schedule. |
-| **Produces** | Dict: `{status, planned_fuel_kg, planned_time_h, speed_schedule[] (278 entries with node_id, segment, sws_knots, sog_knots, distance_nm, time_h, fuel_kg), computation_time_s, solver: "bellman_dp"}` |
+| **Logic** | Forward Bellman DP: `cost[node][time_slot]` = min fuel to reach state. For each (node, time_slot), try all 21 SWS candidates, compute resulting SOG/travel_time/fuel, advance to next node. Uses `math.ceil` for conservative time slot tracking. Backtracks from best arrival to extract per-leg SOG schedule. |
+| **Produces** | Dict: `{status, planned_fuel_kg, planned_time_h, speed_schedule[] (278 entries with node_id, segment, sws_knots, sog_knots, distance_nm, time_h, fuel_kg), computation_time_s, solver: "bellman_dp"}`. The `sog_knots` is the decision the ship executes; `sws_knots` is what the optimizer computed under planning weather (for reference only). |
 | **Config** | `dynamic_det.time_granularity` (dt for DP time slots) |
 | **State space** | 279 nodes x ~3300 time slots x 21 speeds = ~19M edge evaluations. Sparse dict storage. ~1.6s in pure Python. |
 
@@ -410,40 +425,44 @@ All approaches must produce result JSONs that comparison can consume uniformly.
   "approach": "static_det",
   "config": {"weather_snapshot": 0, "optimizer": "pulp", "segments": 12},
   "planned": {
-    "total_fuel_kg": 372370,
-    "voyage_time_h": 278.5
+    "total_fuel_kg": 358.36,
+    "voyage_time_h": 280.0
   },
   "simulated": {
-    "total_fuel_kg": 385200,
-    "voyage_time_h": 280.1,
-    "arrival_deviation_h": 1.6,
-    "speed_changes": 0,
-    "co2_emissions_kg": 1221100
+    "total_fuel_kg": 367.99,
+    "voyage_time_h": 280.26,
+    "arrival_deviation_h": 0.26,
+    "speed_changes": 10,
+    "sws_violations": 10,
+    "co2_emissions_kg": 1166.51
   },
   "metrics": {
-    "fuel_gap_percent": 3.44,
-    "fuel_per_nm": 113.5,
+    "fuel_gap_percent": 2.69,
+    "fuel_per_nm": 0.1084,
     "avg_sog_knots": 12.12
   },
-  "computation_time_s": 0.8,
+  "computation_time_s": 0.01,
   "time_series_file": "output/timeseries_static_det.csv",
-  "timestamp": "2026-02-14T10:30:00Z"
+  "timestamp": "2026-02-17T00:00:00Z"
 }
 ```
 
+Note: `arrival_deviation_h` is now near-zero under the SOG-target model (the ship meets its planned SOG, so it arrives on time). Non-zero deviation only occurs when SWS engine limits are hit, preventing the ship from achieving the target SOG.
+
 ### 7.2 Required Metrics (all approaches)
 
-| Metric | Key | Unit |
-|--------|-----|------|
-| Total fuel (planned by optimizer) | `planned.total_fuel_kg` | kg |
-| Total fuel (simulated vs actual weather) | `simulated.total_fuel_kg` | kg |
-| Fuel gap (plan vs reality) | `metrics.fuel_gap_percent` | % |
-| Voyage time | `simulated.voyage_time_h` | hours |
-| Arrival deviation vs ETA | `simulated.arrival_deviation_h` | hours |
-| Plan stability | `simulated.speed_changes` | count |
-| CO2 emissions | `simulated.co2_emissions_kg` | kg |
-| Computation time | `computation_time_s` | seconds |
-| Fuel efficiency | `metrics.fuel_per_nm` | kg/nm |
+| Metric | Key | Unit | Notes |
+|--------|-----|------|-------|
+| Total fuel (planned by optimizer) | `planned.total_fuel_kg` | kg | Using planning weather |
+| Total fuel (simulated vs actual weather) | `simulated.total_fuel_kg` | kg | Ship targets planned SOG, adjusts SWS |
+| Fuel gap (plan vs reality) | `metrics.fuel_gap_percent` | % | Measures cost of weather forecast error |
+| Voyage time | `simulated.voyage_time_h` | hours | Near-deterministic (≈ planned time) |
+| Arrival deviation vs ETA | `simulated.arrival_deviation_h` | hours | Non-zero only from SWS clamping |
+| SOG changes (plan stability) | `simulated.speed_changes` | count | Transitions in planned SOG schedule |
+| SWS violations (engine limits) | `simulated.sws_violations` | count | Legs where required SWS exceeded [min, max] |
+| CO2 emissions | `simulated.co2_emissions_kg` | kg | From actual SWS, not planned |
+| Computation time | `computation_time_s` | seconds | |
+| Fuel efficiency | `metrics.fuel_per_nm` | kg/nm | |
 
 ---
 
@@ -524,7 +543,7 @@ clean:          rm -rf output/ data/voyage_weather.h5
 |---|------|---------|--------|
 | 2.1 | Implement `static_det/transform.py` | `static_det/transform.py` | Done — reads HDF5, 12 segments, SOG matrix, FCR array, circular mean for directions, nanmean for NaN |
 | 2.2 | Port `static_det/optimize.py` | `static_det/optimize.py` | Done — supports both PuLP CBC and Gurobi solvers via `config.static_det.optimizer` |
-| 2.3 | Implement `shared/simulation.py` | `shared/simulation.py` | Done — per-waypoint (279-node) simulation, reveals fuel gap from spatial averaging |
+| 2.3 | Implement `shared/simulation.py` | `shared/simulation.py` | Done — SOG-target simulation: ship adjusts SWS to maintain planned SOG under actual weather. Fuel gap reveals cost of planning-weather vs actual-weather mismatch. |
 | 2.4 | Implement `shared/metrics.py` | `shared/metrics.py` | Done — `compute_result_metrics()`, `build_result_json()`, `save_result()` |
 | 2.5 | Wire `cli.py run static_det` | `cli.py` | Done — transform -> optimize -> simulate -> metrics -> JSON + CSV |
 | 2.6 | Validate against known result | manual test | Done — see results below |
@@ -545,16 +564,16 @@ The +0.03% delta comes from GPS-computed headings differing by 0.1–0.9 degrees
 
 **Real API weather (HDF5, 279 waypoints, 21 speeds 11–13 kn):**
 
-| Metric | Planned | Simulated |
-|--------|---------|-----------|
-| Total fuel | 358.36 kg | 361.82 kg |
-| Voyage time | 280.00 h | 282.76 h |
-| Fuel gap | — | 0.97% |
-| CO2 emissions | — | 1,146.98 kg |
-| Avg SOG | — | 12.01 knots |
+| Metric | Planned | Simulated (SOG-target) |
+|--------|---------|------------------------|
+| Total fuel | 358.36 kg | 367.99 kg |
+| Voyage time | 280.00 h | 280.26 h |
+| Fuel gap | — | 2.69% |
+| SWS violations | — | 10/278 legs |
+| CO2 emissions | — | 1,166.51 kg |
 | Solve time (Gurobi) | 0.004 s | — |
 
-The fuel gap (planned < simulated) is expected: the LP averages weather across 12 segments, while the simulation uses per-waypoint weather (279 nodes). Gurobi solves ~350x faster than PuLP CBC.
+The fuel gap (planned < simulated) is expected: the LP plans SOG per segment using segment-averaged weather, but during execution the ship must adjust SWS per-node to maintain that SOG under actual local weather. Since FCR ∝ SWS³, nodes with harsher-than-average weather incur disproportionately more fuel than nodes with calmer-than-average weather save (Jensen's inequality on the cubic). Voyage time is near-deterministic (280.26h vs 280.00h planned) because the ship targets the planned SOG — the small deviation comes from 10 legs where SWS hit engine limits. Gurobi solves ~350x faster than PuLP CBC.
 
 ### Phase 3: Dynamic Deterministic — COMPLETE
 
@@ -586,9 +605,9 @@ The HDF5 data has 279 interpolated waypoints (~12 nm apart). Using these directl
 - 278 legs is manageable for the DP (vs 3,394 legs which would need finer dt)
 - Per-leg optimization still captures much more spatial granularity than LP's 12 segments
 
-**3. Forward SWS -> SOG (not inverse SOG -> SWS)**
+**3. Optimizer uses forward SWS -> SOG; execution uses inverse SOG -> SWS**
 
-The DP iterates over candidate SWS values and computes SOG using the same `calculate_speed_over_ground()` as the LP. This avoids the binary search inverse (`calculate_sws_from_sog()`), which is slower and can have convergence issues in extreme weather. The forward approach is also simpler to validate since both LP and DP use identical physics calls.
+The optimizer internally iterates over candidate SWS values and computes the resulting SOG using `calculate_speed_over_ground()`. This forward direction is fast and numerically stable. The optimizer selects the SWS whose resulting SOG minimizes fuel — but the **output decision is the SOG**, not the SWS. During simulation (execution), the ship targets this SOG and uses the inverse function `calculate_sws_from_sog()` to find the actual SWS required under actual weather. This separation means the optimizer plans efficiently while the execution model is operationally realistic.
 
 **4. `time_granularity: 0.1` with `math.ceil` for conservative time tracking**
 
@@ -609,9 +628,9 @@ State space with dt=0.1: 279 nodes x 3,300 time slots x 21 speeds = 19.3M edge e
 
 Predicted weather at `sample_hour=0` covers `forecast_hour` 0 to 149 (150 hours). The voyage takes ~280 hours. For hours 150–280, the DP uses weather from `forecast_hour=149` (persistence assumption — last known forecast carries forward). This is a known limitation documented for future improvement. It affects the second half of the voyage where the DP has no forecast data and must assume conditions persist.
 
-**6. Per-leg speed schedule with `node_id` key**
+**6. Per-leg SOG schedule with `node_id` key**
 
-The LP produces a per-segment schedule (`segment -> SWS`, 12 entries). The DP produces a per-leg schedule (`node_id -> SWS`, 278 entries). `shared/simulation.py` was extended to auto-detect the schedule type by checking whether `speed_schedule[0]` has a `node_id` key (per-leg) or only `segment` (per-segment). Backward-compatible with static_det.
+The LP produces a per-segment SOG schedule (`segment -> SOG`, 12 entries). The DP produces a per-leg SOG schedule (`node_id -> SOG`, 278 entries). Both also store the planning-SWS for reference, but the SOG is the operative decision. `shared/simulation.py` auto-detects the schedule type by checking whether `speed_schedule[0]` has a `node_id` key (per-leg) or only `segment` (per-segment). Backward-compatible with static_det.
 
 **7. Configurable weather source and node selection**
 
@@ -624,19 +643,19 @@ When `nodes: original` + `weather_source: actual`, the transform reads all 279 n
 
 #### Validation Results
 
-**1. Full pipeline (279 nodes, predicted weather, time-varying):**
+**1. Full pipeline (279 nodes, predicted weather, time-varying) — SOG-target simulation:**
 
 | Metric | Static Det (LP) | Dynamic Det (DP) |
 |--------|-----------------|------------------|
 | Planned fuel | 358.36 kg | 365.32 kg |
 | Planned time | 280.00 h | 278.88 h |
-| Simulated fuel | 361.82 kg | 367.83 kg |
-| Simulated time | 282.76 h | 280.79 h |
-| **Fuel gap** | **0.97%** | **0.69%** |
-| Speed changes | 10 | 206 |
+| Simulated fuel | 367.99 kg | 366.87 kg |
+| Simulated time | 280.26 h | 281.21 h |
+| **Fuel gap** | **2.69%** | **0.42%** |
+| SWS violations | 10 | 62 |
 | Solve time | 0.009 s (Gurobi) | 1.63 s |
 
-The DP's planned fuel (365 kg) is slightly higher than LP's (358 kg) because they use different weather data: LP plans with actual weather (observed), DP plans with predicted weather (forecasted). The key win is the smaller fuel gap (0.69% vs 0.97%) — DP's per-node planning matches simulation more closely than LP's segment-averaged planning.
+**DP beats LP on simulated fuel** (366.87 vs 367.99 kg). The LP's fuel gap is larger (2.69%) because maintaining segment-averaged SOG targets at individual nodes requires SWS adjustments that are penalized by Jensen's inequality on the cubic FCR. The DP's per-node SOG targets are better adapted to local conditions, resulting in smaller SWS adjustments despite having more violations (62 vs 10). Simulated times are near-deterministic: LP 280.26h (~planned), DP 281.21h (2.33h deviation from the 62 legs where SWS hit engine limits).
 
 **2. Apples-to-apples: 13 original waypoints, segment-averaged actual weather:**
 
@@ -681,20 +700,20 @@ Both match the paper's ~372 kg target. Difference: +1.09 kg (+0.29%). The DP's `
 
 **Gate**: Passed. Committed `d3e647e`.
 
-#### Validation Results
+#### Validation Results (SOG-target simulation)
 
 | Metric | Static Det (LP) | Dynamic Det (DP) | Rolling Horizon |
 |--------|-----------------|------------------|-----------------|
 | Planned fuel | 358.36 kg | 365.32 kg | 361.43 kg |
 | Planned time | 280.00 h | 278.88 h | 279.89 h |
-| Simulated fuel | 361.82 kg | 367.83 kg | 364.36 kg |
-| Simulated time | 282.76 h | 280.79 h | 282.26 h |
-| **Fuel gap** | **0.97%** | **0.69%** | **0.81%** |
-| Speed changes | 10 | 206 | 198 |
+| Simulated fuel | **367.99 kg** | **366.87 kg** | **364.76 kg** |
+| Simulated time | 280.26 h | 281.21 h | 282.09 h |
+| **Fuel gap** | **2.69%** | **0.42%** | **0.92%** |
+| SWS violations | 10 | 62 | 60 |
 | Decision points | — | — | 42 |
-| Solve time | 0.009 s | 1.63 s | 25.66 s |
+| Solve time | 0.009 s | 1.63 s | 25.07 s |
 
-The RH makes 42 re-plan decisions (every 6 hours over ~252 hours of active voyage). Simulated fuel (364.36 kg) is between LP (361.82) and DP (367.83), as expected — re-planning with fresher forecasts improves on single-plan DP, but the baseline LP still benefits from using actual weather for planning.
+**Rolling Horizon wins** on simulated fuel (364.76 kg), followed by DP (366.87), then LP (367.99). The RH makes 42 re-plan decisions (every 6 hours). Re-planning with updated forecasts produces SOG schedules that require less SWS adjustment under actual weather, resulting in lower fuel. The LP has the largest gap (2.69%) because its segment-averaged SOG targets are costly to maintain at individual nodes (Jensen's inequality on cubic FCR).
 
 ### Phase 5: Comparison & Paper Outputs — COMPLETE
 
@@ -724,9 +743,9 @@ The RH makes 42 re-plan decisions (every 6 hours over ~252 hours of active voyag
 
 #### Design Decisions
 
-**1. Upper bound uses max speed (13 kn), not mean speed (12 kn)**
+**1. Upper bound uses max SOG at max SWS (13 kn), not mean speed**
 
-The original plan specified mean speed for the upper bound. However, mean speed (12 kn) produces a voyage time of 287h under actual weather, exceeding the 280h ETA. Since the optimized approaches are ETA-constrained, a slower upper bound that uses *less* fuel than the optimized approaches is not a meaningful ceiling. Using max speed (13 kn) gives a proper upper bound: the ship burns the most fuel but arrives well within ETA (265h). This represents "no optimization, just go fast."
+The upper bound represents "no optimization, just go fast." The ship targets the SOG achievable at maximum SWS (13 kn) under actual weather at each node. This burns the most fuel but arrives well within ETA. Using mean speed would violate ETA under actual conditions.
 
 **2. Lower bound uses relaxed ETA (110% of nominal)**
 
@@ -741,12 +760,12 @@ All replan frequencies (3h–48h) produce nearly identical fuel (~364.2–364.4 
 | Approach | Sim Fuel (kg) | Sim Time (h) | Optimization Captured |
 |----------|---------------|---------------|----------------------|
 | Lower bound (perfect info) | 310.96 | 306.13 | — (floor) |
-| Static LP | 361.82 | 282.76 | 49.0% |
-| Rolling Horizon | 364.36 | 282.26 | 46.5% |
-| Dynamic DP | 367.83 | 280.79 | 43.0% |
+| **Rolling Horizon** | **364.76** | 282.09 | **46.0%** |
+| **Dynamic DP** | **366.87** | 281.21 | **43.9%** |
+| **Static LP** | **367.99** | 280.26 | **42.8%** |
 | Upper bound (max speed) | 410.71 | 264.79 | — (ceiling) |
 
-Optimization span: 99.74 kg (24.3% of upper bound). All three strategies fall between bounds as expected. The "optimization potential captured" metric quantifies how close each strategy gets to the perfect-information floor.
+Optimization span: 99.74 kg (24.3% of upper bound). Under SOG-target simulation, the ranking is RH > DP > LP. The LP's segment averaging creates a Jensen's inequality penalty on the cubic FCR, making it the least efficient despite having the best planning weather.
 
 #### Replan Frequency Sweep
 
@@ -776,7 +795,7 @@ Phase 0 ─> Phase 1 ─> Phase 2 ─> Phase 3 ─> Phase 4 ─> Phase 5 ─> Ph
 | Figure | Description | Source |
 |--------|-------------|--------|
 | Fig 1 | Route map with 13 waypoints | `config/routes/`, `plots.py::plot_route_map()` |
-| Fig 2 | Speed profiles (SWS vs distance, all 3 overlaid) | Time series CSVs, `plots.py::plot_speed_profiles()` |
+| Fig 2 | Speed profiles (planned SOG and actual SWS vs distance, all 3 overlaid) | Time series CSVs, `plots.py::plot_speed_profiles()` |
 | Fig 3 | Cumulative fuel vs distance | Time series CSVs, `plots.py::plot_fuel_curves()` |
 | Fig 4 | Planned vs actual fuel (bar chart, 3 approaches) | Result JSONs, `plots.py::plot_fuel_comparison()` |
 | Fig 5 | Forecast error vs lead time | HDF5 predicted vs actual, `plots.py::plot_forecast_error()` |
@@ -795,14 +814,16 @@ Phase 0 ─> Phase 1 ─> Phase 2 ─> Phase 3 ─> Phase 4 ─> Phase 5 ─> Ph
 
 ### Research Questions
 
-| Question | Comparison | Expected Finding |
-|----------|-----------|-----------------|
-| Value of time-varying weather modeling? | Dynamic Det. vs Static Det. | 3-5% fuel savings from DP |
-| Value of forecast adaptation? | Dynamic RH. vs Dynamic Det. | 1-3% additional savings |
-| Optimal re-plan frequency? | Stochastic sweep | Diminishing returns past 6h |
-| Lower bound (perfect info)? | Dynamic Det. with actuals | Floor on achievable fuel — cost of imperfect information |
-| Upper bound (naive baseline)? | Constant avg speed, no optimization | Ceiling on fuel — value of any optimization |
-| Which segments benefit most from dynamic planning? | Per-segment delta | High-variability segments |
+| Question | Comparison | Finding |
+|----------|-----------|---------|
+| Does the execution model matter? | SOG-target vs fixed-SWS simulation | **Yes**: ranking flips. LP worst under SOG-target (367.99 kg) due to Jensen's inequality on cubic FCR |
+| Value of spatial granularity? | DP (278 legs) vs LP (12 segments), same actual weather | DP wins by 0.66% (359.44 vs 361.82 kg) — real but small |
+| Value of forecast adaptation? | RH vs DP (both SOG-target) | RH wins: 364.76 vs 366.87 kg (-0.6%) |
+| Optimal re-plan frequency? | RH sweep (3h–48h) | Negligible (<0.15 kg) on this dataset |
+| Value of forecast horizon? | 72h vs 120h vs 168h | Dominant factor: 168h RH → 351 kg (3% better than LP) |
+| Lower bound (perfect info)? | DP with actual weather, relaxed ETA | Floor: 310.96 kg |
+| Upper bound (naive baseline)? | Constant max SOG, no optimization | Ceiling: 410.71 kg |
+| SWS violations as feasibility metric? | LP (10) vs DP (62) vs RH (60) | LP has fewer violations (plans with actual weather); DP/RH violations measure forecast error cost |
 
 ---
 

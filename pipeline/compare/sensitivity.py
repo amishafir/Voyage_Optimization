@@ -18,87 +18,42 @@ logger = logging.getLogger(__name__)
 
 
 def run_lower_bound(config, hdf5_path, output_dir):
-    """Run DP optimizer with actual weather (perfect information).
+    """Compute the theoretical lower bound: constant speed in calm water.
 
-    This represents the theoretical floor — the best possible fuel consumption
-    if the optimizer had perfect knowledge of future weather.
+    Lower bound = FCR(V_const) * ETA, where V_const = total_distance / ETA.
+
+    By Jensen's inequality on the convex cubic FCR, any speed variation
+    increases fuel above this floor.  Weather effects only raise fuel
+    further (SWS must deviate from SOG to compensate).
+
+    Also simulates the constant-SOG voyage under actual weather to show
+    the gap between the analytical floor and real-world constant speed.
 
     Returns:
         Result dict (also saved as result_lower_bound.json).
     """
-    from dynamic_det.transform import transform
-    from dynamic_det.optimize import optimize
-
-    cfg = copy.deepcopy(config)
-    cfg["dynamic_det"]["weather_source"] = "actual"
-    cfg["dynamic_det"]["nodes"] = "all"
-
-    # Relax ETA by 10% — actual weather may be harsher than predicted,
-    # making the nominal ETA infeasible under real conditions.
-    # The lower bound answers: "minimum fuel with perfect information"
-    # regardless of the original time constraint.
-    nominal_eta = cfg["ship"]["eta_hours"]
-    cfg["ship"]["eta_hours"] = int(nominal_eta * 1.1)
-
-    print("--- Lower Bound: Transform (actual weather) ---")
-    t_out = transform(hdf5_path, cfg)
-
-    print("--- Lower Bound: Optimize (DP) ---")
-    planned = optimize(t_out, cfg)
-    if planned.get("status") not in ("Optimal", "Feasible"):
-        logger.warning("Lower bound DP status: %s", planned.get("status"))
-        return None
-
-    print("--- Lower Bound: Simulate ---")
-    simulated = simulate_voyage(
-        planned["speed_schedule"], hdf5_path, cfg,
-        sample_hour=cfg["dynamic_det"]["forecast_origin"],
-    )
-
-    total_dist = sum(t_out["distances"])
-    metrics = compute_result_metrics(planned, simulated, total_dist)
-
-    ts_path = os.path.join(output_dir, "timeseries_lower_bound.csv")
-    simulated["time_series"].to_csv(ts_path, index=False)
-
-    result = build_result_json(
-        approach="lower_bound",
-        config=cfg,
-        planned=planned,
-        simulated=simulated,
-        metrics=metrics,
-        time_series_file=ts_path,
-    )
-    json_path = os.path.join(output_dir, "result_lower_bound.json")
-    save_result(result, json_path)
-
-    print(f"  Lower bound: {simulated['total_fuel_kg']:.2f} kg fuel, "
-          f"{simulated['total_time_h']:.2f} h")
-    return result
-
-
-def run_upper_bound(config, hdf5_path, output_dir):
-    """Simulate a constant-speed voyage (no optimization).
-
-    Uses the mean of the speed range as SWS for all legs.
-    Represents the theoretical ceiling — what happens without optimization.
-
-    Returns:
-        Result dict (also saved as result_upper_bound.json).
-    """
     from shared.hdf5_io import read_metadata
+    from shared.physics import calculate_fuel_consumption_rate
 
     metadata = read_metadata(hdf5_path)
     metadata = metadata.sort_values("node_id").reset_index(drop=True)
     num_nodes = len(metadata)
     num_legs = num_nodes - 1
 
-    min_speed, max_speed = config["ship"]["speed_range_knots"]
-    # Use max speed for upper bound — worst-case fuel while ensuring
-    # the ship meets the ETA. Mean speed may violate ETA under harsh weather.
-    avg_sws = max_speed
+    total_dist = metadata.iloc[-1]["distance_from_start_nm"]
+    eta = config["ship"]["eta_hours"]
+    constant_sog = total_dist / eta
 
-    # Build constant-speed schedule (one entry per leg, keyed by node_id)
+    # --- Analytical lower bound (calm water) ---
+    fcr_calm = calculate_fuel_consumption_rate(constant_sog)
+    analytical_fuel = fcr_calm * eta
+
+    print(f"  Analytical lower bound (calm water):")
+    print(f"    Constant SOG = {constant_sog:.4f} kn")
+    print(f"    FCR           = {fcr_calm:.6f} kg/h")
+    print(f"    Fuel           = {analytical_fuel:.2f} kg")
+
+    # --- Simulated constant-SOG voyage under actual weather ---
     schedule = []
     for i in range(num_legs):
         node_a = metadata.iloc[i]
@@ -108,25 +63,94 @@ def run_upper_bound(config, hdf5_path, output_dir):
             "leg": i,
             "node_id": int(node_a["node_id"]),
             "segment": int(node_a["segment"]),
-            "sws_knots": avg_sws,
+            "sog_knots": constant_sog,
+            "sws_knots": constant_sog,  # reference only — simulation computes actual SWS
             "distance_nm": max(dist, 0.001),
         })
 
-    print("--- Upper Bound: Simulate (constant speed) ---")
-    simulated = simulate_voyage(
-        schedule, hdf5_path, config,
-        sample_hour=0,
-    )
+    print("--- Lower Bound: Simulate (constant SOG under actual weather) ---")
+    simulated = simulate_voyage(schedule, hdf5_path, config, sample_hour=0)
 
-    total_dist = sum(e["distance_nm"] for e in schedule)
-
-    # For upper bound, planned == simulated (no optimizer)
     planned_stub = {
-        "planned_fuel_kg": simulated["total_fuel_kg"],
-        "planned_time_h": simulated["total_time_h"],
+        "planned_fuel_kg": analytical_fuel,
+        "planned_time_h": eta,
         "speed_schedule": schedule,
         "computation_time_s": 0.0,
-        "status": "N/A",
+        "status": "Analytical",
+    }
+    metrics = compute_result_metrics(planned_stub, simulated, total_dist)
+
+    ts_path = os.path.join(output_dir, "timeseries_lower_bound.csv")
+    simulated["time_series"].to_csv(ts_path, index=False)
+
+    result = build_result_json(
+        approach="lower_bound",
+        config=config,
+        planned=planned_stub,
+        simulated=simulated,
+        metrics=metrics,
+        time_series_file=ts_path,
+    )
+    result["analytical_fuel_kg"] = round(analytical_fuel, 4)
+    result["constant_sog_knots"] = round(constant_sog, 4)
+    json_path = os.path.join(output_dir, "result_lower_bound.json")
+    save_result(result, json_path)
+
+    print(f"  Lower bound (analytical): {analytical_fuel:.2f} kg fuel (calm water)")
+    print(f"  Lower bound (simulated):  {simulated['total_fuel_kg']:.2f} kg fuel (actual weather)")
+    return result
+
+
+def run_upper_bound(config, hdf5_path, output_dir):
+    """Simulate a constant-SOG voyage at max speed (no optimization).
+
+    Uses max_speed as target SOG for all legs.  The ship adjusts SWS to
+    maintain this SOG under actual weather.  This represents the theoretical
+    ceiling — maximum fuel consumption at constant maximum speed.
+
+    Returns:
+        Result dict (also saved as result_upper_bound.json).
+    """
+    from shared.hdf5_io import read_metadata
+    from shared.physics import calculate_fuel_consumption_rate
+
+    metadata = read_metadata(hdf5_path)
+    metadata = metadata.sort_values("node_id").reset_index(drop=True)
+    num_nodes = len(metadata)
+    num_legs = num_nodes - 1
+
+    min_speed, max_speed = config["ship"]["speed_range_knots"]
+    total_dist = metadata.iloc[-1]["distance_from_start_nm"]
+
+    # Analytical upper bound: FCR(max_speed) * (total_dist / max_speed)
+    fcr_max = calculate_fuel_consumption_rate(max_speed)
+    analytical_time = total_dist / max_speed
+    analytical_fuel = fcr_max * analytical_time
+
+    # Build constant-SOG schedule at max speed
+    schedule = []
+    for i in range(num_legs):
+        node_a = metadata.iloc[i]
+        node_b = metadata.iloc[i + 1]
+        dist = node_b["distance_from_start_nm"] - node_a["distance_from_start_nm"]
+        schedule.append({
+            "leg": i,
+            "node_id": int(node_a["node_id"]),
+            "segment": int(node_a["segment"]),
+            "sog_knots": max_speed,
+            "sws_knots": max_speed,
+            "distance_nm": max(dist, 0.001),
+        })
+
+    print("--- Upper Bound: Simulate (constant SOG = max speed) ---")
+    simulated = simulate_voyage(schedule, hdf5_path, config, sample_hour=0)
+
+    planned_stub = {
+        "planned_fuel_kg": analytical_fuel,
+        "planned_time_h": analytical_time,
+        "speed_schedule": schedule,
+        "computation_time_s": 0.0,
+        "status": "Analytical",
     }
     metrics = compute_result_metrics(planned_stub, simulated, total_dist)
 
@@ -141,11 +165,13 @@ def run_upper_bound(config, hdf5_path, output_dir):
         metrics=metrics,
         time_series_file=ts_path,
     )
+    result["analytical_fuel_kg"] = round(analytical_fuel, 4)
+    result["constant_sog_knots"] = max_speed
     json_path = os.path.join(output_dir, "result_upper_bound.json")
     save_result(result, json_path)
 
-    print(f"  Upper bound: {simulated['total_fuel_kg']:.2f} kg fuel, "
-          f"{simulated['total_time_h']:.2f} h (constant SWS={max_speed:.1f} kn)")
+    print(f"  Upper bound (analytical): {analytical_fuel:.2f} kg fuel (calm water, SOG={max_speed} kn)")
+    print(f"  Upper bound (simulated):  {simulated['total_fuel_kg']:.2f} kg fuel (actual weather)")
     return result
 
 
