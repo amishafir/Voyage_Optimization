@@ -12,7 +12,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from shared.hdf5_io import read_metadata, read_actual
+from shared.hdf5_io import read_metadata, read_actual, read_predicted
 from shared.physics import (
     calculate_ship_heading,
     calculate_speed_over_ground,
@@ -77,14 +77,29 @@ def transform(hdf5_path: str, config: dict) -> dict:
     ship_params = load_ship_parameters(config)
     sample_hour = sd_cfg["weather_snapshot"]
     num_speeds = sd_cfg["speed_choices"]
+    weather_source = sd_cfg.get("weather_source", "actual")
 
     # ------------------------------------------------------------------
     # 1. Read HDF5
     # ------------------------------------------------------------------
     metadata = read_metadata(hdf5_path)
-    weather = read_actual(hdf5_path, sample_hour=sample_hour)
-    logger.info("Read %d nodes, %d weather rows (sample_hour=%d)",
-                len(metadata), len(weather), sample_hour)
+    if weather_source == "predicted":
+        # Use predicted weather at forecast_hour=sample_hour, from forecast
+        # origin=0.  This gives the forecast's estimate of conditions at hour
+        # ``sample_hour``, as predicted at collection time 0.
+        forecast_origin = sd_cfg.get("forecast_origin", 0)
+        weather = read_predicted(
+            hdf5_path,
+            sample_hour=forecast_origin,
+            forecast_hour=sample_hour,
+        )
+        logger.info("Read %d nodes, %d PREDICTED weather rows "
+                     "(forecast_origin=%d, forecast_hour=%d)",
+                     len(metadata), len(weather), forecast_origin, sample_hour)
+    else:
+        weather = read_actual(hdf5_path, sample_hour=sample_hour)
+        logger.info("Read %d nodes, %d ACTUAL weather rows (sample_hour=%d)",
+                     len(metadata), len(weather), sample_hour)
 
     # ------------------------------------------------------------------
     # 2. Original waypoints -> segment headings & distances

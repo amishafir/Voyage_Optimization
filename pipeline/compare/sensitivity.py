@@ -361,6 +361,356 @@ def run_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
     return results
 
 
+def run_lp_predicted(config, hdf5_path, output_dir):
+    """Run the LP optimizer using predicted weather instead of actual.
+
+    This isolates whether the LP's disadvantage comes from segment-averaging
+    or from using actual (vs predicted) weather.  The LP plans on
+    predicted weather at forecast_origin=0, forecast_hour=0, then is
+    simulated under actual weather (same as all other approaches).
+
+    Returns:
+        Result dict (also saved as result_static_det_predicted.json).
+    """
+    from static_det.transform import transform
+    from static_det.optimize import optimize
+
+    cfg = copy.deepcopy(config)
+    cfg["static_det"]["weather_source"] = "predicted"
+    cfg["static_det"]["forecast_origin"] = 0
+    approach_name = "static_det_predicted"
+
+    print(f"\n--- LP with Predicted Weather ---")
+
+    print(f"  Transform (predicted weather)...")
+    t_out = transform(hdf5_path, cfg)
+
+    print(f"  Optimize (LP)...")
+    planned = optimize(t_out, cfg)
+    if planned.get("status") != "Optimal":
+        logger.warning("LP predicted: status=%s", planned.get("status"))
+        return None
+
+    print(f"  Simulate (actual weather)...")
+    simulated = simulate_voyage(
+        planned["speed_schedule"], hdf5_path, cfg,
+        sample_hour=0,
+    )
+
+    total_dist = sum(t_out["distances"])
+    metrics = compute_result_metrics(planned, simulated, total_dist)
+
+    ts_path = os.path.join(output_dir, f"timeseries_{approach_name}.csv")
+    simulated["time_series"].to_csv(ts_path, index=False)
+
+    result = build_result_json(
+        approach=approach_name,
+        config=cfg,
+        planned=planned,
+        simulated=simulated,
+        metrics=metrics,
+        time_series_file=ts_path,
+    )
+    json_path = os.path.join(output_dir, f"result_{approach_name}.json")
+    save_result(result, json_path)
+
+    print(f"  {approach_name}: plan={planned['planned_fuel_kg']:.2f} kg, "
+          f"sim={simulated['total_fuel_kg']:.2f} kg, "
+          f"gap={metrics['fuel_gap_percent']:.2f}%, "
+          f"SWS violations={simulated.get('sws_violations', 0)}")
+    return result
+
+
+def run_2x2_decomposition(config_a, config_b, hdf5_a, hdf5_b, output_dir):
+    """Run 2x2 spatial x temporal decomposition.
+
+    Four configurations:
+        A-LP: exp_a (7 nodes), LP (6 segments) — baseline
+        A-DP: exp_a (7 nodes), DP (7 nodes)   — temporal effect only
+        B-LP: exp_b (~138 nodes), LP (6 segments) — spatial averaging effect
+        B-DP: exp_b (~138 nodes), DP (~138 nodes) — full spatial + temporal
+
+    Also runs RH on exp_b for the complete picture.
+
+    Decomposition:
+        temporal_effect  = A_DP_fuel - A_LP_fuel  (same 7 nodes)
+        spatial_effect   = B_LP_fuel - A_LP_fuel  (both static, different resolution)
+        interaction      = B_DP_fuel - A_LP_fuel - temporal - spatial
+
+    Returns:
+        Dict with all results and decomposition values.
+    """
+    from static_det.transform import transform as lp_transform
+    from static_det.optimize import optimize as lp_optimize
+    from dynamic_det.transform import transform as dd_transform
+    from dynamic_det.optimize import optimize as dd_optimize
+    from dynamic_rh.transform import transform as rh_transform
+    from dynamic_rh.optimize import optimize as rh_optimize
+
+    os.makedirs(output_dir, exist_ok=True)
+    results = {}
+
+    configs = {
+        "A_LP": (config_a, hdf5_a, "static_det",  lp_transform, lp_optimize),
+        "A_DP": (config_a, hdf5_a, "dynamic_det",  dd_transform, dd_optimize),
+        "B_LP": (config_b, hdf5_b, "static_det",  lp_transform, lp_optimize),
+        "B_DP": (config_b, hdf5_b, "dynamic_det",  dd_transform, dd_optimize),
+        "B_RH": (config_b, hdf5_b, "dynamic_rh",  rh_transform, rh_optimize),
+    }
+
+    for label, (cfg, hdf5, approach, transform_fn, optimize_fn) in configs.items():
+        print(f"\n--- 2x2 Decomposition: {label} ({approach}) ---")
+
+        print(f"  Transform...")
+        t_out = transform_fn(hdf5, cfg)
+
+        print(f"  Optimize...")
+        planned = optimize_fn(t_out, cfg)
+        status = planned.get("status", "unknown")
+        if status not in ("Optimal", "Feasible"):
+            logger.warning("2x2 %s: status=%s", label, status)
+            print(f"  WARNING: {label} status={status}, skipping")
+            continue
+
+        print(f"  Simulate...")
+        simulated = simulate_voyage(
+            planned["speed_schedule"], hdf5, cfg,
+            sample_hour=0,
+        )
+
+        total_dist = sum(t_out["distances"])
+        metrics = compute_result_metrics(planned, simulated, total_dist)
+
+        approach_name = f"decomp_{label}"
+        ts_path = os.path.join(output_dir, f"timeseries_{approach_name}.csv")
+        simulated["time_series"].to_csv(ts_path, index=False)
+
+        result = build_result_json(
+            approach=approach_name,
+            config=cfg,
+            planned=planned,
+            simulated=simulated,
+            metrics=metrics,
+            time_series_file=ts_path,
+        )
+        json_path = os.path.join(output_dir, f"result_{approach_name}.json")
+        save_result(result, json_path)
+
+        fuel = simulated["total_fuel_kg"]
+        time_h = simulated["total_time_h"]
+        violations = simulated.get("sws_violations", 0)
+        print(f"  {label}: {fuel:.2f} kg fuel, {time_h:.2f} h, {violations} SWS violations")
+        results[label] = result
+
+    # Compute decomposition if all 4 core configs succeeded
+    decomp = {}
+    if all(k in results for k in ("A_LP", "A_DP", "B_LP", "B_DP")):
+        a_lp = results["A_LP"]["simulated"]["total_fuel_kg"]
+        a_dp = results["A_DP"]["simulated"]["total_fuel_kg"]
+        b_lp = results["B_LP"]["simulated"]["total_fuel_kg"]
+        b_dp = results["B_DP"]["simulated"]["total_fuel_kg"]
+
+        temporal = a_dp - a_lp
+        spatial = b_lp - a_lp
+        interaction = b_dp - a_lp - temporal - spatial
+
+        decomp = {
+            "A_LP_fuel": round(a_lp, 4),
+            "A_DP_fuel": round(a_dp, 4),
+            "B_LP_fuel": round(b_lp, 4),
+            "B_DP_fuel": round(b_dp, 4),
+            "temporal_effect_kg": round(temporal, 4),
+            "spatial_effect_kg": round(spatial, 4),
+            "interaction_kg": round(interaction, 4),
+        }
+
+        if "B_RH" in results:
+            b_rh = results["B_RH"]["simulated"]["total_fuel_kg"]
+            decomp["B_RH_fuel"] = round(b_rh, 4)
+            decomp["rh_additional_kg"] = round(b_rh - b_dp, 4)
+
+        print("\n" + "=" * 60)
+        print("2x2 DECOMPOSITION RESULTS")
+        print("=" * 60)
+        print(f"{'Config':<10} {'Fuel (kg)':>12} {'vs A-LP':>10}")
+        print("-" * 35)
+        print(f"{'A-LP':<10} {a_lp:>12.2f} {'baseline':>10}")
+        print(f"{'A-DP':<10} {a_dp:>12.2f} {temporal:>+10.2f}")
+        print(f"{'B-LP':<10} {b_lp:>12.2f} {spatial:>+10.2f}")
+        print(f"{'B-DP':<10} {b_dp:>12.2f} {b_dp - a_lp:>+10.2f}")
+        if "B_RH" in results:
+            print(f"{'B-RH':<10} {b_rh:>12.2f} {b_rh - a_lp:>+10.2f}")
+        print("-" * 35)
+        print(f"Temporal effect (A-DP - A-LP):  {temporal:+.2f} kg")
+        print(f"Spatial effect  (B-LP - A-LP):  {spatial:+.2f} kg")
+        print(f"Interaction:                    {interaction:+.2f} kg")
+        print("=" * 60)
+
+        # Save decomposition
+        decomp_path = os.path.join(output_dir, "decomposition_2x2.json")
+        with open(decomp_path, "w") as f:
+            json.dump(decomp, f, indent=2)
+        print(f"Saved: {decomp_path}")
+
+    return {"results": results, "decomposition": decomp}
+
+
+def run_short_route_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
+    """Run horizon sweep on the shorter route (exp_b, ~140h voyage).
+
+    Since the route is ~140h, the horizon sweep becomes more interesting:
+        72h  = 51% of voyage
+        120h = 86% of voyage
+        144h = 103% (full coverage!)
+
+    This tests the Section 4.5 hypothesis: does the plateau shift when
+    forecast_horizon / voyage_duration changes?
+
+    Args:
+        config: Experiment config for the short route.
+        hdf5_path: Path to exp_b HDF5.
+        output_dir: Output directory.
+        horizons: List of forecast horizons in hours.
+            Default: [24, 48, 72, 96, 120, 144]
+
+    Returns:
+        List of result dicts.
+    """
+    from dynamic_det.transform import transform as dd_transform
+    from dynamic_det.optimize import optimize as dd_optimize
+    from dynamic_rh.transform import transform as rh_transform
+    from dynamic_rh.optimize import optimize as rh_optimize
+
+    if horizons is None:
+        horizons = [24, 48, 72, 96, 120, 144]
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    eta = config["ship"]["eta_hours"]
+    relaxed_eta = int(eta * 1.02)
+
+    results = []
+
+    print("=" * 60)
+    print(f"SHORT-ROUTE HORIZON SWEEP (ETA={eta}h, relaxed={relaxed_eta}h)")
+    print("=" * 60)
+
+    for horizon in horizons:
+        ratio = horizon / eta * 100
+
+        # --- Dynamic Det ---
+        cfg = copy.deepcopy(config)
+        cfg["dynamic_det"]["max_forecast_horizon"] = horizon
+        cfg["ship"]["eta_hours"] = relaxed_eta
+        approach_name = f"short_dd_horizon_{horizon}h"
+
+        print(f"\n--- Horizon {horizon}h ({ratio:.0f}% of voyage) — Dynamic Det ---")
+
+        print(f"  Transform...")
+        t_out = dd_transform(hdf5_path, cfg)
+
+        print(f"  Optimize (DP, horizon={horizon}h)...")
+        planned = dd_optimize(t_out, cfg)
+        if planned.get("status") not in ("Optimal", "Feasible"):
+            logger.warning("Short route horizon %dh DP: status=%s",
+                           horizon, planned.get("status"))
+            print(f"  WARNING: DP status={planned.get('status')}")
+        else:
+            print(f"  Simulate...")
+            simulated = simulate_voyage(
+                planned["speed_schedule"], hdf5_path, cfg,
+                sample_hour=cfg["dynamic_det"]["forecast_origin"],
+            )
+
+            total_dist = sum(t_out["distances"])
+            metrics = compute_result_metrics(planned, simulated, total_dist)
+
+            ts_path = os.path.join(output_dir, f"timeseries_{approach_name}.csv")
+            simulated["time_series"].to_csv(ts_path, index=False)
+
+            result = build_result_json(
+                approach=approach_name,
+                config=cfg,
+                planned=planned,
+                simulated=simulated,
+                metrics=metrics,
+                time_series_file=ts_path,
+            )
+            result["horizon_ratio_pct"] = round(ratio, 1)
+            json_path = os.path.join(output_dir, f"result_{approach_name}.json")
+            save_result(result, json_path)
+
+            print(f"  {approach_name}: {simulated['total_fuel_kg']:.2f} kg, "
+                  f"ratio={ratio:.0f}%")
+            results.append(result)
+
+        # --- Rolling Horizon ---
+        cfg_rh = copy.deepcopy(config)
+        cfg_rh["dynamic_det"]["max_forecast_horizon"] = horizon
+        cfg_rh["ship"]["eta_hours"] = relaxed_eta
+        approach_name_rh = f"short_rh_horizon_{horizon}h"
+
+        print(f"\n--- Horizon {horizon}h ({ratio:.0f}% of voyage) — Rolling Horizon ---")
+
+        print(f"  Transform...")
+        t_out_rh = rh_transform(hdf5_path, cfg_rh)
+
+        print(f"  Optimize (RH, horizon={horizon}h)...")
+        planned_rh = rh_optimize(t_out_rh, cfg_rh)
+        if planned_rh.get("status") not in ("Optimal", "Feasible"):
+            logger.warning("Short route horizon %dh RH: status=%s",
+                           horizon, planned_rh.get("status"))
+            print(f"  WARNING: RH status={planned_rh.get('status')}")
+            continue
+
+        print(f"  Simulate...")
+        simulated_rh = simulate_voyage(
+            planned_rh["speed_schedule"], hdf5_path, cfg_rh,
+            sample_hour=0,
+        )
+
+        total_dist_rh = sum(t_out_rh["distances"])
+        metrics_rh = compute_result_metrics(planned_rh, simulated_rh, total_dist_rh)
+
+        ts_path_rh = os.path.join(output_dir, f"timeseries_{approach_name_rh}.csv")
+        simulated_rh["time_series"].to_csv(ts_path_rh, index=False)
+
+        result_rh = build_result_json(
+            approach=approach_name_rh,
+            config=cfg_rh,
+            planned=planned_rh,
+            simulated=simulated_rh,
+            metrics=metrics_rh,
+            time_series_file=ts_path_rh,
+        )
+        result_rh["decision_points"] = planned_rh.get("decision_points", [])
+        result_rh["horizon_ratio_pct"] = round(ratio, 1)
+        json_path_rh = os.path.join(output_dir, f"result_{approach_name_rh}.json")
+        save_result(result_rh, json_path_rh)
+
+        print(f"  {approach_name_rh}: {simulated_rh['total_fuel_kg']:.2f} kg, "
+              f"ratio={ratio:.0f}%")
+        results.append(result_rh)
+
+    # Summary table
+    print("\n" + "=" * 60)
+    print("SHORT-ROUTE HORIZON SWEEP SUMMARY")
+    print("=" * 60)
+    print(f"{'Approach':<30} {'Horizon':>8} {'Ratio':>7} {'Sim Fuel':>10} {'Time':>8}")
+    print("-" * 68)
+
+    for r in results:
+        name = r["approach"]
+        fuel = r["simulated"]["total_fuel_kg"]
+        time_h = r["simulated"]["voyage_time_h"]
+        ratio = r.get("horizon_ratio_pct", 0)
+        h = name.split("_")[-1]  # e.g. "144h"
+        print(f"{name:<30} {h:>8} {ratio:>6.0f}% {fuel:>10.2f} {time_h:>8.2f}")
+
+    print("=" * 68)
+    return results
+
+
 def run_sensitivity(config, output_dir, hdf5_path):
     """Top-level orchestrator for all sensitivity experiments.
 
