@@ -273,18 +273,16 @@ This single experiment would isolate:
 **Priority: HIGH. Can run immediately with existing data.**
 Config: `dynamic_det.weather_source: actual`, `dynamic_det.nodes: all`, normal ETA.
 
-### 4.2 Longer Collection Window (In Progress)
+### 4.2 ~~Longer Collection Window~~ DONE
 
-The server is collecting experiments with 143 sample hours (~6 days) vs the original 72 hours.
-- `exp_a`: 7 waypoints (original route density)
-- `exp_b`: 138 waypoints (interpolated)
+**Completed**: exp_a (7 WP, 133/144 samples) and exp_b (138 WP, 132/144 samples) downloaded and validated. Collection still running for the last ~11 samples but data is more than sufficient.
 
-With 143 sample hours:
-- RH has access to more diverse forecast snapshots
-- Forecast errors at long lead times are captured
-- Can test whether re-planning frequency matters MORE with longer, more variable data
+Key characteristics of the new data:
+- **Calmer weather** than the original collection: wind std 6.07 km/h (vs 10.63), wave height 0.65 m (vs 0.97)
+- **No NaN gaps** in any weather field
+- **11x more temporal samples** (132 vs 12) — enables ground-truth RMSE out to 131h lead time
 
-**ETA: ~5.5 days from now.**
+Results in Sections 15-17.
 
 ### 4.3 Weather Variability Axis
 
@@ -300,24 +298,28 @@ Options:
 - Use historical weather data (Open-Meteo has archives) for contrasting seasons
 - Create synthetic weather with controlled variability to map the breakeven curve
 
-### 4.4 Forecast Accuracy Degradation Analysis
+### ~~4.4 Forecast Accuracy Degradation Analysis~~ DONE
 
-We have forecast errors at LT=0h and LT=6h. We need the FULL lead-time curve:
-- How does RMSE grow with lead time (0h, 6h, 12h, 24h, 48h, 72h, 120h, 168h)?
-- At what lead time does forecast become "noise"?
-- Does this correlate with the horizon where DP stops improving?
+**Completed** (Exp 15): Full 0-131h ground-truth RMSE curve from exp_b data. Key results:
+- Wind speed RMSE doubles: 4.12 → 8.82 km/h (+114%)
+- Wind speed bias grows monotonically: +0.2 → +3.3 km/h (systematic overpredict)
+- Wave height doubles but from small base: 0.052 → 0.109 m
+- Current velocity barely changes: 0.358 → 0.410 km/h (+14%)
+- Error growth is not linear — accelerates after 72h, consistent with atmospheric predictability limit
 
-The data is in the HDF5 — we can compute this without new collection.
+**At what lead time does forecast become "noise"?** Not reached at 131h — RMSE is still growing but error/signal ratio is ~0.6 for wind (8.8/13.9 mean). Forecasts remain informative throughout, just increasingly biased.
 
-**Priority: HIGH. Strengthens the thesis narrative.**
+**Does it correlate with horizon where DP stops improving?** YES — on the full route, the plateau starts at 72h, which is exactly where the wind RMSE growth curve starts to accelerate. On the short route, the entire voyage is within the <96h window where forecasts are still reasonably accurate.
 
-### 4.5 Route Length Sensitivity
+### ~~4.5 Route Length Sensitivity~~ DONE
 
-Voyage is ~280 hours (12 days). Forecast horizon of 168h covers 60% of the voyage.
-- For a shorter route (e.g., 3-day crossing), would 72h forecast cover 100% → DP always wins?
-- For a longer route (e.g., 30-day transpacific), even 168h covers only 23% → LP always wins?
+**Completed** (Exp 17): Short-route horizon sweep (24h-144h on 140h voyage) vs full-route (72h-168h on 280h voyage).
 
-This would establish the **critical ratio**: `forecast_horizon / voyage_duration`.
+**The critical ratio `forecast_horizon / voyage_duration` is NOT the right framing.** The actual critical variable is whether the voyage extends beyond the "accurate forecast" window:
+- Full route (280h): extends 140h beyond the ~140h useful forecast range → horizon matters
+- Short route (140h): fits entirely within the useful forecast range → horizon is irrelevant (0.08 kg range)
+
+A better framing: **`voyage_duration / forecast_accuracy_horizon`**. If this ratio < 1, dynamic optimization benefits from any forecast length. If > 1, the uncovered portion of the voyage runs on weather persistence, and longer horizons help.
 
 ---
 
@@ -348,19 +350,19 @@ This would establish the **critical ratio**: `forecast_horizon / voyage_duration
 
 ## 6. Key Assumptions to Validate
 
-| # | Assumption | Status | How to Validate |
-|---|-----------|--------|-----------------|
-| A1 | Forecast accuracy degrades with lead time | **PARTIALLY CONFIRMED** (wind +45% over 0-11h; full curve needs exp_a/b) | Exp 4.4 done for 0-11h; full 0-168h needs 143-sample data |
+| # | Assumption | Status | Evidence |
+|---|-----------|--------|----------|
+| A1 | Forecast accuracy degrades with lead time | **CONFIRMED** | Wind RMSE 4.1→8.8 km/h over 0-131h; bias +0.2→+3.3 (Exp 15) |
 | A2 | LP uses actual weather = perfect information | True by construction | — |
 | A3 | DP with actual weather ≈ LP performance | **CONFIRMED** (Exp 4.1) | DP_actual=359.44 vs LP=361.82 (DP wins by 0.66%) |
-| A4 | Weather on this route/period is "stable" | Assumed from replan results | Quantify with forecast error variance |
-| A5 | 168h horizon covers enough of the voyage | Supported (60% → 3% gain) | Test more horizons (96h, 144h, 192h) |
-| A6 | Results generalize to other routes/seasons | **UNKNOWN** | Need multi-route or multi-season data |
-| A7 | FCR cubic relationship is accurate | Assumed (from research paper) | Sensitivity analysis on FCR exponent |
-| A8 | 279 waypoints is sufficient spatial resolution | Assumed | Compare 279 vs 3,388 (full 1nm grid) |
+| A4 | Weather on this route/period is "stable" | **CONFIRMED** | Wind std 6.07 km/h (new route) vs 10.63 (old); replan negligible on both routes |
+| A5 | 168h horizon covers enough of the voyage | **ROUTE-DEPENDENT** | Full route: plateau at 72h (26% coverage). Short route: 24h is enough (17%) |
+| A6 | Results generalize to other routes/seasons | **PARTIALLY CONFIRMED** | RH>DP holds on both routes; horizon effect is route-length dependent (Exps 16-18) |
+| A7 | FCR cubic relationship is accurate | Assumed (from research paper) | Sensitivity analysis on FCR exponent still TODO |
+| A8 | 279 waypoints is sufficient spatial resolution | **PARTIALLY TESTED** | 138 vs 7 tested in 2x2 decomp; full 3,388 still TODO |
 | A9 | SOG-targeting is standard operational practice | **Assumed** | Cite IMO EEXI / industry practices |
-| A10 | Jensen's inequality on cubic FCR causes LP penalty | **CONFIRMED** | LP gap went from 0.97% to 2.69% under SOG model |
-| A11 | SWS violations are operationally meaningful | **SUPPORTED** (magnitude analysis shows 80% LP soft vs 18% RH very hard; clear fuel-feasibility tradeoff) | Exp 4.6 done; further: cite engine limit literature |
+| A10 | Jensen's inequality on cubic FCR causes LP penalty | **CONFIRMED** | LP gap 2.69% full route; +2.44 kg spatial effect in 2x2 decomp (Exp 16) |
+| A11 | SWS violations are operationally meaningful | **SUPPORTED** | Consistent pattern across both routes; fewer violations on calmer route confirms weather-driven mechanism |
 
 ---
 
@@ -368,11 +370,11 @@ This would establish the **critical ratio**: `forecast_horizon / voyage_duration
 
 1. ~~**Is the forecast horizon effect linear or does it have a knee?**~~ **ANSWERED**: Neither — it's a **plateau**. With 5 data points (72h, 96h, 120h, 144h, 168h), the curve is flat: DP range 359-361 kg, RH range 356-358 kg. Total variation ~1.5 kg. The major benefit occurs before 72h; beyond 3 days of forecast, additional horizon provides essentially no benefit on this route/weather. See Section 12.
 
-2. **Does the new 143-hour collection window change the replan frequency finding?** With more hourly snapshots, forecasts at each decision point are genuinely different — replan frequency might finally matter.
+2. ~~**Does the new 143-hour collection window change the replan frequency finding?**~~ **ANSWERED**: No. RH on the short route with 132 samples beats DP by a consistent ~1.3 kg at every horizon (24h-144h). The RH-DP gap is remarkably stable. More temporal data does NOT make replan frequency matter more — the benefit of re-planning is about correcting systematic forecast bias, not about getting "fresher" data.
 
-3. **What's the optimal forecast_horizon / voyage_duration ratio?** Is 60% always the sweet spot, or is it route-dependent?
+3. ~~**What's the optimal forecast_horizon / voyage_duration ratio?**~~ **ANSWERED**: The ratio framing is wrong. The actual critical variable is `voyage_duration / forecast_accuracy_horizon`. If the voyage fits within the accurate forecast window (~96h for wind), ANY horizon is sufficient (even 17% coverage works). If the voyage extends beyond it, longer horizons help up to the accuracy limit, then plateau. See Section 17.
 
-4. **Can we decompose the DP advantage into spatial vs temporal components?** Run DP with (a) original 13 nodes + time-varying weather, (b) 279 nodes + static weather, (c) 279 nodes + time-varying weather. This gives a 2x2 decomposition.
+4. ~~**Can we decompose the DP advantage into spatial vs temporal components?**~~ **ANSWERED**: Yes — clean 2x2 factorial done (Exp 16). Temporal effect = +3.02 kg, spatial effect = +2.44 kg, interaction = -1.43 kg. The interaction is meaningful: finer spatial resolution partially mitigates forecast error cost. See Section 16.
 
 5. **Is there a "forecast quality threshold" below which LP dominates?** If we artificially add noise to forecasts, at what RMSE does DP start losing to LP?
 
@@ -380,7 +382,7 @@ This would establish the **critical ratio**: `forecast_horizon / voyage_duration
 
 7. ~~**Do the horizon sweep results change under the SOG-target model?**~~ **ANSWERED**: Yes. Under SOG-target, the horizon effect is smaller (356–360 kg range vs 351–366 in old model), but RH consistently beats LP at every horizon. The forecast horizon effect is dampened but the directional conclusion is unchanged.
 
-8. **How large is the Jensen's inequality penalty as a function of weather variability?** The LP's 2.69% gap is route-specific. On a route with more within-segment weather variability, this penalty should grow. Can we quantify this relationship?
+8. ~~**How large is the Jensen's inequality penalty as a function of weather variability?**~~ **PARTIALLY ANSWERED**: Full route (wind std 10.63) LP gap = 2.69%, spatial penalty = ~2.4 kg. Short route (wind std 6.07) spatial penalty = 2.44 kg on 1,678 nm. Normalizing: full route = 0.071 kg/segment, short route = 0.407 kg/segment. The per-segment penalty is actually LARGER on the short route despite calmer weather, likely because the 138→6 aggregation averages over more diverse nodes per segment than 279→12. More data points needed to establish the full relationship.
 
 9. ~~**What fraction of SWS violations are "hard" vs "soft"?**~~ **ANSWERED**: LP violations are 80% soft (<0.5 kn), max 0.67 kn. DP/RH are ~50/50 soft/hard, with DP max 1.46 kn and RH max 1.54 kn. RH has the worst "very hard" violations (18% ≥1.0 kn vs DP's 6%). Violations cluster in segments 7-8 (Indian Ocean). See Section 11.
 
@@ -394,13 +396,13 @@ This would establish the **critical ratio**: `forecast_horizon / voyage_duration
 |---|--------|--------|--------|--------|
 | 1 | ~~Run DP with actual weather + normal ETA~~ | ~~Isolates spatial granularity~~ | ~~Small~~ | **DONE** — Exp 4.1 |
 | 2 | ~~Change simulation to SOG-target model~~ | ~~Operationally realistic~~ | ~~Medium~~ | **DONE** — ranking flipped |
-| 3 | ~~Re-run horizon sweep (72h, 120h, 168h) under SOG model~~ | ~~Confirm horizon effect persists~~ | ~~Small~~ | **DONE** — RH wins at all horizons |
-| 4 | ~~Compute forecast error vs lead time curve~~ | ~~Supports thesis narrative~~ | ~~Small~~ | **DONE** — 0-11h verified; full curve needs exp_a/b |
-| 5 | ~~Add intermediate horizons (96h, 144h)~~ | ~~Maps horizon curve~~ | ~~Small~~ | **DONE** — plateau confirmed, ~1.5 kg range |
-| 6 | ~~Analyze SWS violation distribution~~ | ~~Strengthens feasibility argument~~ | ~~Small~~ | **DONE** — 4 thesis figures produced |
-| 7 | ~~Run LP with predicted weather~~ | ~~Isolates weather-type vs averaging~~ | ~~Small~~ | **DONE** — LP_pred ≈ LP_actual ≈ constant-speed |
-| 8 | Wait for exp_a/exp_b completion | Tests generalizability on new data | 5.5 days (passive) | IN PROGRESS |
-| 9 | 2x2 decomposition (spatial x temporal) | Cleanly separates factors | Medium — 4 experiment configs | TODO |
+| 3 | ~~Re-run horizon sweep under SOG model~~ | ~~Confirm horizon effect persists~~ | ~~Small~~ | **DONE** — RH wins at all horizons |
+| 4 | ~~Compute forecast error vs lead time curve~~ | ~~Supports thesis narrative~~ | ~~Small~~ | **DONE** — 0-131h verified (Exp 15) |
+| 5 | ~~Add intermediate horizons (96h, 144h)~~ | ~~Maps horizon curve~~ | ~~Small~~ | **DONE** — plateau confirmed |
+| 6 | ~~Analyze SWS violation distribution~~ | ~~Strengthens feasibility argument~~ | ~~Small~~ | **DONE** — Exp 4.6 |
+| 7 | ~~Run LP with predicted weather~~ | ~~Isolates weather-type vs averaging~~ | ~~Small~~ | **DONE** — LP ≈ constant-speed |
+| 8 | ~~Download + run exp_a/exp_b~~ | ~~Tests generalizability~~ | ~~Medium~~ | **DONE** — Exps 15-17 |
+| 9 | ~~2x2 decomposition (spatial × temporal)~~ | ~~Cleanly separates factors~~ | ~~Medium~~ | **DONE** — Exp 16 |
 | 10 | Cite IMO/EEXI on SOG-targeting practice | Validates simulation model assumption | Small — literature search | TODO |
 | 11 | Multi-season/synthetic weather | Tests robustness of thesis | Large — new data source needed | TODO |
 
