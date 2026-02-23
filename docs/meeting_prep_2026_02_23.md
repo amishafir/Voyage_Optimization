@@ -73,7 +73,28 @@ This is operationally realistic: ships maintain target speed over ground, adjust
 
 ## 3. Results
 
-### Canonical Results (SOG-target, ETA=280h, full route)
+### Simulation Credibility — Critical Caveat
+
+| Dataset | Voyage Duration | Actual Weather Samples | Simulation Quality |
+|---------|:-:|:-:|--|
+| `voyage_weather.h5` (full route) | ~280h | **12h** | **Weak** — ship at hour 200 tested against hour 0 weather |
+| `experiment_b_138wp.h5` (short route) | ~140h | **134h** | **Strong** — real weather at nearly every hour the ship passes through |
+
+The full-route results (368 kg, 367 kg, 365 kg) are **indicative but not fully trustworthy** — the simulation uses frozen hour-0 weather for a 280h voyage. The spatial variation across 279 nodes is real, but the temporal dimension is missing.
+
+The short-route results (exp_b) are the **credible, validated results** — 134 hours of ground truth for a ~140h voyage.
+
+### Credible Results — Short Route (exp_b, 138 nodes, ~140h)
+
+| | B-LP | B-DP | B-RH |
+|--|:--:|:--:|:--:|
+| **Planned fuel** | 178.2 kg | 180.1 kg | 179.2 kg |
+| **Actual fuel (simulated)** | 180.6 kg | 182.2 kg | 180.9 kg |
+| **Gap** | +2.4 kg | +2.1 kg | +1.7 kg |
+
+On the short, calm route: **all three approaches are close** (1.6 kg range). LP and RH are nearly tied (180.6 vs 180.9 kg). The optimization opportunity is small because weather is calm (wind std 6.07 km/h) and the voyage fits within the accurate forecast window.
+
+### Full-Route Results (indicative, weak simulation)
 
 | Approach | Sim Fuel (kg) | Fuel Gap | SWS Violations | vs Constant Speed |
 |----------|:------------:|:--------:|:--------------:|:-----------------:|
@@ -81,21 +102,24 @@ This is operationally realistic: ships maintain target speed over ground, adjust
 | Dynamic DP | 366.9 | 0.42% | 62/278 (22%) | -1.0 kg |
 | Static LP | 368.0 | 2.69% | 10/278 (4%) | +0.1 kg |
 | Constant SOG | 367.9 | — | 9/278 (3%) | baseline |
-| Lower bound | 352.6 | — | 0 | — |
-| Upper bound | 406.9 | — | 171 | — |
 
-### Five Key Findings
+These show larger separations (3.2 kg RH advantage, LP = constant speed), but rely on 12h of actual weather for a 280h voyage. The spatial variation is real; the temporal realism is not.
+
+### Key Findings
 
 **1. The simulation model flips the ranking.**
-Under fixed-SWS (naive): LP wins. Under SOG-targeting (realistic): RH > DP > LP. Root cause: Jensen's inequality on cubic FCR — segment averaging hides weather variation, creating hidden execution costs.
+Under fixed-SWS (naive): LP wins. Under SOG-targeting (realistic): RH > DP > LP. Root cause: Jensen's inequality on cubic FCR — segment averaging hides weather variation, creating hidden execution costs. Observed on both routes.
 
-**2. LP = constant speed (operationally meaningless).**
-LP: 368.0 kg. Constant speed: 367.9 kg. LP with predicted weather: 368.0 kg. The weather source is irrelevant — LP's disadvantage is purely structural (segment averaging compresses all signal). LP speed range is just 12.0–12.5 kn.
+**2. LP ≈ constant speed.**
+Full route: LP 368.0 kg vs constant 367.9 kg (indicative). Short route: LP 180.6 kg, close to all approaches. The LP barely varies speed (12.0–12.5 kn range), so its optimization adds negligible value.
 
-**3. Forecast horizon effect is route-length dependent.**
-Full route (280h): plateau at 72h, ~1.5 kg range. Short route (140h): flat from 24h, 0.08 kg range. Critical variable: does the voyage extend beyond the accurate forecast window (~72–96h)? If not, even a 1-day forecast suffices.
+**3. Differences shrink on calm, short routes.**
+Full route (variable weather): 3.2 kg RH advantage. Short route (calm weather): 1.6 kg total range across all methods. The value of dynamic optimization depends on weather variability and route length.
 
-**4. Information value hierarchy (2x2 decomposition on short route).**
+**4. Forecast horizon is route-length dependent.**
+Short route (credible): flat from 24h — even 17% horizon coverage is sufficient (0.08 kg range). Full route (indicative): plateau at 72h, ~1.5 kg range.
+
+**5. Information value hierarchy (2x2 decomposition, credible — exp_a + exp_b).**
 
 | Factor | Impact | Rank |
 |--------|:------:|:----:|
@@ -104,8 +128,9 @@ Full route (280h): plateau at 72h, ~1.5 kg range. Short route (140h): flat from 
 | Interaction (spatial mitigates temporal) | -1.43 kg | — |
 | Re-planning benefit (RH vs DP) | -1.33 kg | 3rd |
 
-**5. Forecast error curve completes the causal chain.**
-From exp_b (138 nodes × 134 samples), ground-truth RMSE:
+This decomposition is credible — it uses exp_a/exp_b with sufficient temporal coverage.
+
+**6. Forecast error curve (credible — exp_b ground truth).**
 
 | Lead Time | Wind RMSE (km/h) | Wind Bias |
 |:---------:|:----------------:|:---------:|
@@ -113,21 +138,13 @@ From exp_b (138 nodes × 134 samples), ground-truth RMSE:
 | 72h | 6.13 | +1.31 |
 | 133h | 8.40 | +2.67 |
 
-Wind RMSE doubles (+103%). Systematic overpredict bias → DP/RH prepare for headwinds that don't materialize → SWS overspeed violations. Error accelerates after 72h, matching the horizon plateau.
-
-### Generalizability (two routes, two weather regimes)
-
-| Finding | Full Route (windier, 280h) | Short Route (calmer, 140h) |
-|---------|:-:|:-:|
-| RH > DP > LP | Yes | Yes |
-| LP ≈ constant speed | Yes | Yes |
-| Replan negligible | Yes | Yes |
-| Horizon matters | Yes (plateau at 72h) | No (flat from 24h) |
+Wind RMSE doubles (+103%). Systematic overpredict bias explains SWS violations. This is pure measurement — no simulation assumptions.
 
 ### Sensitivity (negligible factors)
 
 - **Replan frequency**: 3h vs 48h → <0.35 kg range
 - **Weather source for LP**: actual vs predicted → 0.02 kg difference
+- **Horizon on short route**: 24h–144h → 0.08 kg range
 
 ---
 
@@ -153,21 +170,23 @@ Wind RMSE doubles (+103%). Systematic overpredict bias → DP/RH prepare for hea
 
 | Item | Effort | Impact | Notes |
 |------|--------|--------|-------|
-| IMO/EEXI citations | 2–3 days | Medium | Validates the SOG-target model assumption that drives Finding #1 |
+| **Full-route collection (280+ hours)** | 12 days (passive) | **Critical** | Enables credible simulation on the full route where algorithm differences are large |
+| IMO/EEXI citations | 2–3 days | Medium | Validates the SOG-target model assumption |
 | Multi-season analysis | 2–4 weeks | Large | Monsoon, North Atlantic winter — strengthens generalizability |
-| Thesis writing (first draft) | 3–4 weeks | — | Core research is sufficient to start |
+| Thesis writing (first draft) | 3–4 weeks | — | Can start in parallel with collection |
 
 ### Questions for Supervisor
 
-1. **Scope**: Start writing now (9/11 done), or pursue multi-season analysis first?
-2. **Generalizability**: Is two routes sufficient, or do we need more to claim route-length dependence?
-3. **IMO/EEXI**: What citation level justifies the SOG-target model? Guidelines, surveys, or reasoning?
-4. **Novelty**: Is "LP = constant speed" known in the literature, or is this a new finding?
-5. **2x2 interaction** (-1.43 kg): Dedicated section or just a paragraph?
+1. **Simulation credibility**: Full-route results use 12h of weather for a 280h voyage — should we re-collect for 280+ hours before relying on those results?
+2. **Are short-route results sufficient?** The credible exp_b results show small differences (1.6 kg range). Is this enough to justify the thesis, or do we need the full-route data where differences are larger?
+3. **IMO/EEXI**: What citation level justifies the SOG-target model?
+4. **Novelty**: Is "LP = constant speed" known in the literature?
+5. **Scope**: Start writing now with exp_b as the primary evidence, or wait for full-route re-collection?
 
 ### Proposed Thesis Arc
 
 1. Lead with simulation model insight (SOG-target vs fixed-SWS flips everything)
-2. Present LP ≈ constant-speed (strongest, most surprising finding)
-3. Layer in forecast horizon + route-length dependence
-4. Organize as information value hierarchy (actionable framework for practitioners)
+2. Present the 2x2 decomposition (credible, from exp_a/b) as primary evidence
+3. Present forecast error curve (credible ground truth, no simulation needed)
+4. Full-route results as supporting/indicative evidence (or re-collect to make credible)
+5. Organize as information value hierarchy (actionable framework)
