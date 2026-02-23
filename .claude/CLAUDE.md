@@ -85,7 +85,7 @@ Multi-location scripts produce Excel files with 14 sheets:
 - **Integer time keys only**: Sample hours are `0, 1, 2, ...` (int), never floats or strings
 - **Local Node class per producer**: Each producer defines its own Node class (not imported from class.py)
 - **`Linear programing/`**: Note the single "m" — legacy spelling, do not rename
-- **`remote_server_scripts/`**: Deprecated — use the `remote-server` agent instead
+
 
 ## Reference Skills
 

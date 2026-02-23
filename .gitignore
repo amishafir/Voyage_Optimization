@@ -7,7 +7,6 @@ __pycache__/
 .pytest_cache/
 
 # API cache
-.cache.sqlite
 .cache/
 
 # Virtual environments
@@ -35,6 +34,17 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Sensitive files
+recovery_codes.txt
+
+# Data artifacts
+*.pickle
+*.h5
+*.sqlite
+
+# Claude dev artifacts
+.a5c/
 
 # Pipeline runtime data
 pipeline/data/*
