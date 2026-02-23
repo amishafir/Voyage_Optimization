@@ -22,8 +22,8 @@ Weather API (Open-Meteo) --> Collection --> HDF5 --> Transform --> Optimize --> 
 | SOG-target simulation engine | Done |
 | Comparison framework (figures, tables, report) | Done |
 | Sensitivity analysis (bounds, horizon sweep, replan sweep) | Done |
-| Extended dataset (132 samples, shorter route, two spatial densities) | **Done** |
-| Full forecast error curve (0-131h, ground truth) | **Done** |
+| Extended dataset (134 samples, shorter route, two spatial densities) | **Done** |
+| Full forecast error curve (0-133h, ground truth) | **Done** |
 | 2x2 spatial x temporal decomposition | **Done** |
 | Short-route horizon sweep (24-144h) | **Done** |
 
@@ -40,7 +40,7 @@ Weather API (Open-Meteo) --> Collection --> HDF5 --> Transform --> Optimize --> 
 | 7 | LP with predicted weather | LP_predicted = LP_actual = constant speed |
 | 8 | SWS violation analysis | LP: 10 mild; DP/RH: 60+ with hard violations |
 | 9 | Theoretical bounds (lower/upper) | Optimization span: 352.6 - 406.9 kg |
-| **10** | **Full forecast error curve (0-131h)** | **Wind RMSE doubles (4.1→8.8 km/h), bias grows to +3.3 km/h** |
+| **10** | **Full forecast error curve (0-133h)** | **Wind RMSE doubles (4.1→8.4 km/h), bias grows to +2.7 km/h** |
 | **11** | **2x2 decomposition (spatial x temporal)** | **Temporal +3.02 kg > Spatial +2.44 kg, interaction -1.43 kg** |
 | **12** | **Short-route horizon sweep (24-144h)** | **Horizon effect flat on short route (0.08 kg range)** |
 
@@ -60,7 +60,7 @@ Weather API (Open-Meteo) --> Collection --> HDF5 --> Transform --> Optimize --> 
 | 2 | **LP optimization is operationally meaningless** | LP (368.0 kg) = constant speed (367.9 kg). The LP barely varies speed (12.0-12.5 kn), so its "optimization" is indistinguishable from just dividing distance by ETA. |
 | 3 | **Forecast horizon effect is route-length dependent** | Dominant on long routes (280h, 1.5 kg range), negligible on short routes (140h, 0.08 kg range). Explained by the forecast error growth curve. |
 | 4 | **Information value hierarchy** | Temporal effect (+3.02 kg) > spatial effect (+2.44 kg), with meaningful interaction (-1.43 kg). Confirmed by clean 2x2 factorial experiment. |
-| 5 | **Forecast error curve completes the causal chain** | Wind RMSE doubles (4.1→8.8 km/h) over 131h, with systematic overpredict bias (+3.3 km/h). This directly explains the SWS violations and the route-length dependence. |
+| 5 | **Forecast error curve completes the causal chain** | Wind RMSE doubles (4.1→8.4 km/h) over 133h, with systematic overpredict bias (+2.7 km/h). This directly explains the SWS violations and the route-length dependence. |
 
 ### The Hierarchy (from most to least impactful)
 
@@ -180,8 +180,8 @@ This is real but small — the 3rd most important factor.
 **Original collection** (full route): 72 hourly samples (sample_hour 0-71), 279 waypoints, 3,394 nm.
 
 **Extended collection** (short route): 132 hourly samples (sample_hour 0-131), two densities:
-- exp_a: 7 original waypoints, 133 samples — for temporal isolation
-- exp_b: 138 interpolated waypoints, 132 samples — for spatial + temporal analysis
+- exp_a: 7 original waypoints, 135 samples — for temporal isolation
+- exp_b: 138 interpolated waypoints, 134 samples — for spatial + temporal analysis
 
 **Forecast structure**: At each sample_hour, the API returns forecasts for the next ~150 hours (forecast_hour 0 through ~149).
 
@@ -384,21 +384,21 @@ Under operationally realistic execution (ship targets SOG, adjusts engine power)
 
 ### The Full Forecast Error Curve (NEW — key thesis figure)
 
-With 132 actual weather samples (vs the previous 12), we now have ground-truth forecast accuracy from 0 to 131 hours:
+With 134 actual weather samples (vs the previous 12), we now have ground-truth forecast accuracy from 0 to 133 hours:
 
 | Lead Time | Wind RMSE (km/h) | Wind Bias | Wave RMSE (m) | Current RMSE (km/h) |
 |-----------|-----------------|-----------|---------------|---------------------|
-| 0h | 4.12 | +0.20 | 0.052 | 0.358 |
-| 24h | 4.81 | +0.56 | 0.072 | 0.382 |
-| 48h | 5.62 | +1.17 | 0.075 | 0.406 |
-| 72h | 6.12 | +1.28 | 0.095 | 0.449 |
-| 96h | 7.59 | +2.76 | 0.115 | 0.458 |
-| 120h | 8.30 | +3.19 | 0.120 | 0.438 |
-| 131h | 8.82 | +3.34 | 0.109 | 0.410 |
+| 0h | 4.13 | +0.20 | 0.052 | 0.358 |
+| 24h | 4.84 | +0.59 | 0.072 | 0.382 |
+| 48h | 5.63 | +1.21 | 0.076 | 0.406 |
+| 72h | 6.13 | +1.31 | 0.094 | 0.448 |
+| 96h | 7.65 | +2.86 | 0.114 | 0.460 |
+| 120h | 8.34 | +3.15 | 0.118 | 0.443 |
+| 133h | 8.40 | +2.67 | 0.113 | 0.503 |
 
-**Why this matters**: Wind RMSE doubles over 131h, and wind speed is the dominant environmental factor for fuel consumption (wind resistance). The growing positive bias (+3.3 km/h at 131h) means forecasts systematically overpredict wind — this is exactly why DP/RH plans create overspeed SWS violations (they prepare for headwinds that don't materialize).
+**Why this matters**: Wind RMSE doubles over 133h, and wind speed is the dominant environmental factor for fuel consumption (wind resistance). The growing positive bias (+2.7 km/h at 133h) means forecasts systematically overpredict wind — this is exactly why DP/RH plans create overspeed SWS violations (they prepare for headwinds that don't materialize).
 
-**Connection to horizon sweep**: On the full route (280h), hours 140-280 of the voyage have no forecast coverage and use weather persistence. The forecast error at those hours is even worse than 8.8 km/h. This is why the horizon effect matters on long routes. On the short route (140h), the entire voyage is within the 0-140h window where forecasts are still reasonably accurate — so additional forecast hours don't help.
+**Connection to horizon sweep**: On the full route (280h), hours 140-280 of the voyage have no forecast coverage and use weather persistence. The forecast error at those hours is even worse than 8.4 km/h. This is why the horizon effect matters on long routes. On the short route (140h), the entire voyage is within the 0-140h window where forecasts are still reasonably accurate — so additional forecast hours don't help.
 
 ### Generalizability: Two Routes, Two Weather Regimes (NEW)
 
@@ -417,8 +417,8 @@ With 132 actual weather samples (vs the previous 12), we now have ground-truth f
 **What's route-dependent**: The forecast horizon effect is entirely route-length dependent. On a voyage that fits within the ~72h accurate forecast window, even a 1-day forecast is sufficient. On a longer voyage, the hours beyond the forecast horizon run on "weather persistence" — and that's where the fuel cost accumulates.
 
 ### What's Now Resolved (since last version)
-1. ~~Longer collection window~~ — **DONE**: exp_a (7 WP, 133 samples) + exp_b (138 WP, 132 samples) downloaded and validated
-2. ~~Full forecast error curve~~ — **DONE**: 0-131h ground-truth RMSE. Wind doubles, bias grows to +3.3 km/h.
+1. ~~Longer collection window~~ — **DONE**: exp_a (7 WP, 135 samples) + exp_b (138 WP, 134 samples) downloaded and validated
+2. ~~Full forecast error curve~~ — **DONE**: 0-133h ground-truth RMSE. Wind doubles, bias grows to +2.7 km/h.
 3. ~~2x2 decomposition~~ — **DONE**: Temporal +3.02 kg > Spatial +2.44 kg, with -1.43 kg interaction
 4. ~~Generalizability on second route~~ — **DONE**: RH > DP hierarchy holds; horizon effect is route-length dependent
 
