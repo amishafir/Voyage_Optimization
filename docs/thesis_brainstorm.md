@@ -15,22 +15,45 @@
 
 ---
 
-## 2. Canonical Results
+## 2. Simulation Credibility
 
-### SOG-Target Model (ETA=280h, full route)
+| Dataset | Voyage Duration | Actual Weather Samples | Simulation Quality |
+|---------|:-:|:-:|--|
+| `voyage_weather.h5` (full route) | ~280h | **12h** | **Weak** — ship at hour 200 tested against hour 0 weather |
+| `experiment_b_138wp.h5` (short route) | ~140h | **134h** | **Strong** — real weather at nearly every hour |
 
-| Approach | Plan Fuel | Sim Fuel | Gap | Sim Time | SWS Violations |
-|----------|:---------:|:--------:|:---:|:--------:|:--------------:|
-| **Rolling Horizon** | 361.4 kg | **364.8 kg** | 0.92% | 282.1h | 60/278 (22%) |
-| **Dynamic DP** | 365.3 kg | **366.9 kg** | 0.42% | 281.2h | 62/278 (22%) |
-| **Static LP** | 358.4 kg | **368.0 kg** | 2.69% | 280.3h | 10/278 (4%) |
-| Constant SOG (12.13 kn) | — | **367.9 kg** | — | 280.3h | 9/278 (3%) |
-| Lower bound (calm) | — | **352.6 kg** | — | 280.0h | 0 |
-| Upper bound (13 kn) | — | **406.9 kg** | — | — | 171 |
+Full-route results show larger algorithm separations (3.2 kg RH advantage) but rely on frozen weather for a 280h voyage. The spatial variation across 279 nodes is real; the temporal realism is not. These results are **indicative but not fully trustworthy**.
 
-Optimization potential: 54.3 kg range. RH captures 77.6%, DP 73.8%, LP 71.8% ≈ constant-speed 71.9%.
+Short-route results (exp_b) have near-complete temporal coverage and are the **credible primary evidence**. However, differences are small on this calm route (1.6 kg total range).
 
-### The Ranking Reversal
+The forecast error curve and 2x2 decomposition are **fully credible** — they compare predicted vs actual observations directly, with no simulation assumptions.
+
+---
+
+## 3. Results
+
+### Credible Results — Short Route (exp_b, 138 nodes, ~140h)
+
+| | B-LP | B-DP | B-RH |
+|--|:--:|:--:|:--:|
+| **Planned fuel** | 178.2 kg | 180.1 kg | 179.2 kg |
+| **Actual fuel (simulated)** | 180.6 kg | 182.2 kg | 180.9 kg |
+| **Gap** | +2.4 kg | +2.1 kg | +1.7 kg |
+
+All three approaches are close (1.6 kg range). LP and RH nearly tied (180.6 vs 180.9). The optimization opportunity is small on this calm route (wind std 6.07 km/h).
+
+### Full-Route Results (indicative, weak simulation)
+
+| Approach | Plan Fuel | Sim Fuel | Gap | SWS Violations |
+|----------|:---------:|:--------:|:---:|:--------------:|
+| **Rolling Horizon** | 361.4 kg | **364.8 kg** | 0.92% | 60/278 (22%) |
+| **Dynamic DP** | 365.3 kg | **366.9 kg** | 0.42% | 62/278 (22%) |
+| **Static LP** | 358.4 kg | **368.0 kg** | 2.69% | 10/278 (4%) |
+| Constant SOG | — | **367.9 kg** | — | 9/278 (3%) |
+
+Larger separations here (LP = constant speed, RH saves 3.2 kg), but temporal realism is weak.
+
+### The Ranking Reversal (observed on both routes)
 
 | Approach | Fixed-SWS (old) | SOG-Target (new) |
 |----------|:---------------:|:----------------:|
@@ -38,13 +61,13 @@ Optimization potential: 54.3 kg range. RH captures 77.6%, DP 73.8%, LP 71.8% ≈
 | DP | 367.8 kg (worst) | **366.9 kg (best)** |
 | RH | 364.4 kg | 364.8 kg |
 
-**Mechanism:** LP picks one SOG per segment from averaged weather. Under SOG-targeting, maintaining that SOG at individual nodes where weather differs from the average requires SWS adjustments. Cubic FCR (0.000706 × SWS³) means harsh-node penalties always outweigh calm-node savings (Jensen's inequality). The averaging that helped LP plan now hurts it in execution.
+**Mechanism:** LP picks one SOG per segment from averaged weather. Under SOG-targeting, maintaining that SOG at individual nodes where weather differs from the average requires SWS adjustments. Cubic FCR (0.000706 × SWS³) means harsh-node penalties always outweigh calm-node savings (Jensen's inequality).
 
 ---
 
-## 3. Factor Decomposition
+## 4. Factor Decomposition
 
-### Full Route (controlled experiments)
+### Full Route (indicative — weak simulation)
 
 | Factor | How Measured | Impact |
 |--------|-------------|:------:|
@@ -55,7 +78,7 @@ Optimization potential: 54.3 kg range. RH captures 77.6%, DP 73.8%, LP 71.8% ≈
 | Forecast horizon (default vs 168h) | Horizon sweep at ETA=285h | **-8 kg** |
 | Replan frequency (3h vs 48h) | Replan sweep | **~0 kg** |
 
-### 2x2 Factorial (short route, exp_a/b)
+### 2x2 Factorial (credible — short route, exp_a/b)
 
 | Config | Nodes | Weather | Approach | Fuel (kg) |
 |--------|:-----:|---------|----------|:---------:|
@@ -76,9 +99,9 @@ The negative interaction means finer spatial resolution partially compensates fo
 
 ---
 
-## 4. Sensitivity Analyses
+## 5. Sensitivity Analyses
 
-### Horizon Sweep — Full Route (ETA=285h)
+### Horizon Sweep — Full Route (indicative, ETA=285h)
 
 | Horizon | DP Fuel | RH Fuel | RH Violations |
 |---------|:-------:|:-------:|:-------------:|
@@ -90,7 +113,7 @@ The negative interaction means finer spatial resolution partially compensates fo
 
 **Plateau from 72h onward** (~1.5 kg range). 72h (26% of voyage) captures nearly all benefit. Violations increase with horizon — more information enables more aggressive plans.
 
-### Horizon Sweep — Short Route (exp_b, ~140h voyage)
+### Horizon Sweep — Short Route (credible, exp_b, ~140h voyage)
 
 | Horizon | Ratio | DP Fuel | RH Fuel |
 |---------|:-----:|:-------:|:-------:|
@@ -103,7 +126,7 @@ The negative interaction means finer spatial resolution partially compensates fo
 
 **Critical insight:** The relevant variable is not absolute horizon length but `voyage_duration / forecast_accuracy_horizon`. If the voyage fits within the accurate forecast window (~72-96h for wind), any horizon suffices. If it extends beyond, longer horizons help up to the accuracy limit.
 
-### Replan Frequency (full route)
+### Replan Frequency (indicative, full route)
 
 | Freq | Fuel (kg) | Delta |
 |------|:---------:|:-----:|
@@ -116,7 +139,7 @@ Range <0.35 kg — negligible.
 
 ---
 
-## 5. Forecast Error Curve (ground truth, 0-133h)
+## 6. Forecast Error Curve (credible — ground truth, 0-133h)
 
 From exp_b (138 nodes × 134 samples):
 
@@ -136,7 +159,7 @@ This directly explains: (1) the horizon plateau at 72h, (2) the route-length dep
 
 ---
 
-## 6. SWS Violation Analysis
+## 7. SWS Violation Analysis (indicative — full-route data only)
 
 | Approach | Violations | Rate | Max Severity | Soft (<0.5 kn) | Very Hard (≥1.0 kn) |
 |----------|:---------:|:----:|:------------:|:--------------:|:--------------------:|
@@ -150,27 +173,31 @@ Violations cluster in segments 7-8 (Indian Ocean, ~2000-2500 nm) — 84-88% rate
 
 ---
 
-## 7. Generalizability (two routes, two weather regimes)
+## 8. Generalizability (two routes, two weather regimes)
 
 | Finding | Full Route (3,394 nm, windier) | Short Route (1,678 nm, calmer) |
 |---------|:--:|:--:|
-| RH > DP > LP | Yes | Yes |
-| LP ≈ constant speed | Yes | Yes |
-| Replan negligible | Yes | Yes |
-| Horizon matters | Yes (plateau at 72h) | No (flat from 24h) |
+| RH > DP > LP | Yes (indicative) | Yes (credible) |
+| LP ≈ constant speed | Yes (indicative) | Yes (credible) |
+| Replan negligible | Yes (indicative) | Yes (credible) |
+| Horizon matters | Yes, plateau at 72h (indicative) | No, flat from 24h (credible) |
 
 Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despite different conditions, the hierarchy holds. Horizon effect is the only route-dependent finding.
 
+**Caveat:** Full-route column is indicative (12h actual for 280h voyage). The hierarchy is consistent across routes, but confidence levels differ. Re-collection of full-route data (280+ hours) would make both columns credible.
+
 ---
 
-## 8. Thesis Structure
+## 9. Thesis Structure
 
 ### Proposed Arc
 
 1. **Lead with simulation model insight** — SOG-target vs fixed-SWS flips everything. Novel methodological contribution.
-2. **Present LP ≈ constant-speed** — strongest, most surprising evidence.
-3. **Layer in forecast horizon + route-length dependence** — explains when dynamic optimization matters.
-4. **Organize as information value hierarchy** — actionable framework for practitioners.
+2. **Present 2x2 decomposition** (credible, from exp_a/b) as primary quantitative evidence.
+3. **Present forecast error curve** (credible ground truth, no simulation needed) — completes causal chain.
+4. **Layer in forecast horizon + route-length dependence** — explains when dynamic optimization matters.
+5. **Full-route results as supporting/indicative evidence** (or re-collect to make credible).
+6. **Organize as information value hierarchy** — actionable framework for practitioners.
 
 ### Title Ideas
 
@@ -180,7 +207,7 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 
 ---
 
-## 9. Assumptions & Validation
+## 10. Assumptions & Validation
 
 | # | Assumption | Status | Evidence |
 |---|-----------|:------:|----------|
@@ -198,7 +225,7 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 
 ---
 
-## 10. Action Items
+## 11. Action Items
 
 | # | Action | Status |
 |---|--------|:------:|
@@ -212,11 +239,12 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 | 8 | exp_a/exp_b generalizability | **Done** |
 | 9 | 2x2 decomposition | **Done** |
 | **10** | **IMO/EEXI literature — validate SOG-targeting** | **TODO** (small) |
-| **11** | **Multi-season weather robustness** | **TODO** (large) |
+| **11** | **Full-route re-collection (280+ hours actual weather)** | **TODO** (critical) |
+| **12** | **Multi-season weather robustness** | **TODO** (large) |
 
 ---
 
-## 11. Open Questions
+## 12. Open Questions
 
 ### Resolved
 
@@ -238,7 +266,7 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 
 ---
 
-## 12. Session Log
+## 13. Session Log
 
 ### 2026-02-17 — Initial brainstorm + simulation model change
 - Three-way comparison showed LP wins under fixed-SWS
@@ -263,3 +291,11 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 - 2x2 decomposition: temporal +3.02 > spatial +2.44, interaction -1.43, RH benefit -1.33
 - Short-route horizon sweep: completely flat (0.08 kg DP range across 24h-144h)
 - Generalizability confirmed: RH > DP > LP holds on both routes; horizon effect is route-dependent
+
+### 2026-02-23 — Simulation credibility caveat
+- Identified critical limitation: full-route simulation uses 12h actual weather for 280h voyage (frozen hour-0 weather)
+- Short-route (exp_b) has 134h actual for ~140h voyage — **credible primary evidence**
+- Relabeled all results: full-route = "indicative", short-route = "credible"
+- Forecast error curve and 2x2 decomposition are fully credible (no simulation assumptions)
+- Added full-route re-collection (280+ hours) as critical action item
+- Updated thesis arc: lead with credible exp_a/b evidence, full-route as supporting

@@ -2,124 +2,207 @@
 
 ---
 
-## 1. Data Structure
+## 1. The Dataset: `experiment_b_138wp.h5`
 
-### Pipeline
+### What we collected
+
+A Python script queried the Open-Meteo API every hour for **134 hours** (~5.5 days), collecting weather data for 138 waypoints along a 1,678 nm route from the Persian Gulf to the Indian Ocean.
 
 ```
-Open-Meteo API → Collection (hourly) → HDF5 → Transform → Optimize → Simulate → Compare
+Route:    Port A (Persian Gulf) → Indian Ocean 1
+Distance: 1,678 nm (~140 hours at 12 kn)
+Nodes:    138 (7 original waypoints + 131 interpolated at ~12 nm spacing)
+Samples:  134 hours of continuous collection
 ```
 
-### Three HDF5 Datasets
+### HDF5 structure (3 tables)
 
-| Dataset | HDF5 File | Route | Nodes | Samples | Purpose |
-|---------|-----------|-------|:-----:|:-------:|---------|
-| **Original** | `voyage_weather.h5` | Persian Gulf → Malacca (3,394 nm, ~280h) | 279 | 12h | Base experiments |
-| **Exp A** | `experiment_a_7wp.h5` | Persian Gulf → IO1 (1,678 nm, ~140h) | 7 | 135h | Temporal isolation (coarse spatial) |
-| **Exp B** | `experiment_b_138wp.h5` | Same short route | 138 | 134h | Spatial + temporal (fine spatial) |
+**`/metadata`** — 138 rows, one per waypoint. Static.
 
-Exp A and B form a **2x2 factorial design** — same route, different spatial densities, 11x more temporal samples than original.
+| node_id | lat | lon | waypoint_name | distance_from_start_nm | segment |
+|:--:|:--:|:--:|:--|:--:|:--:|
+| 0 | 24.75 | 52.83 | Port A (Persian Gulf) | 0.0 | 0 |
+| 1 | 56.45 | 26.55 | Gulf of Oman | 223.7 | 1 |
+| ... | ... | ... | ... | ... | ... |
+| 137 | 10.45 | 75.16 | Indian Ocean 1 | 1677.6 | 5 |
 
-### HDF5 Schema (3 tables, identical across all files)
+**`/actual_weather`** — 18,492 rows (138 nodes × 134 hours). What really happened.
 
-| Table | Key Columns | Rows (exp_b) |
-|-------|-------------|:------------:|
-| `/metadata` | node_id, lat, lon, waypoint_name, is_original, distance_from_start_nm, segment | 138 |
-| `/actual_weather` | node_id, sample_hour, + 6 weather fields | 18,492 |
-| `/predicted_weather` | node_id, forecast_hour, sample_hour, + 6 weather fields | 3.1M |
+Each row: at node X, at sample_hour Y, the conditions were: wind, waves, current.
 
-**6 weather fields:** wind_speed_10m_kmh, wind_direction_10m_deg, beaufort_number (calculated, not from API), wave_height_m, ocean_current_velocity_kmh, ocean_current_direction_deg
+**`/predicted_weather`** — 3.1M rows (138 nodes × 134 hours × ~168 forecast hours). What the forecast said would happen.
 
-**Time dimensions:**
-- `sample_hour` = when we queried the API (0, 1, 2, ... — always integer)
-- `forecast_hour` = what future hour the prediction is about (-18 to +173, ~7 days ahead)
-- Each sample produces ~168 forecast hours per node
+Each row: at node X, when we asked at sample_hour Y, the forecast predicted that at forecast_hour Z the conditions would be: wind, waves, current.
 
-**Known issue:** Last waypoint on each route may have NaN for wave/current (coastal, outside Marine API coverage). Handled by clamping to 0.
+### The two time dimensions
+
+- **`sample_hour`** = when we queried the API (0, 1, 2, ... 133). Real wall-clock time. The script ran for 134 hours.
+- **`forecast_hour`** = what future hour the prediction is about (-18 to +173). Each query produces ~168 forecast hours. Negative = hindcast.
+
+### 6 weather fields (identical across both tables)
+
+`wind_speed_10m_kmh`, `wind_direction_10m_deg`, `beaufort_number` (calculated from wind, not from API), `wave_height_m`, `ocean_current_velocity_kmh`, `ocean_current_direction_deg`
+
+### Why this dataset is credible
+
+The voyage takes ~140 hours. We collected 134 hours of actual weather. That means the simulation can test the ship against **real weather at nearly every hour it passes through a node**. This is the key advantage over the original dataset (12h actual for a 280h voyage).
 
 ---
 
-## 2. Optimization Algorithms
+## 2. The Experiment: Plan vs Actual
 
-### Physics Model (shared by all approaches)
+### The core concept
 
-8-step speed correction from research paper: SWS → wind/wave resistance → weather-corrected speed → vector addition with current → SOG.
+```
+                    PLAN                              ACTUAL (simulation)
+    ┌──────────────────────────┐          ┌──────────────────────────────┐
+    │ Optimizer sees weather   │          │ Ship sails through ACTUAL    │
+    │ (actual or predicted)    │          │ weather from actual_weather  │
+    │          ↓               │          │          ↓                   │
+    │ Outputs: SOG target per  │   ──→    │ At each node: what SWS is   │
+    │ leg (speed over ground)  │          │ needed to achieve that SOG?  │
+    │          ↓               │          │          ↓                   │
+    │ Plan fuel = FCR × time   │          │ Actual fuel = FCR(SWS) × t  │
+    └──────────────────────────┘          └──────────────────────────────┘
+```
 
-**FCR** = 0.000706 × SWS³ (kg/hour, cubic — this convexity drives the key findings)
+### SOG-targeting (operationally realistic)
 
-### Three Strategies
+Ships in the real world maintain a **target speed over ground** (SOG). The engine adjusts power (SWS = speed through water) to compensate for weather:
+- Headwind → increase SWS to maintain SOG
+- Tailwind → decrease SWS to maintain SOG
+
+The simulation mirrors this: for each node, given the planned SOG and actual weather, it uses binary search to find the SWS needed. If SWS exceeds engine limits [11, 13] kn, it's **clamped** and a violation is logged.
+
+### Why the gap matters
+
+**FCR = 0.000706 × SWS³** — fuel consumption is cubic in engine speed.
+
+The plan uses one version of weather (predicted or averaged). The actual weather is different at each node. The SWS adjustments needed to maintain the planned SOG under actual weather cost more fuel than the plan estimated — because the cubic FCR means **penalties at harsh nodes always outweigh savings at calm nodes** (Jensen's inequality).
+
+The gap between plan and actual = the cost of imperfect information.
+
+### What creates SWS violations
+
+| Source | Direction | Mechanism |
+|--------|:---------:|-----------|
+| Forecast overpredicts wind | SWS > 13 kn needed | Plan expects headwind, actual is calmer → ship overspeeds |
+| Forecast underpredicts wind | SWS < 11 kn needed | Plan expects calm, actual has headwind → ship can't keep up |
+| Segment averaging hides extremes | Both | LP sees mild average, but individual nodes have harsh weather |
+
+---
+
+## 3. The Three Algorithms
+
+### Shared physics model
+
+8-step speed correction from research paper:
+
+```
+SWS → weather direction angle → Froude number → direction/speed/form coefficients
+    → speed loss % → weather-corrected speed → vector addition with current → SOG
+```
+
+**FCR = 0.000706 × SWS³** (kg/hour). This cubic convexity is what makes the choice of algorithm matter.
+
+### Algorithm comparison (on exp_b: 138 nodes, 6 segments, ~140h)
 
 | | Static Det. (LP) | Dynamic Det. (DP) | Rolling Horizon (RH) |
 |--|---|---|---|
-| **Granularity** | 12 segments (~280 nm each) | 278 legs (~12 nm each) | 278 legs, re-planned |
-| **Weather** | Actual, single snapshot (hour 0) | Predicted, single forecast (hour 0) | Predicted, fresh forecast each decision point |
-| **Algorithm** | Linear Program (Gurobi/PuLP) | Forward Bellman DP | DP × 42 decision points |
-| **Re-planning** | None | None | Every 6h (configurable) |
-| **Solve time** | 0.002s | 1.7s | 26s |
+| **Weather source** | `/actual_weather` at hour 0 | `/predicted_weather` at hour 0 | `/predicted_weather`, re-queried each decision point |
+| **Spatial granularity** | 6 segments (~280 nm each) | 137 legs (~12 nm each) | 137 legs, re-planned |
+| **What it sees** | Segment-averaged actual weather | Per-node predicted weather (single forecast) | Per-node predicted weather (latest forecast) |
+| **Algorithm** | Linear Program (Gurobi) | Forward Bellman DP | DP × ~23 decision points |
+| **Re-planning** | None | None | Every 6h |
+| **SWS choices** | 21 options (11.0–13.0 kn) | 21 options per node | 21 options per node |
 
-**LP:** Averages weather per segment → picks one SWS per segment (21 candidates, 11.0–13.0 kn) → minimizes fuel subject to ETA ≤ 280h. SOS2 piecewise linearization for SOG(SWS).
+**LP:** Averages weather across all nodes in each segment → picks one SWS per segment → minimizes total fuel subject to arriving within ETA. Uses SOS2 piecewise linearization for the nonlinear SOG(SWS) relationship.
 
-**DP:** Builds (node, time_slot) state space → tries all 21 SWS at each state → tracks fuel + time → backtracks optimal path. Uses predicted weather at the forecast hour matching the ship's arrival time at each node.
+**DP:** Builds a (node, time_slot) state space over all 137 legs. At each state, tries all 21 SWS options, computes SOG from predicted weather at the forecast_hour matching the ship's arrival time. Forward Bellman recursion finds the minimum-fuel path.
 
-**RH:** At each decision point, loads the latest forecast and re-runs DP for the remaining voyage. Stitches executed segments together.
+**RH:** At each decision point (every 6h of voyage time), loads the latest forecast (`sample_hour = current_hour`) and re-runs DP for the remaining voyage. Stitches executed legs together. Benefits from forecast drift — newer predictions are more accurate.
 
-### Simulation (SOG-target model)
+### Why LP uses actual weather but DP/RH use predicted
 
-The optimizer outputs SOG targets. The simulation determines what SWS is needed to achieve that SOG under **actual** weather (binary search inversion). SWS is clamped to engine limits [11, 13] kn — violations are logged.
+LP represents the simplest planning approach: look at current conditions, assume they persist. It reads `/actual_weather` (what's happening now) and treats it as constant for the whole voyage.
 
-This is operationally realistic: ships maintain target speed over ground, adjusting engine power as conditions change.
+DP/RH represent more sophisticated planning: use the 7-day forecast to anticipate future conditions. They read `/predicted_weather` to get weather at each future hour the ship will arrive at each node.
+
+The simulation always tests against `/actual_weather` — the ground truth.
 
 ---
 
-## 3. Results
+## 4. Results
 
-### Simulation Credibility — Critical Caveat
+### Theoretical bounds (exp_b)
 
-| Dataset | Voyage Duration | Actual Weather Samples | Simulation Quality |
-|---------|:-:|:-:|--|
-| `voyage_weather.h5` (full route) | ~280h | **12h** | **Weak** — ship at hour 200 tested against hour 0 weather |
-| `experiment_b_138wp.h5` (short route) | ~140h | **134h** | **Strong** — real weather at nearly every hour the ship passes through |
+| Bound | Fuel (kg) | Method | Time |
+|-------|:---------:|--------|:----:|
+| **Upper** | **203.91** | SWS = 13 kn (max engine) at every node, SOG varies with weather | 131.5h (8.5h early) |
+| **Lower** | **180.59** | Optimal per-node SWS with actual weather, Lagrangian optimization | 140.0h (exact ETA) |
+| **Span** | **23.33** | The total optimization opportunity on this route | |
 
-The full-route results (368 kg, 367 kg, 365 kg) are **indicative but not fully trustworthy** — the simulation uses frozen hour-0 weather for a 280h voyage. The spatial variation across 279 nodes is real, but the temporal dimension is missing.
+The lower bound is the absolute minimum fuel achievable: perfect weather knowledge, continuous SWS optimization at every node, within engine limits, arriving exactly at ETA.
 
-The short-route results (exp_b) are the **credible, validated results** — 134 hours of ground truth for a ~140h voyage.
-
-### Credible Results — Short Route (exp_b, 138 nodes, ~140h)
+### Three approaches: plan vs actual
 
 | | B-LP | B-DP | B-RH |
 |--|:--:|:--:|:--:|
-| **Planned fuel** | 178.2 kg | 180.1 kg | 179.2 kg |
-| **Actual fuel (simulated)** | 180.6 kg | 182.2 kg | 180.9 kg |
-| **Gap** | +2.4 kg | +2.1 kg | +1.7 kg |
+| **Planned fuel** | 175.96 kg | 177.63 kg | 174.20 kg |
+| **Simulated fuel** | 180.63 kg | 182.22 kg | 180.89 kg |
+| **Gap (plan→actual)** | +4.67 kg (+2.7%) | +4.59 kg (+2.6%) | +6.70 kg (+3.8%) |
+| **SWS violations** | 4/137 (2.9%) | 17/137 (12.4%) | 12/137 (8.8%) |
+| **% of span captured** | 99.9% | 93.1% | 98.7% |
 
-On the short, calm route: **all three approaches are close** (1.6 kg range). LP and RH are nearly tied (180.6 vs 180.9 kg). The optimization opportunity is small because weather is calm (wind std 6.07 km/h) and the voyage fits within the accurate forecast window.
+### Where each approach sits within the bounds
 
-### Full-Route Results (indicative, weak simulation)
+```
+Lower bound                                                Upper bound
+180.59 ──────────────────────────────────────────────────── 203.91 kg
+  |  LP   RH           DP                                      |
+  |  180.6 180.9       182.2                                   |
+  |  99.9% 98.7%       93.1%                                   |
+  └─────── 23.33 kg span ─────────────────────────────────────┘
+```
 
-| Approach | Sim Fuel (kg) | Fuel Gap | SWS Violations | vs Constant Speed |
-|----------|:------------:|:--------:|:--------------:|:-----------------:|
-| **Rolling Horizon** | **364.8** | 0.92% | 60/278 (22%) | -3.2 kg |
-| Dynamic DP | 366.9 | 0.42% | 62/278 (22%) | -1.0 kg |
-| Static LP | 368.0 | 2.69% | 10/278 (4%) | +0.1 kg |
-| Constant SOG | 367.9 | — | 9/278 (3%) | baseline |
+All three approaches capture >93% of the optimization potential. On this calm route (wind std 6.07 km/h), the differences are small (1.6 kg range).
 
-These show larger separations (3.2 kg RH advantage, LP = constant speed), but rely on 12h of actual weather for a 280h voyage. The spatial variation is real; the temporal realism is not.
+### SWS violation details
 
-### Key Findings
+During **planning**: zero violations. All algorithms choose SWS within [11, 13] kn.
 
-**1. The simulation model flips the ranking.**
-Under fixed-SWS (naive): LP wins. Under SOG-targeting (realistic): RH > DP > LP. Root cause: Jensen's inequality on cubic FCR — segment averaging hides weather variation, creating hidden execution costs. Observed on both routes.
+During **simulation**: violations occur because actual weather differs from what was used for planning.
 
-**2. LP ≈ constant speed.**
-Full route: LP 368.0 kg vs constant 367.9 kg (indicative). Short route: LP 180.6 kg, close to all approaches. The LP barely varies speed (12.0–12.5 kn range), so its optimization adds negligible value.
+| | Violations | Needed SWS range | Cause |
+|--|:--:|:--:|--|
+| LP | 4 | up to 13.21 kn | Segment average hides per-node extremes |
+| DP | 17 | 10.6 – 13.99 kn | Predicted weather ≠ actual weather |
+| RH | 12 | 10.6 – 13.38 kn | Fewer than DP — fresher forecasts help |
 
-**3. Differences shrink on calm, short routes.**
-Full route (variable weather): 3.2 kg RH advantage. Short route (calm weather): 1.6 kg total range across all methods. The value of dynamic optimization depends on weather variability and route length.
+DP has the most violations: it plans on a single forecast from hour 0, which grows stale. RH re-plans with newer forecasts, reducing violations. LP has the fewest because segment averaging smooths extremes (but this also means LP can't exploit per-node variation).
 
-**4. Forecast horizon is route-length dependent.**
-Short route (credible): flat from 24h — even 17% horizon coverage is sufficient (0.08 kg range). Full route (indicative): plateau at 72h, ~1.5 kg range.
+### Key findings
 
-**5. Information value hierarchy (2x2 decomposition, credible — exp_a + exp_b).**
+**1. All approaches converge on calm routes.**
+On this calm, short route: 1.6 kg total range (180.6–182.2 kg). The optimization opportunity is small because weather variability is low and the voyage fits within the accurate forecast window.
+
+**2. LP ≈ lower bound.**
+LP (180.63 kg) is within 0.04 kg of the theoretical lower bound (180.59 kg). On calm routes, even segment-averaged planning is near-optimal.
+
+**3. The plan-vs-actual gap reveals information cost.**
+Every approach overestimates its efficiency. The gap (2.6–3.8%) is the real-world cost of using imperfect weather data. RH has the largest gap because its plan is the most optimistic (it uses the freshest forecasts, which don't fully anticipate reality).
+
+**4. Forecast error curve (credible — ground truth from exp_b).**
+
+| Lead Time | Wind RMSE (km/h) | Wind Bias |
+|:---------:|:----------------:|:---------:|
+| 0h | 4.13 | +0.20 |
+| 72h | 6.13 | +1.31 |
+| 133h | 8.40 | +2.67 |
+
+Wind RMSE doubles (+103%) over 133h. Systematic overpredict bias explains why DP/RH violations tend toward SWS > 13 kn: the forecast expects more headwind than actually occurs, so the plan is too aggressive.
+
+**5. Information value hierarchy (2x2 factorial, credible).**
 
 | Factor | Impact | Rank |
 |--------|:------:|:----:|
@@ -128,65 +211,4 @@ Short route (credible): flat from 24h — even 17% horizon coverage is sufficien
 | Interaction (spatial mitigates temporal) | -1.43 kg | — |
 | Re-planning benefit (RH vs DP) | -1.33 kg | 3rd |
 
-This decomposition is credible — it uses exp_a/exp_b with sufficient temporal coverage.
-
-**6. Forecast error curve (credible — exp_b ground truth).**
-
-| Lead Time | Wind RMSE (km/h) | Wind Bias |
-|:---------:|:----------------:|:---------:|
-| 0h | 4.13 | +0.20 |
-| 72h | 6.13 | +1.31 |
-| 133h | 8.40 | +2.67 |
-
-Wind RMSE doubles (+103%). Systematic overpredict bias explains SWS violations. This is pure measurement — no simulation assumptions.
-
-### Sensitivity (negligible factors)
-
-- **Replan frequency**: 3h vs 48h → <0.35 kg range
-- **Weather source for LP**: actual vs predicted → 0.02 kg difference
-- **Horizon on short route**: 24h–144h → 0.08 kg range
-
----
-
-## 4. What Next
-
-### Status: 9 of 11 Action Items Complete
-
-| # | Item | Status |
-|---|------|:------:|
-| 1 | DP with actual weather (spatial isolation) | Done |
-| 2 | SOG-target simulation model | Done |
-| 3 | Horizon sweep under SOG model | Done |
-| 4 | Forecast error curve (0-133h) | Done |
-| 5 | Intermediate horizons (96h, 144h) | Done |
-| 6 | SWS violation analysis | Done |
-| 7 | LP with predicted weather | Done |
-| 8 | 2x2 spatial × temporal decomposition | Done |
-| 9 | Short-route horizon sweep | Done |
-| **10** | **IMO/EEXI literature — validate SOG-targeting** | **TODO (small)** |
-| **11** | **Multi-season weather robustness** | **TODO (large)** |
-
-### Remaining Work
-
-| Item | Effort | Impact | Notes |
-|------|--------|--------|-------|
-| **Full-route collection (280+ hours)** | 12 days (passive) | **Critical** | Enables credible simulation on the full route where algorithm differences are large |
-| IMO/EEXI citations | 2–3 days | Medium | Validates the SOG-target model assumption |
-| Multi-season analysis | 2–4 weeks | Large | Monsoon, North Atlantic winter — strengthens generalizability |
-| Thesis writing (first draft) | 3–4 weeks | — | Can start in parallel with collection |
-
-### Questions for Supervisor
-
-1. **Simulation credibility**: Full-route results use 12h of weather for a 280h voyage — should we re-collect for 280+ hours before relying on those results?
-2. **Are short-route results sufficient?** The credible exp_b results show small differences (1.6 kg range). Is this enough to justify the thesis, or do we need the full-route data where differences are larger?
-3. **IMO/EEXI**: What citation level justifies the SOG-target model?
-4. **Novelty**: Is "LP = constant speed" known in the literature?
-5. **Scope**: Start writing now with exp_b as the primary evidence, or wait for full-route re-collection?
-
-### Proposed Thesis Arc
-
-1. Lead with simulation model insight (SOG-target vs fixed-SWS flips everything)
-2. Present the 2x2 decomposition (credible, from exp_a/b) as primary evidence
-3. Present forecast error curve (credible ground truth, no simulation needed)
-4. Full-route results as supporting/indicative evidence (or re-collect to make credible)
-5. Organize as information value hierarchy (actionable framework)
+Better forecast accuracy matters most. Finer spatial resolution matters second. Re-planning helps but is the smallest factor.
