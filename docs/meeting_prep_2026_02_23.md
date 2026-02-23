@@ -45,7 +45,7 @@ Each row: at node X, when we asked at sample_hour Y, the forecast predicted that
 
 ### Why this dataset is credible
 
-The voyage takes ~140 hours. We collected 134 hours of actual weather. That means the simulation can test the ship against **real weather at nearly every hour it passes through a node**. This is the key advantage over the original dataset (12h actual for a 280h voyage).
+The voyage takes ~140 hours. We collected 134 hours of actual weather. That means the simulation can test the ship against **real weather at nearly every hour it passes through a node**.
 
 ---
 
@@ -192,23 +192,29 @@ LP (180.63 kg) is within 0.04 kg of the theoretical lower bound (180.59 kg). On 
 **3. The plan-vs-actual gap reveals information cost.**
 Every approach overestimates its efficiency. The gap (2.6–3.8%) is the real-world cost of using imperfect weather data. RH has the largest gap because its plan is the most optimistic (it uses the freshest forecasts, which don't fully anticipate reality).
 
-**4. Forecast error curve (credible — ground truth from exp_b).**
+**4. Forecast error curve (ground truth from exp_b).**
 
-| Lead Time | Wind RMSE (km/h) | Wind Bias |
-|:---------:|:----------------:|:---------:|
-| 0h | 4.13 | +0.20 |
-| 72h | 6.13 | +1.31 |
-| 133h | 8.40 | +2.67 |
+For each lead time, we compare every prediction to what actually happened — across all 138 nodes and all valid starting hours (~15,000 samples per lead time). No simulation needed, pure measurement.
 
-Wind RMSE doubles (+103%) over 133h. Systematic overpredict bias explains why DP/RH violations tend toward SWS > 13 kn: the forecast expects more headwind than actually occurs, so the plan is too aggressive.
+| Lead Time | Wind RMSE (km/h) | Wind Bias | What this means |
+|:---------:|:----------------:|:---------:|:--|
+| 0h | 4.13 | +0.20 | Forecast's "current conditions" — already 4 km/h off |
+| 24h | 4.84 | +0.59 | 1-day forecast — slightly worse |
+| 48h | 5.63 | +1.21 | 2-day — bias growing |
+| 72h | 6.13 | +1.31 | 3-day — accuracy starts degrading fast |
+| 96h | 7.65 | +2.86 | 4-day — big jump in RMSE and bias |
+| 133h | 8.40 | +2.67 | 5.5-day — RMSE has doubled vs hour 0 |
 
-**5. Information value hierarchy (2x2 factorial, credible).**
+**Two patterns:**
 
-| Factor | Impact | Rank |
-|--------|:------:|:----:|
-| Temporal (forecast error cost) | +3.02 kg | 1st |
-| Spatial (segment averaging cost) | +2.44 kg | 2nd |
-| Interaction (spatial mitigates temporal) | -1.43 kg | — |
-| Re-planning benefit (RH vs DP) | -1.33 kg | 3rd |
+- **RMSE doubles** (4.13 → 8.40, +103%). After ~72h, errors grow fast — the fundamental limit of atmospheric prediction.
+- **Positive bias grows** (+0.20 → +2.67). Forecasts systematically **overpredict** wind. DP/RH plan for worse conditions than actually occur → set SOG too conservatively → SWS needed under calmer actual weather exceeds 13 kn → violations.
 
-Better forecast accuracy matters most. Finer spatial resolution matters second. Re-planning helps but is the smallest factor.
+**Why this matters for the algorithms:**
+
+- **DP** uses one forecast from hour 0. For nodes the ship reaches at hour 100+, the forecast is 100h stale (RMSE ~8 km/h).
+- **RH** re-plans every 6h. For those same nodes, the lead time drops to ~40h (RMSE ~5.5 km/h).
+- That's why RH has fewer violations (12) than DP (17) — its forecasts are always fresher.
+
+On this calm 140h route, the advantage is small. On a longer route with harsher weather, DP's stale forecasts would be much more costly.
+
