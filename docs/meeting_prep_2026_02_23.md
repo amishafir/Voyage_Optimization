@@ -118,9 +118,80 @@ SWS → weather direction angle → Froude number → direction/speed/form coeff
 
 **LP:** Averages weather across all nodes in each segment → picks one SWS per segment → minimizes total fuel subject to arriving within ETA. Uses SOS2 piecewise linearization for the nonlinear SOG(SWS) relationship.
 
-**DP:** Builds a (node, time_slot) state space over all 137 legs. At each state, tries all 21 SWS options, computes SOG from predicted weather at the forecast_hour matching the ship's arrival time. Forward Bellman recursion finds the minimum-fuel path.
-
 **RH:** At each decision point (every 6h of voyage time), loads the latest forecast (`sample_hour = current_hour`) and re-runs DP for the remaining voyage. Stitches executed legs together. Benefits from forecast drift — newer predictions are more accurate.
+
+### DP algorithm in detail
+
+The DP models the voyage as a **2D grid**: nodes (space) × time slots (time).
+
+```
+         time →  t=0    t=1    t=2    t=3   ...   t=T (ETA)
+node 0    ●─────┬──────┬──────┬─────────────────────
+node 1          ●      ●      ●
+node 2                 ●      ●      ●
+node 3                        ●      ●      ●
+  ...                                         ...
+node 137                                          ●  ← destination
+```
+
+**State** = `(node_i, time_slot_t)` — the ship is at node `i` at time `t × dt`. Start: `(node 0, t=0)` with fuel = 0. Goal: reach node 137 at any `t` where `t × dt ≤ ETA`.
+
+On exp_b: `dt = 0.1h`, ETA = 140h → 1,400 time slots + 500 buffer = 1,900 slots.
+
+**Forward pass** — for every reachable state `(node_i, t)`:
+
+1. Look up predicted weather at node `i` for `forecast_hour = t × dt` (the weather the ship will encounter when it arrives)
+2. Try all 21 SWS options (11.0, 11.1, ... 13.0 kn). For each:
+   - SOG = physics_model(SWS, weather)
+   - travel_time = distance_to_next_node / SOG
+   - fuel = FCR(SWS) × travel_time
+   - t_next = ceil(arrival_time / dt)
+3. Update `cost[i+1][t_next]` if this path is cheaper than any previously found
+4. Store `parent[i+1][t_next] = (t, speed_k)` for backtracking
+
+**Backtrack** — scan `cost[137][t]` for all `t ≤ ETA/dt`, pick minimum fuel. Follow `parent` pointers backwards to reconstruct the per-leg SWS/SOG schedule.
+
+**Complexity: O(N × T × K)**
+
+| Symbol | Meaning | exp_b value |
+|:--:|:--|:--:|
+| N | Legs | 137 |
+| T | Time slots | 1,900 |
+| K | SWS options | 21 |
+
+Worst case: 137 × 1,900 × 21 = **5.5M edge evaluations**. Each calls the 8-step physics model (constant time). In practice less, because `cost` is sparse — not all 1,900 time slots are reachable at each node (the code uses dicts, not arrays).
+
+| Change | Effect |
+|:--|:--|
+| More nodes (279 vs 137) | ~2× time |
+| Finer time granularity (dt=0.05 vs 0.1) | ~2× time |
+| Finer speed granularity (0.01 vs 0.1) | ~10× time |
+| Longer voyage (280h vs 140h) | ~2× time |
+
+### Why DP is polynomial, not exponential
+
+A naive brute-force approach would enumerate **every possible combination** of speed choices across all legs:
+
+```
+Brute force: 21 choices at leg 1 × 21 at leg 2 × ... × 21 at leg 137 = 21^137 ≈ 10^181
+```
+
+That's more than the number of atoms in the universe (~10^80). Completely intractable.
+
+DP avoids this through **Bellman's principle of optimality**: the optimal path from node `i` to the destination does not depend on how the ship reached node `i`. This means:
+
+```
+Brute force:                              DP:
+
+leg 0 → leg 1 → leg 2 → ... → leg 137    leg 0 → leg 1 → leg 2 → ... → leg 137
+  21  ×   21  ×   21   × ... ×   21        21  +   21  +   21   + ... +   21
+        21^137 combinations                       137 × 21 decisions
+        ≈ 10^181                                  = 2,877 (× T time slots)
+```
+
+At each node, DP only keeps **the cheapest way to reach each time slot**. If two different paths arrive at node 5 at time slot 200, only the one with lower fuel survives. All future decisions are identical regardless of which path got there — so the worse path is discarded.
+
+This collapses the exponential tree into a polynomial grid: **O(N × T × K) = 5.5M** operations instead of 10^181.
 
 ### Why LP uses actual weather but DP/RH use predicted
 
