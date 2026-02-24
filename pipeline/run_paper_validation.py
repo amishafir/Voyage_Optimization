@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Run the new pipeline against the research paper's Table 8 weather data.
-Validates that the new pipeline reproduces the legacy 372 kg result.
+Validates that the new pipeline reproduces the legacy 372 mt result.
 """
 
 import math
@@ -199,9 +199,9 @@ def main():
     print("=" * 60)
     print("NEW PIPELINE — PAPER TABLE 8 DATA")
     print("=" * 60)
-    print(f"  Planned fuel:    {planned['planned_fuel_kg']:>10.2f} kg")
+    print(f"  Planned fuel:    {planned['planned_fuel_mt']:>10.2f} mt")
     print(f"  Planned time:    {planned['planned_time_h']:>10.2f} h")
-    print(f"  Simulated fuel:  {simulated['total_fuel_kg']:>10.2f} kg")
+    print(f"  Simulated fuel:  {simulated['total_fuel_mt']:>10.2f} mt")
     print(f"  Simulated time:  {simulated['total_time_h']:>10.2f} h")
     print(f"  Fuel gap:        {metrics['fuel_gap_percent']:>10.2f} %")
     print(f"  Solve time:      {planned['computation_time_s']:>10.3f} s")
@@ -209,20 +209,20 @@ def main():
 
     print()
     print(f"{'Seg':>3}  {'Dist':>8}  {'SWS':>6}  {'SOG':>8}  {'Time':>7}  {'Fuel':>8}")
-    print(f"{'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(kg)':>8}")
+    print(f"{'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(mt)':>8}")
     print("-" * 50)
     for s in planned["speed_schedule"]:
         print(f"{s['segment']+1:>3}  {s['distance_nm']:>8.1f}  "
               f"{s['sws_knots']:>6.1f}  {s['sog_knots']:>8.3f}  "
-              f"{s['time_h']:>7.2f}  {s['fuel_kg']:>8.2f}")
+              f"{s['time_h']:>7.2f}  {s['fuel_mt']:>8.2f}")
     print(f"{'TOT':>3}  {total_dist:>8.1f}  {'--':>6}  {'--':>8}  "
-          f"{planned['planned_time_h']:>7.2f}  {planned['planned_fuel_kg']:>8.2f}")
+          f"{planned['planned_time_h']:>7.2f}  {planned['planned_fuel_mt']:>8.2f}")
 
     # Compare with legacy
     print()
-    print("Legacy LP result: 372.37 kg")
-    delta = planned["planned_fuel_kg"] - 372.37
-    print(f"Delta:            {delta:+.2f} kg ({delta/372.37*100:+.2f}%)")
+    print("Legacy LP result: 372.37 mt")
+    delta = planned["planned_fuel_mt"] - 372.37
+    print(f"Delta:            {delta:+.2f} mt ({delta/372.37*100:+.2f}%)")
 
 
 if __name__ == "__main__":

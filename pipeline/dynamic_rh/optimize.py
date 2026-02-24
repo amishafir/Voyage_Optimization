@@ -26,7 +26,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
         config: Full experiment config.
 
     Returns:
-        Dict with: status, planned_fuel_kg, planned_time_h,
+        Dict with: status, planned_fuel_mt, planned_time_h,
         speed_schedule (stitched), computation_time_s, solver,
         decision_points (log of each re-plan).
     """
@@ -42,8 +42,12 @@ def optimize(transform_output: dict, config: dict) -> dict:
     max_forecast_hours = transform_output["max_forecast_hours"]
     available_sample_hours = transform_output["available_sample_hours"]
 
+    actual_weather = transform_output.get("actual_weather", {})
+    available_actual_hours = transform_output.get("available_actual_hours", [])
+
     rh_cfg = config["dynamic_rh"]
     replan_freq = rh_cfg["replan_frequency_hours"]
+    use_actual = rh_cfg.get("use_actual_at_replan", False)
 
     # Decision points: [0, replan_freq, 2*replan_freq, ...]
     decision_hours = []
@@ -51,7 +55,8 @@ def optimize(transform_output: dict, config: dict) -> dict:
     while h < ETA:
         decision_hours.append(h)
         h += replan_freq
-    logger.info("RH: %d decision points, replan every %d h", len(decision_hours), replan_freq)
+    logger.info("RH: %d decision points, replan every %d h, use_actual_at_replan=%s",
+                len(decision_hours), replan_freq, use_actual)
 
     # State tracking
     current_node_idx = 0
@@ -78,6 +83,26 @@ def optimize(transform_output: dict, config: dict) -> dict:
                            dp_idx, elapsed_time)
             break
 
+        grid_for_dp = weather_grids[sample_hour]
+
+        # 2b. Inject actual weather for current node (first leg of sub-problem)
+        if use_actual and actual_weather:
+            current_nid = node_metadata[current_node_idx]["node_id"]
+            actual_sh = _pick_sample_hour(available_actual_hours, elapsed_time)
+            actual_wx = actual_weather.get(actual_sh, {}).get(current_nid)
+
+            if actual_wx is not None:
+                # Deep-copy only the current node's forecast dict to avoid mutating shared data
+                grid_for_dp = dict(grid_for_dp)  # shallow copy outer dict
+                grid_for_dp[current_nid] = dict(grid_for_dp.get(current_nid, {}))  # copy node's fh dict
+
+                # DP looks up fh = round(elapsed_time) for the first leg (time_offset)
+                inject_fh = min(int(round(elapsed_time)), max_forecast_hours[sample_hour])
+                grid_for_dp[current_nid][inject_fh] = actual_wx
+
+                logger.info("RH decision %d: injected actual weather (SH=%d) at node %d, fh=%d",
+                            dp_idx, actual_sh, current_nid, inject_fh)
+
         sub_transform = {
             "ETA": remaining_eta,
             "num_nodes": remaining_legs + 1,
@@ -86,7 +111,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
             "fcr": fcr,
             "distances": distances[current_node_idx:],
             "headings_deg": headings_deg[current_node_idx:],
-            "weather_grid": weather_grids[sample_hour],
+            "weather_grid": grid_for_dp,
             "max_forecast_hour": max_forecast_hours[sample_hour],
             "node_metadata": node_metadata[current_node_idx:],
             "ship_params": ship_params,
@@ -106,7 +131,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
                 "sample_hour": sample_hour,
                 "node_idx": current_node_idx,
                 "legs_committed": 0,
-                "elapsed_fuel_kg": round(elapsed_fuel, 4),
+                "elapsed_fuel_mt": round(elapsed_fuel, 4),
                 "elapsed_time_h": round(elapsed_time, 4),
                 "dp_status": dp_result.get("status", "Infeasible"),
                 "dp_solve_time_s": dp_result.get("computation_time_s", 0),
@@ -135,7 +160,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
             remapped["leg"] = leg["leg"] + current_node_idx
             legs_this_round.append(remapped)
             sub_elapsed += leg["time_h"]
-            sub_fuel += leg["fuel_kg"]
+            sub_fuel += leg["fuel_mt"]
 
         committed_legs.extend(legs_this_round)
 
@@ -150,18 +175,18 @@ def optimize(transform_output: dict, config: dict) -> dict:
             "sample_hour": sample_hour,
             "node_idx": current_node_idx - len(legs_this_round),
             "legs_committed": len(legs_this_round),
-            "elapsed_fuel_kg": round(elapsed_fuel, 4),
+            "elapsed_fuel_mt": round(elapsed_fuel, 4),
             "elapsed_time_h": round(elapsed_time, 4),
             "remaining_legs": num_legs - current_node_idx,
             "remaining_eta_h": round(ETA - elapsed_time, 4),
-            "dp_planned_fuel_kg": round(dp_result["planned_fuel_kg"], 4),
+            "dp_planned_fuel_mt": round(dp_result["planned_fuel_mt"], 4),
             "dp_planned_time_h": round(dp_result["planned_time_h"], 4),
             "dp_status": dp_result["status"],
             "dp_solve_time_s": round(dp_result["computation_time_s"], 4),
         })
 
         logger.info("RH decision %d: hour=%.1f, SH=%d, node=%d, committed=%d legs, "
-                     "fuel=%.2f kg, time=%.2f h",
+                     "fuel=%.2f mt, time=%.2f h",
                      dp_idx, nominal_hour, sample_hour,
                      current_node_idx - len(legs_this_round),
                      len(legs_this_round), sub_fuel, sub_elapsed)
@@ -173,14 +198,14 @@ def optimize(transform_output: dict, config: dict) -> dict:
         logger.warning("RH: Only covered %d/%d legs. %d legs remaining.",
                        current_node_idx, num_legs, num_legs - current_node_idx)
 
-    total_fuel = sum(l["fuel_kg"] for l in committed_legs)
+    total_fuel = sum(l["fuel_mt"] for l in committed_legs)
     total_time = sum(l["time_h"] for l in committed_legs)
 
     status = "Optimal" if current_node_idx >= num_legs else "Feasible"
 
     result = {
         "status": status,
-        "planned_fuel_kg": total_fuel,
+        "planned_fuel_mt": total_fuel,
         "planned_time_h": total_time,
         "speed_schedule": committed_legs,
         "computation_time_s": round(total_elapsed, 4),
@@ -188,7 +213,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
         "decision_points": decision_log,
     }
 
-    logger.info("RH complete: %.2f kg fuel, %.2f h, %d decision points, %.2f s total",
+    logger.info("RH complete: %.2f mt fuel, %.2f h, %d decision points, %.2f s total",
                 total_fuel, total_time, len(decision_log), total_elapsed)
     return result
 

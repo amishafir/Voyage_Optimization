@@ -32,7 +32,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
         config: Full experiment config.
 
     Returns:
-        Dict with: status, planned_fuel_kg, planned_time_h,
+        Dict with: status, planned_fuel_mt, planned_time_h,
         speed_schedule (278 per-leg dicts), computation_time_s, solver.
     """
     ETA = transform_output["ETA"]
@@ -175,7 +175,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
         }
 
     planned_time = best_t * dt
-    logger.info("DP optimal: %.2f kg fuel, %.1f h, solved in %.2f s",
+    logger.info("DP optimal: %.2f mt fuel, %.1f h, solved in %.2f s",
                 best_fuel, planned_time, elapsed)
 
     # ------------------------------------------------------------------
@@ -237,7 +237,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
             "sog_knots": round(sog, 4),
             "distance_nm": round(dist, 4),
             "time_h": round(leg_time, 4),
-            "fuel_kg": round(leg_fuel, 4),
+            "fuel_mt": round(leg_fuel, 4),
         })
 
         t_cur = t_prev
@@ -245,14 +245,14 @@ def optimize(transform_output: dict, config: dict) -> dict:
     schedule.reverse()
 
     # Verify totals from schedule
-    total_fuel = sum(e["fuel_kg"] for e in schedule)
+    total_fuel = sum(e["fuel_mt"] for e in schedule)
     total_time = sum(e["time_h"] for e in schedule)
 
     status = "Optimal" if abs(best_fuel - total_fuel) < 1.0 else "Feasible"
 
     return {
         "status": status,
-        "planned_fuel_kg": total_fuel,
+        "planned_fuel_mt": total_fuel,
         "planned_time_h": total_time,
         "speed_schedule": schedule,
         "computation_time_s": round(elapsed, 4),

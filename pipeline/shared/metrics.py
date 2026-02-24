@@ -18,15 +18,15 @@ def compute_result_metrics(
     """Compute comparison metrics between planned and simulated results.
 
     Args:
-        planned:           Dict with planned_fuel_kg, planned_time_h.
-        simulated:         Dict with total_fuel_kg, total_time_h.
+        planned:           Dict with planned_fuel_mt, planned_time_h.
+        simulated:         Dict with total_fuel_mt, total_time_h.
         total_distance_nm: Total route distance.
 
     Returns:
         Dict with fuel_gap_percent, fuel_per_nm, avg_sog_knots.
     """
-    planned_fuel = planned["planned_fuel_kg"]
-    sim_fuel = simulated["total_fuel_kg"]
+    planned_fuel = planned["planned_fuel_mt"]
+    sim_fuel = simulated["total_fuel_mt"]
 
     fuel_gap_pct = 0.0
     if planned_fuel > 0:
@@ -73,19 +73,19 @@ def build_result_json(
             approach: config.get(approach, {}),
         },
         "planned": {
-            "total_fuel_kg": round(planned["planned_fuel_kg"], 4),
+            "total_fuel_mt": round(planned["planned_fuel_mt"], 4),
             "voyage_time_h": round(planned["planned_time_h"], 4),
             "speed_schedule": planned.get("speed_schedule", []),
             "computation_time_s": round(planned.get("computation_time_s", 0), 4),
             "solver_status": planned.get("status", "unknown"),
         },
         "simulated": {
-            "total_fuel_kg": round(simulated["total_fuel_kg"], 4),
+            "total_fuel_mt": round(simulated["total_fuel_mt"], 4),
             "voyage_time_h": round(simulated["total_time_h"], 4),
             "arrival_deviation_h": round(simulated["arrival_deviation_h"], 4),
             "speed_changes": simulated.get("speed_changes", 0),
             "sws_violations": simulated.get("sws_violations", 0),
-            "co2_emissions_kg": round(simulated["co2_emissions_kg"], 4),
+            "co2_emissions_mt": round(simulated["co2_emissions_mt"], 4),
         },
         "metrics": metrics,
         "time_series_file": time_series_file,

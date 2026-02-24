@@ -131,7 +131,7 @@ fuel_ub = sum(table[-1][4] for table in leg_tables)  # last entry = max SWS
 time_ub = sum(table[-1][3] for table in leg_tables)
 
 print(f"  SWS = {max_speed} kn")
-print(f"  Fuel = {fuel_ub:.2f} kg")
+print(f"  Fuel = {fuel_ub:.2f} mt")
 print(f"  Time = {time_ub:.2f}h (arrives {eta - time_ub:.1f}h early)")
 print()
 
@@ -203,7 +203,7 @@ else:
     fuel_lb, time_lb, opt_sws = solve_for_lambda(best_lam)
     print(f"  Lambda = {best_lam:.6f}")
 
-print(f"  Fuel = {fuel_lb:.2f} kg")
+print(f"  Fuel = {fuel_lb:.2f} mt")
 print(f"  Time = {time_lb:.2f}h (target: {eta}h)")
 print(f"  SWS range: [{min(opt_sws):.4f}, {max(opt_sws):.4f}] kn")
 print(f"  SWS mean:  {sum(opt_sws)/len(opt_sws):.4f} kn")
@@ -215,9 +215,9 @@ print("=" * 60)
 print("SUMMARY")
 print("=" * 60)
 span = fuel_ub - fuel_lb
-print(f"  Upper bound: {fuel_ub:.2f} kg  (SWS={max_speed} kn, arrives {eta - time_ub:.1f}h early)")
-print(f"  Lower bound: {fuel_lb:.2f} kg  (optimal per-node SWS, actual weather)")
-print(f"  Span:        {span:.2f} kg")
+print(f"  Upper bound: {fuel_ub:.2f} mt  (SWS={max_speed} kn, arrives {eta - time_ub:.1f}h early)")
+print(f"  Lower bound: {fuel_lb:.2f} mt  (optimal per-node SWS, actual weather)")
+print(f"  Span:        {span:.2f} mt")
 print()
 
 # Where do the 3 approaches fall?
@@ -225,4 +225,4 @@ if span > 0:
     print("  Optimization results (from exp_b):")
     for label, fuel in [("B-LP", 180.6), ("B-RH", 180.9), ("B-DP", 182.2)]:
         captured = (fuel_ub - fuel) / span * 100
-        print(f"    {label} = {fuel} kg  →  {captured:.1f}% of span captured")
+        print(f"    {label} = {fuel} mt→  {captured:.1f}% of span captured")

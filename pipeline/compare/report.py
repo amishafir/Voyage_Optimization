@@ -99,14 +99,14 @@ def _comparison_table_section(comparison_df):
 
     col_map = [
         ("approach", "Approach"),
-        ("planned_fuel_kg", "Plan Fuel (kg)"),
-        ("simulated_fuel_kg", "Sim Fuel (kg)"),
+        ("planned_fuel_mt", "Plan Fuel (mt)"),
+        ("simulated_fuel_mt", "Sim Fuel (mt)"),
         ("fuel_gap_pct", "Gap (%)"),
         ("planned_time_h", "Plan Time (h)"),
         ("simulated_time_h", "Sim Time (h)"),
         ("arrival_deviation_h", "Arr Dev (h)"),
         ("speed_changes", "Speed Chg"),
-        ("co2_kg", "CO2 (kg)"),
+        ("co2_mt", "CO2 (mt)"),
         ("computation_time_s", "Comp Time (s)"),
         ("fuel_per_nm", "Fuel/NM"),
         ("avg_sog", "Avg SOG"),
@@ -151,12 +151,12 @@ def _key_findings_section(comparison_df, results):
         static_row = comparison_df[comparison_df["approach"] == "static_det"].iloc[0]
         dyn_row = comparison_df[comparison_df["approach"] == "dynamic_det"].iloc[0]
 
-        static_fuel = static_row["simulated_fuel_kg"]
-        dyn_fuel = dyn_row["simulated_fuel_kg"]
+        static_fuel = static_row["simulated_fuel_mt"]
+        dyn_fuel = dyn_row["simulated_fuel_mt"]
         if static_fuel and static_fuel > 0:
             delta_pct = (dyn_fuel - static_fuel) / static_fuel * 100
             lines.append(f"\n**Value of dynamic weather**: Dynamic DP simulated fuel is "
-                         f"{delta_pct:+.2f}% vs Static LP ({dyn_fuel:.2f} vs {static_fuel:.2f} kg)")
+                         f"{delta_pct:+.2f}% vs Static LP ({dyn_fuel:.2f} vs {static_fuel:.2f} mt)")
 
         # Gap comparison
         static_gap = static_row["fuel_gap_pct"]
@@ -242,15 +242,15 @@ def _decision_points_section(decision_points):
 
     lines.append(f"\n- Total re-plan events: {n}")
     lines.append(f"- First decision: hour {first['decision_hour']}, "
-                 f"DP planned fuel = {first['dp_planned_fuel_kg']:.2f} kg")
+                 f"DP planned fuel = {first['dp_planned_fuel_mt']:.2f} mt")
     lines.append(f"- Last decision: hour {last['decision_hour']}, "
-                 f"DP planned fuel = {last['dp_planned_fuel_kg']:.2f} kg")
+                 f"DP planned fuel = {last['dp_planned_fuel_mt']:.2f} mt")
 
     # Show how the estimate converged
-    initial_est = first["dp_planned_fuel_kg"]
-    final_elapsed = last["elapsed_fuel_kg"]
-    lines.append(f"- Initial total estimate: {initial_est:.2f} kg")
-    lines.append(f"- Final elapsed fuel: {final_elapsed:.2f} kg")
+    initial_est = first["dp_planned_fuel_mt"]
+    final_elapsed = last["elapsed_fuel_mt"]
+    lines.append(f"- Initial total estimate: {initial_est:.2f} mt")
+    lines.append(f"- Final elapsed fuel: {final_elapsed:.2f} mt")
 
     # All statuses
     statuses = set(dp["dp_status"] for dp in decision_points)
@@ -271,15 +271,15 @@ def _bounds_section(results):
         return "\n".join(lines)
 
     if has_lower:
-        lb_fuel = results["lower_bound"]["simulated"]["total_fuel_kg"]
-        lines.append(f"\n- **Lower bound** (perfect information): {lb_fuel:.2f} kg")
+        lb_fuel = results["lower_bound"]["simulated"]["total_fuel_mt"]
+        lines.append(f"\n- **Lower bound** (perfect information): {lb_fuel:.2f} mt")
     if has_upper:
-        ub_fuel = results["upper_bound"]["simulated"]["total_fuel_kg"]
-        lines.append(f"- **Upper bound** (constant speed, no optimization): {ub_fuel:.2f} kg")
+        ub_fuel = results["upper_bound"]["simulated"]["total_fuel_mt"]
+        lines.append(f"- **Upper bound** (constant speed, no optimization): {ub_fuel:.2f} mt")
 
     if has_lower and has_upper:
         span = ub_fuel - lb_fuel
-        lines.append(f"- **Optimization span**: {span:.2f} kg ({span / ub_fuel * 100:.1f}% of upper bound)")
+        lines.append(f"- **Optimization span**: {span:.2f} mt ({span / ub_fuel * 100:.1f}% of upper bound)")
 
         # Show where each core approach falls
         lines.append("")
@@ -289,11 +289,11 @@ def _bounds_section(results):
         for approach in core_approaches:
             if approach not in results:
                 continue
-            fuel = results[approach]["simulated"]["total_fuel_kg"]
+            fuel = results[approach]["simulated"]["total_fuel_mt"]
             if span > 0:
                 position = (fuel - lb_fuel) / span * 100
                 captured = 100 - position
-                lines.append(f"- **{core_labels[approach]}**: {fuel:.2f} kg "
+                lines.append(f"- **{core_labels[approach]}**: {fuel:.2f} mt "
                              f"({captured:.1f}% of optimization potential captured)")
 
     return "\n".join(lines)
@@ -311,7 +311,7 @@ def _replan_sweep_section(results):
                 freq = int(suffix)
             except ValueError:
                 continue
-            sweep[freq] = r["simulated"]["total_fuel_kg"]
+            sweep[freq] = r["simulated"]["total_fuel_mt"]
 
     if not sweep:
         lines.append("\nNo replan sweep data available (run `sensitivity` first).")
@@ -319,7 +319,7 @@ def _replan_sweep_section(results):
 
     freqs = sorted(sweep.keys())
     lines.append("")
-    lines.append("| Replan Freq (h) | Sim Fuel (kg) |")
+    lines.append("| Replan Freq (h) | Sim Fuel (mt) |")
     lines.append("| --- | --- |")
     for freq in freqs:
         lines.append(f"| {freq} | {sweep[freq]:.2f} |")
@@ -329,7 +329,7 @@ def _replan_sweep_section(results):
         best_fuel = sweep[freqs[0]]
         worst_fuel = sweep[freqs[-1]]
         delta = worst_fuel - best_fuel
-        lines.append(f"\n- Range: {delta:.2f} kg between {freqs[0]}h and {freqs[-1]}h replan")
+        lines.append(f"\n- Range: {delta:.2f} mt between {freqs[0]}h and {freqs[-1]}h replan")
         if worst_fuel > 0:
             lines.append(f"- Relative impact: {delta / worst_fuel * 100:.2f}%")
         lines.append("- More frequent replanning uses fresher forecasts, reducing fuel; "
@@ -348,13 +348,13 @@ def _horizon_sweep_section(results):
         if approach.startswith("dynamic_det_horizon_"):
             suffix = approach.replace("dynamic_det_horizon_", "").rstrip("h")
             try:
-                dd_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+                dd_sweep[int(suffix)] = r["simulated"]["total_fuel_mt"]
             except ValueError:
                 continue
         elif approach.startswith("dynamic_rh_horizon_"):
             suffix = approach.replace("dynamic_rh_horizon_", "").rstrip("h")
             try:
-                rh_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+                rh_sweep[int(suffix)] = r["simulated"]["total_fuel_mt"]
             except ValueError:
                 continue
 
@@ -365,7 +365,7 @@ def _horizon_sweep_section(results):
     all_horizons = sorted(set(list(dd_sweep.keys()) + list(rh_sweep.keys())))
 
     lines.append("")
-    lines.append("| Horizon (h) | Days | DP Fuel (kg) | RH Fuel (kg) |")
+    lines.append("| Horizon (h) | Days | DP Fuel (mt) | RH Fuel (mt) |")
     lines.append("| --- | --- | --- | --- |")
     for h in all_horizons:
         dd_val = f"{dd_sweep[h]:.2f}" if h in dd_sweep else "N/A"
@@ -378,12 +378,12 @@ def _horizon_sweep_section(results):
         longest = all_horizons[-1]
         if shortest in dd_sweep and longest in dd_sweep:
             dd_delta = dd_sweep[shortest] - dd_sweep[longest]
-            lines.append(f"\n- **Dynamic DP**: {dd_delta:+.2f} kg from "
+            lines.append(f"\n- **Dynamic DP**: {dd_delta:+.2f} mt from "
                          f"{longest}h to {shortest}h horizon "
                          f"({dd_delta / dd_sweep[longest] * 100:+.2f}%)")
         if shortest in rh_sweep and longest in rh_sweep:
             rh_delta = rh_sweep[shortest] - rh_sweep[longest]
-            lines.append(f"- **Rolling Horizon**: {rh_delta:+.2f} kg from "
+            lines.append(f"- **Rolling Horizon**: {rh_delta:+.2f} mt from "
                          f"{longest}h to {shortest}h horizon "
                          f"({rh_delta / rh_sweep[longest] * 100:+.2f}%)")
 

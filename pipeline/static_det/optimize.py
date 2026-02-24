@@ -151,7 +151,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
         config: Full experiment config.
 
     Returns:
-        Dict with: status, planned_fuel_kg, planned_time_h,
+        Dict with: status, planned_fuel_mt, planned_time_h,
         speed_schedule (list of 12 dicts), computation_time_s.
     """
     ETA = transform_output["ETA"]
@@ -202,13 +202,13 @@ def optimize(transform_output: dict, config: dict) -> dict:
             "sog_knots": seg_sog,
             "distance_nm": distances[i],
             "time_h": seg_time,
-            "fuel_kg": seg_fuel,
-            "fcr_kg_h": fcr[k],
+            "fuel_mt": seg_fuel,
+            "fcr_mt_h": fcr[k],
         })
 
     return {
         "status": status,
-        "planned_fuel_kg": total_fuel,
+        "planned_fuel_mt": total_fuel,
         "planned_time_h": total_time,
         "speed_schedule": schedule,
         "computation_time_s": elapsed,

@@ -107,13 +107,13 @@ def plot_fuel_curves(time_series, save_dir):
         df = time_series[approach]
         s = _style(approach)
         ax.plot(
-            df["cum_distance_nm"], df["cum_fuel_kg"],
+            df["cum_distance_nm"], df["cum_fuel_mt"],
             color=s["color"], linestyle=s["ls"], label=s["label"],
             linewidth=1.2, alpha=0.9,
         )
 
     ax.set_xlabel("Cumulative Distance (nm)")
-    ax.set_ylabel("Cumulative Fuel (kg)")
+    ax.set_ylabel("Cumulative Fuel (mt)")
     ax.set_title("Fuel Consumption Curves")
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -133,8 +133,8 @@ def plot_fuel_comparison(results, save_dir):
     """
     approaches = sorted(results.keys())
     labels = [_style(a)["label"] for a in approaches]
-    planned = [results[a]["planned"]["total_fuel_kg"] for a in approaches]
-    simulated = [results[a]["simulated"]["total_fuel_kg"] for a in approaches]
+    planned = [results[a]["planned"]["total_fuel_mt"] for a in approaches]
+    simulated = [results[a]["simulated"]["total_fuel_mt"] for a in approaches]
     gaps = [results[a]["metrics"]["fuel_gap_percent"] for a in approaches]
 
     x = np.arange(len(approaches))
@@ -157,7 +157,7 @@ def plot_fuel_comparison(results, save_dir):
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylabel("Total Fuel (kg)")
+    ax.set_ylabel("Total Fuel (mt)")
     ax.set_title("Planned vs Simulated Fuel Consumption")
     ax.legend()
     ax.grid(True, axis="y", alpha=0.3)
@@ -230,23 +230,23 @@ def plot_replan_evolution(decision_points, save_dir):
 
     # Top: DP planned total fuel at each decision point
     ax1.plot(
-        df["decision_hour"], df["dp_planned_fuel_kg"],
+        df["decision_hour"], df["dp_planned_fuel_mt"],
         "o-", color="#4CAF50", markersize=4, linewidth=1.2,
         label="DP planned total fuel",
     )
-    ax1.set_ylabel("DP Planned Fuel (kg)")
+    ax1.set_ylabel("DP Planned Fuel (mt)")
     ax1.set_title("Optimizer Estimate Convergence")
     ax1.legend()
     ax1.grid(True, alpha=0.3)
 
     # Bottom: Elapsed fuel
     ax2.plot(
-        df["decision_hour"], df["elapsed_fuel_kg"],
+        df["decision_hour"], df["elapsed_fuel_mt"],
         "s-", color="#FF9800", markersize=4, linewidth=1.2,
         label="Elapsed fuel (actual)",
     )
     ax2.set_xlabel("Decision Hour")
-    ax2.set_ylabel("Elapsed Fuel (kg)")
+    ax2.set_ylabel("Elapsed Fuel (mt)")
     ax2.set_title("Fuel Consumed at Each Re-plan Point")
     ax2.legend()
     ax2.grid(True, alpha=0.3)
@@ -276,7 +276,7 @@ def plot_replan_sensitivity(results, save_dir):
                 freq = int(suffix)
             except ValueError:
                 continue
-            sweep[freq] = r["simulated"]["total_fuel_kg"]
+            sweep[freq] = r["simulated"]["total_fuel_mt"]
 
     if not sweep:
         logger.info("No replan sweep data, skipping sensitivity plot")
@@ -298,7 +298,7 @@ def plot_replan_sensitivity(results, save_dir):
     ]
     for ref_key, color, label in ref_approaches:
         if ref_key in results:
-            fuel = results[ref_key]["simulated"]["total_fuel_kg"]
+            fuel = results[ref_key]["simulated"]["total_fuel_mt"]
             ax.axhline(fuel, color=color, linestyle=":", linewidth=1.2, alpha=0.8)
             ax.annotate(f"{label} ({fuel:.1f})",
                         xy=(freqs[-1], fuel),
@@ -306,7 +306,7 @@ def plot_replan_sensitivity(results, save_dir):
                         fontsize=8, color=color, va="center")
 
     ax.set_xlabel("Replan Frequency (hours)")
-    ax.set_ylabel("Simulated Fuel (kg)")
+    ax.set_ylabel("Simulated Fuel (mt)")
     ax.set_title("Replan Frequency Sensitivity")
     ax.set_xticks(freqs)
     ax.legend()
@@ -331,13 +331,13 @@ def plot_horizon_sensitivity(results, save_dir):
         if approach.startswith("dynamic_det_horizon_"):
             suffix = approach.replace("dynamic_det_horizon_", "").rstrip("h")
             try:
-                dd_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+                dd_sweep[int(suffix)] = r["simulated"]["total_fuel_mt"]
             except ValueError:
                 continue
         elif approach.startswith("dynamic_rh_horizon_"):
             suffix = approach.replace("dynamic_rh_horizon_", "").rstrip("h")
             try:
-                rh_sweep[int(suffix)] = r["simulated"]["total_fuel_kg"]
+                rh_sweep[int(suffix)] = r["simulated"]["total_fuel_mt"]
             except ValueError:
                 continue
 
@@ -369,7 +369,7 @@ def plot_horizon_sensitivity(results, save_dir):
     ]
     for ref_key, color, label in ref_approaches:
         if ref_key in results:
-            fuel = results[ref_key]["simulated"]["total_fuel_kg"]
+            fuel = results[ref_key]["simulated"]["total_fuel_mt"]
             ax.axhline(fuel, color=color, linestyle=":", linewidth=1.2, alpha=0.8)
             # Place label at rightmost x
             x_max = max(
@@ -382,7 +382,7 @@ def plot_horizon_sensitivity(results, save_dir):
                         fontsize=8, color=color, va="center")
 
     ax.set_xlabel("Forecast Horizon (days)")
-    ax.set_ylabel("Simulated Fuel (kg)")
+    ax.set_ylabel("Simulated Fuel (mt)")
     ax.set_title("Forecast Horizon Sensitivity")
     ax.legend()
     ax.grid(True, alpha=0.3)

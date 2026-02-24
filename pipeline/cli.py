@@ -97,15 +97,15 @@ def _run_static_det(config):
     print("=" * 60)
     print("STATIC DETERMINISTIC — RESULTS")
     print("=" * 60)
-    print(f"  Planned fuel:    {planned['planned_fuel_kg']:>10.2f} kg")
+    print(f"  Planned fuel:    {planned['planned_fuel_mt']:>10.2f} mt")
     print(f"  Planned time:    {planned['planned_time_h']:>10.2f} h")
-    print(f"  Simulated fuel:  {simulated['total_fuel_kg']:>10.2f} kg")
+    print(f"  Simulated fuel:  {simulated['total_fuel_mt']:>10.2f} mt")
     print(f"  Simulated time:  {simulated['total_time_h']:>10.2f} h")
     print(f"  Fuel gap:        {metrics['fuel_gap_percent']:>10.2f} %")
-    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} kg/nm")
+    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} mt/nm")
     print(f"  Avg SOG:         {metrics['avg_sog_knots']:>10.2f} knots")
     print(f"  SWS violations:  {simulated.get('sws_violations', 0):>10d}")
-    print(f"  CO2 emissions:   {simulated['co2_emissions_kg']:>10.2f} kg")
+    print(f"  CO2 emissions:   {simulated['co2_emissions_mt']:>10.2f} mt")
     print(f"  Solve time:      {planned['computation_time_s']:>10.3f} s")
     print(f"  Result JSON:     {json_path}")
     print("=" * 60)
@@ -113,12 +113,12 @@ def _run_static_det(config):
     # Print speed schedule
     print()
     print(f"{'Seg':>3}  {'Dist':>8}  {'SWS':>6}  {'SOG':>8}  {'Time':>7}  {'Fuel':>8}")
-    print(f"{'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(kg)':>8}")
+    print(f"{'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(mt)':>8}")
     print("-" * 50)
     for s in planned["speed_schedule"]:
         print(f"{s['segment']+1:>3}  {s['distance_nm']:>8.1f}  "
               f"{s['sws_knots']:>6.1f}  {s['sog_knots']:>8.3f}  "
-              f"{s['time_h']:>7.2f}  {s['fuel_kg']:>8.2f}")
+              f"{s['time_h']:>7.2f}  {s['fuel_mt']:>8.2f}")
     print()
 
 
@@ -178,15 +178,15 @@ def _run_dynamic_det(config):
     print("=" * 60)
     print("DYNAMIC DETERMINISTIC — RESULTS")
     print("=" * 60)
-    print(f"  Planned fuel:    {planned['planned_fuel_kg']:>10.2f} kg")
+    print(f"  Planned fuel:    {planned['planned_fuel_mt']:>10.2f} mt")
     print(f"  Planned time:    {planned['planned_time_h']:>10.2f} h")
-    print(f"  Simulated fuel:  {simulated['total_fuel_kg']:>10.2f} kg")
+    print(f"  Simulated fuel:  {simulated['total_fuel_mt']:>10.2f} mt")
     print(f"  Simulated time:  {simulated['total_time_h']:>10.2f} h")
     print(f"  Fuel gap:        {metrics['fuel_gap_percent']:>10.2f} %")
-    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} kg/nm")
+    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} mt/nm")
     print(f"  Avg SOG:         {metrics['avg_sog_knots']:>10.2f} knots")
     print(f"  SWS violations:  {simulated.get('sws_violations', 0):>10d}")
-    print(f"  CO2 emissions:   {simulated['co2_emissions_kg']:>10.2f} kg")
+    print(f"  CO2 emissions:   {simulated['co2_emissions_mt']:>10.2f} mt")
     print(f"  Solve time:      {planned['computation_time_s']:>10.3f} s")
     print(f"  Result JSON:     {json_path}")
     print("=" * 60)
@@ -195,7 +195,7 @@ def _run_dynamic_det(config):
     sched = planned["speed_schedule"]
     print()
     print(f"{'Leg':>4}  {'Node':>5}  {'Seg':>3}  {'Dist':>8}  {'SWS':>6}  {'SOG':>8}  {'Time':>7}  {'Fuel':>8}")
-    print(f"{'#':>4}  {'ID':>5}  {'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(kg)':>8}")
+    print(f"{'#':>4}  {'ID':>5}  {'#':>3}  {'(nm)':>8}  {'(kn)':>6}  {'(kn)':>8}  {'(h)':>7}  {'(mt)':>8}")
     print("-" * 60)
     show = sched[:5] + [None] + sched[-5:] if len(sched) > 12 else sched
     for s in show:
@@ -204,7 +204,7 @@ def _run_dynamic_det(config):
             continue
         print(f"{s['leg']:>4}  {s['node_id']:>5}  {s['segment']:>3}  {s['distance_nm']:>8.1f}  "
               f"{s['sws_knots']:>6.1f}  {s['sog_knots']:>8.3f}  "
-              f"{s['time_h']:>7.4f}  {s['fuel_kg']:>8.4f}")
+              f"{s['time_h']:>7.4f}  {s['fuel_mt']:>8.4f}")
     print()
 
 
@@ -265,15 +265,15 @@ def _run_dynamic_rh(config):
     print("=" * 60)
     print("DYNAMIC ROLLING HORIZON — RESULTS")
     print("=" * 60)
-    print(f"  Planned fuel:    {planned['planned_fuel_kg']:>10.2f} kg")
+    print(f"  Planned fuel:    {planned['planned_fuel_mt']:>10.2f} mt")
     print(f"  Planned time:    {planned['planned_time_h']:>10.2f} h")
-    print(f"  Simulated fuel:  {simulated['total_fuel_kg']:>10.2f} kg")
+    print(f"  Simulated fuel:  {simulated['total_fuel_mt']:>10.2f} mt")
     print(f"  Simulated time:  {simulated['total_time_h']:>10.2f} h")
     print(f"  Fuel gap:        {metrics['fuel_gap_percent']:>10.2f} %")
-    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} kg/nm")
+    print(f"  Fuel/nm:         {metrics['fuel_per_nm']:>10.4f} mt/nm")
     print(f"  Avg SOG:         {metrics['avg_sog_knots']:>10.2f} knots")
     print(f"  SWS violations:  {simulated.get('sws_violations', 0):>10d}")
-    print(f"  CO2 emissions:   {simulated['co2_emissions_kg']:>10.2f} kg")
+    print(f"  CO2 emissions:   {simulated['co2_emissions_mt']:>10.2f} mt")
     print(f"  Solve time:      {planned['computation_time_s']:>10.3f} s")
     print(f"  Decision points: {len(planned.get('decision_points', [])):>10d}")
     print(f"  Result JSON:     {json_path}")
@@ -289,7 +289,7 @@ def _run_dynamic_rh(config):
         for i, dp in enumerate(dps):
             print(f"{i:>3}  {dp['decision_hour']:>6}  {dp['sample_hour']:>3}  "
                   f"{dp['node_idx']:>5}  {dp['legs_committed']:>5}  "
-                  f"{dp['elapsed_fuel_kg']:>8.2f}  {dp['elapsed_time_h']:>7.2f}  "
+                  f"{dp['elapsed_fuel_mt']:>8.2f}  {dp['elapsed_time_h']:>7.2f}  "
                   f"{dp['dp_status']:>8}")
     print()
 

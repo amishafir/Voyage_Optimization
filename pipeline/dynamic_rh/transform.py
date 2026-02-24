@@ -11,7 +11,7 @@ import logging
 
 import pandas as pd
 
-from shared.hdf5_io import read_metadata, read_predicted
+from shared.hdf5_io import read_metadata, read_predicted, read_actual
 from shared.physics import (
     calculate_ship_heading,
     calculate_fuel_consumption_rate,
@@ -139,6 +139,36 @@ def transform(hdf5_path: str, config: dict) -> dict:
     logger.info("Loaded weather grids for %d sample hours, nodes per grid: %d",
                 len(available_sample_hours), len(active_node_ids))
 
+    # ------------------------------------------------------------------
+    # 6. Load actual weather (for use_actual_at_replan feature)
+    # ------------------------------------------------------------------
+    all_actual = read_actual(hdf5_path)
+    actual_weather = {}
+    available_actual_hours = []
+
+    if len(all_actual) > 0:
+        available_actual_hours = sorted(int(s) for s in all_actual["sample_hour"].unique())
+
+        for sh in available_actual_hours:
+            sh_data = all_actual[all_actual["sample_hour"] == sh]
+            grid = {}
+            for _, row in sh_data.iterrows():
+                nid = int(row["node_id"])
+                if nid not in active_node_ids:
+                    continue
+                wx = {}
+                for field in WEATHER_FIELDS:
+                    val = float(row[field])
+                    if math.isnan(val):
+                        val = 0.0
+                    wx[field] = val
+                grid[nid] = wx
+            actual_weather[sh] = grid
+
+        logger.info("Loaded actual weather for %d sample hours", len(available_actual_hours))
+    else:
+        logger.info("No actual weather data found in HDF5")
+
     ETA = config["ship"]["eta_hours"]
 
     result = {
@@ -154,9 +184,12 @@ def transform(hdf5_path: str, config: dict) -> dict:
         "weather_grids": weather_grids,
         "max_forecast_hours": max_forecast_hours,
         "available_sample_hours": available_sample_hours,
+        "actual_weather": actual_weather,
+        "available_actual_hours": available_actual_hours,
     }
 
     logger.info("RH Transform complete: ETA=%d h, %d nodes, %d legs, %d speeds, "
-                "%d sample hours",
-                ETA, num_nodes, num_legs, num_speeds, len(available_sample_hours))
+                "%d sample hours, %d actual hours",
+                ETA, num_nodes, num_legs, num_speeds, len(available_sample_hours),
+                len(available_actual_hours))
     return result

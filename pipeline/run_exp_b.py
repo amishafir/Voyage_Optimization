@@ -75,10 +75,10 @@ def print_result(name, planned, simulated):
     print(f"\n{'=' * 60}")
     print(f"  {name}")
     print(f"{'=' * 60}")
-    print(f"  Plan:  fuel={planned['planned_fuel_kg']:.2f} kg, time={planned['planned_time_h']:.2f}h")
+    print(f"  Plan:  fuel={planned['planned_fuel_mt']:.2f} mt, time={planned['planned_time_h']:.2f}h")
     print(f"  Plan SWS range: [{plan_min_sws:.2f}, {plan_max_sws:.2f}] kn")
-    print(f"  Sim:   fuel={simulated['total_fuel_kg']:.2f} kg, time={simulated['total_time_h']:.2f}h")
-    print(f"  Gap:   {simulated['total_fuel_kg'] - planned['planned_fuel_kg']:+.2f} kg")
+    print(f"  Sim:   fuel={simulated['total_fuel_mt']:.2f} mt, time={simulated['total_time_h']:.2f}h")
+    print(f"  Gap:   {simulated['total_fuel_mt'] - planned['planned_fuel_mt']:+.2f} mt")
     print(f"  SWS violations: {simulated['sws_violations']}")
 
     # Check simulation SWS details

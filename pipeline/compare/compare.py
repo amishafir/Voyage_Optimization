@@ -69,14 +69,14 @@ def build_comparison_table(results):
 
         rows.append({
             "approach": approach,
-            "planned_fuel_kg": planned.get("total_fuel_kg"),
-            "simulated_fuel_kg": simulated.get("total_fuel_kg"),
+            "planned_fuel_mt": planned.get("total_fuel_mt"),
+            "simulated_fuel_mt": simulated.get("total_fuel_mt"),
             "fuel_gap_pct": metrics.get("fuel_gap_percent"),
             "planned_time_h": planned.get("voyage_time_h"),
             "simulated_time_h": simulated.get("voyage_time_h"),
             "arrival_deviation_h": simulated.get("arrival_deviation_h"),
             "speed_changes": simulated.get("speed_changes"),
-            "co2_kg": simulated.get("co2_emissions_kg"),
+            "co2_mt": simulated.get("co2_emissions_mt"),
             "computation_time_s": planned.get("computation_time_s"),
             "fuel_per_nm": metrics.get("fuel_per_nm"),
             "avg_sog": metrics.get("avg_sog_knots"),
@@ -266,8 +266,8 @@ def _print_table(df):
     """Print a formatted comparison table to console."""
     display_cols = {
         "approach": "Approach",
-        "planned_fuel_kg": "Plan Fuel (kg)",
-        "simulated_fuel_kg": "Sim Fuel (kg)",
+        "planned_fuel_mt": "Plan Fuel (mt)",
+        "simulated_fuel_mt": "Sim Fuel (mt)",
         "fuel_gap_pct": "Gap (%)",
         "simulated_time_h": "Sim Time (h)",
         "arrival_deviation_h": "Arr Dev (h)",

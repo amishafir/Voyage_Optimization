@@ -50,8 +50,8 @@ def run_lower_bound(config, hdf5_path, output_dir):
 
     print(f"  Analytical lower bound (calm water):")
     print(f"    Constant SOG = {constant_sog:.4f} kn")
-    print(f"    FCR           = {fcr_calm:.6f} kg/h")
-    print(f"    Fuel           = {analytical_fuel:.2f} kg")
+    print(f"    FCR           = {fcr_calm:.6f} mt/h")
+    print(f"    Fuel           = {analytical_fuel:.2f} mt")
 
     # --- Simulated constant-SOG voyage under actual weather ---
     schedule = []
@@ -72,7 +72,7 @@ def run_lower_bound(config, hdf5_path, output_dir):
     simulated = simulate_voyage(schedule, hdf5_path, config, sample_hour=0)
 
     planned_stub = {
-        "planned_fuel_kg": analytical_fuel,
+        "planned_fuel_mt": analytical_fuel,
         "planned_time_h": eta,
         "speed_schedule": schedule,
         "computation_time_s": 0.0,
@@ -91,13 +91,13 @@ def run_lower_bound(config, hdf5_path, output_dir):
         metrics=metrics,
         time_series_file=ts_path,
     )
-    result["analytical_fuel_kg"] = round(analytical_fuel, 4)
+    result["analytical_fuel_mt"] = round(analytical_fuel, 4)
     result["constant_sog_knots"] = round(constant_sog, 4)
     json_path = os.path.join(output_dir, "result_lower_bound.json")
     save_result(result, json_path)
 
-    print(f"  Lower bound (analytical): {analytical_fuel:.2f} kg fuel (calm water)")
-    print(f"  Lower bound (simulated):  {simulated['total_fuel_kg']:.2f} kg fuel (actual weather)")
+    print(f"  Lower bound (analytical): {analytical_fuel:.2f} mt fuel (calm water)")
+    print(f"  Lower bound (simulated):  {simulated['total_fuel_mt']:.2f} mt fuel (actual weather)")
     return result
 
 
@@ -146,7 +146,7 @@ def run_upper_bound(config, hdf5_path, output_dir):
     simulated = simulate_voyage(schedule, hdf5_path, config, sample_hour=0)
 
     planned_stub = {
-        "planned_fuel_kg": analytical_fuel,
+        "planned_fuel_mt": analytical_fuel,
         "planned_time_h": analytical_time,
         "speed_schedule": schedule,
         "computation_time_s": 0.0,
@@ -165,13 +165,13 @@ def run_upper_bound(config, hdf5_path, output_dir):
         metrics=metrics,
         time_series_file=ts_path,
     )
-    result["analytical_fuel_kg"] = round(analytical_fuel, 4)
+    result["analytical_fuel_mt"] = round(analytical_fuel, 4)
     result["constant_sog_knots"] = max_speed
     json_path = os.path.join(output_dir, "result_upper_bound.json")
     save_result(result, json_path)
 
-    print(f"  Upper bound (analytical): {analytical_fuel:.2f} kg fuel (calm water, SOG={max_speed} kn)")
-    print(f"  Upper bound (simulated):  {simulated['total_fuel_kg']:.2f} kg fuel (actual weather)")
+    print(f"  Upper bound (analytical): {analytical_fuel:.2f} mt fuel (calm water, SOG={max_speed} kn)")
+    print(f"  Upper bound (simulated):  {simulated['total_fuel_mt']:.2f} mt fuel (actual weather)")
     return result
 
 
@@ -232,7 +232,7 @@ def run_replan_sweep(config, hdf5_path, output_dir, frequencies=None):
         json_path = os.path.join(output_dir, f"result_{approach_name}.json")
         save_result(result, json_path)
 
-        print(f"  {approach_name}: {simulated['total_fuel_kg']:.2f} kg fuel, "
+        print(f"  {approach_name}: {simulated['total_fuel_mt']:.2f} mt fuel, "
               f"{simulated['total_time_h']:.2f} h")
         results.append(result)
 
@@ -310,7 +310,7 @@ def run_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
             json_path = os.path.join(output_dir, f"result_{approach_name}.json")
             save_result(result, json_path)
 
-            print(f"  {approach_name}: {simulated['total_fuel_kg']:.2f} kg fuel")
+            print(f"  {approach_name}: {simulated['total_fuel_mt']:.2f} mt fuel")
             results.append(result)
 
         # --- Rolling Horizon at this horizon ---
@@ -355,7 +355,7 @@ def run_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
         json_path_rh = os.path.join(output_dir, f"result_{approach_name_rh}.json")
         save_result(result_rh, json_path_rh)
 
-        print(f"  {approach_name_rh}: {simulated_rh['total_fuel_kg']:.2f} kg fuel")
+        print(f"  {approach_name_rh}: {simulated_rh['total_fuel_mt']:.2f} mt fuel")
         results.append(result_rh)
 
     return results
@@ -414,8 +414,8 @@ def run_lp_predicted(config, hdf5_path, output_dir):
     json_path = os.path.join(output_dir, f"result_{approach_name}.json")
     save_result(result, json_path)
 
-    print(f"  {approach_name}: plan={planned['planned_fuel_kg']:.2f} kg, "
-          f"sim={simulated['total_fuel_kg']:.2f} kg, "
+    print(f"  {approach_name}: plan={planned['planned_fuel_mt']:.2f} mt, "
+          f"sim={simulated['total_fuel_mt']:.2f} mt, "
           f"gap={metrics['fuel_gap_percent']:.2f}%, "
           f"SWS violations={simulated.get('sws_violations', 0)}")
     return result
@@ -496,19 +496,19 @@ def run_2x2_decomposition(config_a, config_b, hdf5_a, hdf5_b, output_dir):
         json_path = os.path.join(output_dir, f"result_{approach_name}.json")
         save_result(result, json_path)
 
-        fuel = simulated["total_fuel_kg"]
+        fuel = simulated["total_fuel_mt"]
         time_h = simulated["total_time_h"]
         violations = simulated.get("sws_violations", 0)
-        print(f"  {label}: {fuel:.2f} kg fuel, {time_h:.2f} h, {violations} SWS violations")
+        print(f"  {label}: {fuel:.2f} mt fuel, {time_h:.2f} h, {violations} SWS violations")
         results[label] = result
 
     # Compute decomposition if all 4 core configs succeeded
     decomp = {}
     if all(k in results for k in ("A_LP", "A_DP", "B_LP", "B_DP")):
-        a_lp = results["A_LP"]["simulated"]["total_fuel_kg"]
-        a_dp = results["A_DP"]["simulated"]["total_fuel_kg"]
-        b_lp = results["B_LP"]["simulated"]["total_fuel_kg"]
-        b_dp = results["B_DP"]["simulated"]["total_fuel_kg"]
+        a_lp = results["A_LP"]["simulated"]["total_fuel_mt"]
+        a_dp = results["A_DP"]["simulated"]["total_fuel_mt"]
+        b_lp = results["B_LP"]["simulated"]["total_fuel_mt"]
+        b_dp = results["B_DP"]["simulated"]["total_fuel_mt"]
 
         temporal = a_dp - a_lp
         spatial = b_lp - a_lp
@@ -519,20 +519,20 @@ def run_2x2_decomposition(config_a, config_b, hdf5_a, hdf5_b, output_dir):
             "A_DP_fuel": round(a_dp, 4),
             "B_LP_fuel": round(b_lp, 4),
             "B_DP_fuel": round(b_dp, 4),
-            "temporal_effect_kg": round(temporal, 4),
-            "spatial_effect_kg": round(spatial, 4),
-            "interaction_kg": round(interaction, 4),
+            "temporal_effect_mt": round(temporal, 4),
+            "spatial_effect_mt": round(spatial, 4),
+            "interaction_mt": round(interaction, 4),
         }
 
         if "B_RH" in results:
-            b_rh = results["B_RH"]["simulated"]["total_fuel_kg"]
+            b_rh = results["B_RH"]["simulated"]["total_fuel_mt"]
             decomp["B_RH_fuel"] = round(b_rh, 4)
-            decomp["rh_additional_kg"] = round(b_rh - b_dp, 4)
+            decomp["rh_additional_mt"] = round(b_rh - b_dp, 4)
 
         print("\n" + "=" * 60)
         print("2x2 DECOMPOSITION RESULTS")
         print("=" * 60)
-        print(f"{'Config':<10} {'Fuel (kg)':>12} {'vs A-LP':>10}")
+        print(f"{'Config':<10} {'Fuel (mt)':>12} {'vs A-LP':>10}")
         print("-" * 35)
         print(f"{'A-LP':<10} {a_lp:>12.2f} {'baseline':>10}")
         print(f"{'A-DP':<10} {a_dp:>12.2f} {temporal:>+10.2f}")
@@ -541,9 +541,9 @@ def run_2x2_decomposition(config_a, config_b, hdf5_a, hdf5_b, output_dir):
         if "B_RH" in results:
             print(f"{'B-RH':<10} {b_rh:>12.2f} {b_rh - a_lp:>+10.2f}")
         print("-" * 35)
-        print(f"Temporal effect (A-DP - A-LP):  {temporal:+.2f} kg")
-        print(f"Spatial effect  (B-LP - A-LP):  {spatial:+.2f} kg")
-        print(f"Interaction:                    {interaction:+.2f} kg")
+        print(f"Temporal effect (A-DP - A-LP):  {temporal:+.2f} mt")
+        print(f"Spatial effect  (B-LP - A-LP):  {spatial:+.2f} mt")
+        print(f"Interaction:                    {interaction:+.2f} mt")
         print("=" * 60)
 
         # Save decomposition
@@ -640,7 +640,7 @@ def run_short_route_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
             json_path = os.path.join(output_dir, f"result_{approach_name}.json")
             save_result(result, json_path)
 
-            print(f"  {approach_name}: {simulated['total_fuel_kg']:.2f} kg, "
+            print(f"  {approach_name}: {simulated['total_fuel_mt']:.2f} mt, "
                   f"ratio={ratio:.0f}%")
             results.append(result)
 
@@ -688,7 +688,7 @@ def run_short_route_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
         json_path_rh = os.path.join(output_dir, f"result_{approach_name_rh}.json")
         save_result(result_rh, json_path_rh)
 
-        print(f"  {approach_name_rh}: {simulated_rh['total_fuel_kg']:.2f} kg, "
+        print(f"  {approach_name_rh}: {simulated_rh['total_fuel_mt']:.2f} mt, "
               f"ratio={ratio:.0f}%")
         results.append(result_rh)
 
@@ -701,7 +701,7 @@ def run_short_route_horizon_sweep(config, hdf5_path, output_dir, horizons=None):
 
     for r in results:
         name = r["approach"]
-        fuel = r["simulated"]["total_fuel_kg"]
+        fuel = r["simulated"]["total_fuel_mt"]
         time_h = r["simulated"]["voyage_time_h"]
         ratio = r.get("horizon_ratio_pct", 0)
         h = name.split("_")[-1]  # e.g. "144h"
@@ -745,7 +745,7 @@ def run_sensitivity(config, output_dir, hdf5_path):
     print("\n" + "=" * 60)
     print("SENSITIVITY SUMMARY")
     print("=" * 60)
-    print(f"{'Approach':<35}  {'Sim Fuel (kg)':>14}  {'Sim Time (h)':>13}")
+    print(f"{'Approach':<35}  {'Sim Fuel (mt)':>14}  {'Sim Time (h)':>13}")
     print("-" * 65)
 
     all_results = []
@@ -758,7 +758,7 @@ def run_sensitivity(config, output_dir, hdf5_path):
 
     for r in all_results:
         name = r["approach"]
-        fuel = r["simulated"]["total_fuel_kg"]
+        fuel = r["simulated"]["total_fuel_mt"]
         time_h = r["simulated"]["voyage_time_h"]
         print(f"{name:<35}  {fuel:>14.2f}  {time_h:>13.2f}")
 

@@ -17,7 +17,7 @@ GRAVITY = 9.81          # m/s²
 WATER_DENSITY = 1025.0  # kg/m³ (seawater)
 AIR_DENSITY = 1.225     # kg/m³
 KINEMATIC_VISCOSITY = 1.19e-6  # m²/s (seawater at 15°C)
-CO2_FACTOR = 3.17       # kg CO2 per kg fuel
+CO2_FACTOR = 3.17       # mt CO2 per mt fuel
 KNOTS_TO_MS = 0.5144    # knots -> m/s
 MS_TO_KNOTS = 1.944     # m/s -> knots
 
@@ -324,7 +324,7 @@ def calculate_speed_over_ground(
 
 def calculate_fuel_consumption_rate(ship_speed: float) -> float:
     """
-    Fuel consumption rate (kg/hour).
+    Fuel consumption rate (mt/hour).
 
     FCR = 0.000706 × SWS³.
 
@@ -332,7 +332,7 @@ def calculate_fuel_consumption_rate(ship_speed: float) -> float:
         ship_speed: SWS in knots.
 
     Returns:
-        FCR in kg/hour (≥ 0.1).
+        FCR in mt/hour (≥ 0.1).
     """
     return max(0.000706 * ship_speed ** 3, 0.1)
 
@@ -369,11 +369,11 @@ def calculate_total_fuel_consumption(
 
     Args:
         distance:              Distance in nautical miles.
-        fuel_consumption_rate: FCR in kg/hour.
+        fuel_consumption_rate: FCR in mt/hour.
         speed_over_ground:     SOG in knots.
 
     Returns:
-        Total fuel in kg.
+        Total fuel in mt.
     """
     return fuel_consumption_rate * calculate_travel_time(distance, speed_over_ground)
 
@@ -387,10 +387,10 @@ def calculate_co2_emissions(fuel_consumption: float) -> float:
     CO2 emissions = fuel × 3.17.
 
     Args:
-        fuel_consumption: Fuel in kg.
+        fuel_consumption: Fuel in mt.
 
     Returns:
-        CO2 in kg.
+        CO2 in mt.
     """
     return fuel_consumption * CO2_FACTOR
 

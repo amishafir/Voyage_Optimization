@@ -39,6 +39,7 @@ dynamic_rh:
   enabled: true
   time_window_hours: 6
   replan_frequency_hours: 6
+  use_actual_at_replan: true
 
 comparison:
   metrics:

@@ -53,8 +53,8 @@ def simulate_voyage(
         sample_hour:    Which actual-weather snapshot to use.
 
     Returns:
-        Dict with: total_fuel_kg, total_time_h, arrival_deviation_h,
-        speed_changes, co2_emissions_kg, sws_violations, time_series (DataFrame).
+        Dict with: total_fuel_mt, total_time_h, arrival_deviation_h,
+        speed_changes, co2_emissions_mt, sws_violations, time_series (DataFrame).
     """
     ship_params = load_ship_parameters(config)
     eta = config["ship"]["eta_hours"]
@@ -177,10 +177,10 @@ def simulate_voyage(
             "actual_sws_knots": clamped_sws,
             "distance_nm": dist,
             "time_h": leg_time,
-            "fuel_kg": leg_fuel,
+            "fuel_mt": leg_fuel,
             "cum_distance_nm": cum_distance,
             "cum_time_h": cum_time,
-            "cum_fuel_kg": cum_fuel,
+            "cum_fuel_mt": cum_fuel,
             "beaufort": beaufort,
             "wave_height_m": wave_height,
             "current_knots": current_knots,
@@ -198,17 +198,17 @@ def simulate_voyage(
                 speed_changes += 1
 
     result = {
-        "total_fuel_kg": cum_fuel,
+        "total_fuel_mt": cum_fuel,
         "total_time_h": cum_time,
         "arrival_deviation_h": cum_time - eta,
         "speed_changes": speed_changes,
         "sws_violations": sws_violations,
-        "co2_emissions_kg": co2,
+        "co2_emissions_mt": co2,
         "time_series": time_series,
     }
 
     logger.info(
-        "Simulation: %.1f kg fuel, %.1f h, deviation %.1f h, "
+        "Simulation: %.1f mt fuel, %.1f h, deviation %.1f h, "
         "%d speed changes, %d SWS violations",
         cum_fuel, cum_time, result["arrival_deviation_h"],
         speed_changes, sws_violations,
