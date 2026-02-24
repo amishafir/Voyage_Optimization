@@ -289,3 +289,19 @@ For each lead time, we compare every prediction to what actually happened — ac
 
 On this calm 140h route, the advantage is small. On a longer route with harsher weather, DP's stale forecasts would be much more costly.
 
+---
+
+## 5. Post-Meeting Action Items (Feb 23)
+
+**1. RH re-planning frequency: every hour instead of every 6h.**
+Test whether hourly re-planning improves RH results. Currently RH re-plans every 6h (~23 decision points on a 140h voyage). Hourly re-planning = ~140 decision points. Expected: fewer violations, tighter plan-vs-actual gap, but higher computation cost (140× DP runs instead of 23×).
+
+**2. Deep dive into Open-Meteo API update cycle.**
+Understand when the underlying weather model actually updates its predictions. If the model only refreshes every 6h (e.g., GFS runs at 00/06/12/18 UTC), then re-planning every hour between model runs fetches the same forecast — no information gain. Need to determine: (a) which model Open-Meteo serves for this region, (b) model run frequency, (c) data availability lag. This defines the minimum useful re-planning interval.
+
+**3. RH first-hour actual weather: eliminate plan-vs-actual gap at decision points.**
+When RH re-plans, the current node's weather should use actual conditions (not predicted). The ship is *at* that node right now — there's no forecast uncertainty for hour 0. If the first leg of each re-plan uses actual weather, there should be zero SWS violations on that leg. This would reduce total violations and make the plan-vs-actual transition seamless.
+
+**4. Collect data on a longer, harsher route.**
+The current exp_b route (Persian Gulf → Indian Ocean, 1,678 nm, ~140h) has calm weather (wind std 6.07 km/h). All three approaches converge within 1.6 kg. To show meaningful differentiation between LP/DP/RH, need: (a) a route with higher weather variability (e.g., North Atlantic, Arabian Sea monsoon season, Southern Ocean), (b) longer duration (5+ days = 120+ hours), (c) data collection for the full voyage duration plus buffer. This is the critical experiment to demonstrate RH's advantage over DP.
+
