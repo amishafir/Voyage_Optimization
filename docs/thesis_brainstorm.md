@@ -8,7 +8,7 @@
 
 **Five contributions:**
 1. **Simulation model matters** — SOG-target vs fixed-SWS reverses the LP/DP ranking (Jensen's inequality on cubic FCR)
-2. **LP ≈ constant speed** — LP (368.0 kg) = constant speed (367.9 kg) under realistic execution
+2. **LP ≈ lower bound on calm routes** — LP (180.63 kg) within 0.04 kg of theoretical lower bound (180.59 kg) on exp_b; all approaches capture >93% of optimization span
 3. **Forecast horizon is route-length dependent** — dominant on long routes (280h), negligible on short routes (140h)
 4. **Information value hierarchy** — temporal > spatial > re-planning, confirmed by 2x2 factorial
 5. **Forecast error curve** — wind RMSE doubles over 133h with systematic overpredict bias, completing the causal chain
@@ -32,15 +32,25 @@ The forecast error curve and 2x2 decomposition are **fully credible** — they c
 
 ## 3. Results
 
+### Theoretical Bounds — Short Route (exp_b)
+
+| Bound | Fuel (kg) | Method | Time |
+|-------|:---------:|--------|:----:|
+| **Upper** | **203.91** | SWS = 13 kn (max engine) at every node, SOG varies with weather | 131.5h (8.5h early) |
+| **Lower** | **180.59** | Optimal per-node SWS with actual weather, Lagrangian optimization | 140.0h (exact ETA) |
+| **Span** | **23.33** | The total optimization opportunity on this route | |
+
 ### Credible Results — Short Route (exp_b, 138 nodes, ~140h)
 
 | | B-LP | B-DP | B-RH |
 |--|:--:|:--:|:--:|
-| **Planned fuel** | 178.2 kg | 180.1 kg | 179.2 kg |
-| **Actual fuel (simulated)** | 180.6 kg | 182.2 kg | 180.9 kg |
-| **Gap** | +2.4 kg | +2.1 kg | +1.7 kg |
+| **Planned fuel** | 175.96 kg | 177.63 kg | 174.20 kg |
+| **Actual fuel (simulated)** | 180.63 kg | 182.22 kg | 180.89 kg |
+| **Gap (plan→actual)** | +4.67 kg (+2.7%) | +4.59 kg (+2.6%) | +6.70 kg (+3.8%) |
+| **SWS violations** | 4/137 (2.9%) | 17/137 (12.4%) | 12/137 (8.8%) |
+| **% of span captured** | 99.9% | 93.1% | 98.7% |
 
-All three approaches are close (1.6 kg range). LP and RH nearly tied (180.6 vs 180.9). The optimization opportunity is small on this calm route (wind std 6.07 km/h).
+All three approaches capture >93% of the optimization potential. LP and RH nearly tied (180.6 vs 180.9). On this calm route (wind std 6.07 km/h), the 1.6 kg total range confirms the optimization opportunity is small.
 
 ### Full-Route Results (indicative, weak simulation)
 
@@ -159,7 +169,23 @@ This directly explains: (1) the horizon plateau at 72h, (2) the route-length dep
 
 ---
 
-## 7. SWS Violation Analysis (indicative — full-route data only)
+## 7. SWS Violation Analysis
+
+### Credible — Short Route (exp_b)
+
+During **planning**: zero violations. All algorithms choose SWS within [11, 13] kn.
+
+During **simulation**: violations occur because actual weather differs from what was used for planning.
+
+| | Violations | Needed SWS range | Cause |
+|--|:--:|:--:|--|
+| LP | 4/137 (2.9%) | up to 13.21 kn | Segment average hides per-node extremes |
+| DP | 17/137 (12.4%) | 10.6 – 13.99 kn | Predicted weather ≠ actual weather |
+| RH | 12/137 (8.8%) | 10.6 – 13.38 kn | Fewer than DP — fresher forecasts help |
+
+DP has the most violations: it plans on a single forecast from hour 0, which grows stale. RH re-plans with newer forecasts, reducing violations. LP has the fewest because segment averaging smooths extremes (but this also means LP can't exploit per-node variation).
+
+### Indicative — Full Route (weak simulation)
 
 | Approach | Violations | Rate | Max Severity | Soft (<0.5 kn) | Very Hard (≥1.0 kn) |
 |----------|:---------:|:----:|:------------:|:--------------:|:--------------------:|
@@ -241,6 +267,10 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 | **10** | **IMO/EEXI literature — validate SOG-targeting** | **TODO** (small) |
 | **11** | **Full-route re-collection (280+ hours actual weather)** | **TODO** (critical) |
 | **12** | **Multi-season weather robustness** | **TODO** (large) |
+| **13** | **RH re-planning every hour (not 6h)** | **TODO** (from meeting) |
+| **14** | **Open-Meteo API update cycle deep dive** | **TODO** (from meeting) |
+| **15** | **RH first-hour actual weather at decision points** | **TODO** (from meeting) |
+| **16** | **Collect data on longer, harsher route (5+ days)** | **TODO** (from meeting, critical) |
 
 ---
 
@@ -263,6 +293,9 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 3. **How does the hierarchy shift in extreme weather?** (monsoon, North Atlantic winter)
 4. **Is SOG-targeting truly standard practice?** (IMO/EEXI citation needed)
 5. **FCR exponent sensitivity?** (how sensitive are conclusions to ±0.05 on the cubic?)
+6. **Does hourly RH re-planning improve results, or is 6h optimal?** (depends on API update cycle)
+7. **What is the Open-Meteo weather model update frequency for this region?** (GFS 6h? ECMWF 6h/12h?)
+8. **Can RH eliminate first-leg violations by using actual weather at decision points?**
 
 ---
 
@@ -292,10 +325,19 @@ Weather comparison: wind std 10.63 vs 6.07 km/h, wave std 0.50 vs 0.26 m. Despit
 - Short-route horizon sweep: completely flat (0.08 kg DP range across 24h-144h)
 - Generalizability confirmed: RH > DP > LP holds on both routes; horizon effect is route-dependent
 
-### 2026-02-23 — Simulation credibility caveat
+### 2026-02-23 — Simulation credibility caveat + bounds + meeting prep
 - Identified critical limitation: full-route simulation uses 12h actual weather for 280h voyage (frozen hour-0 weather)
 - Short-route (exp_b) has 134h actual for ~140h voyage — **credible primary evidence**
 - Relabeled all results: full-route = "indicative", short-route = "credible"
 - Forecast error curve and 2x2 decomposition are fully credible (no simulation assumptions)
-- Added full-route re-collection (280+ hours) as critical action item
-- Updated thesis arc: lead with credible exp_a/b evidence, full-route as supporting
+- Computed theoretical bounds for exp_b: upper 203.91 kg (SWS=13), lower 180.59 kg (Lagrangian), span 23.33 kg
+- All approaches capture >93% of optimization span (LP 99.9%, RH 98.7%, DP 93.1%)
+- Corrected exp_b planned fuel numbers: LP 175.96, DP 177.63, RH 174.20 kg
+- Corrected gaps: LP +4.67 (+2.7%), DP +4.59 (+2.6%), RH +6.70 (+3.8%)
+- Confirmed: zero SWS violations during planning, violations only during simulation
+
+### 2026-02-23 — Supervisor meeting outcomes
+- **RH frequency**: test hourly re-planning (not just 6h) — may reduce violations further
+- **API update cycle**: need to understand when Open-Meteo model actually refreshes (GFS every 6h?) — determines minimum useful re-planning interval
+- **Actual weather at decision points**: RH should use actual weather for first leg of each re-plan (ship is physically there, no forecast uncertainty)
+- **Harsher route needed**: current exp_b is too calm (1.6 kg range) to differentiate algorithms — need 5+ day route with more weather variability
