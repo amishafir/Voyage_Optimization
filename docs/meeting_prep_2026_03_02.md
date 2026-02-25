@@ -37,6 +37,32 @@ Note: ECMWF WAM also provides waves at 6h, but our route (Persian Gulf–Indian 
 
 **Conclusion:** Hourly collection wastes ~86–97% of API calls on identical data. 6-hourly collection aligns with the fastest model cycle (GFS wind) and captures all new information.
 
+**Empirical verification — exact NWP propagation timing:**
+
+Tracked `predicted_weather.csv` from exp_b (3.1M rows, 138 nodes, 134 sample hours). For a fixed `forecast_hour=50`, compared predictions across consecutive `sample_hour` values to find exactly when the API returns new data:
+
+```
+GFS cycle:     00z       06z       12z       18z
+                 ↓         ↓         ↓         ↓  (~5h processing delay)
+Data arrives:  05 UTC    11 UTC    17 UTC    23 UTC
+```
+
+Change events in our data (node 0): sample hours 2, 8, 14, 20, 28, 32, 38, 44, 50, 56 — gaps are consistently 6h (median=6, mean=6.0). Mapped to UTC, 9 out of 10 updates landed at `hour % 6 == 5`, confirming the ~5h propagation delay from GFS initialization.
+
+At each update, ~98-100% of all 138 nodes change simultaneously — this is a global model refresh, not per-location drift.
+
+**NWP-aligned collection (implemented):**
+
+Added `sample_interval_hours` and `nwp_offset_utc` config options to `collector.py`. Instead of hourly collection with 86% redundancy, future experiments can collect at 6h intervals synchronized to GFS availability:
+
+```yaml
+collection:
+  sample_interval_hours: 6    # 4 samples/day (was 24)
+  nwp_offset_utc: 5           # target 05/11/17/23 UTC
+```
+
+This cuts API calls by ~83% with zero information loss. Sample hours become 0, 6, 12, 18, ... — the RH optimizer already selects the closest available sample_hour at each decision point, so this is fully compatible.
+
 ### Action Item 3: RH actual weather at decision points ✅
 
 **Done in commit `d21cecd`.** When RH re-plans, the first leg now uses actual weather (not predicted) for the current node. The ship is physically there — no forecast uncertainty. Result: SWS violations reduced from 12 → 10 on exp_b.

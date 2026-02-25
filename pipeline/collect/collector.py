@@ -14,7 +14,7 @@ import logging
 import os
 import signal
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 import openmeteo_requests
@@ -238,6 +238,39 @@ def _nan_actual_row(node_id, sample_hour):
 
 
 # ---------------------------------------------------------------------------
+# NWP cycle alignment
+# ---------------------------------------------------------------------------
+
+def _next_nwp_time(nwp_offset_utc, interval_hours):
+    """Compute the next UTC datetime when an NWP update is expected.
+
+    GFS runs at 00/06/12/18 UTC with ~5h propagation delay to Open-Meteo.
+    So fresh data arrives at approximately 05/11/17/23 UTC (offset=5).
+
+    Args:
+        nwp_offset_utc: Hours after each cycle start when data arrives (e.g. 5).
+        interval_hours: NWP cycle interval (e.g. 6).
+
+    Returns:
+        datetime (UTC, aware) of the next expected update.
+    """
+    now = datetime.now(timezone.utc)
+    # Target hours within the day: offset, offset+interval, offset+2*interval, ...
+    targets = [(nwp_offset_utc + i * interval_hours) % 24
+               for i in range(24 // interval_hours)]
+    targets.sort()
+
+    # Find the next target hour today or tomorrow
+    for t in targets:
+        candidate = now.replace(hour=t, minute=0, second=0, microsecond=0)
+        if candidate > now:
+            return candidate
+    # All today's targets have passed — use first target tomorrow
+    tomorrow = now + timedelta(days=1)
+    return tomorrow.replace(hour=targets[0], minute=0, second=0, microsecond=0)
+
+
+# ---------------------------------------------------------------------------
 # Main collection loop
 # ---------------------------------------------------------------------------
 
@@ -251,12 +284,20 @@ def collect(config, hdf5_path=None):
     Supports indefinite collection when hours=0: runs until interrupted.
     Handles SIGINT/SIGTERM gracefully — finishes the current sample, then exits.
     Resumes from the last completed sample_hour on restart.
+
+    NWP-aligned collection (optional):
+        sample_interval_hours: 6    — collect every 6h instead of every 1h
+        nwp_offset_utc: 5           — align to GFS cycle (data arrives ~05/11/17/23 UTC)
+    When both are set, the collector sleeps until the next NWP update time
+    instead of using a fixed wait. Sample hours increment by sample_interval_hours.
     """
     # Load route config and generate waypoints
     route_config = load_route_config(config)
     interval_nm = config["collection"].get("interval_nm", 1.0)
     hours = config["collection"].get("hours", 72)
     api_delay = config["collection"].get("api_delay_seconds", 0.1)
+    sample_interval = config["collection"].get("sample_interval_hours", 1)
+    nwp_offset = config["collection"].get("nwp_offset_utc", None)
     indefinite = hours == 0
 
     if hdf5_path is None:
@@ -266,12 +307,17 @@ def collect(config, hdf5_path=None):
     waypoints_df = generate_waypoints(route_config, interval_nm=interval_nm)
     print(f"Generated {len(waypoints_df)} waypoints at {interval_nm} nm intervals")
 
+    if sample_interval > 1 or nwp_offset is not None:
+        nwp_info = f", NWP offset={nwp_offset} UTC" if nwp_offset is not None else ""
+        print(f"Sample interval: every {sample_interval}h{nwp_info}")
+
     # Create HDF5 if it doesn't exist
     if not os.path.exists(hdf5_path):
         attrs = {
             "route_name": route_config.get("name", "unknown"),
             "interval_nm": interval_nm,
             "planned_hours": hours,
+            "sample_interval_hours": sample_interval,
             "source": "live_collection",
         }
         create_hdf5(hdf5_path, waypoints_df, attrs)
@@ -282,7 +328,7 @@ def collect(config, hdf5_path=None):
     print(f"Already completed: {len(completed)} runs ({sorted(completed)[-5:] if completed else []})")
 
     # Determine starting sample_hour for resume
-    next_hour = max(completed) + 1 if completed else 0
+    next_hour = (max(completed) + sample_interval) if completed else 0
 
     # Graceful shutdown via SIGINT/SIGTERM
     shutdown_requested = [False]
@@ -365,12 +411,20 @@ def collect(config, hdf5_path=None):
                 print(f"\nGraceful shutdown after sample hour {sample_hour}. Output: {hdf5_path}")
                 return
 
-            # Wait before next hour
-            is_last = not indefinite and sample_hour >= hours - 1
+            # Wait before next sample
+            is_last = not indefinite and sample_hour + sample_interval >= hours
             if not is_last:
-                wait = max(0, 3600 - elapsed)
+                if nwp_offset is not None:
+                    # Align to NWP cycle: sleep until next update time
+                    target = _next_nwp_time(nwp_offset, sample_interval)
+                    now_utc = datetime.now(timezone.utc)
+                    wait = max(0, (target - now_utc).total_seconds())
+                    print(f"  Next NWP update: {target.strftime('%H:%M UTC')} (waiting {wait/60:.0f} min)")
+                else:
+                    wait = max(0, sample_interval * 3600 - elapsed)
+                    if wait > 0:
+                        print(f"  Waiting {wait/60:.0f} min until next sample...")
                 if wait > 0:
-                    print(f"  Waiting {wait/60:.0f} min until next sample...")
                     try:
                         time.sleep(wait)
                     except (KeyboardInterrupt, SystemExit):
@@ -380,7 +434,7 @@ def collect(config, hdf5_path=None):
                         print(f"\nGraceful shutdown after sample hour {sample_hour}. Output: {hdf5_path}")
                         return
 
-            sample_hour += 1
+            sample_hour += sample_interval
     finally:
         # Restore original signal handlers
         signal.signal(signal.SIGINT, prev_sigint)
