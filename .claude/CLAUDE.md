@@ -103,6 +103,10 @@ Detailed reference material is available on-demand via skills:
 | `/lp-optimizer` | LP architecture: data flow, SOG matrix, PuLP model, hardcoded values |
 | `/dp-optimizer` | DP architecture: graph classes, Dijkstra, known bugs, SWS inverse |
 | `/research-paper` | Paper equations (7-16), Tables 2-4, coefficient lookups, validation targets |
+| `/lit-search` | Search for papers: web search, Semantic Scholar API, local PDFs |
+| `/lit-validate` | Validate citation: DOI resolution, metadata cross-check, existence confirmation |
+| `/lit-read` | Read PDF and extract structured literature entry matching template |
+| `/lit-file` | Append reviewed entry to pillar file and update index |
 
 ## Pipeline Porting Agents
 
@@ -113,6 +117,12 @@ For implementing the new pipeline (`pipeline/`), use these specialized agents:
 | `lp-porter` | Port LP optimizer to `pipeline/static_det/` (transform + optimize) |
 | `dp-porter` | Port DP optimizer to `pipeline/dynamic_det/` and `dynamic_rh/` |
 | `physics-porter` | Consolidate `utility_functions.py` into `pipeline/shared/physics.py` |
+
+## Literature Review Agent
+
+| Agent | Purpose |
+|-------|---------|
+| `lit-reviewer` | Full pipeline: validate paper, read PDF, assess relevance, produce entry for review |
 
 ## Project Planning
 
