@@ -75,12 +75,13 @@ Two changes:
 
 **Results on exp_b (138 nodes, 134 sample hours):**
 
-| Approach | Plan Fuel (mt) | Sim Fuel (mt) | Plan–Sim Gap | SWS Violations |
-|---|--:|--:|--:|--:|
-| LP (static det.) | 175.96 | 180.63 | +4.67 (+2.7%) | 4 |
-| DP (dynamic det.) | 177.63 | 182.22 | +4.59 (+2.6%) | 17 |
-| RH (old, first leg only) | 174.21 | 180.84 | +6.63 (+3.8%) | 10 |
-| **RH (new, full 6h window)** | **175.52** | **176.40** | **+0.88 (+0.5%)** | **1** |
+| Approach | Plan Fuel (mt) | Sim Fuel (mt) | Plan–Sim Gap | Violations | Avg SOG (kn) | Fuel Saved vs Upper Bound |
+|---|--:|--:|--:|--:|--:|--:|
+| *Upper bound (max SWS=13 kn)* | *—* | *202.14* | *—* | *—* | *12.72* | *baseline* |
+| LP (static det.) | 175.96 | 180.63 | +4.67 (+2.7%) | 4 | 11.98 | 21.51 (10.6%) |
+| DP (dynamic det.) | 177.63 | 182.22 | +4.59 (+2.6%) | 17 | 12.03 | 19.92 (9.9%) |
+| RH (old, first leg only) | 174.21 | 180.84 | +6.63 (+3.8%) | 10 | — | 21.30 (10.5%) |
+| **RH (new, full 6h window)** | **175.52** | **176.40** | **+0.88 (+0.5%)** | **1** | **12.01** | **25.74 (12.7%)** |
 
 **Key improvements:**
 - **Violations: 10 → 1.** The single remaining violation (node 132, SWS=13.079) occurs at the last decision point where the fallback to forecast was triggered (ETA margin < 0.1h).
