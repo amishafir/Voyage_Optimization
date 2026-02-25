@@ -41,9 +41,32 @@ Note: ECMWF WAM also provides waves at 6h, but our route (Persian Gulf–Indian 
 
 **Done in commit `d21cecd`.** When RH re-plans, the first leg now uses actual weather (not predicted) for the current node. The ship is physically there — no forecast uncertainty. Result: SWS violations reduced from 12 → 10 on exp_b.
 
-### Action Item 4: Longer, harsher route ❌ Not started
+### Action Item 4: Longer, harsher route ✅ Two new routes deployed
 
-Still need to identify and collect data for a route with higher weather variability to show meaningful LP/DP/RH differentiation.
+Selected two new routes targeting heavy weather, designed to maximize RH advantage over DD:
+
+**Experiment C — Yokohama → Long Beach (North Pacific Great Circle)**
+- 4,782 nm, ~17 days at 12 kn. Arcs to 47.65°N through the Aleutian storm track (winter BN 8-10, waves 4-6m mean, 8-20m storms).
+- 947 nodes at 5nm spacing, ~1,936 API calls per hourly sample.
+- **Collection running since Feb 24** on TAU server (`tmux exp_c`). As of Feb 25: **18 sample hours collected, 32.5 MB, 0 failures.**
+- Full voyage data by ~Mar 11. Partial analysis (10 days, 240h) by ~Mar 6.
+- Route file: `pipeline/config/routes/yokohama_long_beach.yaml`
+
+**Experiment D — St. John's → Liverpool (North Atlantic Storm Track)**
+- 1,955 nm, ~6.8 days at 12 kn. Crosses the heart of the North Atlantic storm track (45-56°N) — the most extreme wave climate on Earth per NASA.
+- 389 nodes at 5nm spacing, ~782 API calls per hourly sample.
+- **Collection running since Feb 25** on TAU server (`tmux exp_d`). First sample: 389/389 OK, 0 failures.
+- Full voyage data by ~**Mar 4** (7 days). This is the priority route for analysis.
+- Route file: `pipeline/config/routes/st_johns_liverpool.yaml`
+
+**Why two routes with different lengths:**
+
+| | Exp D (7 days) | Exp C (17 days) |
+|---|---|---|
+| DD forecast coverage | Full voyage (168h horizon covers ~163h voyage) | First 7 of 17 days only |
+| RH advantage source | **Freshness effect** only — DD has data but it degrades | Freshness **+ horizon effect** — DD is blind for 58% of voyage |
+| Thesis value | Isolates the pure forecast freshness advantage | Shows combined effect + how much worse DD gets without any forecast |
+| Results ready | **Mar 4** | Mar 6 (partial) / Mar 11 (full) |
 
 ---
 
@@ -75,6 +98,24 @@ Wave and current deltas have effectively zero SOG impact at any gap size.
 
 ---
 
+## Pipeline Infrastructure Improvements
+
+### Indefinite collection mode
+Modified `collector.py` to support `hours: 0` for indefinite collection:
+- Loop runs `while True` instead of `for sample_hour in range(hours)`
+- Graceful shutdown: SIGINT/SIGTERM finishes current sample, then exits cleanly (no partial writes)
+- Resume-aware: restarts from `max(completed) + 1`
+- Status summary each sample: nodes OK/failed, HDF5 size, total hours, wall time
+
+### Partial analysis workflow
+New scripts for analyzing data while collection is still running:
+- `check_exp_c_status.py` — lightweight status checker (no optimizer imports), runs locally or via SSH
+- `run_partial_exp_c.py` — runs LP/DP/RH on whatever data exists, auto-adjusts ETA and segments to reachable nodes
+
+Workflow: `scp` the HDF5 anytime → run partial analysis locally → collection continues on server.
+
+---
+
 ## Thesis-Ready Conclusions from This Week
 
 1. **6h is the optimal replan frequency.** Matches the fastest NWP model cycle. Sub-6h replanning provides no new information and negligible fuel benefit.
@@ -85,14 +126,16 @@ Wave and current deltas have effectively zero SOG impact at any gap size.
 
 4. **Actual weather at decision points reduces violations.** Simple improvement with no downside — should be standard for RH.
 
+5. **Forecast horizon (168h) is the key driver of RH advantage.** On voyages ≤ 7 days, DD has full coverage and the RH advantage comes only from freshness (~0.7% on exp_b). On voyages > 7 days, DD falls back to persistence — RH should show a much larger advantage. Exp C and D are designed to test both regimes.
+
 ---
 
 ## Questions for Discussion
 
-1. **Is the 6h replan result sufficient for the thesis, or do we need to repeat on the harsher route?** On this calm route, all frequencies converge. A harsh route might show more differentiation.
+1. **Exp D results expected by Mar 4 — what analysis should we prioritize?** Options: (a) repeat the replan frequency sweep on harsh weather, (b) forecast error vs lead time comparison, (c) fuel gap analysis DD vs RH.
 
-2. **Should we collect a new dataset at 6h intervals instead of hourly?** Would be cleaner for thesis presentation but means new ~6-day collection run.
+2. **How to present the two-route comparison in the thesis?** Exp D (within horizon) shows freshness effect; Exp C (beyond horizon) shows combined effect. Together they decompose the RH advantage into its two components.
 
-3. **Route selection for action item 4:** Arabian Sea (monsoon), North Atlantic (winter storms), or Southern Ocean? Need high weather variability + practical shipping route.
+3. **Should we present the staleness analysis as a standalone section?** It explains *why* 6h replanning is optimal and connects to the NWP model cycles. Could be Section 4.X or folded into the replan discussion.
 
-4. **How to present the staleness analysis in the thesis?** Section 4.X as a standalone finding, or fold into the replan frequency discussion?
+4. **Port B NaN issue on new routes:** The last waypoint on the original route had NaN marine data (coastal proximity). Need to verify whether Liverpool and Long Beach have the same issue — if so, the existing NaN handling covers it.

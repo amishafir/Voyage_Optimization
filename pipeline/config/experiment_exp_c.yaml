@@ -1,0 +1,51 @@
+collection:
+  route: yokohama_long_beach             # 12 waypoints, 4,782 nm, ~400h
+  interval_nm: 5                         # 5 nm spacing → ~968 interpolated waypoints
+  hours: 0                               # 0 = indefinite (collect until stopped)
+  api_delay_seconds: 0.1
+
+ship:
+  length_m: 200.0
+  beam_m: 32.0
+  draft_m: 12.0
+  displacement_tonnes: 50000.0
+  block_coefficient: 0.75
+  rated_power_kw: 10000.0
+  speed_range_knots: [11, 13]
+  eta_hours: 400                         # ~4,782 nm / 12 kn
+
+# exp_c: North Pacific Great Circle, harsh weather, long voyage
+# LP aggregates to 11 segments; DP uses all interpolated nodes
+
+static_det:
+  enabled: true
+  segments: 11                           # 12 waypoints → 11 segments
+  weather_snapshot: 0
+  weather_source: actual
+  optimizer: gurobi
+  speed_choices: 21
+
+dynamic_det:
+  enabled: true
+  time_window_hours: 6
+  forecast_origin: 0
+  speed_granularity: 0.1
+  time_granularity: 0.1
+  distance_granularity: 1
+  nodes: all
+  time_windows: all
+
+dynamic_rh:
+  enabled: true
+  time_window_hours: 6
+  replan_frequency_hours: 6
+  use_actual_at_replan: true
+
+comparison:
+  metrics:
+    - total_fuel_mt
+    - voyage_time_h
+    - arrival_deviation_h
+    - plan_stability
+    - computation_time_s
+    - fuel_per_nm

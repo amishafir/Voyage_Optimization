@@ -1,0 +1,19 @@
+name: St. John's to Liverpool (North Atlantic Storm Track)
+description: >
+  Realistic shipping route across the North Atlantic, 1,955 nm, ~6.8 days at 12 kn.
+  Crosses the heart of the North Atlantic storm track (45-56°N) — the most extreme
+  wave climate on Earth (NASA). Winter BN 8-10, mean significant wave height 4-6m,
+  extreme waves 18m+. Route goes north around Ireland via Malin Head and the North
+  Channel into the Irish Sea.
+waypoints:
+  - {lat: 47.57, lon: -52.71, name: "St. John's"}
+  - {lat: 48.80, lon: -47.50, name: "Grand Banks"}
+  - {lat: 50.40, lon: -41.00, name: "Mid-Atlantic West"}
+  - {lat: 52.00, lon: -34.00, name: "Mid-Atlantic Central"}
+  - {lat: 53.30, lon: -26.50, name: "Mid-Atlantic East"}
+  - {lat: 54.20, lon: -18.50, name: "Rockall Bank"}
+  - {lat: 55.50, lon: -11.00, name: "West of Ireland"}
+  - {lat: 55.80, lon: -7.00,  name: "Malin Head"}
+  - {lat: 55.20, lon: -5.20,  name: "North Channel"}
+  - {lat: 54.20, lon: -3.80,  name: "Irish Sea North"}
+  - {lat: 53.41, lon: -3.01,  name: "Liverpool"}

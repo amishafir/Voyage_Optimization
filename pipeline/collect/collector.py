@@ -12,6 +12,7 @@ Key changes:
 
 import logging
 import os
+import signal
 import time
 from datetime import datetime
 
@@ -246,12 +247,17 @@ def collect(config, hdf5_path=None):
     Args:
         config: Full experiment config dict.
         hdf5_path: Override output path (default: pipeline/data/voyage_weather.h5).
+
+    Supports indefinite collection when hours=0: runs until interrupted.
+    Handles SIGINT/SIGTERM gracefully — finishes the current sample, then exits.
+    Resumes from the last completed sample_hour on restart.
     """
     # Load route config and generate waypoints
     route_config = load_route_config(config)
     interval_nm = config["collection"].get("interval_nm", 1.0)
     hours = config["collection"].get("hours", 72)
     api_delay = config["collection"].get("api_delay_seconds", 0.1)
+    indefinite = hours == 0
 
     if hdf5_path is None:
         pipeline_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -273,63 +279,111 @@ def collect(config, hdf5_path=None):
 
     # Check what's already collected
     completed = get_completed_runs(hdf5_path)
-    print(f"Already completed: {len(completed)} runs ({completed})")
+    print(f"Already completed: {len(completed)} runs ({sorted(completed)[-5:] if completed else []})")
+
+    # Determine starting sample_hour for resume
+    next_hour = max(completed) + 1 if completed else 0
+
+    # Graceful shutdown via SIGINT/SIGTERM
+    shutdown_requested = [False]
+
+    def _signal_handler(signum, frame):
+        sig_name = signal.Signals(signum).name
+        print(f"\n  [{sig_name}] Shutdown requested — finishing current sample...")
+        shutdown_requested[0] = True
+
+    prev_sigint = signal.signal(signal.SIGINT, _signal_handler)
+    prev_sigterm = signal.signal(signal.SIGTERM, _signal_handler)
 
     # Setup API client
     client = setup_api_client()
     voyage_start_time = datetime.now()
+    collection_start = time.time()
 
-    for sample_hour in range(hours):
-        if sample_hour in completed:
-            continue
+    try:
+        sample_hour = next_hour
+        while True:
+            # Check bounds for finite mode
+            if not indefinite and sample_hour >= hours:
+                break
 
-        print(f"\n--- Sample hour {sample_hour}/{hours - 1} ---")
-        start_time = time.time()
+            if sample_hour in completed:
+                sample_hour += 1
+                continue
 
-        actual_rows = []
-        predicted_rows = []
-        successful = 0
-        failed = 0
-
-        for _, wp in waypoints_df.iterrows():
-            node_id = wp["node_id"]
-            lat, lon = wp["lat"], wp["lon"]
-
-            actual, predicted, error = fetch_waypoint_weather(
-                client, lat, lon, sample_hour, voyage_start_time,
-            )
-
-            if error:
-                failed += 1
-                if failed <= 5:
-                    logger.warning("Node %d (%s): %s", node_id, wp["waypoint_name"], error)
-                actual_rows.append(_nan_actual_row(node_id, sample_hour))
+            if indefinite:
+                print(f"\n--- Sample hour {sample_hour} (indefinite mode) ---")
             else:
-                row = {"node_id": node_id, "sample_hour": sample_hour}
-                row.update(actual)
-                actual_rows.append(row)
+                print(f"\n--- Sample hour {sample_hour}/{hours - 1} ---")
+            start_time = time.time()
 
-                for pr in predicted:
-                    pr["node_id"] = node_id
-                    predicted_rows.append(pr)
-                successful += 1
+            actual_rows = []
+            predicted_rows = []
+            successful = 0
+            failed = 0
 
-            time.sleep(api_delay)
+            for _, wp in waypoints_df.iterrows():
+                node_id = wp["node_id"]
+                lat, lon = wp["lat"], wp["lon"]
 
-        # Batch append to HDF5
-        append_actual(hdf5_path, pd.DataFrame(actual_rows))
-        if predicted_rows:
-            append_predicted(hdf5_path, pd.DataFrame(predicted_rows))
+                actual, predicted, error = fetch_waypoint_weather(
+                    client, lat, lon, sample_hour, voyage_start_time,
+                )
 
-        elapsed = time.time() - start_time
-        print(f"  {successful}/{len(waypoints_df)} OK, {failed} failed, {elapsed:.1f}s")
-        print(f"  Actual: {len(actual_rows)} rows, Predicted: {len(predicted_rows)} rows")
+                if error:
+                    failed += 1
+                    if failed <= 5:
+                        logger.warning("Node %d (%s): %s", node_id, wp["waypoint_name"], error)
+                    actual_rows.append(_nan_actual_row(node_id, sample_hour))
+                else:
+                    row = {"node_id": node_id, "sample_hour": sample_hour}
+                    row.update(actual)
+                    actual_rows.append(row)
 
-        # Wait before next hour (unless this is the last one)
-        if sample_hour < hours - 1 and sample_hour not in completed:
-            wait = max(0, 3600 - elapsed)
-            if wait > 0:
-                print(f"  Waiting {wait/60:.0f} min until next sample...")
-                time.sleep(wait)
+                    for pr in predicted:
+                        pr["node_id"] = node_id
+                        predicted_rows.append(pr)
+                    successful += 1
+
+                time.sleep(api_delay)
+
+            # Batch append to HDF5
+            append_actual(hdf5_path, pd.DataFrame(actual_rows))
+            if predicted_rows:
+                append_predicted(hdf5_path, pd.DataFrame(predicted_rows))
+
+            elapsed = time.time() - start_time
+            wall_hours = (time.time() - collection_start) / 3600
+            h5_size_mb = os.path.getsize(hdf5_path) / (1024 * 1024)
+            total_collected = len(completed) + (sample_hour - next_hour + 1)
+            print(f"  {successful}/{len(waypoints_df)} OK, {failed} failed, {elapsed:.1f}s")
+            print(f"  Actual: {len(actual_rows)} rows, Predicted: {len(predicted_rows)} rows")
+            print(f"  Total hours collected: {total_collected}, HDF5: {h5_size_mb:.1f} MB, wall: {wall_hours:.1f}h")
+
+            # Check for shutdown request
+            if shutdown_requested[0]:
+                print(f"\nGraceful shutdown after sample hour {sample_hour}. Output: {hdf5_path}")
+                return
+
+            # Wait before next hour
+            is_last = not indefinite and sample_hour >= hours - 1
+            if not is_last:
+                wait = max(0, 3600 - elapsed)
+                if wait > 0:
+                    print(f"  Waiting {wait/60:.0f} min until next sample...")
+                    try:
+                        time.sleep(wait)
+                    except (KeyboardInterrupt, SystemExit):
+                        print(f"\nShutdown during wait after sample hour {sample_hour}. Output: {hdf5_path}")
+                        return
+                    if shutdown_requested[0]:
+                        print(f"\nGraceful shutdown after sample hour {sample_hour}. Output: {hdf5_path}")
+                        return
+
+            sample_hour += 1
+    finally:
+        # Restore original signal handlers
+        signal.signal(signal.SIGINT, prev_sigint)
+        signal.signal(signal.SIGTERM, prev_sigterm)
 
     print(f"\nCollection complete. Output: {hdf5_path}")
