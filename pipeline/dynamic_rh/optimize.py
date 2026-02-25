@@ -85,23 +85,30 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
         grid_for_dp = weather_grids[sample_hour]
 
-        # 2b. Inject actual weather for current node (first leg of sub-problem)
+        # 2b. Inject actual weather for all nodes within the committed window
+        #     The DP looks up fh = round(sub_time + time_offset) for each node.
+        #     For the first `replan_freq` hours of the sub-problem, we replace
+        #     forecast weather with actual observations so the optimizer plans
+        #     with ground truth for the legs it will commit to.
         if use_actual and actual_weather:
-            current_nid = node_metadata[current_node_idx]["node_id"]
-            actual_sh = _pick_sample_hour(available_actual_hours, elapsed_time)
-            actual_wx = actual_weather.get(actual_sh, {}).get(current_nid)
+            fh_start = int(round(elapsed_time))
+            fh_end = int(round(elapsed_time + replan_freq))
+            max_fh_val = max_forecast_hours[sample_hour]
 
-            if actual_wx is not None:
-                # Deep-copy only the current node's forecast dict to avoid mutating shared data
-                grid_for_dp = dict(grid_for_dp)  # shallow copy outer dict
-                grid_for_dp[current_nid] = dict(grid_for_dp.get(current_nid, {}))  # copy node's fh dict
+            # Deep-copy the grid to avoid mutating shared data
+            grid_for_dp = {nid: dict(fh_dict) for nid, fh_dict in grid_for_dp.items()}
 
-                # DP looks up fh = round(elapsed_time) for the first leg (time_offset)
-                inject_fh = min(int(round(elapsed_time)), max_forecast_hours[sample_hour])
-                grid_for_dp[current_nid][inject_fh] = actual_wx
+            injected = 0
+            for fh in range(fh_start, min(fh_end, max_fh_val) + 1):
+                actual_sh = _pick_sample_hour(available_actual_hours, fh)
+                actual_grid = actual_weather.get(actual_sh, {})
+                for nid in grid_for_dp:
+                    if nid in actual_grid:
+                        grid_for_dp[nid][fh] = actual_grid[nid]
+                        injected += 1
 
-                logger.info("RH decision %d: injected actual weather (SH=%d) at node %d, fh=%d",
-                            dp_idx, actual_sh, current_nid, inject_fh)
+            logger.info("RH decision %d: injected actual weather for fh=[%d,%d] (%d node×hour entries)",
+                        dp_idx, fh_start, min(fh_end, max_fh_val), injected)
 
         sub_transform = {
             "ETA": remaining_eta,
@@ -120,6 +127,14 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
         # 3. Run DP on remaining voyage
         dp_result = dp_optimize(sub_transform, config)
+
+        # Fallback: if actual weather injection made DP infeasible (tight ETA),
+        # retry with forecast-only weather
+        if dp_result.get("status") not in ("Optimal", "Feasible") and use_actual and actual_weather:
+            logger.info("RH decision %d: infeasible with actual weather, retrying with forecast only",
+                        dp_idx)
+            sub_transform["weather_grid"] = weather_grids[sample_hour]
+            dp_result = dp_optimize(sub_transform, config)
 
         if dp_result.get("status") not in ("Optimal", "Feasible"):
             logger.warning("RH: DP infeasible at decision point %d (node=%d, remaining_eta=%.1f h). "

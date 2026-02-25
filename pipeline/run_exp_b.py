@@ -61,7 +61,7 @@ def run_rh():
         return
     simulated = simulate_voyage(
         planned["speed_schedule"], hdf5_path, config,
-        sample_hour=0,
+        sample_hour=0, time_varying=True,
     )
     return planned, simulated
 

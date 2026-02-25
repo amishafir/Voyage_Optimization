@@ -39,6 +39,7 @@ def simulate_voyage(
     hdf5_path: str,
     config: dict,
     sample_hour: int = 0,
+    time_varying: bool = False,
 ) -> dict:
     """Simulate a voyage targeting the planned SOG at each leg.
 
@@ -50,7 +51,11 @@ def simulate_voyage(
                         and ``sws_knots`` (planned SWS, for reference).
         hdf5_path:      Path to HDF5 weather file.
         config:         Full experiment config.
-        sample_hour:    Which actual-weather snapshot to use.
+        sample_hour:    Which actual-weather snapshot to use (static mode).
+        time_varying:   If True, use actual weather at the sample_hour
+                        closest to each leg's cumulative transit time.
+                        This matches RH's use of actual weather at each
+                        decision point.
 
     Returns:
         Dict with: total_fuel_mt, total_time_h, arrival_deviation_h,
@@ -65,9 +70,32 @@ def simulate_voyage(
     # 1. Read per-waypoint data
     # ------------------------------------------------------------------
     metadata = read_metadata(hdf5_path)
-    weather = read_actual(hdf5_path, sample_hour=sample_hour)
 
-    merged = metadata.merge(weather, on="node_id", how="left")
+    weather_fields = [
+        "wind_speed_10m_kmh", "wind_direction_10m_deg", "beaufort_number",
+        "wave_height_m", "ocean_current_velocity_kmh", "ocean_current_direction_deg",
+    ]
+
+    if time_varying:
+        all_actual = read_actual(hdf5_path)
+        avail_sh = sorted(int(h) for h in all_actual["sample_hour"].unique())
+        # Build weather lookup: {sample_hour: {node_id: {field: value}}}
+        wx_by_sh = {}
+        for sh in avail_sh:
+            sh_data = all_actual[all_actual["sample_hour"] == sh]
+            wx_by_sh[sh] = {}
+            for _, row in sh_data.iterrows():
+                nid = int(row["node_id"])
+                wx_by_sh[sh][nid] = {f: _safe(row.get(f), 0.0) for f in weather_fields}
+        # Merge with first sample_hour for metadata (lat, lon, distances)
+        first_wx = all_actual[all_actual["sample_hour"] == avail_sh[0]]
+        merged = metadata.merge(first_wx, on="node_id", how="left")
+    else:
+        weather = read_actual(hdf5_path, sample_hour=sample_hour)
+        merged = metadata.merge(weather, on="node_id", how="left")
+        avail_sh = None
+        wx_by_sh = None
+
     merged = merged.sort_values("node_id").reset_index(drop=True)
 
     num_nodes = len(merged)
@@ -83,11 +111,6 @@ def simulate_voyage(
     # ------------------------------------------------------------------
     # 2. Walk through consecutive waypoint pairs
     # ------------------------------------------------------------------
-    weather_fields = [
-        "wind_speed_10m_kmh", "wind_direction_10m_deg", "beaufort_number",
-        "wave_height_m", "ocean_current_velocity_kmh", "ocean_current_direction_deg",
-    ]
-
     rows = []
     cum_distance = 0.0
     cum_time = 0.0
@@ -117,9 +140,14 @@ def simulate_voyage(
         )
 
         # Build weather dict for this node
-        wx = {}
-        for field in weather_fields:
-            wx[field] = _safe(node_a.get(field), 0.0)
+        nid_a = int(node_a["node_id"])
+        if time_varying:
+            sh = _pick_closest_hour(avail_sh, cum_time)
+            wx = wx_by_sh.get(sh, {}).get(nid_a, {f: 0.0 for f in weather_fields})
+        else:
+            wx = {}
+            for field in weather_fields:
+                wx[field] = _safe(node_a.get(field), 0.0)
 
         # Inverse: find SWS required to achieve target SOG under actual weather
         required_sws = calculate_sws_from_sog(
@@ -214,6 +242,15 @@ def simulate_voyage(
         speed_changes, sws_violations,
     )
     return result
+
+
+def _pick_closest_hour(available_hours, target_time):
+    """Pick the largest available hour <= target_time, or smallest if none."""
+    target = int(target_time)
+    candidates = [h for h in available_hours if h <= target]
+    if candidates:
+        return max(candidates)
+    return available_hours[0]
 
 
 def _safe(val, default):
