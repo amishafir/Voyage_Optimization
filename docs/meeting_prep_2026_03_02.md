@@ -75,13 +75,14 @@ Two changes:
 
 **Results on exp_b (138 nodes, 134 sample hours):**
 
-| Approach | Plan Fuel (mt) | Sim Fuel (mt) | Plan–Sim Gap | Violations | Avg SOG (kn) | Fuel Saved vs Upper Bound |
-|---|--:|--:|--:|--:|--:|--:|
-| *Upper bound (SWS=13 kn always)* | *—* | *203.91* | *—* | *—* | *12.78* | *baseline* |
-| LP (static det.) | 175.96 | 180.63 | +4.67 (+2.7%) | 4 | 11.98 | 23.28 (11.4%) |
-| DP (dynamic det.) | 177.63 | 182.22 | +4.59 (+2.6%) | 17 | 12.03 | 21.69 (10.6%) |
-| RH (old, first leg only) | 174.21 | 180.84 | +6.63 (+3.8%) | 10 | — | 23.07 (11.3%) |
-| **RH (new, full 6h window)** | **175.52** | **176.40** | **+0.88 (+0.5%)** | **1** | **12.01** | **27.51 (13.5%)** |
+| Approach | Plan Fuel (mt) | Sim Fuel (mt) | Plan–Sim Gap | Violations | Avg SOG (kn) |
+|---|--:|--:|--:|--:|--:|
+| *Upper bound (SWS=13 kn always)* | *—* | *203.91* | *—* | *—* | *12.78* |
+| LP (static det.) | 175.96 | 180.63 | +4.67 (+2.7%) | 4 | 11.98 |
+| DP (dynamic det.) | 177.63 | 182.22 | +4.59 (+2.6%) | 17 | 12.03 |
+| RH (old, first leg only) | 174.21 | 180.84 | +6.63 (+3.8%) | 10 | — |
+| **RH (new, full 6h window)** | **175.52** | **176.40** | **+0.88 (+0.5%)** | **1** | **12.01** |
+| *Optimal bound (DP with actual weather)* | *176.23* | *176.23* | *0* | *0* | *12.05* |
 
 **Key improvements:**
 - **Violations: 10 → 1.** The single remaining violation (node 132, SWS=13.079) occurs at the last decision point where the fallback to forecast was triggered (ETA margin < 0.1h).
@@ -114,6 +115,32 @@ Selected two new routes targeting heavy weather, designed to maximize RH advanta
 | RH advantage source | **Freshness effect** only — DD has data but it degrades | Freshness **+ horizon effect** — DD is blind for 58% of voyage |
 | Thesis value | Isolates the pure forecast freshness advantage | Shows combined effect + how much worse DD gets without any forecast |
 | Results ready | **Mar 4** | Mar 6 (partial) / Mar 11 (full) |
+
+### Action Item 5: Literature review — structured collection ✅
+
+Built a complete literature review storage system and populated it with 22 articles across 6 research pillars.
+
+**Structure:** `context/literature/` with per-pillar markdown files, master index, and PDF archive (22 PDFs in `pdfs/`).
+
+**Coverage by pillar:**
+
+| # | Pillar | Articles | Key papers |
+|---|--------|:--------:|------------|
+| 1 | Speed Optimization | 5 | Psaraftis & Kontovas 2013 (survey, 40+ models), Bektas & Laporte 2011 (PRP, 1127 cites), Hvattum et al. 2013 (constant-speed optimality proof), **Zaccone et al. 2018 (DP/Bellman-Ford, 161 cites)** |
+| 2 | Fuel Consumption & Resistance | 3 | Tezdogan et al. 2015 (CFD added resistance), Psaraftis & Lagouvardou 2023 (defends cubic exponent), Taskar & Andersen 2020 (exponent 3.3–4.2) |
+| 3 | Weather Forecasting & NWP | 4 | Marjanovic et al. 2025 (RMSE degradation curves), Vettor & Guedes Soares 2022 (ensemble fuel bands), Luo et al. 2023 (ensemble vs deterministic, 1% saving), **Stopa & Cheung 2014 (ECMWF vs NCEP, 323 cites)** |
+| 4 | Simulation & SOG-Targeting | 4 | Huotari et al. 2021 (implicit SOG-targeting), Fagerholt et al. 2010 (cubic DAG), Cariou 2011 (slow steaming, 407 cites), **Yang et al. 2020 (STW/SOG distinction — foundation paper)** |
+| 5 | Rolling Horizon | 3 | Zheng et al. 2023 (MPC ship speed), Sethi & Sorger 1991 (RH theory, 226 cites), Tzortzis & Sakalis 2021 (time horizon segmentation) |
+| 6 | Regulatory & Industry | 3 | Tadros et al. 2023 (EEDI/EEXI/CII), Bouman et al. 2017 (GHG review, 742 cites), Jia et al. 2017 (Virtual Arrival, 5066 voyages) |
+
+**Three gap-filling papers added this session** (bold above):
+- **Zaccone et al. 2018** — First DP paper in Pillar 1 (all 4 previous were LP/convex). Acknowledges forecast uncertainty limits DP but never quantifies it.
+- **Stopa & Cheung 2014** — ECMWF validation anchor. ERA-I wave RMSE ~0.5m, wind ~1.5 m/s. Validates ECMWF as preferred reanalysis for thesis.
+- **Yang et al. 2020** — THE foundation paper. First to explicitly distinguish STW from SOG. Same route (Persian Gulf → Strait of Malacca), same ship type, 12 segments. Section 6 explicitly calls for 6h forecast resolution and speed re-adjustment — exactly our RH contribution.
+
+**Each entry includes:** Citation, PDF path, tags, summary, key findings (with page numbers), methodology, relevance to thesis contributions, quotable claims, and limitations/gaps.
+
+**Next step:** Write the narrative literature review chapter using these 22 structured entries.
 
 ---
 
