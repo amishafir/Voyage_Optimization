@@ -97,14 +97,16 @@ Selected two new routes targeting heavy weather, designed to maximize RH advanta
 - 4,782 nm, ~17 days at 12 kn. Arcs to 47.65°N through the Aleutian storm track (winter BN 8-10, waves 4-6m mean, 8-20m storms).
 - 947 nodes at 5nm spacing, ~1,936 API calls per hourly sample.
 - **Collection running since Feb 24** on TAU server (`tmux exp_c`). As of Feb 25: **18 sample hours collected, 32.5 MB, 0 failures.**
-- Full voyage data by ~Mar 11. Partial analysis (10 days, 240h) by ~Mar 6.
+- **UPDATE (Mar 2):** Server rebooted, collection stalled Feb 26–Mar 2 (4-day gap). Restarted. Hours 0–45 unusable (gap discontinuity). Usable data starts at hour 46. Need ~408 continuous hours from Mar 2.
+- Full voyage data by ~**Mar 19**.
 - Route file: `pipeline/config/routes/yokohama_long_beach.yaml`
 
 **Experiment D — St. John's → Liverpool (North Atlantic Storm Track)**
 - 1,955 nm, ~6.8 days at 12 kn. Crosses the heart of the North Atlantic storm track (45-56°N) — the most extreme wave climate on Earth per NASA.
 - 389 nodes at 5nm spacing, ~782 API calls per hourly sample.
 - **Collection running since Feb 25** on TAU server (`tmux exp_d`). First sample: 389/389 OK, 0 failures.
-- Full voyage data by ~**Mar 4** (7 days). This is the priority route for analysis.
+- **UPDATE (Mar 2):** Server rebooted, collection stalled Feb 26–Mar 2 (4-day gap). Restarted. Hours 0–28 unusable (gap discontinuity). Usable data starts at hour 29. Need ~163 continuous hours from Mar 2.
+- Full voyage data by ~**Mar 9**. This is the priority route for analysis.
 - Route file: `pipeline/config/routes/st_johns_liverpool.yaml`
 
 **Why two routes with different lengths:**
@@ -114,7 +116,7 @@ Selected two new routes targeting heavy weather, designed to maximize RH advanta
 | DD forecast coverage | Full voyage (168h horizon covers ~163h voyage) | First 7 of 17 days only |
 | RH advantage source | **Freshness effect** only — DD has data but it degrades | Freshness **+ horizon effect** — DD is blind for 58% of voyage |
 | Thesis value | Isolates the pure forecast freshness advantage | Shows combined effect + how much worse DD gets without any forecast |
-| Results ready | **Mar 4** | Mar 6 (partial) / Mar 11 (full) |
+| Results ready | **~Mar 9** | **~Mar 19** |
 
 ### Action Item 5: Literature review — structured collection ✅
 
@@ -206,7 +208,7 @@ Workflow: `scp` the HDF5 anytime → run partial analysis locally → collection
 
 ## Questions for Discussion
 
-1. **Exp D results expected by Mar 4 — what analysis should we prioritize?** Options: (a) repeat the replan frequency sweep on harsh weather, (b) forecast error vs lead time comparison, (c) fuel gap analysis DD vs RH.
+1. **Exp D results expected by ~Mar 9 (delayed from Mar 4 due to server reboot) — what analysis should we prioritize?** Options: (a) repeat the replan frequency sweep on harsh weather, (b) forecast error vs lead time comparison, (c) fuel gap analysis DD vs RH.
 
 2. **How to present the two-route comparison in the thesis?** Exp D (within horizon) shows freshness effect; Exp C (beyond horizon) shows combined effect. Together they decompose the RH advantage into its two components.
 
