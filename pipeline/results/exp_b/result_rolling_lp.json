@@ -1,0 +1,104 @@
+{
+  "approach": "rolling_lp",
+  "created_at": "2026-03-03T21:17:31.715875",
+  "config_snapshot": {
+    "ship": {
+      "length_m": 200.0,
+      "beam_m": 32.0,
+      "draft_m": 12.0,
+      "displacement_tonnes": 50000.0,
+      "block_coefficient": 0.75,
+      "rated_power_kw": 10000.0,
+      "speed_range_knots": [
+        11,
+        13
+      ],
+      "eta_hours": 140
+    },
+    "rolling_lp": {}
+  },
+  "planned": {
+    "total_fuel_mt": 185.646,
+    "voyage_time_h": 140.4435,
+    "speed_schedule": [
+      {
+        "segment": 0,
+        "sws_knots": 12.6,
+        "sog_knots": 11.809718195865253,
+        "distance_nm": 223.74049634903625,
+        "time_h": 18.945455991267508,
+        "fuel_mt": 26.75601304463534,
+        "fcr_mt_h": 1.4122654559999999
+      },
+      {
+        "segment": 1,
+        "sws_knots": 12.4,
+        "sog_knots": 11.331714545234252,
+        "distance_nm": 282.4584627342523,
+        "time_h": 24.926365874001394,
+        "fuel_mt": 33.55279643015534,
+        "fcr_mt_h": 1.3460765440000002
+      },
+      {
+        "segment": 2,
+        "sws_knots": 12.2,
+        "sog_knots": 12.033917826654056,
+        "distance_nm": 303.04499560261024,
+        "time_h": 25.182571459096437,
+        "fuel_mt": 32.28377174531328,
+        "fcr_mt_h": 1.2819886879999998
+      },
+      {
+        "segment": 3,
+        "sws_knots": 12.3,
+        "sog_knots": 11.957667641969776,
+        "distance_nm": 298.99395352367026,
+        "time_h": 25.0043706244387,
+        "fuel_mt": 32.85004455445589,
+        "fcr_mt_h": 1.3137721020000004
+      },
+      {
+        "segment": 4,
+        "sws_knots": 12.2,
+        "sog_knots": 12.152062577383898,
+        "distance_nm": 281.2538221748732,
+        "time_h": 23.144533726999757,
+        "fuel_mt": 29.671030427048162,
+        "fcr_mt_h": 1.2819886879999998
+      },
+      {
+        "segment": 5,
+        "sws_knots": 12.3,
+        "sog_knots": 12.396047235170794,
+        "distance_nm": 288.08702341486537,
+        "time_h": 23.240232789488566,
+        "fuel_mt": 30.532369482815724,
+        "fcr_mt_h": 1.3137721020000004
+      }
+    ],
+    "computation_time_s": 0.0,
+    "solver_status": "Optimal"
+  },
+  "simulated": {
+    "total_fuel_mt": 174.5096,
+    "voyage_time_h": 140.4371,
+    "arrival_deviation_h": 0.4371,
+    "speed_changes": 5,
+    "sws_violations": 1,
+    "co2_emissions_mt": 553.1955
+  },
+  "metrics": {
+    "fuel_gap_percent": -5.9987,
+    "fuel_per_nm": 0.104025,
+    "avg_sog_knots": 11.9454
+  },
+  "time_series_file": "results/exp_b/timeseries_rolling_lp.csv",
+  "sample_hours_per_segment": [
+    0,
+    18,
+    43,
+    69,
+    94,
+    117
+  ]
+}

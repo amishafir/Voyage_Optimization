@@ -57,6 +57,77 @@ The forecast error curve and 2x2 decomposition are **fully credible** — they c
 
 RH (new) achieves 176.40 mt — within 0.1% of the theoretical optimal (176.23 mt). It captures **99.4%** of the optimization span. On this calm route (wind std 6.07 km/h), the new RH clearly separates from LP and DP for the first time.
 
+### Plan vs Simulation: Two-Phase Evaluation Framework
+
+Every approach is evaluated in two phases: **planning** (choose speeds) then **simulation** (test them under actual weather). The plan-vs-sim gap and SWS violations reveal how well each optimizer's assumptions hold in reality.
+
+**Phase 1 — Planning: each optimizer sees different weather**
+
+| Approach | Weather Used for Planning | Resolution | Temporal Info |
+|----------|--------------------------|------------|---------------|
+| LP | **Actual** weather at hour 0 | 6 segment averages (~23 nodes each) | Single snapshot |
+| DP | **Predicted** weather from forecast origin 0 | Per-node (~138 nodes) | Time-varying forecast |
+| RH | **Predicted** + **actual** at each 6h decision point | Per-node (~138 nodes) | Fresh forecast every 6h; actual weather injected for committed 6h window |
+
+- LP plans with **actual** (observed) weather — but segment-averaged. It sees the real conditions, just spatially smoothed.
+- DP plans with **predicted** (forecast) weather from hour 0 — full spatial resolution, but the forecast degrades with lead time (wind RMSE doubles over 133h, see Section 6).
+- RH plans with **predicted** weather that it refreshes every 6h, and replaces the committed window's forecast with **actual** observations. This means every committed speed is planned against ground-truth weather for the nodes it actually covers.
+
+All three optimizers produce valid schedules with SWS within [11, 13] kn — **zero violations at planning time**.
+
+**Phase 2 — Simulation: all tested against actual weather**
+
+The simulation is the "real world": it takes the planned SOG schedule and determines what SWS the engine must set at each of the ~137 legs to maintain that SOG under **actual** weather.
+
+| Approach | Simulation Weather | Mode |
+|----------|--------------------|------|
+| LP | Actual at hour 0 | Static (`sample_hour=0`) |
+| DP | Actual at hour 0 | Static (`sample_hour=0`) |
+| RH | Actual at each leg's transit time | Time-varying (`time_varying=True`) |
+
+- LP and DP are simulated against a **frozen** actual-weather snapshot (hour 0). This is a simplification, but both plan and simulate against the same temporal reference.
+- RH is simulated with **time-varying** actual weather — the simulator picks the closest available sample hour to each leg's cumulative transit time. This matches RH's planning assumption: it planned each committed window using actual weather at that decision time.
+
+**Why LP and DP use static simulation:** Both plan against a single temporal reference (hour 0). Simulating them against time-varying weather would penalize them for temporal drift they never planned for. Static simulation isolates the effect of each optimizer's *spatial* and *forecast-error* assumptions.
+
+**Why RH uses time-varying simulation:** RH explicitly plans each 6h window with the weather at that decision time. Simulating against static hour-0 weather would unfairly penalize RH for *matching* the right temporal conditions.
+
+**How violations arise**
+
+```
+Plan:  optimizer picks SOG for segment/leg → implies SWS under planning weather
+Sim:   simulator targets that SOG → computes required SWS under actual weather
+       If required SWS ∉ [11, 13] kn → clamped → violation
+```
+
+| | Sim Fuel | Violations | Gap | Mechanism |
+|--|:-:|:-:|:-:|--|
+| *Average bound* (170.06 mt) | 170.06 | **0** | — | Constant SWS = SOG = 11.98 kn (total distance / ETA) in calm water. No weather effects, so SWS = SOG throughout — zero violations by construction. By Jensen's inequality on the convex cubic FCR, any speed variation above or below this constant increases total fuel. *Theoretical floor in ideal conditions.* |
+| **RH** (176.40 mt) | 176.40 | **1** | +0.50% | Plans each 6h window with actual weather → committed speeds match reality. Only 1 violation: a boundary effect at the last decision point where remaining ETA margin was < 0.1h, forcing the optimizer to use forecast weather for the final legs. *Actual weather injection nearly eliminates the plan-sim gap.* |
+| *Optimal bound* (176.23 mt) | 176.23 | **0** | 0% | DP with time-varying actual weather (perfect foresight). Per-node resolution + ground-truth weather at every hour = zero plan-sim mismatch. *Best achievable under real weather.* |
+| **LP** (180.63 mt) | 180.63 | **4** | +2.65% | Plans with segment-averaged weather. Individual nodes within a segment have worse conditions than the average → require SWS > 13 kn to hit the planned SOG. *Averaging hides within-segment extremes.* |
+| **DP** (182.22 mt) | 182.22 | **17** | +2.58% | Plans with predicted weather; simulated against actual. Forecast errors accumulate over the voyage (wind bias overpredicts by ~1-3 km/h). The optimizer plans for headwinds that don't materialize → SWS is systematically off. *Forecast error is the dominant violation source.* |
+
+**The two bounds frame the problem:**
+- **Average bound** (170.06 mt): the minimum fuel if the ship sailed at constant speed in calm water. Weather effects and speed variation can only increase fuel above this floor. Zero violations because SWS = 11.98 kn stays within [11, 13].
+- **Optimal bound** (176.23 mt): the minimum fuel achievable under actual weather with perfect foresight and per-node resolution. The gap from average to optimal (176.23 − 170.06 = **6.17 mt**) is the unavoidable *weather tax* — the cost of operating in non-uniform conditions, even with a perfect optimizer.
+
+All three approaches pay the weather tax plus an additional *information penalty*: LP +4.40 mt above optimal (segment averaging), DP +5.99 mt (forecast error), RH +0.17 mt (near-zero — actual weather injection eliminates most of the penalty).
+
+**Why RH has the lowest fuel despite planning with actual weather being "easy":**
+RH's advantage is not that it sees perfect weather (LP also plans with actual weather). The advantage is threefold:
+1. **Per-node resolution** — no segment averaging, so no Jensen's inequality penalty from cubic FCR
+2. **Temporal freshness** — weather is observed at the time the ship is actually there, not extrapolated from hour 0
+3. **Re-planning** — if conditions change between decision points, the next solve adapts
+
+LP has (1) negated by averaging, (2) only at hour 0, and (3) none.
+DP has (1) but not (2) or (3) — it uses a single forecast that degrades over time.
+
+**Plan-sim gap interpretation:**
+- LP: +4.67 mt (+2.65%) — segment averaging creates a systematic gap. The LP "thinks" its plan is efficient, but individual nodes pay more than the average predicted.
+- DP: +4.59 mt (+2.58%) — forecast error creates a comparable gap. The plan optimizes for predicted conditions that don't match reality.
+- RH: +0.88 mt (+0.50%) — near-zero gap. Plans with actual weather → simulation confirms the plan.
+
 ### Full-Route Results (indicative, weak simulation)
 
 | Approach | Plan Fuel | Sim Fuel | Gap | SWS Violations |

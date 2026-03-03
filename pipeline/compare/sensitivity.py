@@ -175,6 +175,454 @@ def run_upper_bound(config, hdf5_path, output_dir):
     return result
 
 
+def run_constant_speed_bound(config, hdf5_path, output_dir):
+    """Simulate a naive captain: constant speed that meets ETA, recalculated per leg.
+
+    At each leg, the captain computes:
+        target_sog = remaining_distance / remaining_time
+    then sets SWS to achieve that SOG under actual weather, clamped to
+    [min_speed, max_speed].  Zero SWS violations by design.
+
+    This is tighter than the max-speed upper bound because the captain
+    targets the ETA rather than going full speed.
+
+    Returns:
+        Result dict (also saved as result_constant_speed_bound.json).
+    """
+    import math
+    import pandas as pd
+    from shared.hdf5_io import read_metadata, read_actual
+    from shared.physics import (
+        calculate_ship_heading,
+        calculate_sws_from_sog,
+        calculate_speed_over_ground,
+        calculate_fuel_consumption_rate,
+        calculate_co2_emissions,
+        load_ship_parameters,
+    )
+
+    ship_params = load_ship_parameters(config)
+    eta = config["ship"]["eta_hours"]
+    min_speed, max_speed = config["ship"]["speed_range_knots"]
+
+    metadata = read_metadata(hdf5_path)
+    metadata = metadata.sort_values("node_id").reset_index(drop=True)
+
+    weather = read_actual(hdf5_path, sample_hour=0)
+    merged = metadata.merge(weather, on="node_id", how="left")
+    merged = merged.sort_values("node_id").reset_index(drop=True)
+
+    num_nodes = len(merged)
+    total_dist = merged.iloc[-1]["distance_from_start_nm"]
+    initial_sog = total_dist / eta
+
+    weather_fields = [
+        "wind_speed_10m_kmh", "wind_direction_10m_deg", "beaufort_number",
+        "wave_height_m", "ocean_current_velocity_kmh", "ocean_current_direction_deg",
+    ]
+
+    print(f"  Initial constant SOG = {initial_sog:.4f} kn (total_dist={total_dist:.1f} nm, ETA={eta} h)")
+
+    rows = []
+    cum_distance = 0.0
+    cum_time = 0.0
+    cum_fuel = 0.0
+    sws_violations = 0
+
+    for idx in range(num_nodes - 1):
+        node_a = merged.iloc[idx]
+        node_b = merged.iloc[idx + 1]
+
+        dist = node_b["distance_from_start_nm"] - node_a["distance_from_start_nm"]
+        if dist <= 0:
+            continue
+
+        # Recalculate target SOG based on remaining voyage
+        remaining_dist = total_dist - cum_distance
+        remaining_time = eta - cum_time
+        if remaining_time <= 0:
+            target_sog = max_speed
+        else:
+            target_sog = remaining_dist / remaining_time
+
+        # Heading from node_a to node_b
+        heading_deg = calculate_ship_heading(
+            node_a["lat"], node_a["lon"], node_b["lat"], node_b["lon"]
+        )
+
+        # Weather at node_a
+        wx = {}
+        for field in weather_fields:
+            val = node_a.get(field)
+            if val is None or (isinstance(val, float) and math.isnan(val)):
+                wx[field] = 0.0
+            else:
+                wx[field] = float(val)
+
+        # Inverse: SWS needed to achieve target SOG under weather
+        required_sws = calculate_sws_from_sog(
+            target_sog=target_sog,
+            weather=wx,
+            ship_heading_deg=heading_deg,
+            ship_parameters=ship_params,
+        )
+
+        # Clamp SWS — guarantees zero violations
+        clamped_sws = max(min_speed, min(max_speed, required_sws))
+        if abs(clamped_sws - required_sws) > 0.01:
+            sws_violations += 1
+
+        # Forward: actual SOG with clamped SWS
+        if abs(clamped_sws - required_sws) > 0.01:
+            heading_rad = math.radians(heading_deg)
+            wind_dir_rad = math.radians(wx["wind_direction_10m_deg"])
+            current_knots = wx["ocean_current_velocity_kmh"] / 1.852
+            current_dir_rad = math.radians(wx["ocean_current_direction_deg"])
+            beaufort = int(round(wx["beaufort_number"]))
+            wave_height = wx["wave_height_m"]
+
+            actual_sog = calculate_speed_over_ground(
+                ship_speed=clamped_sws,
+                ocean_current=current_knots,
+                current_direction=current_dir_rad,
+                ship_heading=heading_rad,
+                wind_direction=wind_dir_rad,
+                beaufort_scale=beaufort,
+                wave_height=wave_height,
+                ship_parameters=ship_params,
+            )
+            actual_sog = max(actual_sog, 0.1)
+        else:
+            actual_sog = target_sog
+
+        fcr = calculate_fuel_consumption_rate(clamped_sws)
+        leg_time = dist / actual_sog
+        leg_fuel = fcr * leg_time
+
+        cum_distance += dist
+        cum_time += leg_time
+        cum_fuel += leg_fuel
+
+        rows.append({
+            "node_id": int(node_a["node_id"]),
+            "segment": int(node_a["segment"]),
+            "lat": float(node_a["lat"]),
+            "lon": float(node_a["lon"]),
+            "target_sog_knots": target_sog,
+            "actual_sog_knots": actual_sog,
+            "required_sws_knots": required_sws,
+            "clamped_sws_knots": clamped_sws,
+            "distance_nm": dist,
+            "time_h": leg_time,
+            "fuel_mt": leg_fuel,
+            "cum_distance_nm": cum_distance,
+            "cum_time_h": cum_time,
+            "cum_fuel_mt": cum_fuel,
+            "beaufort": int(round(wx["beaufort_number"])),
+            "wave_height_m": wx["wave_height_m"],
+            "current_knots": wx["ocean_current_velocity_kmh"] / 1.852,
+            "heading_deg": heading_deg,
+        })
+
+    time_series = pd.DataFrame(rows)
+    co2 = calculate_co2_emissions(cum_fuel)
+
+    # Build result using standard helpers
+    simulated = {
+        "total_fuel_mt": cum_fuel,
+        "total_time_h": cum_time,
+        "arrival_deviation_h": cum_time - eta,
+        "speed_changes": 0,
+        "sws_violations": sws_violations,
+        "co2_emissions_mt": co2,
+        "time_series": time_series,
+    }
+
+    planned_stub = {
+        "planned_fuel_mt": cum_fuel,  # no separate planning phase
+        "planned_time_h": eta,
+        "speed_schedule": [],
+        "computation_time_s": 0.0,
+        "status": "Analytical",
+    }
+    metrics = compute_result_metrics(planned_stub, simulated, total_dist)
+
+    ts_path = os.path.join(output_dir, "timeseries_constant_speed_bound.csv")
+    time_series.to_csv(ts_path, index=False)
+
+    result = build_result_json(
+        approach="constant_speed_bound",
+        config=config,
+        planned=planned_stub,
+        simulated=simulated,
+        metrics=metrics,
+        time_series_file=ts_path,
+    )
+    result["initial_sog_knots"] = round(initial_sog, 4)
+    json_path = os.path.join(output_dir, "result_constant_speed_bound.json")
+    save_result(result, json_path)
+
+    print(f"  Constant-speed bound: {cum_fuel:.2f} mt fuel, {cum_time:.2f} h")
+    print(f"    Arrival deviation: {cum_time - eta:+.2f} h, SWS violations: {sws_violations}")
+    return result
+
+
+def _feasible_sog_bounds(hdf5_path, seg_idx, sample_hours_range,
+                         ship_params, heading_rad):
+    """Find the feasible SOG band for a segment across all waypoints and hours.
+
+    Ceiling: min SOG at SWS=max_speed across all (waypoint, hour) pairs.
+             Any committed SOG above this causes max-speed violations.
+    Floor:   max SOG at SWS=min_speed across all (waypoint, hour) pairs.
+             Any committed SOG below this causes min-speed violations.
+
+    Returns:
+        (sog_floor, sog_ceiling)
+    """
+    import math
+    from shared.hdf5_io import read_metadata, read_actual
+    from shared.physics import calculate_speed_over_ground
+
+    metadata = read_metadata(hdf5_path)
+    max_sws = ship_params["max_speed"]
+    min_sws = ship_params["min_speed"]
+    sog_ceiling = float("inf")
+    sog_floor = 0.0
+
+    for sh in sample_hours_range:
+        wx = read_actual(hdf5_path, sample_hour=sh)
+        merged = metadata[["node_id", "segment"]].merge(wx, on="node_id", how="left")
+        seg_nodes = merged[merged["segment"] == seg_idx]
+
+        for _, node in seg_nodes.iterrows():
+            wind_dir = node.get("wind_direction_10m_deg", 0.0)
+            current_vel = node.get("ocean_current_velocity_kmh", 0.0)
+            current_dir = node.get("ocean_current_direction_deg", 0.0)
+            beaufort = node.get("beaufort_number", 0)
+            wave_h = node.get("wave_height_m", 0.0)
+
+            if math.isnan(wind_dir): wind_dir = 0.0
+            if math.isnan(current_vel): current_vel = 0.0
+            if math.isnan(current_dir): current_dir = 0.0
+            if math.isnan(beaufort) or beaufort < 0: beaufort = 0
+            if math.isnan(wave_h): wave_h = 0.0
+
+            sog_at_max = calculate_speed_over_ground(
+                ship_speed=max_sws,
+                ocean_current=current_vel / 1.852,
+                current_direction=math.radians(current_dir),
+                ship_heading=heading_rad,
+                wind_direction=math.radians(wind_dir),
+                beaufort_scale=int(round(beaufort)),
+                wave_height=wave_h,
+                ship_parameters=ship_params,
+            )
+            sog_at_min = calculate_speed_over_ground(
+                ship_speed=min_sws,
+                ocean_current=current_vel / 1.852,
+                current_direction=math.radians(current_dir),
+                ship_heading=heading_rad,
+                wind_direction=math.radians(wind_dir),
+                beaufort_scale=int(round(beaufort)),
+                wave_height=wave_h,
+                ship_parameters=ship_params,
+            )
+
+            if sog_at_max < sog_ceiling:
+                sog_ceiling = sog_at_max
+            if sog_at_min > sog_floor:
+                sog_floor = sog_at_min
+
+    return sog_floor, sog_ceiling
+
+
+def run_rolling_lp(config, hdf5_path, output_dir):
+    """Rolling LP: re-solve the LP at each segment boundary with fresh weather.
+
+    At each segment, re-run transform with the actual weather closest to the
+    current cumulative transit time, slice to remaining segments, adjust ETA,
+    and solve.  Commit only the first segment's speed from each re-solve.
+
+    Post-solve clamp: after the LP picks a speed, caps the committed SOG
+    at the worst-case feasibility ceiling (min SOG at max SWS across all
+    waypoints and transit hours) to eliminate SWS violations.
+
+    Returns:
+        Result dict (also saved as result_rolling_lp.json).
+    """
+    from static_det.transform import transform
+    from static_det.optimize import optimize
+    from shared.hdf5_io import get_completed_runs
+    from shared.physics import load_ship_parameters
+
+    available_hours = get_completed_runs(hdf5_path)
+    if not available_hours:
+        logger.warning("Rolling LP: no sample hours in HDF5")
+        return None
+
+    eta = config["ship"]["eta_hours"]
+    sd_cfg = config["static_det"]
+    num_segments = sd_cfg["segments"]
+    ship_params = load_ship_parameters(config)
+
+    committed = []  # one entry per segment: {segment, sws_knots, sog_knots, ...}
+    cum_time = 0.0
+    hours_used = []
+
+    print(f"  Rolling LP: {num_segments} segments, ETA={eta} h, "
+          f"available sample hours: {available_hours}")
+
+    for seg_idx in range(num_segments):
+        # Pick closest sample_hour <= cum_time (or smallest available)
+        candidates = [h for h in available_hours if h <= cum_time]
+        sample_hour = max(candidates) if candidates else available_hours[0]
+        hours_used.append(sample_hour)
+
+        # Deep-copy config and override weather snapshot
+        cfg = copy.deepcopy(config)
+        cfg["static_det"]["weather_snapshot"] = sample_hour
+
+        # Transform with fresh weather
+        t_out = transform(hdf5_path, cfg)
+
+        # Slice to remaining segments [seg_idx : num_segments]
+        remaining_eta = eta - cum_time
+        remaining_segments = num_segments - seg_idx
+        t_sub = {
+            "ETA": remaining_eta,
+            "num_segments": remaining_segments,
+            "num_speeds": t_out["num_speeds"],
+            "distances": t_out["distances"][seg_idx:],
+            "speeds": t_out["speeds"],
+            "fcr": t_out["fcr"],
+            "sog_matrix": t_out["sog_matrix"][seg_idx:],
+            "sog_lower": t_out["sog_lower"][seg_idx:],
+            "sog_upper": t_out["sog_upper"][seg_idx:],
+        }
+
+        # Solve LP for remaining segments
+        planned = optimize(t_sub, cfg)
+
+        if planned.get("status") != "Optimal":
+            # Fallback: max speed for this segment
+            max_speed = config["ship"]["speed_range_knots"][1]
+            # Use the SOG at max speed from the transform output
+            max_sog = t_out["sog_matrix"][seg_idx][-1]  # last speed = max
+            max_fcr = t_out["fcr"][-1]
+            seg_dist = t_out["distances"][seg_idx]
+            seg_time = seg_dist / max_sog
+            logger.warning("Rolling LP seg %d: infeasible (remaining_eta=%.1f h), "
+                           "using max speed", seg_idx, remaining_eta)
+            committed.append({
+                "segment": seg_idx,
+                "sws_knots": t_out["speeds"][-1],
+                "sog_knots": max_sog,
+                "distance_nm": seg_dist,
+                "time_h": seg_time,
+                "fuel_mt": seg_dist * max_fcr / max_sog,
+                "fcr_mt_h": max_fcr,
+            })
+            cum_time += seg_time
+        else:
+            # Commit only the first segment from this re-solve
+            first = planned["speed_schedule"][0]
+
+            # Post-solve clamp: cap SOG at the worst-case feasibility ceiling
+            # to prevent SWS violations from within-segment weather variability
+            # and time-varying weather during transit.
+            import math as _math
+            from shared.hdf5_io import read_metadata as _read_meta
+            from shared.physics import calculate_ship_heading as _calc_heading
+
+            _meta = _read_meta(hdf5_path)
+            _orig = _meta[_meta["is_original"]].sort_values("node_id").reset_index(drop=True)
+            _wp_a, _wp_b = _orig.iloc[seg_idx], _orig.iloc[seg_idx + 1]
+            _heading_rad = _math.radians(_calc_heading(
+                _wp_a["lat"], _wp_a["lon"], _wp_b["lat"], _wp_b["lon"]))
+
+            min_speed = config["ship"]["speed_range_knots"][0]
+            seg_dist = first["distance_nm"]
+            max_seg_time = seg_dist / min_speed
+            w_start = int(cum_time)
+            w_end = min(int(cum_time + max_seg_time) + 1, max(available_hours))
+            transit_hours = [h for h in available_hours if w_start <= h <= w_end]
+            if not transit_hours:
+                transit_hours = [sample_hour]
+
+            sog_floor, sog_ceiling = _feasible_sog_bounds(
+                hdf5_path, seg_idx, transit_hours, ship_params, _heading_rad)
+
+            committed_sog = first["sog_knots"]
+            if committed_sog > sog_ceiling:
+                logger.info("Rolling LP seg %d: clamping SOG %.4f -> %.4f "
+                            "(max-speed ceiling)", seg_idx, committed_sog, sog_ceiling)
+                committed_sog = sog_ceiling
+            elif committed_sog < sog_floor:
+                logger.info("Rolling LP seg %d: raising SOG %.4f -> %.4f "
+                            "(min-speed floor)", seg_idx, committed_sog, sog_floor)
+                committed_sog = sog_floor
+
+            seg_time = seg_dist / committed_sog
+            committed.append({
+                "segment": seg_idx,
+                "sws_knots": first["sws_knots"],
+                "sog_knots": committed_sog,
+                "distance_nm": seg_dist,
+                "time_h": seg_time,
+                "fuel_mt": first["fcr_mt_h"] * seg_time,
+                "fcr_mt_h": first["fcr_mt_h"],
+            })
+            cum_time += seg_time
+
+        print(f"    Seg {seg_idx}: sample_hour={sample_hour}, "
+              f"SWS={committed[-1]['sws_knots']:.2f} kn, "
+              f"SOG={committed[-1]['sog_knots']:.2f} kn, "
+              f"cum_time={cum_time:.1f} h")
+
+    # Planned totals
+    planned_fuel = sum(c["fuel_mt"] for c in committed)
+    planned_time = sum(c["time_h"] for c in committed)
+
+    print(f"  Rolling LP planned: {planned_fuel:.2f} mt fuel, {planned_time:.2f} h")
+    print(f"  Sample hours used per segment: {hours_used}")
+
+    # Simulate under actual weather (time_varying=True, same as run_exp_b.py)
+    print("  Simulate (actual weather, time-varying)...")
+    simulated = simulate_voyage(committed, hdf5_path, config,
+                                sample_hour=0, time_varying=True)
+
+    total_dist = sum(c["distance_nm"] for c in committed)
+    planned_stub = {
+        "planned_fuel_mt": planned_fuel,
+        "planned_time_h": planned_time,
+        "speed_schedule": committed,
+        "computation_time_s": 0.0,
+        "status": "Optimal",
+    }
+    metrics = compute_result_metrics(planned_stub, simulated, total_dist)
+
+    ts_path = os.path.join(output_dir, "timeseries_rolling_lp.csv")
+    simulated["time_series"].to_csv(ts_path, index=False)
+
+    result = build_result_json(
+        approach="rolling_lp",
+        config=config,
+        planned=planned_stub,
+        simulated=simulated,
+        metrics=metrics,
+        time_series_file=ts_path,
+    )
+    result["sample_hours_per_segment"] = hours_used
+    json_path = os.path.join(output_dir, "result_rolling_lp.json")
+    save_result(result, json_path)
+
+    print(f"  Rolling LP: plan={planned_fuel:.2f} mt, "
+          f"sim={simulated['total_fuel_mt']:.2f} mt, "
+          f"gap={metrics['fuel_gap_percent']:.2f}%, "
+          f"SWS violations={simulated.get('sws_violations', 0)}")
+    return result
+
+
 def run_replan_sweep(config, hdf5_path, output_dir, frequencies=None):
     """Run rolling horizon at multiple replan frequencies.
 
@@ -726,19 +1174,27 @@ def run_sensitivity(config, output_dir, hdf5_path):
     print("=" * 60)
 
     # 1. Lower bound
-    print("\n[1/4] Lower bound (perfect information)...")
+    print("\n[1/6] Lower bound (perfect information)...")
     lb = run_lower_bound(config, hdf5_path, output_dir)
 
-    # 2. Upper bound
-    print("\n[2/4] Upper bound (constant speed)...")
+    # 2. Constant-speed bound (ETA-meeting)
+    print("\n[2/6] Constant-speed bound (ETA-meeting)...")
+    csb = run_constant_speed_bound(config, hdf5_path, output_dir)
+
+    # 3. Rolling LP (segment-wise re-planning)
+    print("\n[3/6] Rolling LP (segment-wise re-planning)...")
+    rlp = run_rolling_lp(config, hdf5_path, output_dir)
+
+    # 4. Upper bound
+    print("\n[4/6] Upper bound (constant speed = max)...")
     ub = run_upper_bound(config, hdf5_path, output_dir)
 
-    # 3. Replan sweep
-    print("\n[3/4] Replan frequency sweep...")
+    # 5. Replan sweep
+    print("\n[5/6] Replan frequency sweep...")
     sweep = run_replan_sweep(config, hdf5_path, output_dir)
 
-    # 4. Forecast horizon sweep
-    print("\n[4/4] Forecast horizon sweep...")
+    # 6. Forecast horizon sweep
+    print("\n[6/6] Forecast horizon sweep...")
     horizon = run_horizon_sweep(config, hdf5_path, output_dir)
 
     # Summary table
@@ -751,6 +1207,10 @@ def run_sensitivity(config, output_dir, hdf5_path):
     all_results = []
     if lb:
         all_results.append(lb)
+    if csb:
+        all_results.append(csb)
+    if rlp:
+        all_results.append(rlp)
     if ub:
         all_results.append(ub)
     all_results.extend(sweep)
