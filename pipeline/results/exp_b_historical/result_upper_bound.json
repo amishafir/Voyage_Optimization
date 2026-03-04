@@ -1,0 +1,1140 @@
+{
+  "approach": "upper_bound",
+  "created_at": "2026-03-04T15:24:15.863796",
+  "config_snapshot": {
+    "ship": {
+      "length_m": 200.0,
+      "beam_m": 32.0,
+      "draft_m": 12.0,
+      "displacement_tonnes": 50000.0,
+      "block_coefficient": 0.75,
+      "rated_power_kw": 10000.0,
+      "speed_range_knots": [
+        11,
+        13
+      ],
+      "eta_hours": 140
+    },
+    "upper_bound": {}
+  },
+  "planned": {
+    "total_fuel_mt": 200.1586,
+    "voyage_time_h": 129.0445,
+    "speed_schedule": [
+      {
+        "leg": 0,
+        "node_id": 0,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999728
+      },
+      {
+        "leg": 1,
+        "node_id": 1,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999988
+      },
+      {
+        "leg": 2,
+        "node_id": 2,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000128
+      },
+      {
+        "leg": 3,
+        "node_id": 3,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999957
+      },
+      {
+        "leg": 4,
+        "node_id": 4,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.00000000000012
+      },
+      {
+        "leg": 5,
+        "node_id": 5,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999723
+      },
+      {
+        "leg": 6,
+        "node_id": 6,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000341
+      },
+      {
+        "leg": 7,
+        "node_id": 7,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000142
+      },
+      {
+        "leg": 8,
+        "node_id": 8,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999872
+      },
+      {
+        "leg": 9,
+        "node_id": 9,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000355
+      },
+      {
+        "leg": 10,
+        "node_id": 10,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999702
+      },
+      {
+        "leg": 11,
+        "node_id": 11,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000426
+      },
+      {
+        "leg": 12,
+        "node_id": 12,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.99999999999946
+      },
+      {
+        "leg": 13,
+        "node_id": 13,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 14,
+        "node_id": 14,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 15,
+        "node_id": 15,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 16,
+        "node_id": 16,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999744
+      },
+      {
+        "leg": 17,
+        "node_id": 17,
+        "segment": 0,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 19.74049634903588
+      },
+      {
+        "leg": 18,
+        "node_id": 18,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000284
+      },
+      {
+        "leg": 19,
+        "node_id": 19,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 20,
+        "node_id": 20,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000085
+      },
+      {
+        "leg": 21,
+        "node_id": 21,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 22,
+        "node_id": 22,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 23,
+        "node_id": 23,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000512
+      },
+      {
+        "leg": 24,
+        "node_id": 24,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999261
+      },
+      {
+        "leg": 25,
+        "node_id": 25,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000057
+      },
+      {
+        "leg": 26,
+        "node_id": 26,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999943
+      },
+      {
+        "leg": 27,
+        "node_id": 27,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 28,
+        "node_id": 28,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000284
+      },
+      {
+        "leg": 29,
+        "node_id": 29,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.99999999999983
+      },
+      {
+        "leg": 30,
+        "node_id": 30,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 31,
+        "node_id": 31,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999943
+      },
+      {
+        "leg": 32,
+        "node_id": 32,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000398
+      },
+      {
+        "leg": 33,
+        "node_id": 33,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999602
+      },
+      {
+        "leg": 34,
+        "node_id": 34,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999602
+      },
+      {
+        "leg": 35,
+        "node_id": 35,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000341
+      },
+      {
+        "leg": 36,
+        "node_id": 36,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000284
+      },
+      {
+        "leg": 37,
+        "node_id": 37,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999318
+      },
+      {
+        "leg": 38,
+        "node_id": 38,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.00000000000017
+      },
+      {
+        "leg": 39,
+        "node_id": 39,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.00000000000017
+      },
+      {
+        "leg": 40,
+        "node_id": 40,
+        "segment": 1,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 18.45846273425218
+      },
+      {
+        "leg": 41,
+        "node_id": 41,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999659
+      },
+      {
+        "leg": 42,
+        "node_id": 42,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000341
+      },
+      {
+        "leg": 43,
+        "node_id": 43,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 44,
+        "node_id": 44,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 45,
+        "node_id": 45,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 46,
+        "node_id": 46,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 47,
+        "node_id": 47,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 48,
+        "node_id": 48,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 49,
+        "node_id": 49,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 50,
+        "node_id": 50,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 51,
+        "node_id": 51,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 52,
+        "node_id": 52,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000568
+      },
+      {
+        "leg": 53,
+        "node_id": 53,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 54,
+        "node_id": 54,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 55,
+        "node_id": 55,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 56,
+        "node_id": 56,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999204
+      },
+      {
+        "leg": 57,
+        "node_id": 57,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000796
+      },
+      {
+        "leg": 58,
+        "node_id": 58,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999659
+      },
+      {
+        "leg": 59,
+        "node_id": 59,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 60,
+        "node_id": 60,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 61,
+        "node_id": 61,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 62,
+        "node_id": 62,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 63,
+        "node_id": 63,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 64,
+        "node_id": 64,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 65,
+        "node_id": 65,
+        "segment": 2,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 15.044995602609788
+      },
+      {
+        "leg": 66,
+        "node_id": 66,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 67,
+        "node_id": 67,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000341
+      },
+      {
+        "leg": 68,
+        "node_id": 68,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999432
+      },
+      {
+        "leg": 69,
+        "node_id": 69,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000682
+      },
+      {
+        "leg": 70,
+        "node_id": 70,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 71,
+        "node_id": 71,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 72,
+        "node_id": 72,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 73,
+        "node_id": 73,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999886
+      },
+      {
+        "leg": 74,
+        "node_id": 74,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999659
+      },
+      {
+        "leg": 75,
+        "node_id": 75,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 76,
+        "node_id": 76,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999659
+      },
+      {
+        "leg": 77,
+        "node_id": 77,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 78,
+        "node_id": 78,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 79,
+        "node_id": 79,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999432
+      },
+      {
+        "leg": 80,
+        "node_id": 80,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 81,
+        "node_id": 81,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000341
+      },
+      {
+        "leg": 82,
+        "node_id": 82,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000114
+      },
+      {
+        "leg": 83,
+        "node_id": 83,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 84,
+        "node_id": 84,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999545
+      },
+      {
+        "leg": 85,
+        "node_id": 85,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 86,
+        "node_id": 86,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 87,
+        "node_id": 87,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 88,
+        "node_id": 88,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 89,
+        "node_id": 89,
+        "segment": 3,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 22.993953523669916
+      },
+      {
+        "leg": 90,
+        "node_id": 90,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 91,
+        "node_id": 91,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 92,
+        "node_id": 92,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 93,
+        "node_id": 93,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 94,
+        "node_id": 94,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 95,
+        "node_id": 95,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 96,
+        "node_id": 96,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 97,
+        "node_id": 97,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 98,
+        "node_id": 98,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 99,
+        "node_id": 99,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 100,
+        "node_id": 100,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 101,
+        "node_id": 101,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 102,
+        "node_id": 102,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 103,
+        "node_id": 103,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 104,
+        "node_id": 104,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 105,
+        "node_id": 105,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 106,
+        "node_id": 106,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 107,
+        "node_id": 107,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 108,
+        "node_id": 108,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 109,
+        "node_id": 109,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 110,
+        "node_id": 110,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 111,
+        "node_id": 111,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 112,
+        "node_id": 112,
+        "segment": 4,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 17.253822174873676
+      },
+      {
+        "leg": 113,
+        "node_id": 113,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 114,
+        "node_id": 114,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 115,
+        "node_id": 115,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000682
+      },
+      {
+        "leg": 116,
+        "node_id": 116,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 117,
+        "node_id": 117,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 118,
+        "node_id": 118,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 119,
+        "node_id": 119,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 120,
+        "node_id": 120,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 121,
+        "node_id": 121,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 122,
+        "node_id": 122,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999545
+      },
+      {
+        "leg": 123,
+        "node_id": 123,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.0
+      },
+      {
+        "leg": 124,
+        "node_id": 124,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 125,
+        "node_id": 125,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 126,
+        "node_id": 126,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 127,
+        "node_id": 127,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 128,
+        "node_id": 128,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 129,
+        "node_id": 129,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999545
+      },
+      {
+        "leg": 130,
+        "node_id": 130,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 131,
+        "node_id": 131,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 132,
+        "node_id": 132,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000227
+      },
+      {
+        "leg": 133,
+        "node_id": 133,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999773
+      },
+      {
+        "leg": 134,
+        "node_id": 134,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.000000000000455
+      },
+      {
+        "leg": 135,
+        "node_id": 135,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 11.999999999999318
+      },
+      {
+        "leg": 136,
+        "node_id": 136,
+        "segment": 5,
+        "sog_knots": 13,
+        "sws_knots": 13,
+        "distance_nm": 12.08702341486537
+      }
+    ],
+    "computation_time_s": 0.0,
+    "solver_status": "Analytical"
+  },
+  "simulated": {
+    "total_fuel_mt": 201.0964,
+    "voyage_time_h": 131.5537,
+    "arrival_deviation_h": -8.4463,
+    "speed_changes": 0,
+    "sws_violations": 89,
+    "co2_emissions_mt": 637.4755
+  },
+  "metrics": {
+    "fuel_gap_percent": 0.4685,
+    "fuel_per_nm": 0.119873,
+    "avg_sog_knots": 12.752
+  },
+  "time_series_file": "results/exp_b_historical/timeseries_upper_bound.csv",
+  "analytical_fuel_mt": 200.1586,
+  "constant_sog_knots": 13
+}
