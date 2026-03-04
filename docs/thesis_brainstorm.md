@@ -518,3 +518,25 @@ Two harsh-weather routes are collecting data on the TAU server, designed to test
 - **Exp C deployed** (Yokohama → Long Beach, 4,782 nm, ~17 days, 947 nodes) — collection running on TAU server since Feb 24
 - **Exp D deployed** (St. John's → Liverpool, 1,955 nm, ~7 days, 389 nodes) — collection running since Feb 25
 - Together exp C and D decompose RH advantage into freshness (D, within horizon) and horizon (C, beyond horizon) components
+
+### 2026-03-04 — API quota crisis → bulk collection refactor + 6h deployment
+
+**Problem:** All 6 collection sessions (3 experiments × 2 servers) hit Open-Meteo daily API quota. Per-node collection = 2N calls/sample (N = nodes). exp_c alone: 947 × 2 = 1,894 calls/sample, ~45,456/day with hourly sampling.
+
+**Fix — two stacked optimizations:**
+1. **Bulk multi-location API**: single request with comma-separated lat/lon per endpoint. Chunked at 100 locations to avoid 414 URI Too Large. Reduces per-sample calls from O(N) to O(N/100).
+2. **6h NWP-aligned sampling**: deployed `sample_interval_hours: 6` + `nwp_offset_utc: 5` to all 6 sessions. Matches GFS refresh cycle — empirically validated: 86% of hourly calls return identical data.
+
+**Combined reduction:**
+- exp_c: ~45,456 → ~80 calls/day (99.8% reduction)
+- exp_b: ~6,624 → ~16 calls/day
+- exp_d: ~18,672 → ~32 calls/day
+- All 6 sessions total: ~256 calls/day — well within free tier
+
+**Data status at time of refactor:**
+- exp_b (Shlomo1): 161 hours collected (50 MB) — near complete
+- exp_c (Shlomo1): 98 hours (146 MB) — gaps from rate limiting
+- exp_d (Shlomo1): 81 hours (53 MB) — gaps from rate limiting
+- Shlomo2 copies: 31 hours each (started later)
+
+**Thesis relevance:** The NWP cycle analysis (Section 6b) isn't just an academic finding — it directly solved an engineering constraint. The 86% redundancy finding drove the 6h sampling decision, and the bulk API refactor transforms collection from quota-limited to practically unlimited. This is a clean example of how understanding the data source (NWP model cycles) informs both the optimization algorithm (6h replan frequency) and the data collection infrastructure.

@@ -55,7 +55,35 @@ If either server goes down, all experiments continue on the other.
 - Partial analysis possible with ~7 days of data (covers the DD forecast horizon)
 - Full data expected ~**Mar 19**
 
-### 5. Literature review — next steps
+### 5. API quota crisis & bulk collection refactor (Mar 4) ✅
+
+**Problem:** All 6 collection processes hit Open-Meteo daily API quota limits. The per-node approach made 2 API calls per node per sample (1 wind + 1 marine). For exp_c alone, that's ~1,894 calls per sample hour, ~45,456 calls/day with hourly collection — far exceeding the free tier.
+
+**Root cause:** Two independent multiplicative problems:
+1. **Per-node API calls**: N nodes × 2 endpoints = O(N) calls per sample
+2. **Hourly sampling**: NWP models only update every 6h, so ~86% of hourly samples return identical data
+
+**Solution — two optimizations stacked:**
+
+| Optimization | Mechanism | Reduction |
+|---|---|---|
+| **Bulk multi-location API** | Comma-separated lat/lon in one request; chunked at 100 locations to avoid URI limits | ~1,894 → ~20 calls/sample (exp_c) |
+| **6h NWP-aligned sampling** | Collect every 6h aligned to GFS cycle arrival (05/11/17/23 UTC) | 24 → 4 samples/day |
+| **Combined** | | **~45,456 → ~80 calls/day** (99.8% reduction) |
+
+Deployed to all 6 sessions across both servers. Collection resumes from last completed sample hour (resume-aware HDF5).
+
+**API call budget (per experiment per day):**
+
+| Experiment | Nodes | Chunks (×100) | Calls/sample (wind + marine) | Samples/day | Calls/day |
+|---|---|---|---|---|---|
+| exp_b | 138 | 2 | 4 | 4 | **16** |
+| exp_c | 947 | 10 | 20 | 4 | **80** |
+| exp_d | 389 | 4 | 8 | 4 | **32** |
+
+Both servers combined: ~256 calls/day total. Well within free tier (~10,000/day).
+
+### 6. Literature review — next steps
 
 22 articles filed across 6 pillars (completed Mar 2). Potential work this week:
 
@@ -65,13 +93,28 @@ If either server goes down, all experiments continue on the other.
 
 ---
 
-## Data Collection Status (as of Mar 9)
+## Data Collection Status (as of Mar 4)
 
-| Experiment | Route | Nodes | Usable Start | Hours by Mar 9 | Hours Needed | Complete? |
-|---|---|---|---|---|---|---|
-| **exp_b** | Persian Gulf → Malacca | 131 | hour 0 | ~163 | ~163 | ~Yes |
-| **exp_c** | Yokohama → Long Beach | 947 | hour 46 (s1) / hour 0 (s2) | ~168 | ~408 | ~41% |
-| **exp_d** | St. John's → Liverpool | 389 | hour 29 | ~163 | ~163 | ~Yes |
+**Pre-refactor data (hourly sampling, per-node API):**
+
+| Experiment | Server | Hours Collected | HDF5 Size | Notes |
+|---|---|---|---|---|
+| exp_b | Shlomo1 | 161 | 50 MB | May be complete |
+| exp_b | Shlomo2 | 31 | 8.3 MB | |
+| exp_c | Shlomo1 | 98 | 146 MB | Gaps from rate limiting |
+| exp_c | Shlomo2 | 31 | 50 MB | |
+| exp_d | Shlomo1 | 81 | 53 MB | Gaps from rate limiting |
+| exp_d | Shlomo2 | 31 | 24 MB | |
+
+**Post-refactor (Mar 4+):** All 6 sessions now collecting at 6h intervals with bulk API. New samples append to existing HDF5 files. Some rate-limit gaps in the hourly data are unavoidable but the 6h samples going forward will be clean.
+
+**Revised completion estimates (6h sampling from Mar 4):**
+
+| Experiment | Route | Nodes | Hours Needed | Remaining (approx) | Est. Complete |
+|---|---|---|---|---|---|
+| **exp_b** | Persian Gulf → Malacca | 138 | ~163 | ~2 (Shlomo1 nearly done) | **Mar 4–5** |
+| **exp_c** | Yokohama → Long Beach | 947 | ~408 | ~310 | **~Mar 17** |
+| **exp_d** | St. John's → Liverpool | 389 | ~163 | ~82 | **~Mar 8** |
 
 ---
 

@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 WIND_API_URL = "https://api.open-meteo.com/v1/forecast"
 MARINE_API_URL = "https://marine-api.open-meteo.com/v1/marine"
 
+# Max locations per bulk request (avoids 414 URI Too Large)
+BULK_CHUNK_SIZE = 100
+
 WIND_HOURLY_VARIABLES = ["wind_speed_10m", "wind_direction_10m"]
 WIND_CURRENT_VARIABLES = ["wind_speed_10m", "wind_direction_10m"]
 MARINE_HOURLY_VARIABLES = ["ocean_current_velocity", "ocean_current_direction", "wave_height"]
@@ -57,170 +60,147 @@ def setup_api_client():
 # Data fetching
 # ---------------------------------------------------------------------------
 
-def fetch_wind_data(client, lat, lon):
-    """Fetch wind data for a single location.
+def _chunked_bulk(client, url, lats, lons, hourly_vars, current_vars, api_delay):
+    """Fetch data for all locations, chunking to avoid 414 URI Too Large.
+
+    Splits locations into batches of BULK_CHUNK_SIZE and concatenates results.
 
     Returns:
-        (hourly_list, current_dict) — each entry has wind_speed_10m_kmh,
-        wind_direction_10m_deg, beaufort_number.
+        List[WeatherApiResponse], one per location in order.
     """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": ",".join(WIND_HOURLY_VARIABLES),
-        "current": ",".join(WIND_CURRENT_VARIABLES),
-        "timezone": "GMT",
-    }
-
-    responses = client.weather_api(WIND_API_URL, params=params)
-    response = responses[0]
-
-    # Hourly data
-    hourly = response.Hourly()
-    hourly_time = pd.date_range(
-        start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
-        end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
-        freq=pd.Timedelta(seconds=hourly.Interval()),
-        inclusive="left",
-    )
-
-    wind_speed_values = hourly.Variables(0).ValuesAsNumpy()
-    wind_dir_values = hourly.Variables(1).ValuesAsNumpy()
-
-    hourly_data = []
-    for i, t in enumerate(hourly_time):
-        ws = float(wind_speed_values[i])
-        hourly_data.append({
-            "time": t.to_pydatetime(),
-            "wind_speed_10m_kmh": ws,
-            "wind_direction_10m_deg": float(wind_dir_values[i]),
-            "beaufort_number": wind_speed_to_beaufort(ws),
-        })
-
-    # Current data
-    current = response.Current()
-    ws_curr = current.Variables(0).Value()
-    current_data = {
-        "wind_speed_10m_kmh": ws_curr,
-        "wind_direction_10m_deg": current.Variables(1).Value(),
-        "beaufort_number": wind_speed_to_beaufort(ws_curr),
-    }
-
-    return hourly_data, current_data
+    all_responses = []
+    n = len(lats)
+    for start in range(0, n, BULK_CHUNK_SIZE):
+        end = min(start + BULK_CHUNK_SIZE, n)
+        params = {
+            "latitude": ",".join(f"{lat:.4f}" for lat in lats[start:end]),
+            "longitude": ",".join(f"{lon:.4f}" for lon in lons[start:end]),
+            "hourly": ",".join(hourly_vars),
+            "current": ",".join(current_vars),
+            "timezone": "GMT",
+        }
+        responses = client.weather_api(url, params=params)
+        all_responses.extend(responses)
+        if end < n:
+            time.sleep(api_delay)
+    return all_responses
 
 
-def fetch_marine_data(client, lat, lon):
-    """Fetch marine (wave/current) data for a single location.
-
-    Returns:
-        (hourly_list, current_dict) — each entry has wave_height_m,
-        ocean_current_velocity_kmh, ocean_current_direction_deg.
-    """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": ",".join(MARINE_HOURLY_VARIABLES),
-        "current": ",".join(MARINE_CURRENT_VARIABLES),
-        "timezone": "GMT",
-    }
-
-    responses = client.weather_api(MARINE_API_URL, params=params)
-    response = responses[0]
-
-    # Hourly data
-    hourly = response.Hourly()
-    hourly_time = pd.date_range(
-        start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
-        end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
-        freq=pd.Timedelta(seconds=hourly.Interval()),
-        inclusive="left",
-    )
-
-    current_vel_values = hourly.Variables(0).ValuesAsNumpy()
-    current_dir_values = hourly.Variables(1).ValuesAsNumpy()
-    wave_height_values = hourly.Variables(2).ValuesAsNumpy()
-
-    hourly_data = []
-    for i, t in enumerate(hourly_time):
-        hourly_data.append({
-            "time": t.to_pydatetime(),
-            "ocean_current_velocity_kmh": float(current_vel_values[i]),
-            "ocean_current_direction_deg": float(current_dir_values[i]),
-            "wave_height_m": float(wave_height_values[i]),
-        })
-
-    # Current data
-    current = response.Current()
-    current_data = {
-        "wave_height_m": current.Variables(0).Value(),
-        "ocean_current_velocity_kmh": current.Variables(1).Value(),
-        "ocean_current_direction_deg": current.Variables(2).Value(),
-    }
-
-    return hourly_data, current_data
+def fetch_wind_bulk(client, lats, lons, api_delay=0.1):
+    """Fetch wind data for all locations in chunked bulk calls."""
+    return _chunked_bulk(client, WIND_API_URL, lats, lons,
+                         WIND_HOURLY_VARIABLES, WIND_CURRENT_VARIABLES, api_delay)
 
 
-def fetch_waypoint_weather(client, lat, lon, sample_hour, voyage_start_time):
-    """Fetch both wind and marine data for a waypoint and combine them.
+def fetch_marine_bulk(client, lats, lons, api_delay=0.1):
+    """Fetch marine data for all locations in chunked bulk calls."""
+    return _chunked_bulk(client, MARINE_API_URL, lats, lons,
+                         MARINE_HOURLY_VARIABLES, MARINE_CURRENT_VARIABLES, api_delay)
+
+
+def _parse_bulk_responses(wind_responses, marine_responses, node_ids, sample_hour, voyage_start_time):
+    """Parse bulk API responses into actual_rows + predicted_rows lists.
 
     Args:
-        client: Open-Meteo API client.
-        lat, lon: Waypoint coordinates.
+        wind_responses: List of wind WeatherApiResponse (one per location).
+        marine_responses: List of marine WeatherApiResponse (one per location).
+        node_ids: List of node IDs matching response order.
         sample_hour: Integer sample hour index.
         voyage_start_time: datetime of voyage start.
 
     Returns:
-        (actual_dict, predicted_rows_list, error_str_or_None)
-        actual_dict has the 6 weather fields.
-        predicted_rows_list is a list of dicts with forecast_hour, sample_hour, + 6 weather fields.
+        (actual_rows, predicted_rows, failed_count)
     """
-    try:
-        wind_hourly, wind_current = fetch_wind_data(client, lat, lon)
-        marine_hourly, marine_current = fetch_marine_data(client, lat, lon)
+    actual_rows = []
+    predicted_rows = []
+    failed = 0
 
-        # Combine current (actual) conditions
-        actual = {
-            "wind_speed_10m_kmh": wind_current["wind_speed_10m_kmh"],
-            "wind_direction_10m_deg": wind_current["wind_direction_10m_deg"],
-            "beaufort_number": wind_current["beaufort_number"],
-            "wave_height_m": marine_current["wave_height_m"],
-            "ocean_current_velocity_kmh": marine_current["ocean_current_velocity_kmh"],
-            "ocean_current_direction_deg": marine_current["ocean_current_direction_deg"],
-        }
+    for i, node_id in enumerate(node_ids):
+        try:
+            wind_resp = wind_responses[i]
+            marine_resp = marine_responses[i]
 
-        # Combine hourly forecasts (predicted conditions)
-        marine_by_time = {m["time"]: m for m in marine_hourly}
-        predicted_rows = []
+            # --- Current (actual) conditions ---
+            wind_cur = wind_resp.Current()
+            marine_cur = marine_resp.Current()
+            ws_curr = wind_cur.Variables(0).Value()
 
-        for wind_entry in wind_hourly:
-            forecast_time = wind_entry["time"]
-            forecast_hours = (forecast_time.replace(tzinfo=None) - voyage_start_time).total_seconds() / 3600
-            forecast_hour = round(forecast_hours)
-
-            row = {
-                "forecast_hour": forecast_hour,
+            actual = {
+                "node_id": node_id,
                 "sample_hour": sample_hour,
-                "wind_speed_10m_kmh": wind_entry["wind_speed_10m_kmh"],
-                "wind_direction_10m_deg": wind_entry["wind_direction_10m_deg"],
-                "beaufort_number": wind_entry["beaufort_number"],
+                "wind_speed_10m_kmh": ws_curr,
+                "wind_direction_10m_deg": wind_cur.Variables(1).Value(),
+                "beaufort_number": wind_speed_to_beaufort(ws_curr),
+                "wave_height_m": marine_cur.Variables(0).Value(),
+                "ocean_current_velocity_kmh": marine_cur.Variables(1).Value(),
+                "ocean_current_direction_deg": marine_cur.Variables(2).Value(),
             }
+            actual_rows.append(actual)
 
-            if forecast_time in marine_by_time:
-                marine = marine_by_time[forecast_time]
-                row["wave_height_m"] = marine["wave_height_m"]
-                row["ocean_current_velocity_kmh"] = marine["ocean_current_velocity_kmh"]
-                row["ocean_current_direction_deg"] = marine["ocean_current_direction_deg"]
-            else:
-                row["wave_height_m"] = float("nan")
-                row["ocean_current_velocity_kmh"] = float("nan")
-                row["ocean_current_direction_deg"] = float("nan")
+            # --- Hourly (predicted) conditions ---
+            wind_hourly = wind_resp.Hourly()
+            wind_time = pd.date_range(
+                start=pd.to_datetime(wind_hourly.Time(), unit="s", utc=True),
+                end=pd.to_datetime(wind_hourly.TimeEnd(), unit="s", utc=True),
+                freq=pd.Timedelta(seconds=wind_hourly.Interval()),
+                inclusive="left",
+            )
+            wind_speed_vals = wind_hourly.Variables(0).ValuesAsNumpy()
+            wind_dir_vals = wind_hourly.Variables(1).ValuesAsNumpy()
 
-            predicted_rows.append(row)
+            marine_hourly = marine_resp.Hourly()
+            marine_time = pd.date_range(
+                start=pd.to_datetime(marine_hourly.Time(), unit="s", utc=True),
+                end=pd.to_datetime(marine_hourly.TimeEnd(), unit="s", utc=True),
+                freq=pd.Timedelta(seconds=marine_hourly.Interval()),
+                inclusive="left",
+            )
+            marine_vel_vals = marine_hourly.Variables(0).ValuesAsNumpy()
+            marine_dir_vals = marine_hourly.Variables(1).ValuesAsNumpy()
+            marine_wave_vals = marine_hourly.Variables(2).ValuesAsNumpy()
 
-        return actual, predicted_rows, None
+            # Index marine by timestamp for merging
+            marine_by_time = {}
+            for j, t in enumerate(marine_time):
+                marine_by_time[t] = (
+                    float(marine_vel_vals[j]),
+                    float(marine_dir_vals[j]),
+                    float(marine_wave_vals[j]),
+                )
 
-    except Exception as e:
-        return None, None, str(e)
+            for j, forecast_time in enumerate(wind_time):
+                forecast_hours = (forecast_time.replace(tzinfo=None) - voyage_start_time).total_seconds() / 3600
+                forecast_hour = round(forecast_hours)
+                ws = float(wind_speed_vals[j])
+
+                row = {
+                    "node_id": node_id,
+                    "forecast_hour": forecast_hour,
+                    "sample_hour": sample_hour,
+                    "wind_speed_10m_kmh": ws,
+                    "wind_direction_10m_deg": float(wind_dir_vals[j]),
+                    "beaufort_number": wind_speed_to_beaufort(ws),
+                }
+
+                if forecast_time in marine_by_time:
+                    vel, d, wh = marine_by_time[forecast_time]
+                    row["wave_height_m"] = wh
+                    row["ocean_current_velocity_kmh"] = vel
+                    row["ocean_current_direction_deg"] = d
+                else:
+                    row["wave_height_m"] = float("nan")
+                    row["ocean_current_velocity_kmh"] = float("nan")
+                    row["ocean_current_direction_deg"] = float("nan")
+
+                predicted_rows.append(row)
+
+        except Exception as e:
+            failed += 1
+            if failed <= 5:
+                logger.warning("Node %d parse error: %s", node_id, e)
+            actual_rows.append(_nan_actual_row(node_id, sample_hour))
+
+    return actual_rows, predicted_rows, failed
 
 
 def _nan_actual_row(node_id, sample_hour):
@@ -363,35 +343,26 @@ def collect(config, hdf5_path=None):
                 print(f"\n--- Sample hour {sample_hour}/{hours - 1} ---")
             start_time = time.time()
 
-            actual_rows = []
-            predicted_rows = []
-            successful = 0
-            failed = 0
+            lats = waypoints_df["lat"].tolist()
+            lons = waypoints_df["lon"].tolist()
+            node_ids = waypoints_df["node_id"].tolist()
 
-            for _, wp in waypoints_df.iterrows():
-                node_id = wp["node_id"]
-                lat, lon = wp["lat"], wp["lon"]
-
-                actual, predicted, error = fetch_waypoint_weather(
-                    client, lat, lon, sample_hour, voyage_start_time,
-                )
-
-                if error:
-                    failed += 1
-                    if failed <= 5:
-                        logger.warning("Node %d (%s): %s", node_id, wp["waypoint_name"], error)
-                    actual_rows.append(_nan_actual_row(node_id, sample_hour))
-                else:
-                    row = {"node_id": node_id, "sample_hour": sample_hour}
-                    row.update(actual)
-                    actual_rows.append(row)
-
-                    for pr in predicted:
-                        pr["node_id"] = node_id
-                        predicted_rows.append(pr)
-                    successful += 1
-
+            try:
+                wind_responses = fetch_wind_bulk(client, lats, lons, api_delay)
                 time.sleep(api_delay)
+                marine_responses = fetch_marine_bulk(client, lats, lons, api_delay)
+
+                actual_rows, predicted_rows, failed = _parse_bulk_responses(
+                    wind_responses, marine_responses, node_ids,
+                    sample_hour, voyage_start_time,
+                )
+                successful = len(node_ids) - failed
+            except Exception as e:
+                logger.error("Bulk API call failed: %s", e)
+                actual_rows = [_nan_actual_row(nid, sample_hour) for nid in node_ids]
+                predicted_rows = []
+                failed = len(node_ids)
+                successful = 0
 
             # Batch append to HDF5
             append_actual(hdf5_path, pd.DataFrame(actual_rows))
