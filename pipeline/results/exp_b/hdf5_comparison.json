@@ -1,0 +1,463 @@
+{
+  "files": {
+    "original": "data/experiment_b_138wp.h5",
+    "historical": "data/experiment_b_138wp_historical.h5",
+    "config": "config/experiment_exp_b.yaml"
+  },
+  "actual_weather": {
+    "matched_rows": 18492,
+    "rows_a": 18492,
+    "rows_b": 18492,
+    "overall": {
+      "wind_speed_10m_kmh": {
+        "n": 18492,
+        "mean_diff": 0.1452,
+        "rmse": 4.3748,
+        "r_squared": 0.5416,
+        "max_abs_diff": 25.995
+      },
+      "beaufort_number": {
+        "n": 18492,
+        "mean_diff": 0.0256,
+        "rmse": 0.7712,
+        "r_squared": 0.4124,
+        "max_abs_diff": 4.0
+      },
+      "wave_height_m": {
+        "n": 18492,
+        "mean_diff": -0.03,
+        "rmse": 0.0854,
+        "r_squared": 0.9097,
+        "max_abs_diff": 0.54
+      },
+      "ocean_current_velocity_kmh": {
+        "n": 18492,
+        "mean_diff": 0.009,
+        "rmse": 0.3758,
+        "r_squared": 0.3728,
+        "max_abs_diff": 2.1264
+      },
+      "wind_direction_10m_deg": {
+        "n": 18492,
+        "mean_diff": 24.2097,
+        "rmse": 39.3461,
+        "r_squared": null,
+        "max_abs_diff": 180.0
+      },
+      "ocean_current_direction_deg": {
+        "n": 18492,
+        "mean_diff": 34.9144,
+        "rmse": 54.7948,
+        "r_squared": null,
+        "max_abs_diff": 180.0
+      }
+    },
+    "per_segment": {
+      "0": {
+        "wind_speed_10m_kmh": {
+          "n": 2412,
+          "mean_diff": -0.2361,
+          "rmse": 4.3594,
+          "r_squared": 0.4986,
+          "max_abs_diff": 15.008
+        },
+        "beaufort_number": {
+          "n": 2412,
+          "mean_diff": -0.0357,
+          "rmse": 0.7711,
+          "r_squared": 0.3769,
+          "max_abs_diff": 3.0
+        },
+        "wave_height_m": {
+          "n": 2412,
+          "mean_diff": -0.0136,
+          "rmse": 0.0731,
+          "r_squared": 0.853,
+          "max_abs_diff": 0.26
+        },
+        "ocean_current_velocity_kmh": {
+          "n": 2412,
+          "mean_diff": 0.0131,
+          "rmse": 0.7102,
+          "r_squared": 0.0318,
+          "max_abs_diff": 2.0469
+        },
+        "wind_direction_10m_deg": {
+          "n": 2412,
+          "mean_diff": 24.0585,
+          "rmse": 37.4116,
+          "r_squared": null,
+          "max_abs_diff": 179.6334
+        },
+        "ocean_current_direction_deg": {
+          "n": 2412,
+          "mean_diff": 81.1486,
+          "rmse": 96.9523,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        }
+      },
+      "1": {
+        "wind_speed_10m_kmh": {
+          "n": 3082,
+          "mean_diff": 0.2078,
+          "rmse": 5.667,
+          "r_squared": 0.2753,
+          "max_abs_diff": 25.995
+        },
+        "beaufort_number": {
+          "n": 3082,
+          "mean_diff": 0.0422,
+          "rmse": 0.9653,
+          "r_squared": 0.1959,
+          "max_abs_diff": 4.0
+        },
+        "wave_height_m": {
+          "n": 3082,
+          "mean_diff": -0.0214,
+          "rmse": 0.0753,
+          "r_squared": 0.8536,
+          "max_abs_diff": 0.34
+        },
+        "ocean_current_velocity_kmh": {
+          "n": 3082,
+          "mean_diff": 0.0072,
+          "rmse": 0.4975,
+          "r_squared": 0.3396,
+          "max_abs_diff": 2.1264
+        },
+        "wind_direction_10m_deg": {
+          "n": 3082,
+          "mean_diff": 45.7799,
+          "rmse": 61.9576,
+          "r_squared": null,
+          "max_abs_diff": 179.8377
+        },
+        "ocean_current_direction_deg": {
+          "n": 3082,
+          "mean_diff": 45.1787,
+          "rmse": 67.0854,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        }
+      },
+      "2": {
+        "wind_speed_10m_kmh": {
+          "n": 3350,
+          "mean_diff": 0.2352,
+          "rmse": 5.2137,
+          "r_squared": 0.5228,
+          "max_abs_diff": 21.706
+        },
+        "beaufort_number": {
+          "n": 3350,
+          "mean_diff": 0.0496,
+          "rmse": 0.8711,
+          "r_squared": 0.3973,
+          "max_abs_diff": 3.0
+        },
+        "wave_height_m": {
+          "n": 3350,
+          "mean_diff": -0.0426,
+          "rmse": 0.0952,
+          "r_squared": 0.775,
+          "max_abs_diff": 0.5
+        },
+        "ocean_current_velocity_kmh": {
+          "n": 3350,
+          "mean_diff": 0.0183,
+          "rmse": 0.2258,
+          "r_squared": 0.5393,
+          "max_abs_diff": 0.82
+        },
+        "wind_direction_10m_deg": {
+          "n": 3350,
+          "mean_diff": 26.5312,
+          "rmse": 44.0699,
+          "r_squared": null,
+          "max_abs_diff": 179.9999
+        },
+        "ocean_current_direction_deg": {
+          "n": 3350,
+          "mean_diff": 35.7381,
+          "rmse": 51.5341,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        }
+      },
+      "3": {
+        "wind_speed_10m_kmh": {
+          "n": 3216,
+          "mean_diff": -0.0289,
+          "rmse": 3.2049,
+          "r_squared": 0.6669,
+          "max_abs_diff": 13.581
+        },
+        "beaufort_number": {
+          "n": 3216,
+          "mean_diff": -0.0131,
+          "rmse": 0.6279,
+          "r_squared": 0.5125,
+          "max_abs_diff": 2.0
+        },
+        "wave_height_m": {
+          "n": 3216,
+          "mean_diff": -0.0776,
+          "rmse": 0.1198,
+          "r_squared": 0.6081,
+          "max_abs_diff": 0.54
+        },
+        "ocean_current_velocity_kmh": {
+          "n": 3216,
+          "mean_diff": -0.0246,
+          "rmse": 0.2273,
+          "r_squared": 0.6617,
+          "max_abs_diff": 0.9308
+        },
+        "wind_direction_10m_deg": {
+          "n": 3216,
+          "mean_diff": 17.8538,
+          "rmse": 27.738,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        },
+        "ocean_current_direction_deg": {
+          "n": 3216,
+          "mean_diff": 18.5644,
+          "rmse": 30.6311,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        }
+      },
+      "4": {
+        "wind_speed_10m_kmh": {
+          "n": 3082,
+          "mean_diff": 0.1604,
+          "rmse": 3.1976,
+          "r_squared": 0.4222,
+          "max_abs_diff": 11.7199
+        },
+        "beaufort_number": {
+          "n": 3082,
+          "mean_diff": 0.0328,
+          "rmse": 0.6122,
+          "r_squared": 0.2167,
+          "max_abs_diff": 2.0
+        },
+        "wave_height_m": {
+          "n": 3082,
+          "mean_diff": -0.0038,
+          "rmse": 0.0683,
+          "r_squared": 0.6249,
+          "max_abs_diff": 0.28
+        },
+        "ocean_current_velocity_kmh": {
+          "n": 3082,
+          "mean_diff": 0.0213,
+          "rmse": 0.2043,
+          "r_squared": 0.6824,
+          "max_abs_diff": 0.8
+        },
+        "wind_direction_10m_deg": {
+          "n": 3082,
+          "mean_diff": 11.1977,
+          "rmse": 14.718,
+          "r_squared": null,
+          "max_abs_diff": 87.4054
+        },
+        "ocean_current_direction_deg": {
+          "n": 3082,
+          "mean_diff": 21.286,
+          "rmse": 34.8764,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        }
+      },
+      "5": {
+        "wind_speed_10m_kmh": {
+          "n": 3350,
+          "mean_diff": 0.4253,
+          "rmse": 3.9961,
+          "r_squared": 0.4834,
+          "max_abs_diff": 14.804
+        },
+        "beaufort_number": {
+          "n": 3350,
+          "mean_diff": 0.0612,
+          "rmse": 0.718,
+          "r_squared": 0.3452,
+          "max_abs_diff": 3.0
+        },
+        "wave_height_m": {
+          "n": 3350,
+          "mean_diff": -0.0154,
+          "rmse": 0.0641,
+          "r_squared": 0.3638,
+          "max_abs_diff": 0.32
+        },
+        "ocean_current_velocity_kmh": {
+          "n": 3350,
+          "mean_diff": 0.0194,
+          "rmse": 0.2225,
+          "r_squared": 0.7024,
+          "max_abs_diff": 0.7708
+        },
+        "wind_direction_10m_deg": {
+          "n": 3350,
+          "mean_diff": 20.2251,
+          "rmse": 33.5583,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        },
+        "ocean_current_direction_deg": {
+          "n": 3350,
+          "mean_diff": 19.5931,
+          "rmse": 31.4616,
+          "r_squared": null,
+          "max_abs_diff": 180.0
+        }
+      }
+    }
+  },
+  "predicted_weather": {
+    "matched_rows": 2986458,
+    "rows_a": 3106656,
+    "rows_b": 3106656,
+    "overall": {
+      "wind_speed_10m_kmh": {
+        "n": 2986458,
+        "mean_diff": 0.0424,
+        "rmse": 5.2134,
+        "r_squared": 0.3479,
+        "max_abs_diff": 43.8346
+      },
+      "beaufort_number": {
+        "n": 2986458,
+        "mean_diff": 0.0013,
+        "rmse": 0.8471,
+        "r_squared": 0.2736,
+        "max_abs_diff": 6.0
+      },
+      "wave_height_m": {
+        "n": 2986458,
+        "mean_diff": -0.0377,
+        "rmse": 0.1116,
+        "r_squared": 0.8104,
+        "max_abs_diff": 1.18
+      },
+      "ocean_current_velocity_kmh": {
+        "n": 2986458,
+        "mean_diff": 0.0015,
+        "rmse": 0.2775,
+        "r_squared": 0.6161,
+        "max_abs_diff": 1.8
+      },
+      "wind_direction_10m_deg": {
+        "n": 2986458,
+        "mean_diff": 24.8837,
+        "rmse": 39.7989,
+        "r_squared": null,
+        "max_abs_diff": 180.0
+      },
+      "ocean_current_direction_deg": {
+        "n": 2986458,
+        "mean_diff": 28.153,
+        "rmse": 46.568,
+        "r_squared": null,
+        "max_abs_diff": 180.0
+      }
+    }
+  },
+  "optimization": {
+    "static_det": {
+      "original": {
+        "fuel_mt": 175.9606224967203,
+        "time_h": 139.99672850776875,
+        "status": "Optimal",
+        "computation_s": 0.103
+      },
+      "historical": {
+        "fuel_mt": 176.26552268525893,
+        "time_h": 139.9956920279055,
+        "status": "Optimal",
+        "computation_s": 0.012
+      },
+      "fuel_delta_pct": 0.17,
+      "time_delta_h": -0.0
+    },
+    "dynamic_det": {
+      "original": {
+        "fuel_mt": 177.63209999999998,
+        "time_h": 139.39849999999998,
+        "status": "Optimal",
+        "computation_s": 0.908
+      },
+      "historical": {
+        "fuel_mt": 175.06510000000003,
+        "time_h": 139.48740000000004,
+        "status": "Optimal",
+        "computation_s": 0.895
+      },
+      "fuel_delta_pct": -1.45,
+      "time_delta_h": 0.09
+    },
+    "dynamic_rh": {
+      "original": {
+        "fuel_mt": 175.52080000000007,
+        "time_h": 139.90319999999994,
+        "status": "Optimal",
+        "computation_s": 37.393
+      },
+      "historical": {
+        "fuel_mt": 173.52159999999998,
+        "time_h": 139.94140000000002,
+        "status": "Optimal",
+        "computation_s": 38.44
+      },
+      "fuel_delta_pct": -1.14,
+      "time_delta_h": 0.04
+    }
+  },
+  "assessment": {
+    "verdict": "NOT_RECOMMENDED",
+    "failures": [
+      {
+        "field": "wind_direction_10m_deg",
+        "rmse": 39.3461,
+        "threshold": 30.0,
+        "unit": "deg",
+        "rationale": "Within one heading sector"
+      },
+      {
+        "field": "ocean_current_direction_deg",
+        "rmse": 54.7948,
+        "threshold": 30.0,
+        "unit": "deg",
+        "rationale": "Within one heading sector"
+      }
+    ],
+    "warnings": [
+      {
+        "field": "wind_speed_10m_kmh",
+        "rmse": 4.3748,
+        "threshold": 5.0,
+        "unit": "km/h",
+        "note": "Approaching threshold (>70%)"
+      },
+      {
+        "field": "ocean_current_velocity_kmh",
+        "rmse": 0.3758,
+        "threshold": 0.5,
+        "unit": "km/h",
+        "note": "Approaching threshold (>70%)"
+      },
+      {
+        "field": "optimization_fuel_dynamic_det",
+        "delta_pct": -1.45,
+        "threshold": 2.0,
+        "unit": "%",
+        "note": "Approaching threshold (>70%)"
+      }
+    ]
+  }
+}

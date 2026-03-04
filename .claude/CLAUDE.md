@@ -107,6 +107,7 @@ Detailed reference material is available on-demand via skills:
 | `/lit-validate` | Validate citation: DOI resolution, metadata cross-check, existence confirmation |
 | `/lit-read` | Read PDF and extract structured literature entry matching template |
 | `/lit-file` | Append reviewed entry to pillar file and update index |
+| `/hdf5-comparison` | Live vs historical data differences, API model mapping, interpretation |
 
 ## Pipeline Porting Agents
 
@@ -117,6 +118,7 @@ For implementing the new pipeline (`pipeline/`), use these specialized agents:
 | `lp-porter` | Port LP optimizer to `pipeline/static_det/` (transform + optimize) |
 | `dp-porter` | Port DP optimizer to `pipeline/dynamic_det/` and `dynamic_rh/` |
 | `physics-porter` | Consolidate `utility_functions.py` into `pipeline/shared/physics.py` |
+| `hdf5-comparator` | Compare two HDF5 files (live vs historical): weather stats, optimization, substitutability |
 
 ## Literature Review Agent
 
