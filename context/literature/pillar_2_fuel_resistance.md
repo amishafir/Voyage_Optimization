@@ -76,8 +76,10 @@ Directly reinforces our Jensen's inequality argument by defending the cubic law 
 
 **Quotable Claims:**
 - "Using regression analyses for selected case studies, these papers show that in many cases the traditional 'cube law' is not valid, and exponents lower than 3 (and in some cases lower than 2 or even below 1) are more appropriate" (abstract)
-- "This paper reviews some of these papers and shows that their results are partially based on pitfalls in the analysis which are identified" (abstract)
-- Page-specific internal quotes require verification against PDF
+- "The exponent of speed $n$ in the above calculations cannot be less than 3 comes from basic hydrodynamic principles" (p. 2)
+- Power is formally derived as $P = \frac{1}{2} \rho C_T v^3 S$ (Eq. 4, p. 2), proving cubic as the minimum from first principles
+- Regression exponents below 3 arise because speed and weather are cross-correlated: bad-weather slowdowns contaminate the data, biasing the exponent downward (pp. 3–4, Table 1)
+- "Any scientific study, in whatever field, must be based on methodologies that do not contradict the laws of physics" (p. 5)
 
 **Limitations / Gaps:**
 - Treats "ship speed" as single variable — never distinguishes SOG from SWS
@@ -130,3 +132,76 @@ Highly relevant as it demonstrates that weather conditions fundamentally change 
 - No forecast uncertainty, rolling horizon, or re-planning
 - No current effects — only waves considered as weather perturbation
 - Route simulations assume constant speed along entire voyage — no segment-by-segment variation
+
+---
+
+### [Holtrop, J. & Mennen, G.G.J. (1982)] An approximate power prediction method
+
+- **Citation:** Holtrop, J., Mennen, G.G.J., 1982. *An approximate power prediction method*. International Shipbuilding Progress, 29(335), 166-170. https://doi.org/10.3233/ISP-1982-2933501
+- **PDF:** `context/literature/pdfs/Holtrop1982_PowerPrediction.pdf`
+- **Tags:** `Holtrop-Mennen`, `resistance-decomposition`, `power-speed-exponent`, `regression`
+
+**Summary:**
+Introduces the Holtrop-Mennen statistical method for predicting ship resistance and required propulsive power based on regression analysis of model tests from MARIN. Decomposes total resistance into seven additive components: $R_F(1+k_1) + R_{APP} + R_W + R_B + R_{TR} + R_A$ (frictional with form factor, appendages, wave-making, bulbous bow pressure, transom pressure, model-ship correlation). The half-angle-of-entrance formula alone used over 200 hull shapes. Provides closed-form regression equations for each component.
+
+**Key Findings:**
+- Total resistance decomposed into seven additive components, each expressed as regression equations in hull parameters
+- Frictional resistance follows ITTC-1957 friction line with form factor $(1+k_1)$; wave-making resistance uses exponential form with cosine term
+- Half-angle of entrance regression based on over 200 hull shapes, yielding values between 1° and 90° (p. 167)
+- Covers high-block ships, slender naval ships, single-screw (conventional and open stern), and twin-screw vessels
+- Propulsion factors (wake fraction, thrust deduction, relative-rotative efficiency) also provided as regression formulas
+- No explicit mean error percentages given; authors note "tentative character" and "insufficient accuracy" for unconventional parameter combinations (p. 166)
+
+**Methodology:**
+Multiple regression analysis on model test results from MARIN. Dependent variables: resistance components and propulsion factors. Independent variables: length, beam, draft, block coefficient, prismatic coefficient, waterplane coefficient, half-angle of entrance, Froude number. Frictional resistance via ITTC-1957 line. Wave resistance via form-factor approach. Published lookup equations for practical design-stage use.
+
+**Relevance to Thesis:**
+The Holtrop-Mennen method is the foundational resistance prediction approach referenced by virtually all subsequent maritime speed optimization papers. While the thesis uses the Yang et al. (2020) speed correction model rather than Holtrop-Mennen directly, the decomposition philosophy is the same: total resistance = calm-water base + added resistance from environmental factors. Holtrop-Mennen establishes that resistance (and thus power/fuel) increases approximately as speed cubed for displacement vessels — the physical basis for the cubic FCR relationship central to Jensen's inequality (Contribution 1). Zaccone et al. (2018) uses Holtrop for the DP baseline; Tezdogan et al. (2015) validates CFD against Holtrop predictions.
+
+**Quotable Claims:**
+- "The application is limited to hull forms resembling the average ship described by the main dimensions and form coefficients used in the method" (p. 166)
+- "Obtained by regression analysis of over 200 hull shapes, yields $i_E$ values between 1 and 90 degrees" (p. 167)
+
+**Limitations / Gaps:**
+- Calm-water resistance only — does not include added resistance from waves, wind, or currents
+- Regression-based — accuracy degrades for hull forms outside the training set; authors acknowledge "tentative character"
+- Does not address speed over ground vs speed through water distinction
+- No fuel consumption model — provides power prediction only; FCR requires engine-specific SFOC curves
+- No optimization framework — purely a resistance estimation tool
+- No explicit error statistics provided
+
+---
+
+### [Holtrop, J. (1984)] A statistical re-analysis of resistance and propulsion data
+
+- **Citation:** Holtrop, J., 1984. *A statistical re-analysis of resistance and propulsion data*. International Shipbuilding Progress, 31(363), 272-276.
+- **PDF:** `context/literature/pdfs/Holtrop1984_StatisticalReanalysis.pdf`
+- **Tags:** `Holtrop-Mennen`, `resistance-decomposition`, `regression`
+
+**Summary:**
+Re-analyses and extends the 1982 Holtrop-Mennen method using 334 model tests for resistance and 168 full-scale trial data points for propulsion factors. Introduces explicit Froude number regime boundaries: low-speed formula ($F_n < 0.4$), interpolation ($0.40 \leq F_n \leq 0.55$), and a new high-speed formula ($F_n > 0.55$) with separate $c_{17}$ and $m_3$ coefficients. Includes Series 64 high-speed displacement forms and updated propulsion factor regressions.
+
+**Key Findings:**
+- 334 model tests for resistance; 168 full-scale trials for propulsion factors (p. 272)
+- Identical 7-component resistance decomposition as 1982, with re-regressed coefficients
+- New high-speed wave resistance formula for $F_n > 0.55$ — "especially for high speed craft at Froude numbers above 0.5 the power predictions were often wrong" (p. 272)
+- Correlation allowance $C_A$ found to be 91% of the 1982 value on average for modern ships (p. 274)
+- New wake fraction and thrust deduction formulas with cavitation correction factors $F_N$ and $F_P$
+- No explicit mean error percentages — accuracy described qualitatively as "slightly more accurate" than 1982
+
+**Methodology:**
+Extended regression analysis on 334 model tests (resistance) and 168 full-scale trials (propulsion). Same 7-component resistance decomposition. Froude number regimes explicitly defined. Series 64 inclusion extends applicability to high-speed displacement forms. 16 B-series propellers used for cavitation analysis.
+
+**Relevance to Thesis:**
+The 1984 refinement is particularly relevant because it provides explicit Froude number regime boundaries. The thesis vessel operates at $F_n \approx 0.13$–$0.15$ (oil products tanker, 11–13 kn, $L = 200$ m), well within the low-speed regime where the 1984 method is most accurate. The form factor approach used in modern resistance codes (including the framework underlying Yang et al.'s model) traces to this update. The cubic power-speed approximation used in the thesis FCR is well-supported by the underlying hydrodynamics at these low Froude numbers.
+
+**Quotable Claims:**
+- "Especially for high speed craft at Froude numbers above 0.5 the power predictions were often wrong" (p. 272)
+- "For new ships under ideal trial conditions a $C_A$-value would be applicable which is on the average 91 per cent of the $C_A$-value according to the statistical formula of [1]" (p. 274)
+
+**Limitations / Gaps:**
+- Same fundamental limitations as 1982: calm-water only, no added resistance from environment
+- Regression model — not suitable for novel hull forms outside the dataset
+- No explicit error statistics — accuracy claims are qualitative only
+- Still no fuel consumption or speed optimization — purely resistance prediction
+- Does not address SWS vs SOG — provides resistance as function of speed through water only

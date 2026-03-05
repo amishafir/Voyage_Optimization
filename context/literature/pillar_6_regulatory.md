@@ -78,9 +78,9 @@ Systematic literature review and meta-analysis of ~150 studies. Harmonized heter
 Canonical justification for Pillar 6. Speed reduction is the highest-leverage single operational measure (1–60%). The thesis shows that the *method* used to operationalize speed reduction — LP with averaged weather vs DP with time-varying weather — produces systematically different outcomes due to Jensen's inequality on cubic FCR. Regulators relying on LP-computed plans overestimate actual compliance performance. Weather routing potential of "0.1–48%" implicitly assumes perfect forecasts; our Contribution 2 shows forecast error degrades realized savings. Bouman cites weather routing as major opportunity but does not distinguish static vs adaptive replanning — our RH contribution (Contribution 3) directly operationalizes the dynamic end of this spectrum.
 
 **Quotable Claims:**
-- "CO2 emissions from maritime transport represent around 3% of total annual anthropogenic greenhouse gas emissions [...] these emissions are assumed to increase by 150–250% in 2050" (p. 408)
+- "CO2 emissions from maritime transport represent around 3% of total annual anthropogenic greenhouse gas emissions [...] these emissions are assumed to increase by 150–250% in 2050" (p. 408; body text gives 2.6% for 2012 per Third IMO GHG Study, 3.5% for 2007)
 - "In terms of emissions per freight unit transported it is possible to reduce emissions by a factor 4–6" (Abstract)
-- Speed optimization: 1–60% CO2 reduction; voyage optimization: 0.1–48% (results table, pp. 412–416; verify exact phrasing against correct PDF)
+- Speed optimization: 1–60% CO2 reduction; voyage optimization: 0.1–48% (Table 2, p. 415; prose on p. 416 notes "many data points lie well beyond the 3rd quartile boundary, suggesting low agreement in the literature" and "most studies indicate a potential less than 10 percent" for voyage optimization)
 
 **Limitations / Gaps:**
 - Treats "speed optimization" as monolithic — no SWS vs SOG distinction, no LP vs DP comparison
@@ -93,8 +93,8 @@ Canonical justification for Pillar 6. Speed reduction is the highest-leverage si
 
 ### [Jia, H., Adland, R., Prakash, V. & Smith, T. (2017)] Energy efficiency with the application of Virtual Arrival policy
 
-- **Citation:** Jia, H., Adland, R., Prakash, V., Smith, T., 2017. *Energy efficiency with the application of Virtual Arrival policy*. Transportation Research Part D: Transport and Environment, 54, 50–60. https://doi.org/10.1016/j.trd.2017.04.016
-- **PDF:** `context/literature/pdfs/Jia2017_VirtualArrivalEnergy.pdf`
+- **Citation:** Jia, H., Adland, R., Prakash, V., Smith, T., 2017. *Energy efficiency with the application of Virtual Arrival policy*. Transportation Research Part D: Transport and Environment, 54, 50–60. https://doi.org/10.1016/j.trd.2017.04.037
+- **PDF:** `context/literature/pdfs/Jia2017_VirtualArrival.pdf`
 - **Tags:** `Virtual-Arrival`, `SEEMP`, `speed-optimization`, `slow-steaming`, `AIS`, `VLCC`, `GHG-emissions`, `port-congestion`, `just-in-time`, `fuel-savings`, `charterparty`
 
 **Summary:**
@@ -130,3 +130,40 @@ Directly supports the regulatory motivation of Pillar 6. Demonstrates that exist
 - Forecast uncertainty structurally absent: assumes excess port time is known in advance
 - No adaptive re-planning mechanism — VA is a one-shot voyage-start decision
 - Scope limited to VLCCs on tramp trades; may not generalize to liner services or the thesis's tanker route
+
+---
+
+### [IMO (2023)] 2023 IMO Strategy on Reduction of GHG Emissions from Ships
+
+- **Citation:** IMO, 2023. *2023 IMO Strategy on Reduction of GHG Emissions from Ships*. Resolution MEPC.377(80), adopted 7 July 2023.
+- **PDF:** `context/literature/pdfs/IMO2023_MEPC377_GHGStrategy.pdf`
+- **Tags:** `IMO-GHG`, `decarbonization`, `net-zero`, `MEPC`
+
+**Summary:**
+The revised IMO GHG Strategy adopted at MEPC 80 (July 2023) significantly strengthens the ambition of the initial 2018 strategy. Sets net-zero GHG emissions from international shipping "by or around" 2050, with indicative checkpoints of at least 20% reduction by 2030 and at least 70% reduction by 2040 (striving for 30% and 80% respectively), all compared to 2008 levels. Identifies lifecycle GHG assessment, well-to-wake framework, and a basket of mid-term measures (carbon levy, fuel standard) as implementation mechanisms.
+
+**Key Findings:**
+- Net-zero target (s.3.3.4, p. 6): "to reach net-zero GHG emissions by or around, i.e. close to, 2050" — hedged language, not a hard 2050 deadline
+- 2030 checkpoint (s.3.4.1, p. 6): "at least 20%, striving for 30%, by 2030, compared to 2008"
+- 2040 checkpoint (s.3.4.2, p. 6): "at least 70%, striving for 80%, by 2040, compared to 2008"
+- Carbon intensity target: "at least 40% by 2030" (s.3.3.2); zero/near-zero fuel uptake: "at least 5%, striving for 10%" of energy by 2030 (s.3.3.3)
+- Well-to-wake explicitly mentioned in sections 3.2 (p. 5) and 4.7 (p. 8) in context of LCA guidelines
+- Confirms EEXI, CII, and enhanced SEEMP as short-term measures already in force
+
+**Methodology:**
+IMO regulatory resolution adopted by the Marine Environment Protection Committee at its 80th session (MEPC 80), London, 3-7 July 2023. Consensus-based international negotiation among 175 member states. Builds on the initial 2018 strategy (MEPC.304(72)) with strengthened targets based on updated science and political commitments.
+
+**Relevance to Thesis:**
+The 2023 revised strategy is the current regulatory anchor motivating the entire thesis. The net-zero 2050 target and the 2030/2040 checkpoints create urgent demand for operational fuel efficiency measures — speed optimization being the highest-leverage near-term tool (Bouman et al., 2017: 1-60% potential). The CII annual rating system means that the accuracy of fuel estimation directly affects regulatory compliance planning: if LP-based tools systematically underestimate fuel (Jensen's inequality, Contribution 1), ships may receive worse CII ratings than planned. The thesis's RH approach (Contribution 3) provides a more accurate fuel estimation and optimization framework aligned with the regulatory need for reliable operational planning.
+
+**Quotable Claims:**
+- "to reach net-zero GHG emissions from international shipping by or around, i.e. close to, 2050" (s.3.3.4, p. 6)
+- "at least 20%, striving for 30%, by 2030, compared to 2008" (s.3.4.1, p. 6)
+- "at least 70%, striving for 80%, by 2040, compared to 2008" (s.3.4.2, p. 6)
+
+**Limitations / Gaps:**
+- Policy document, not technical — provides targets but no methodology for achieving them
+- Does not specify which operational measures (speed optimization, weather routing, etc.) should be prioritized
+- Mid-term economic measures (carbon levy, fuel standard) still under negotiation as of 2024
+- No guidance on how voyage-level optimization tools should account for forecast uncertainty
+- Does not address the SOG vs SWS distinction or its implications for CII calculation accuracy

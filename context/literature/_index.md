@@ -4,14 +4,14 @@
 
 | # | Pillar | Articles | Status |
 |---|--------|:--------:|--------|
-| 1 | Speed Optimization | 5 | In progress |
-| 2 | Fuel Consumption & Resistance | 3 | In progress |
-| 3 | Weather Forecasting & NWP | 4 | In progress |
+| 1 | Speed Optimization | 8 | In progress |
+| 2 | Fuel Consumption & Resistance | 5 | In progress |
+| 3 | Weather Forecasting & NWP | 5 | In progress |
 | 4 | Simulation Methodology & SOG-Targeting | 4 | In progress |
 | 5 | Rolling Horizon & Information Value | 3 | In progress |
-| 6 | Regulatory & Industry Context | 3 | In progress |
+| 6 | Regulatory & Industry Context | 4 | In progress |
 
-**Total: 22 articles**
+**Total: 29 articles**
 
 ## All Articles
 
@@ -39,6 +39,13 @@
 | Zaccone, Ottaviani, Figari, Altosole | 2018 | 1 | 3D DP (Bellman-Ford) voyage optimization on space-time grid with NOAA weather; acknowledges forecast uncertainty limits DP |
 | Stopa, Cheung | 2014 | 3 | ECMWF ERA-I vs NCEP CFSR benchmark; ERA-I temporally homogeneous; validates ECMWF data quality for thesis |
 | Yang, Chen, Zhao, Rytter | 2020 | 4 | Foundation paper: first to distinguish STW from SOG in speed optimization; 2.20% fuel saving; thesis route and ship |
+| Zis, Psaraftis, Ding | 2020 | 1 | Weather routing taxonomy; distinguishes route optimization from speed optimization; identifies RH as open direction |
+| Wang, Meng | 2012 | 1 | Liner network speed optimization via MINLP; cubic FCR; 12-20% savings; calm-water LP paradigm |
+| Ronen | 2011 | 1 | Foundational speed-fuel economics; cube-root optimal speed formula; slow steaming rationale |
+| Holtrop, Mennen | 1982 | 2 | Foundational ship resistance prediction; 334 model tests; decomposition into 6 resistance components |
+| Holtrop | 1984 | 2 | Refined resistance method; 502 model tests; improved accuracy for tankers at low Froude numbers |
+| Lorenz | 1969 | 3 | Theoretical atmospheric predictability limit; explains 72h forecast skill plateau; foundational for NWP |
+| IMO | 2023 | 6 | Revised GHG Strategy MEPC.377(80); net-zero by ~2050; 20% by 2030; regulatory anchor for thesis |
 
 ## Cross-Pillar References
 
@@ -56,5 +63,8 @@ Articles spanning multiple pillars are listed here with their primary and second
 | Marjanovic et al. | 2025 | 3 | 5 | Also relevant to rolling horizon (Pillar 5) — 96–120h anomalous skill recovery motivates NWP-aligned re-planning |
 | Bouman et al. | 2017 | 6 | 1 | Also relevant to speed optimization (Pillar 1) — speed reduction is highest-leverage single measure (1–60%) |
 | Luo et al. | 2023 | 3 | 5 | Also relevant to rolling horizon (Pillar 5) — explicitly names RH as the solution to static forecast limitation |
-| Jia et al. | 2017 | 6 | 1 | Also relevant to speed optimization (Pillar 1) — VA is speed optimization under time-window constraint |
+| Jia et al. | 2017 | 6 | 1, 4 | Also relevant to speed optimization (Pillar 1) — VA is speed optimization under time-window constraint; and SOG-targeting (Pillar 4) — VA is empirical evidence that ships target arrival time, not SWS |
 | Yang et al. | 2020 | 4 | 1, 2 | Also relevant to speed optimization (Pillar 1) — LP-style optimizer with GA; also Pillar 2 — DTU-SDU fuel model |
+| Zis et al. | 2020 | 1 | 3, 5 | Also relevant to NWP forecasting (Pillar 3) — notes deterministic forecast dominance; and RH (Pillar 5) — identifies adaptive re-planning as open direction |
+| Holtrop & Mennen | 1982 | 2 | 1 | Also relevant to speed optimization (Pillar 1) — underpins resistance models used by virtually all maritime optimizers |
+| Lorenz | 1969 | 3 | 5 | Also relevant to rolling horizon (Pillar 5) — predictability limit motivates frequent re-planning |

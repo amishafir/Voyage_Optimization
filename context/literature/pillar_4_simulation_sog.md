@@ -60,25 +60,27 @@ This paper is highly relevant because its fixed schedule constraint is implicitl
 - **Tags:** `LP-based`, `SOG-targeting`, `Jensen-inequality`
 
 **Summary:**
-Addresses speed optimization on shipping routes where fuel consumption is a cubic function of speed. Given a sequence of ports with time windows, formulates the problem as a nonlinear continuous program and alternatively as a shortest path problem on a directed acyclic graph, where arrival times are discretized. The DAG approach is shown to be superior, and the paper reports 21% average fuel savings compared to design-speed operation for a ship with multiple port calls under varying sea conditions (as described in Huotari et al. 2021, p. 2).
+Addresses speed optimization on shipping routes where fuel consumption is a cubic function of speed ($f(v) = 0.0036v^2 - 0.1015v + 0.8848$ per nm, valid for 14–20 kn, p. 525). Given a sequence of ports with time windows, formulates the problem as a nonlinear continuous program and alternatively as a shortest path problem on a DAG where arrival times are discretized. The DAG approach solves in ~2 ms (vs 430 ms for NLP) with only 0.04% optimality gap (p. 528), and achieves 21% average fuel savings for routes with 10-day time windows and 40% waiting nodes (p. 527).
 
 **Key Findings:**
-- Fuel consumption modeled as cubic function of speed — convexity is central to the solution approach
-- Reformulation as shortest path on DAG outperforms nonlinear programming solver
-- 21% average fuel savings compared to operation at design speed (as cited by Huotari et al. 2021)
-- The convexity of the cubic fuel function means the optimal solution equalizes speeds across legs as much as time windows allow — this is Jensen's inequality in action (f(mean) <= mean(f) for convex f)
-- Norstad et al. (2011) extended this with a "smoothing algorithm" that explicitly leverages convexity to equalize speeds
+- Per-nm fuel cost: $f(v) = 0.0036v^2 - 0.1015v + 0.8848$ (convex quadratic, derived from cubic fuel-per-time, p. 525)
+- DAG shortest path: discretize time windows into $m$ arrival-time points, build arcs with fuel cost from implied speed; single-pass shortest path during topological-order construction (pp. 525–526)
+- 10% uniform speed reduction saves 19.4%; per-leg optimization saves 24.3% — the extra ~5 pp comes from exploiting convexity to equalize speeds across legs (p. 523)
+- "For routes having time windows equal to 10 days and 40% of the nodes with waiting, it is possible to reduce the fuel consumption by 21% on average" (p. 527)
+- DAG with 20 discretization points takes ~2 ms; NLP solver averages 430 ms — 200× faster with 0.04% gap (p. 528)
+- Test instances: cargo ship at 18.5 kn service speed (14–20 kn range), 120 instances across 24 cases: 4/8/12/16 ports, 5/10-day time windows, 0/20/40% waiting nodes, distances 850–8,500 nm per leg (p. 526)
 
 **Methodology:**
-Nonlinear continuous program for speed optimization with port time windows. Alternative formulation: discretize arrival times, build directed acyclic graph, solve as shortest path. Fuel consumption = cubic function of speed. Multiple port calls with time windows. The smoothing algorithm (in the companion Norstad 2011 paper) recursively adjusts speeds on adjacent legs toward equality, exploiting the convexity property that equal speeds minimize total fuel for a given total time.
+Nonlinear continuous program for speed optimization with port time windows. Alternative DAG formulation: discretize arrival times into $m$ points per node, connect feasible pairs with fuel cost from implied speed, solve as shortest path. Fuel consumption = convex quadratic per nm (from cubic per hour). Route: Antwerp–Milford Haven–Boston–Charleston–Algeciras–Point Lisas–Houston. Compared NLP (CONOPT solver) vs DAG at $m$ = 5, 10, 20, 40, 80 discretization points.
 
 **Relevance to Thesis:**
 This is the paper most directly relevant to our Jensen's inequality argument. The smoothing algorithm's core insight — that equalizing speeds across legs minimizes fuel because fuel is convex in speed — is precisely the mathematical property we identify as causing the LP vs DP ranking reversal under SOG-targeting. However, Fagerholt et al. use this convexity to generate better plans (equalize planned speeds). We use the same convexity to analyze what happens when plans are simulated under varying weather: if actual SOG varies from the planned constant speed (which it must under SOG-targeting), Jensen's inequality means actual fuel exceeds the plan's estimate. LP assumes constant speed per segment (which is optimal by Fagerholt's logic), but SOG-targeting simulation reveals this underestimates fuel — and DP, which captures the speed variation, doesn't have this bias. The paper establishes the mathematical foundation we build upon, while our contribution is applying it to the plan-vs-actual simulation gap.
 
 **Quotable Claims:**
-- "Fuel consumption and emissions on a shipping route are typically a cubic function of speed" (from abstract)
-- "Extensive computational results confirm the superiority of the shortest path approach and the potential for fuel savings on shipping routes" (from abstract)
-- Page-specific quotes require TAU access — download before thesis submission
+- "Fuel consumption and emissions on a shipping route are typically a cubic function of speed" (p. 523)
+- Uniform 10% speed reduction saves 19.4%; per-leg optimization saves 24.3% — convexity yields an extra ~5 pp (p. 523)
+- "For routes having time windows equal to 10 days and 40% of the nodes with waiting, it is possible to reduce the fuel consumption by 21% on average" (p. 527)
+- DAG with 20 discretization points: ~2 ms solve time, 0.04% optimality gap vs NLP at 430 ms (p. 528)
 
 **Limitations / Gaps:**
 - Optimizes the plan — never analyzes what happens when the plan is executed under different weather than assumed

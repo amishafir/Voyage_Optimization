@@ -195,3 +195,115 @@ The only DP/graph-based voyage optimization paper in Pillar 1, filling a critica
 - Ocean currents absent from the resistance model
 - No plan-vs-actual simulation — reports planned fuel but does not simulate executing the plan under realized weather
 - Single test case (one departure date, one storm event); no statistical robustness across multiple scenarios
+
+---
+
+### [Zis, T.P.V., Psaraftis, H.N. & Ding, L. (2020)] Ship weather routing: A taxonomy and survey
+
+- **Citation:** Zis, T.P.V., Psaraftis, H.N., Ding, L., 2020. *Ship weather routing: A taxonomy and survey*. Ocean Engineering, 213, 107697. https://doi.org/10.1016/j.oceaneng.2020.107697
+- **PDF:** `context/literature/pdfs/Zis2020_WeatherRoutingSurvey.pdf`
+- **Tags:** `survey`, `weather-routing`, `speed-optimization`, `DP-based`, `metaheuristic`
+
+**Summary:**
+Comprehensive taxonomy and survey of ship weather routing, based on an initial Scopus retrieval of 545 papers refined to 280 journal papers, with a detailed taxonomy of 40 indicative works (Tables 5a–5h). Classifies papers across 10 dimensions and identifies four main solution families: modified isochrone method, dynamic programming, pathfinding/genetic algorithms, and AI/ML. Distinguishes weather routing (route + speed) from speed-only optimization.
+
+**Key Findings:**
+- Four methodological families identified; LP is not a separate category and does not appear as a solution approach for any of the 40 taxonomized papers (p. 12)
+- "The majority of research has used a combination of the modified isochrones method and dynamic programming" (p. 12)
+- Fuel consumption savings typically reported between 3% and 5% across reviewed studies (p. 3)
+- Rolling horizon / MPC is essentially absent from the taxonomy — identified only as a future research direction (Section 6.1)
+- Ocean currents can yield up to $70M annual savings for the world fleet (Lo et al. 1991, cited p. 6) but many studies omit them
+- The paper calls for standardized benchmarking: "the weather routing community could benefit by a standardization of what constitutes a saving" (p. 14)
+
+**Methodology:**
+Systematic literature survey with 10 taxonomy dimensions: optimization criterion, shipping sector, application area, solution approach, weather data, resolution, fuel efficiency modeling, emissions, fleet size, and publication type. Scopus search: 545 papers → 280 journal papers → 40 detailed taxonomy entries. Classification tables 5a–5h.
+
+**Relevance to Thesis:**
+LP-based speed optimization is absent from the weather routing taxonomy, validating the novelty of our LP vs DP comparison on the same route. Rolling horizon/MPC is identified as a gap, not an established method — directly supporting Contribution 3. The call for standardized reporting and benchmarking aligns with our approach of comparing LP, DP, and RH on identical data. The omission of ocean currents in most models supports our use of Yang et al.'s (2020) current-inclusive SOG model.
+
+**Quotable Claims:**
+- "In the majority of the papers reviewed in this survey, fuel consumption savings are typically reported to reach values between 3% and 5%." (p. 3)
+- "The main methods in optimizing a route given the environmental factors have not changed significantly throughout the years. The majority of research has used a combination of the modified isochrones method and dynamic programming." (p. 12)
+- "An important observation is that different studies tend to show a wide range of achieved savings when their suggested methodology is used. [...] Perhaps the weather routing community could benefit by a standardization of what constitutes a saving." (p. 14)
+
+**Limitations / Gaps:**
+- Survey scope — identifies gaps but does not fill them; no new optimization results
+- Does not analyze how simulation methodology (SOG-targeting vs fixed-SWS) affects method comparison
+- Rolling horizon identified as open direction but not developed or tested
+- No forecast error propagation analysis — notes forecast uncertainty as a concern but does not quantify it
+- Does not compare LP and DP on the same route/physics — the head-to-head comparison gap persists
+
+---
+
+### [Wang, S. & Meng, Q. (2012)] Sailing speed optimization for container ships in a liner shipping network
+
+- **Citation:** Wang, S., Meng, Q., 2012. *Sailing speed optimization for container ships in a liner shipping network*. Transportation Research Part E: Logistics and Transportation Review, 48(3), 701-714. https://doi.org/10.1016/j.tre.2011.12.003
+- **PDF:** `context/literature/pdfs/Wang2012_LinerSpeedOptimization.pdf`
+- **Tags:** `LP-based`, `speed-optimization`, `liner-shipping`, `slow-steaming`
+
+**Summary:**
+Calibrates the bunker consumption function $Q = a \cdot v^b$ using real operating data from a global liner company, finding the exponent $b$ ranges from 2.709 to 3.314 across five voyage legs — confirming the cubic approximation is reasonable but leg-dependent. Formulates sailing speed optimization for a liner network as MINLP, then reformulates via reciprocal-speed substitution ($u = 1/v$) to obtain a convex objective, solved by an outer-approximation algorithm with provable $\epsilon$-optimality bounds using CPLEX 12.1.
+
+**Key Findings:**
+- Speed-power exponent calibrated from real data varies by leg: $b$ = 2.709–3.314, confirming cubic is approximate but not universal
+- The bunker function is leg-dependent (different sea conditions produce different coefficients), contradicting the common single-curve assumption
+- Outer-approximation with fewer than 10 linear pieces per leg achieves optimality gaps consistently below 0.1%
+- Higher bunker prices ($300–$1000/ton) drive fleet size up from 29 to 32 ships and speeds down
+- Optimal speeds vary by leg (20–26 kn on the same route) based on sensitivity of the bunker function
+- Solved in under 0.2 seconds for all scenarios (46 ports, 11 routes, 87 legs, 652 O-D pairs)
+
+**Methodology:**
+MINLP formulation [P1] for liner shipping network with joint speed, fleet deployment, and container routing optimization. Reformulated by substituting $u = 1/v$ to make constraints linear and objective convex. Adaptive piecewise-linear outer-approximation yields MILP [P4] solved by CPLEX 12.1. Case study: global liner company data, 46 ports, 11 routes, 87 voyage legs, 652 O-D pairs.
+
+**Relevance to Thesis:**
+The empirical calibration showing $b$ = 2.709–3.314 across different legs directly supports our use of per-segment weather conditions rather than a global cubic constant. The outer-approximation of convex fuel functions is conceptually related to our SOS2 piecewise-linear approach in the LP optimizer. However, like all network-level LP approaches, weather conditions enter only through the calibrated coefficients — there is no time-varying weather, no plan-vs-actual simulation, and no distinction between SWS and SOG.
+
+**Quotable Claims:**
+- Bunker consumption exponent varies from 2.709 to 3.314 across five voyage legs using real operating data
+- Outer-approximation algorithm achieves optimality gaps below 0.1% with fewer than 10 linear pieces per leg
+- Solved in under 0.2 seconds for a 46-port, 11-route, 87-leg liner network
+
+**Limitations / Gaps:**
+- Calm-water assumption — speed equals SOG by construction, no environmental effects modeled dynamically
+- No weather uncertainty or forecast error — purely deterministic optimization
+- Leg-dependent bunker functions are calibrated offline, not from real-time weather data
+- No plan-vs-actual simulation — planned fuel IS realized fuel under deterministic assumption
+- No DP or rolling horizon comparison
+- Liner shipping context (fixed schedules, fleet coupling) differs from tramp/tanker operations in the thesis
+
+---
+
+### [Ronen, D. (2011)] The effect of oil price on containership speed and fleet size
+
+- **Citation:** Ronen, D., 2011. *The effect of oil price on containership speed and fleet size*. Journal of the Operational Research Society, 62, 211-216. https://doi.org/10.1057/jors.2009.174
+- **PDF:** `context/literature/pdfs/Ronen2011_OilPriceContainership.pdf`
+- **Tags:** `speed-optimization`, `slow-steaming`, `LP-based`
+
+**Summary:**
+Analyzes the economic relationship between bunker fuel price and optimal containership speed, demonstrating that as fuel prices rise, optimal speed decreases and fleet size must increase to maintain service frequency. Uses a closed-form analytical model based on cubic fuel consumption ($F_i = F_0 \cdot (V_i / V_0)^3$, Eq. 8, p. 213) to derive optimal speed as a function of fuel and time costs for three containership classes across fuel price scenarios from $104 to $500/tonne.
+
+**Key Findings:**
+- Reducing cruising speed by 20% reduces daily bunker consumption by ~50%, following from the cubic law: $(0.8)^3 = 0.512$ (p. 211)
+- Optimal speed decreases as bunker price increases: for a 2,000-TEU vessel, from 16.8 kn at $104/ton to 8.5 kn at $500/ton (p. 214, Table 1)
+- Fleet size must increase to compensate: from 5 vessels at $104/ton to 9 vessels at $500/ton for the same route (p. 214)
+- Cost is relatively flat near the optimum but increases steeply above it — knowing the minimum-cost speed matters more than exact optimization (p. 214)
+- Almost 50% of liner vessels arrive late, and reduced-speed operation provides catch-up flexibility (p. 215)
+
+**Methodology:**
+Prescriptive cost-optimization model for a single liner service loop. Total daily cost = bunker cost + vessel cost (Eq. 10, p. 213). Bunker cost proportional to $V^2$ (daily fuel $\propto V^3$, divided by distance-time). 5-step enumeration algorithm iterates over integer fleet sizes $N$, computing speed $V_i = D/(168N - P)$ and total cost at each. Three numerical examples: 2,000-TEU (Ting & Tzeng 2003), 4,000-TEU PANAMAX and 10,000-TEU Post-PANAMAX (Notteboom 2006). Fuel prices varied from $104–$500/ton.
+
+**Relevance to Thesis:**
+Foundational reference for the economics of speed optimization under cubic FCR. Ronen's model is the single-segment, calm-water solution that LP approaches generalize to multiple segments. The paper's assumption that fuel ~ speed^3 and that speed is a single scalar per voyage segment is precisely the simplification that Jensen's inequality challenges when weather varies within segments. Ronen's model is the economic justification for why ships slow steam; our thesis shows that the realized fuel savings from slow steaming depend on whether the optimizer accounts for weather-induced SWS variation.
+
+**Quotable Claims:**
+- "A large ship may be burning up to 100 000 USD of bunker fuel per day, which may constitute more than 75% of its operating costs. Reducing the cruising speed by 20% reduces daily bunker consumption by 50%." (p. 211)
+- "For a given bunker fuel price the average total daily cost is relatively flat around its minimal value but increases steeply as the sailing speed is increased." (p. 214)
+- "Almost 50% of liner vessels arrive late (Notteboom and Rodrigue, 2008), and steaming at reduced speed provides them the option to catch-up." (p. 215)
+
+**Limitations / Gaps:**
+- Single scalar speed per voyage — no segment-level or node-level variation
+- Calm-water assumption — speed equals SOG, no environmental effects
+- No weather uncertainty, forecast error, or rolling horizon
+- No distinction between SWS and SOG
+- Analytical model only — no simulation of plan execution under real conditions
+- Containership focus — parameters differ from tanker operations in the thesis
