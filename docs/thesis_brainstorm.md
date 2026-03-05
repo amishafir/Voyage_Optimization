@@ -540,3 +540,36 @@ Two harsh-weather routes are collecting data on the TAU server, designed to test
 - Shlomo2 copies: 31 hours each (started later)
 
 **Thesis relevance:** The NWP cycle analysis (Section 6b) isn't just an academic finding — it directly solved an engineering constraint. The 86% redundancy finding drove the 6h sampling decision, and the bulk API refactor transforms collection from quota-limited to practically unlimited. This is a clean example of how understanding the data source (NWP model cycles) informs both the optimization algorithm (6h replan frequency) and the data collection infrastructure.
+
+### 2026-03-05 — Paper-writing infrastructure + server recovery
+
+**Server reboot recovery:** Both Shlomo1 and Shlomo2 rebooted (cause unknown). All 6 tmux sessions lost. Discovered system Python 3.7 lacks `openmeteo_requests` — switched to `~/miniconda3/bin/python3` for all restarts. All 6 collection processes restored. Data intact: exp_b 166h (complete), exp_d 86h (53%), exp_c 103h (25%).
+
+**Paper infrastructure created — targeting Transportation Research Part C (exp_b + exp_d):**
+
+Directory: `paper/` with `sections/`, `tables/`, `bibliography/`
+
+Core documents:
+- `paper/paper_outline.md` — 9-section outline, 8,000–10,000 words, 6 contributions mapped to sections, 11 tables, 5 figures
+- `paper/style_guide.md` — TR-C conventions, notation, voice, terminology
+
+Skills (quick-reference, invoked with `/`):
+| Skill | Purpose |
+|-------|---------|
+| `paper-outline` | Section targets, contribution mapping, word counts |
+| `paper-style` | Notation, voice, terminology, formatting |
+| `paper-results` | All quantitative results (exp_b complete, exp_d placeholder) |
+| `paper-equations` | 17 numbered equations with LaTeX |
+
+Agents (autonomous writers/reviewers):
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| `section-writer` | opus | Write/revise a single section |
+| `paper-reviewer` | opus | Review with CRITICAL/MAJOR/MINOR severity |
+| `table-builder` | sonnet | Generate 11 tables (markdown + LaTeX) |
+| `bib-builder` | sonnet | Build references.bib from pillar files |
+| `paper-assembler` | sonnet | Concatenate sections, resolve placeholders, word count |
+
+Writing workflow: outline → sections (intro first) → tables → bibliography → review → assembly.
+
+**FIRST TASK FOR TOMORROW (Mar 6):** Start writing the paper — begin with `01_introduction` using the `section-writer` agent. The introduction establishes all 6 gaps and states the numbered contributions, so it anchors the rest of the paper.
