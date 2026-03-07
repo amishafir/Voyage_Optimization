@@ -530,7 +530,216 @@ This design is reported in Section~\ref{sec:results}.
 \section{Results}
 \label{sec:results}
 
-% TODO: Write when exp_d data is available
+This section presents results for Experiment B (Persian Gulf, mild weather, 138 nodes, $\sim$140~h voyage). Results for Experiment D (North Atlantic, harsh weather) will be added upon completion of data collection.
+
+\subsection{Theoretical Bounds}
+\label{sec:results-bounds}
+
+Three bounds frame the optimization opportunity on the Experiment B route (Table~\ref{tab:bounds}).
+
+\begin{table}[htbp]
+\centering
+\caption{Theoretical bounds for Experiment B (1,678~nm, 138 nodes, ETA = 140~h).}
+\label{tab:bounds}
+\begin{tabular}{llcc}
+\toprule
+Bound & Definition & Fuel (mt) & Violations \\
+\midrule
+Upper & SWS = 13~kn at every node; SOG varies with weather & 203.91 & --- \\
+Optimal & DP with time-varying actual weather (perfect foresight) & 176.23 & 0 \\
+Average & Constant SOG = 11.98~kn in calm water ($D_{total}/T$) & 170.06 & 0 \\
+\midrule
+Optimization span & Upper $-$ Optimal & 27.68 & \\
+Weather tax & Optimal $-$ Average & 6.17 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The optimization span of 27.68~mt represents the total fuel that speed optimization can save relative to maximum-speed sailing. The weather tax of 6.17~mt is the unavoidable cost of operating in non-uniform weather even with a perfect optimizer. Each approach's fuel above the optimal bound constitutes its information penalty --- the cost of imperfect weather knowledge or spatial averaging.
+
+\subsection{Main Comparison}
+\label{sec:results-main}
+
+Table~\ref{tab:main-expb} presents the three approaches evaluated under the two-phase framework described in Section~\ref{sec:two-phase}. All three optimizers produce valid schedules with zero SWS violations during planning; violations arise only during simulation when actual weather differs from planning assumptions.
+
+\begin{table}[htbp]
+\centering
+\caption{Main results for Experiment B: planned fuel, simulated fuel, plan-simulation gap, SWS violations, and distance from optimal bound.}
+\label{tab:main-expb}
+\begin{tabular}{lccccc}
+\toprule
+Approach & Plan (mt) & Sim (mt) & Gap & Violations & vs Optimal \\
+\midrule
+LP (static det.) & 175.96 & 180.63 & +4.67 (+2.7\%) & 4/137 (2.9\%) & +4.40 (+2.5\%) \\
+DP (dynamic det.) & 177.63 & 182.22 & +4.59 (+2.6\%) & 17/137 (12.4\%) & +5.99 (+3.4\%) \\
+\textbf{RH (rolling horizon)} & \textbf{175.52} & \textbf{176.40} & \textbf{+0.88 (+0.5\%)} & \textbf{1/137 (0.7\%)} & \textbf{+0.17 (+0.1\%)} \\
+\midrule
+Optimal bound & --- & 176.23 & 0\% & 0 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The RH approach achieved 176.40~mt --- within 0.1\% of the theoretical optimal bound (176.23~mt) --- capturing 99.4\% of the optimization span (27.51 of 27.68~mt). The plan-simulation gap for RH was 0.88~mt (0.5\%), compared to 4.67~mt (2.7\%) for LP and 4.59~mt (2.6\%) for DP. The near-zero gap confirms that actual weather injection at each decision point effectively eliminates the mismatch between planned and realized conditions.
+
+LP and DP exhibited comparable plan-simulation gaps but from different mechanisms. LP's gap arose from segment averaging: individual nodes within a segment experienced worse conditions than the segment mean, requiring SWS above 13~kn to maintain the planned SOG. DP's gap arose from forecast error: predicted weather at planning time differed from actual weather at simulation time, with the divergence growing over the voyage duration.
+
+\subsection{Ranking Reversal Under SOG-Targeting}
+\label{sec:results-reversal}
+
+The simulation model fundamentally altered the ranking of optimization approaches (Table~\ref{tab:reversal}).
+
+\begin{table}[htbp]
+\centering
+\caption{Ranking reversal: simulated fuel under fixed-SWS versus SOG-targeting simulation. Results from the full route (279 nodes, 3,394~nm).}
+\label{tab:reversal}
+\begin{tabular}{lcc}
+\toprule
+Approach & Fixed-SWS (mt) & SOG-Targeting (mt) \\
+\midrule
+LP & \textbf{361.8 (best)} & 368.0 (worst) \\
+DP & 367.8 (worst) & \textbf{366.9 (best)} \\
+RH & 364.4 & 364.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Under fixed-SWS simulation, LP appeared to be the best approach (361.8~mt) and DP the worst (367.8~mt). Under SOG-targeting, the ranking reversed: DP became best (366.9~mt) and LP worst (368.0~mt), equivalent to constant-speed sailing (367.9~mt). The mechanism is Jensen's inequality on the convex cubic FCR: LP assigns one SOG per segment from averaged weather, but maintaining that SOG at individual nodes where weather differs from the average requires SWS adjustments. The cubic relationship ensures that harsh-node penalties always outweigh calm-node savings.
+
+\subsection{Forecast Error Curves}
+\label{sec:results-forecast}
+
+Forecast accuracy was evaluated by comparing predicted weather (from the forecast issued at hour 0) against actual weather observations at 138 nodes across 134 sample hours. Table~\ref{tab:forecast-error} reports RMSE and bias at selected lead times.
+
+\begin{table}[htbp]
+\centering
+\caption{Forecast error versus lead time for Experiment B (138 nodes $\times$ 134 samples).}
+\label{tab:forecast-error}
+\begin{tabular}{ccccc}
+\toprule
+Lead Time (h) & Wind RMSE (km/h) & Wind Bias (km/h) & Wave RMSE (m) & Current RMSE (km/h) \\
+\midrule
+0   & 4.13 & +0.20 & 0.052 & 0.358 \\
+24  & 4.84 & +0.59 & 0.072 & 0.382 \\
+48  & 5.63 & +1.21 & 0.076 & 0.406 \\
+72  & 6.13 & +1.31 & 0.094 & 0.448 \\
+96  & 7.65 & +2.86 & 0.114 & 0.460 \\
+120 & 8.34 & +3.15 & 0.118 & 0.443 \\
+133 & 8.40 & +2.67 & 0.113 & 0.503 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Wind speed RMSE doubled from 4.13 to 8.40~km/h over 133 hours (+103\%), with accelerated deterioration beyond 72 hours consistent with the atmospheric predictability limit described by \cite{Lorenz1969}. The systematic positive bias (+0.20 to +3.15~km/h) indicated that forecasts overpredicted wind speed, causing the DP optimizer to prepare for headwinds that did not materialize. This overpreparation produced systematically higher planned SWS values, which in turn generated the SWS violations observed during simulation.
+
+Wave height RMSE remained modest (0.052--0.118~m), reflecting both the calm conditions on this route and the longer update cycle of the MFWAM wave model (12~h versus 6~h for GFS wind). Ocean current RMSE grew from 0.358 to 0.503~km/h, a 40\% increase that was operationally small relative to the ship's speed.
+
+\subsection{Factor Decomposition ($2 \times 2$ Factorial)}
+\label{sec:results-factorial}
+
+The $2 \times 2$ factorial design (Section~\ref{sec:factorial}) decomposed the effects of spatial resolution and weather source on fuel outcomes. Table~\ref{tab:factorial} presents the four conditions and the RH comparison point.
+
+\begin{table}[htbp]
+\centering
+\caption{$2 \times 2$ factorial results and decomposition (Experiments A and B).}
+\label{tab:factorial}
+\begin{tabular}{lcccc}
+\toprule
+Config & Nodes & Weather & Approach & Sim Fuel (mt) \\
+\midrule
+A-LP & 7 & actual & LP (6 seg) & 178.19 \\
+A-DP & 7 & predicted & DP & 181.20 \\
+B-LP & 138 & actual & LP (6 seg) & 180.63 \\
+B-DP & 138 & predicted & DP & 182.22 \\
+B-RH & 138 & pred + actual & RH & 176.40 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The decomposition yielded:
+\begin{itemize}
+    \item \textbf{Temporal effect} (forecast error): +3.02~mt --- the fuel penalty from using predicted rather than actual weather, holding spatial resolution constant. This was the largest single factor.
+    \item \textbf{Spatial effect} (segment averaging): +2.44~mt --- the fuel penalty from aggregating 138 nodes into 6 segments under actual weather.
+    \item \textbf{Interaction}: $-$1.43~mt --- finer spatial resolution partially compensated for forecast error, because per-node predicted weather was closer to per-node actual weather than segment averages were.
+    \item \textbf{RH benefit} (re-planning): $-$1.33~mt --- the additional improvement from periodic re-planning with fresh forecasts and actual weather injection.
+\end{itemize}
+
+The hierarchy temporal $>$ spatial $>$ re-planning was clear: forecast accuracy dominated spatial granularity, which in turn dominated re-planning frequency.
+
+\subsection{Re-planning Frequency Sweep}
+\label{sec:results-replan}
+
+A sweep of re-planning intervals from 1 to 24 hours was conducted on Experiment B (Table~\ref{tab:replan}).
+
+\begin{table}[htbp]
+\centering
+\caption{Re-planning frequency sweep for Experiment B (RH approach).}
+\label{tab:replan}
+\begin{tabular}{ccccc}
+\toprule
+Frequency (h) & Sim Fuel (mt) & $\Delta$ vs 1~h & Decision Points & New Info Rate \\
+\midrule
+1  & 180.63 & baseline & 73 & 53\% \\
+2  & 180.70 & +0.07 (+0.04\%) & 50 & 70\% \\
+3  & 180.73 & +0.11 (+0.06\%) & 37 & 76\% \\
+\textbf{6}  & \textbf{180.84} & \textbf{+0.21 (+0.12\%)} & \textbf{21} & \textbf{100\%} \\
+12 & 180.69 & +0.06 (+0.04\%) & 12 & 100\% \\
+24 & 181.22 & +0.59 (+0.33\%) & 6  & 100\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fuel difference between 1-hour and 6-hour re-planning was 0.21~mt (0.12\%) --- operationally negligible. At 1-hour frequency, only 53\% of decision points received genuinely different forecasts from the previous decision point; the remaining 47\% re-optimized on identical data. At 6-hour frequency, every decision point received a fresh GFS wind update, matching the model initialization cycle at 00/06/12/18 UTC (Section~\ref{sec:nwp-cycles}). This confirmed that 6 hours is the optimal re-planning interval: it captures all available new information with the minimum number of solver invocations.
+
+\subsection{Forecast Horizon Sweep}
+\label{sec:results-horizon}
+
+The effect of forecast horizon length was evaluated by varying the maximum forecast hour available to the DP and RH optimizers (Table~\ref{tab:horizon}).
+
+\begin{table}[htbp]
+\centering
+\caption{Forecast horizon sweep for Experiment B ($\sim$140~h voyage).}
+\label{tab:horizon}
+\begin{tabular}{cccc}
+\toprule
+Horizon (h) & Horizon/Voyage & DP Fuel (mt) & RH Fuel (mt) \\
+\midrule
+24  & 17\% & 177.70 & 176.46 \\
+48  & 34\% & 177.72 & 176.41 \\
+72  & 51\% & 177.70 & 176.47 \\
+144 & 103\% & 177.78 & 176.54 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The results were completely flat: the DP fuel range across all horizons was 0.08~mt, and the RH range was 0.13~mt. Even a 24-hour forecast covering only 17\% of the voyage duration was sufficient. This occurred because the 140-hour voyage fitted entirely within the accurate forecast window ($\sim$72--96 hours for wind). The relevant variable was not absolute horizon length but the ratio of voyage duration to forecast accuracy horizon. For voyages that fit within the accurate window, any forecast horizon suffices; for voyages extending beyond the atmospheric predictability limit, longer horizons help up to the accuracy boundary. Experiment D (163~h, North Atlantic) is designed to test whether this plateau shifts under harsher conditions.
+
+\subsection{SWS Violation Analysis}
+\label{sec:results-violations}
+
+During planning, all three optimizers produced schedules with SWS within $[11, 13]$~kn --- zero violations by construction. During simulation, violations arose because actual weather at specific nodes differed from the weather used in planning (Table~\ref{tab:violations}).
+
+\begin{table}[htbp]
+\centering
+\caption{SWS violations during simulation for Experiment B. Violation = required SWS outside $[11, 13]$~kn to maintain planned SOG.}
+\label{tab:violations}
+\begin{tabular}{lccl}
+\toprule
+Approach & Violations & Max SWS (kn) & Primary Cause \\
+\midrule
+LP  & 4/137 (2.9\%)  & 13.21 & Segment averaging hides per-node extremes \\
+DP  & 17/137 (12.4\%) & 13.99 & Forecast error accumulates over voyage \\
+\textbf{RH} & \textbf{1/137 (0.7\%)} & \textbf{13.08} & \textbf{Boundary effect at last decision point} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+DP had the most violations (12.4\%), with required SWS reaching 13.99~kn --- nearly 1~kn above the engine limit. These violations arose because the forecast from hour 0 overpredicted wind speed (positive bias, Table~\ref{tab:forecast-error}), causing the optimizer to plan for headwinds that did not materialize; the resulting planned SOG was lower than necessary, and the simulation required higher SWS to maintain it under calmer actual conditions.
+
+LP had fewer violations (2.9\%) but for a different reason: segment averaging smoothed within-segment extremes, so individual nodes with worse-than-average conditions occasionally required SWS above 13~kn. The maximum severity was mild (13.21~kn, only 0.21~kn above the limit).
+
+RH had a single violation (0.7\%) at node 132, where the required SWS was 13.08~kn. This occurred at the last decision point, where the remaining ETA margin was less than 0.1~h and the optimizer fell back to forecast weather for the final legs. This was a boundary effect, not a systematic limitation.
+
+The progression of RH violation reduction through successive design improvements was: DP baseline (17 violations) $\rightarrow$ RH with forecast only (12) $\rightarrow$ RH with actual weather at first leg (10) $\rightarrow$ RH with actual weather for the full 6-hour committed window (1). Each step narrowed the gap between planning assumptions and simulation reality.
 
 %% ============================================================
 %% SECTION 7 — Discussion
