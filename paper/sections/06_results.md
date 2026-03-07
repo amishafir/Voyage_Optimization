@@ -23,40 +23,12 @@
 <!-- Fixed-SWS vs SOG-target: LP goes from best to worst -->
 <!-- TABLE: ranking reversal — see tables/T08_ranking_reversal.md -->
 
-## 6.4 Forecast Error Curves
-
-<!-- Wind RMSE doubles over 133h (4.13 -> 8.40 km/h) -->
-<!-- Systematic positive bias (+0.20 to +2.67 km/h) -->
-<!-- TABLE: forecast error vs lead time — see tables/T09_forecast_error.md -->
-<!-- FIGURE: RMSE vs lead time — see figures/F02_rmse_curves -->
-
-## 6.5 Factor Decomposition (2x2 Factorial)
-
-<!-- Temporal effect: +3.02 kg (largest) -->
-<!-- Spatial effect: +2.44 kg -->
-<!-- Interaction: -1.43 kg -->
-<!-- RH benefit: -1.33 kg -->
-<!-- TABLE: decomposition — see tables/T10_factorial.md -->
-
-## 6.6 Replan Frequency Sweep
-
-<!-- 1h to 24h: 0.12% fuel difference -->
-<!-- At 1h: 53% get new data; at 6h: 100% get new data -->
-<!-- 6h = GFS cycle alignment -->
-<!-- TABLE: replan sweep — see tables/T11_replan_sweep.md -->
-
-## 6.7 Forecast Horizon Sweep
-
-<!-- Short route (exp_b): flat from 24h — 0.08 kg DP range -->
-<!-- Long route / exp_d: PLACEHOLDER -->
-<!-- FIGURE: horizon sweep — see figures/F04_horizon_sweep -->
-
-## 6.8 SWS Violation Analysis
+## 6.4 SWS Violation Analysis
 
 <!-- LP: 4/137 (2.9%), DP: 17/137 (12.4%), RH: 1/137 (0.7%) -->
 <!-- Geographic clustering, severity distribution -->
 
-## 6.9 Generalizability Across Routes
+## 6.5 Generalizability Across Routes
 
 <!-- TABLE: findings that hold across both routes — see tables/T12_generalizability.md -->
 

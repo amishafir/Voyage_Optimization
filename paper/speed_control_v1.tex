@@ -17,10 +17,10 @@
 
 \begin{frontmatter}
 
-\title{Speed Over Ground Targeting Reveals the True Value of Dynamic Voyage Optimization: Comparing LP, DP, and Rolling Horizon Under Real Weather Forecasts}
+\title{Maritime Speed Optimization Under Weather Uncertainty}
 
-\author[tau]{First Author}
-\author[tau]{Second Author}
+\author[tau]{Ami Shafir}
+\author[tau]{Tal Raviv}
 \address[tau]{Faculty of Engineering, Tel Aviv University, Tel Aviv, Israel}
 
 \begin{abstract}
@@ -81,11 +81,11 @@ The reduction of greenhouse gas (GHG) emissions from international shipping has 
 
 In the operations research (OR) literature, ship speed optimization is formulated as a deterministic shortest-path or resource-constrained optimization problem. When the voyage route is fixed and weather conditions are treated as static per segment, the problem reduces to selecting a speed $V_{s,i}$ for each segment $i$ that minimizes total fuel subject to an arrival-time constraint. This structure admits two canonical solution paradigms: linear programming (LP) on continuous speed variables, and dynamic programming (DP) on a discretized time-distance graph. LP formulations are polynomial in the number of segments and speed discretization points; DP formulations are pseudo-polynomial in the time discretization, but both yield provably optimal solutions for their respective problem representations.
 
-\cite{Psaraftis2013} surveyed over 40 speed models and classified them along 13 taxonomy parameters, establishing that the cubic fuel consumption function ($FCR \propto V_s^3$; Eq.~\ref{eq:fcr}) is standard for tankers and bulk carriers. The survey documented ``the scarcity of `dynamic' speed models'' and found zero papers employing rolling horizon or model predictive control for speed optimization. \cite{Ronen2011} formalized the economic rationale: a 20\% speed reduction yields approximately 50\% bunker savings, following directly from the cubic relationship ($(0.8)^3 = 0.512$). \cite{Wang2012} calibrated the speed-power exponent from operational data on a global liner network, finding values of 2.709--3.314 across five voyage legs --- confirming that the cubic approximation is reasonable but leg-dependent. The outer-approximation algorithm developed therein achieved optimality gaps below 0.1\% in under 0.2 seconds for an 87-leg network.
+\cite{Psaraftis2013} surveyed over 40 speed models and classified them along 13 taxonomy parameters, establishing that the cubic fuel consumption function ($FCR \propto V_s^3$) is standard for tankers and bulk carriers. The survey documented ``the scarcity of `dynamic' speed models'' and found zero papers employing rolling horizon or model predictive control for speed optimization. \cite{Ronen2011} formalized the economic rationale: a 20\% speed reduction yields approximately 50\% bunker savings, following directly from the cubic relationship ($(0.8)^3 = 0.512$). \cite{Wang2012} calibrated the speed-power exponent from operational data on a global liner network, finding values of 2.709--3.314 across five voyage legs --- confirming that the cubic approximation is reasonable but leg-dependent. The outer-approximation algorithm developed therein achieved optimality gaps below 0.1\% in under 0.2 seconds for an 87-leg network.
 
 On the LP side, \cite{Bektas2011} introduced the Pollution-Routing Problem, where fuel consumption per unit time is cubic in speed and the resulting objective function is convex. Speed is a continuous decision variable per arc, solved via mixed-integer linear programming. \cite{Norstad2011} extended this to tramp ship routing and scheduling, introducing a recursive smoothing algorithm (RSA) that exploits convexity to equalize speeds across legs. The RSA's optimality was formally proven by \cite{Hvattum2013}, who showed that constant speed over unconstrained port sequences is optimal when the fuel cost function is convex and non-decreasing --- a direct consequence of Jensen's inequality (Eq.~\ref{eq:jensen}). \cite{Fagerholt2010} demonstrated the computational advantage of the alternative DP formulation: a directed acyclic graph (DAG) with discretized arrival times solves the same problem in approximately 2~ms versus 430~ms for nonlinear programming, with only 0.04\% optimality gap. Per-leg speed optimization achieved 24.3\% fuel savings compared to 19.4\% from uniform speed reduction --- the additional 5 percentage points arising precisely from the convexity-driven speed equalization.
 
-On the DP side, \cite{Zaccone2018} developed a three-dimensional Bellman-Ford optimizer on a discretized space-time grid, using NOAA WaveWatch III forecast maps as input. The ship model decomposes resistance into still-water, wave-added, and wind components (analogous to Eqs.~\ref{eq:cbeta}--\ref{eq:cform}) and evaluates fuel via a full propulsion chain including propeller diagrams and engine maps. The resulting Pareto frontier of fuel versus arrival time allows operators to quantify the fuel cost of each hour of schedule deviation. However, the optimization was performed once at departure using a single 162-hour forecast and was never re-planned --- a limitation the authors explicitly acknowledged: ``this advantage over heuristic global search algorithms is partially limited by the fact that input data is affected by significant uncertainties.''
+On the DP side, \cite{Zaccone2018} developed a three-dimensional Bellman-Ford optimizer on a discretized space-time grid, using NOAA WaveWatch III forecast maps as input. The ship model decomposes resistance into still-water, wave-added, and wind components (analogous to the coefficient model in \cite{Yang2020}) and evaluates fuel via a full propulsion chain including propeller diagrams and engine maps. The resulting Pareto frontier of fuel versus arrival time allows operators to quantify the fuel cost of each hour of schedule deviation. However, the optimization was performed once at departure using a single 162-hour forecast and was never re-planned --- a limitation the authors explicitly acknowledged: ``this advantage over heuristic global search algorithms is partially limited by the fact that input data is affected by significant uncertainties.''
 
 The most comprehensive taxonomy of weather routing methods is provided by \cite{Zis2020}, who surveyed 280 journal papers and classified 40 in detail across 10 dimensions. The survey identified four dominant solution families --- modified isochrone, dynamic programming, pathfinding/genetic algorithms, and AI/ML --- but LP did not appear as a solution approach in any of the taxonomized papers. Rolling horizon was identified only as a future research direction. The survey also called for standardized benchmarking: ``the weather routing community could benefit by a standardization of what constitutes a saving.''
 
@@ -94,22 +94,22 @@ Despite this extensive body of work, a systematic gap persists: no study has com
 \subsection{Fuel Consumption Convexity and Jensen's Inequality}
 \label{sec:lit-convexity}
 
-The mathematical foundation of ship speed optimization rests on the relationship between speed and fuel consumption. From first principles, the power required to propel a displacement vessel at speed $V_s$ through water is $P = \frac{1}{2} \rho C_T V_s^3 S$, where $\rho$ is water density, $C_T$ is the total resistance coefficient, and $S$ is wetted surface area \cite{Psaraftis2023}. For a fixed-pitch propeller operating at constant specific fuel oil consumption (SFOC), fuel consumption rate is therefore approximately cubic in speed: $FCR = \alpha V_s^3$ (Eq.~\ref{eq:fcr}). This cubic relationship --- and its convexity --- is the physical mechanism underlying the central contribution of the present study.
+The mathematical foundation of ship speed optimization rests on the relationship between speed and fuel consumption. From first principles, the power required to propel a displacement vessel at speed $V_s$ through water is $P = \frac{1}{2} \rho C_T V_s^3 S$, where $\rho$ is water density, $C_T$ is the total resistance coefficient, and $S$ is wetted surface area \cite{Psaraftis2023}. For a fixed-pitch propeller operating at constant specific fuel oil consumption (SFOC), fuel consumption rate is therefore approximately cubic in speed: $FCR = \alpha V_s^3$. This cubic relationship --- and its convexity --- is the physical mechanism underlying the central contribution of the present study.
 
 The resistance itself is not a single term. \cite{Holtrop1982} introduced a seven-component decomposition --- frictional (with form factor), appendages, wave-making, bulbous bow pressure, transom pressure, and model-ship correlation --- calibrated on over 200 hull shapes from the MARIN database. A subsequent re-analysis using 334 model tests \cite{Holtrop1984} refined the coefficients and introduced explicit Froude number regime boundaries, confirming the method's accuracy for low-speed displacement vessels ($F_n < 0.4$) such as the tanker considered in the present study ($F_n \approx 0.13$--$0.15$). These calm-water resistance methods provide the baseline upon which environmental corrections are applied.
 
 Whether the cubic approximation holds under real operating conditions has been debated. \cite{Psaraftis2023} reviewed recent regression analyses of operational data that report speed-power exponents well below 3 --- in some cases below 2 or even below 1 --- and identified these as statistical artifacts: confounding variables such as draft, hull fouling, and weather contaminate the regressions, biasing the exponent downward. When confounders are controlled, ``the exponent cannot be less than 3 comes from basic hydrodynamic principles.'' \cite{Wang2012} calibrated exponents from operational data on five voyage legs, finding $b = 2.709$--$3.314$, consistent with the cubic approximation being reasonable but route-dependent. \cite{Taskar2020} used detailed ship performance modeling across six vessel types and found speed exponents ranging from 3.3 to 4.2, with the cubic assumption causing up to 15\% error in estimated fuel savings at 30\% speed reduction. The conclusion across these studies is that the exponent is at least 3 and often higher --- the cubic model is conservative.
 
-The convexity of $FCR(V_s)$ has a direct consequence through Jensen's inequality (Eq.~\ref{eq:jensen}): for any convex function $f$, the expectation $E[f(X)] \geq f(E[X])$. Applied to fuel consumption, this means that if a ship's actual SWS varies around a mean (as it must when targeting a fixed SOG through spatially varying weather), the realized fuel consumption exceeds the fuel computed at the mean SWS. This inequality is well known in optimization theory and has been exploited constructively: \cite{Norstad2011} and \cite{Hvattum2013} proved that equalizing speeds across unconstrained legs minimizes total fuel precisely because the cost function is convex. \cite{Fagerholt2010} demonstrated that per-leg speed optimization achieves 5 percentage points more savings than uniform speed reduction, the difference arising from convexity-driven equalization.
+The convexity of $FCR(V_s)$ has a direct consequence through Jensen's inequality: for any convex function $f$, the expectation $E[f(X)] \geq f(E[X])$. Applied to fuel consumption, this means that if a ship's actual SWS varies around a mean (as it must when targeting a fixed SOG through spatially varying weather), the realized fuel consumption exceeds the fuel computed at the mean SWS. This inequality is well known in optimization theory and has been exploited constructively: \cite{Norstad2011} and \cite{Hvattum2013} proved that equalizing speeds across unconstrained legs minimizes total fuel precisely because the cost function is convex. \cite{Fagerholt2010} demonstrated that per-leg speed optimization achieves 5 percentage points more savings than uniform speed reduction, the difference arising from convexity-driven equalization.
 
 However, the same convexity that makes speed equalization optimal for planning creates a systematic bias in plan evaluation. An LP optimizer that assigns a single speed per segment implicitly assumes constant SWS across all nodes within that segment. If the segment is simulated under SOG-targeting --- where the ship adjusts SWS at each node to achieve the planned SOG given local weather --- the resulting SWS varies, and Jensen's inequality guarantees the actual fuel exceeds the LP estimate. This connection between FCR convexity and the plan-simulation gap under SOG-targeting has not been identified in the prior literature. \cite{Tezdogan2015} showed that added wave resistance can reach 15--30\% of calm-water resistance, confirming that weather perturbations are large enough to generate meaningful SWS variation under SOG-targeting; \cite{Taskar2020} found that fuel savings from speed reduction are ``highly weather dependent'' and that the extra fuel from rough weather is ``nearly independent of ship speed.'' Yet neither study connects these findings to the averaging bias inherent in segment-level optimization.
 
 \subsection{SOG-Targeting versus Fixed-SWS Simulation}
 \label{sec:lit-sog}
 
-A fundamental distinction in ship speed optimization is between the speed the engine produces through the water (still water speed, SWS, $V_s$) and the speed at which the vessel advances over the seabed (speed over ground, SOG, $V_g$). The two differ by the cumulative effect of wind resistance, wave-added resistance, and ocean current projection (Eqs.~\ref{eq:cbeta}--\ref{eq:sog}). Despite this, the majority of the speed optimization literature treats ``ship speed'' as a single variable, implicitly equating SWS and SOG.
+A fundamental distinction in ship speed optimization is between the speed the engine produces through the water (still water speed, SWS, $V_s$) and the speed at which the vessel advances over the seabed (speed over ground, SOG, $V_g$). The two differ by the cumulative effect of wind resistance, wave-added resistance, and ocean current projection \cite{Yang2020}. Despite this, the majority of the speed optimization literature treats ``ship speed'' as a single variable, implicitly equating SWS and SOG.
 
-\cite{Yang2020} was the first to identify this conflation as a systematic error. The paper showed that ignoring ocean currents produces an average SOG estimation error of 4.75\% across 12 segments, reduced to 1.36\% when currents are incorporated. More fundamentally, it established the correct computational chain: the optimizer chooses SWS, fuel is consumed at a rate determined by SWS (Eq.~\ref{eq:fcr}), but sailing time depends on SOG --- which is SWS corrected for wind, waves, and currents. This distinction is quantitatively material: on the Persian Gulf to Strait of Malacca route, SWS and SOG differed by 0.5--1.5~kn per segment. However, \cite{Yang2020} treated weather as static per segment and computed fuel from a single optimization pass; no simulation of plan execution under different conditions was performed.
+\cite{Yang2020} was the first to identify this conflation as a systematic error. The paper showed that ignoring ocean currents produces an average SOG estimation error of 4.75\% across 12 segments, reduced to 1.36\% when currents are incorporated. More fundamentally, it established the correct computational chain: the optimizer chooses SWS, fuel is consumed at a rate determined by SWS, but sailing time depends on SOG --- which is SWS corrected for wind, waves, and currents. This distinction is quantitatively material: on the Persian Gulf to Strait of Malacca route, SWS and SOG differed by 0.5--1.5~kn per segment. However, \cite{Yang2020} treated weather as static per segment and computed fuel from a single optimization pass; no simulation of plan execution under different conditions was performed.
 
 The question of how an optimized speed plan should be evaluated --- what happens when the planned speeds encounter actual weather --- has received limited attention. Two paradigms exist. Under \emph{fixed-SWS simulation}, the ship maintains the planned engine setting regardless of weather; the realized SOG (and hence arrival time) becomes a random variable. Under \emph{SOG-targeting}, the ship adjusts its engine setting at each waypoint to achieve the planned SOG given local weather conditions; the arrival time is preserved but the realized SWS (and hence fuel) varies. The second paradigm reflects operational practice. \cite{Jia2017} demonstrated this empirically using AIS data from 5,066 VLCC voyages: when berth delays at destination ports are known in advance, converting excess port waiting time into slower sailing speeds yields 7--19\% fuel savings per voyage (77--226 tonnes of HFO). The ``Virtual Arrival'' policy studied therein is precisely SOG-targeting at the voyage level --- the ship adjusts speed to arrive just in time rather than steaming at full power and waiting at anchor. The average VLCC port call lasts 4.0 days against 22.7 days of sailing, meaning approximately 15\% of voyage time is unproductive waiting that could fund slower transit. Under current charterparty ``utmost dispatch'' clauses, however, most ships sail at maximum speed regardless of berth availability \cite{Cariou2011}, creating a ``sail-fast-then-wait'' pattern that wastes fuel and inflates emissions.
 
@@ -148,7 +148,7 @@ The gap in this literature is threefold. First, no maritime RH study connects th
 
 The literature reviewed above reveals a consistent pattern: each study addresses one dimension of the ship speed optimization problem in isolation. LP methods are evaluated without DP alternatives on the same instance; DP methods plan once without re-planning; forecast quality is characterized without measuring its impact on fuel estimation; and simulation universally assumes fixed SWS, never SOG-targeting. No existing paper covers more than two of the six dimensions simultaneously.
 
-The present study is positioned at the intersection of these gaps. It employs the same physics model (Eqs.~\ref{eq:froude}--\ref{eq:sog}), the same route, and the same weather data across all three optimization approaches (LP, DP, RH), enabling the first controlled comparison. The SOG-targeting simulation paradigm, combined with the cubic FCR convexity (Eqs.~\ref{eq:fcr},~\ref{eq:jensen}), reveals a plan-simulation gap that has been invisible to the prior literature. And the alignment of RH re-planning with NWP refresh cycles connects the forecast quality literature to operational speed optimization in a manner that has been called for \cite{Yang2020,Luo2023} but not previously implemented.
+The present study is positioned at the intersection of these gaps. It employs the same physics model \cite{Yang2020}, the same route, and the same weather data across all three optimization approaches (LP, DP, RH), enabling the first controlled comparison. The SOG-targeting simulation paradigm, combined with the cubic FCR convexity (Eq.~\ref{eq:jensen}), reveals a plan-simulation gap that has been invisible to the prior literature. And the alignment of RH re-planning with NWP refresh cycles connects the forecast quality literature to operational speed optimization in a manner that has been called for \cite{Yang2020,Luo2023} but not previously implemented.
 
 
 %% ============================================================
@@ -164,104 +164,65 @@ This section defines the ship, the route, the physics model linking engine speed
 
 The reference vessel is a medium-size oil products tanker with the parameters listed in Table~\ref{tab:ship}. The still water speed (SWS) range of 11--13~kn reflects the operational envelope under the EEXI engine power limitation. All three optimization approaches select speeds from this range.
 
-% TODO: Table~\ref{tab:ship} — ship parameters
+\begin{table}[htbp]
+\centering
+\caption{Reference vessel parameters.}
+\label{tab:ship}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Type & Oil products tanker \\
+Length ($L$) & 200 m \\
+Beam & 32 m \\
+Displacement ($\Delta$) & 50,000 tonnes \\
+Block coefficient ($C_b$) & 0.75 \\
+Installed power & 10,000 kW \\
+SWS range & 11--13 kn \\
+FCR coefficient & 0.000706 mt/h/kn$^3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Routes}
 \label{sec:routes}
 
 Two routes are used in this study. Experiment B covers a 1,678~nm segment of the Persian Gulf to Strait of Malacca corridor under mild weather conditions, while Experiment D crosses the North Atlantic storm track from St.\ John's, Newfoundland to Liverpool under harsh winter conditions. Both routes are interpolated from their original waypoints to produce evenly spaced nodes at 1~nm (Experiment B) and 5~nm (Experiment D) intervals, yielding 138 and 389 computational nodes respectively. The LP formulation aggregates these nodes into 6 and 10 segments, while the DP and RH approaches operate at full node resolution. Table~\ref{tab:routes} summarizes the route characteristics.
 
-% TODO: Table~\ref{tab:routes} — route summary
+\begin{table}[htbp]
+\centering
+\caption{Route characteristics for the two experiments.}
+\label{tab:routes}
+\begin{tabular}{lcc}
+\toprule
+ & Experiment B & Experiment D \\
+\midrule
+Origin & Persian Gulf & St.\ John's, NL \\
+Destination & Strait of Malacca & Liverpool, UK \\
+Total distance (nm) & 1,678 & 1,940 \\
+Original waypoints & 13 & 15 \\
+Node spacing (nm) & 1 & 5 \\
+Computational nodes & 138 & 389 \\
+LP segments & 6 & 10 \\
+Required voyage time (h) & 140 & 163 \\
+Weather conditions & Mild & Harsh (winter) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 % TODO: Figure — route maps
 
 \subsection{Speed Correction Model}
 \label{sec:speed-model}
 
-The relationship between the engine's still water speed $V_s$ and the achieved speed over ground $V_g$ is governed by an eight-step speed correction model adapted from Yang et al.\ (2020) \cite{Yang2020}. The model accounts for three environmental resistance sources --- wind, waves, and ocean currents --- through empirical coefficient lookups and vector synthesis.
+The relationship between the engine's still water speed $V_s$ and the achieved speed over ground $V_g$ is governed by the eight-step speed correction model of \cite{Yang2020}. The model computes a percentage speed loss from three environmental resistance sources --- wind, waves, and ocean currents --- through empirical coefficient lookups that depend on the Froude number, Beaufort number, relative wind angle, block coefficient, and displacement volume. The weather-corrected speed through water is then combined with ocean current velocity via two-dimensional vector synthesis to yield the final SOG. The complete model maps any combination of SWS $V_s$ and environmental conditions $(BN, \theta, H_w, V_c, \gamma)$ to a unique SOG $V_g$. This mapping is monotonically increasing in $V_s$: higher engine speed always yields higher ground speed, though the relationship is nonlinear and weather-dependent. A detailed derivation with all coefficient tables is provided in \cite{Yang2020}.
 
-\textbf{Step 1: Froude number.} The Froude number characterizes the speed-to-length ratio of the vessel:
-\begin{equation}
-    F_n = \frac{V_s}{\sqrt{g \cdot L}}
-    \label{eq:froude}
-\end{equation}
-where $V_s$ is SWS converted to m/s (1~kn = 0.5144~m/s), $g = 9.81$~m/s\textsuperscript{2}, and $L = 200$~m is the ship length.
-
-\textbf{Step 2: Weather direction angle.} The relative angle $\theta$ between the wind direction and the ship heading determines the directional exposure:
-\begin{equation}
-    \theta = |\phi_{wind} - \alpha_{heading}|
-    \label{eq:theta}
-\end{equation}
-normalized to $[0\degree, 180\degree]$, where $0\degree$ represents head winds and $180\degree$ following winds.
-
-\textbf{Step 3: Direction reduction coefficient.} The coefficient $C_\beta$ captures how the angle of wind encounter modulates resistance. It is computed as a piecewise function of $\theta$ and Beaufort number $BN$:
-\begin{equation}
-    C_\beta = \begin{cases}
-    2.0 & 0\degree \leq \theta \leq 30\degree \\
-    1.7 - 0.03(BN - 4)^2 & 30\degree < \theta \leq 60\degree \\
-    0.9 - 0.06(BN - 6)^2 & 60\degree < \theta \leq 150\degree \\
-    0.4 - 0.03(BN - 8)^2 & 150\degree < \theta \leq 180\degree
-    \end{cases}
-    \label{eq:cbeta}
-\end{equation}
-with a minimum value of 0.1. Head winds ($\theta \leq 30\degree$) produce the largest resistance; following winds produce the least.
-
-\textbf{Step 4: Speed reduction coefficient.} The coefficient $C_U$ depends on Froude number and block coefficient $C_b = 0.75$:
-\begin{equation}
-    C_U = f(F_n, C_b)
-    \label{eq:cu}
-\end{equation}
-obtained from a piecewise quadratic lookup. For $C_b \in (0.70, 0.75]$ under normal loading: $C_U = 2.4 - 10.6 F_n - 9.5 F_n^2$.
-
-\textbf{Step 5: Ship form coefficient.} The coefficient $C_{Form}$ relates sea state severity to hull resistance as a function of Beaufort number and displacement volume $\nabla$:
-\begin{equation}
-    C_{Form} = 0.5 \cdot BN + \frac{BN^{6.5}}{22 \cdot \nabla^{2/3}}
-    \label{eq:cform}
-\end{equation}
-where $\nabla = \Delta / \rho_{sw}$ is the displacement volume in m\textsuperscript{3} ($\Delta = 50{,}000$~tonnes, $\rho_{sw} = 1025$~kg/m\textsuperscript{3}).
-
-\textbf{Step 6: Speed loss.} The combined speed loss percentage is:
-\begin{equation}
-    \frac{\Delta V}{V_s} \times 100\% = C_\beta \cdot C_U \cdot C_{Form}
-    \label{eq:speedloss}
-\end{equation}
-clamped to $[0, 50]\%$.
-
-\textbf{Step 7: Weather-corrected speed.} The speed through water after accounting for wind and wave resistance is:
-\begin{equation}
-    V_w = V_s \cdot \left(1 - \frac{\Delta V / V_s}{100}\right)
-    \label{eq:vw}
-\end{equation}
-with a minimum of 1.0~kn.
-
-\textbf{Step 8: Speed over ground via vector synthesis.} The final SOG incorporates ocean current effects through two-dimensional vector addition:
-\begin{align}
-    V_{g,x} &= V_w \cdot \sin(\alpha) + V_c \cdot \sin(\gamma) \label{eq:sogx} \\
-    V_{g,y} &= V_w \cdot \cos(\alpha) + V_c \cdot \cos(\gamma) \label{eq:sogy} \\
-    V_g &= \sqrt{V_{g,x}^2 + V_{g,y}^2} \label{eq:sog}
-\end{align}
-where $\alpha$ is the ship heading, $\gamma$ is the current direction (both in radians from north), and $V_c$ is the ocean current velocity. An additional 3.5\% reduction is applied when $BN \geq 5$ to account for involuntary speed loss in higher sea states.
-
-The complete chain --- Eqs.~(\ref{eq:froude}) through (\ref{eq:sog}) --- maps any combination of SWS $V_s$ and environmental conditions $(BN, \theta, H_w, V_c, \gamma)$ to a unique SOG $V_g$. This mapping is monotonically increasing in $V_s$: higher engine speed always yields higher ground speed, though the relationship is nonlinear and weather-dependent.
-
-\subsection{Beaufort Number Calculation}
-\label{sec:beaufort}
-
-The Beaufort number is not obtained from the weather API but is calculated from the 10-metre wind speed $V_w$ (km/h) using the WMO-standard threshold scale:
-\begin{equation}
-    BN = \max\{n \in \{0, 1, \ldots, 12\} : V_w \geq V_{threshold}(n)\}
-    \label{eq:beaufort}
-\end{equation}
-with thresholds at 0, 1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 117~km/h for BN 0--12.
+The Beaufort number $BN$ is not obtained from the weather API but is calculated from the 10-metre wind speed using the WMO-standard threshold scale (BN 0--12).
 
 \subsection{Fuel Consumption Rate}
 \label{sec:fcr}
 
-The fuel consumption rate follows the cubic relationship standard in maritime engineering \cite{Psaraftis2013}:
-\begin{equation}
-    FCR = 0.000706 \cdot V_s^3
-    \label{eq:fcr}
-\end{equation}
-where $FCR$ is in mt/h and $V_s$ is in knots. This function is strictly convex, a property central to the Jensen's inequality analysis in Section~\ref{sec:jensen}. The coefficient 0.000706 is calibrated for the reference vessel class; the cubic exponent is consistent with the empirical range of 2.7--3.3 reported across cargo vessel types \cite{Psaraftis2023,Taskar2020}.
+The fuel consumption rate follows the cubic relationship $FCR(V_s)$ (mt/h) standard in maritime engineering, calibrated for the reference vessel class with a coefficient consistent with the empirical exponent range of 2.7--3.3 reported across cargo vessel types \cite{Psaraftis2013,Psaraftis2023,Taskar2020}. This function is strictly convex --- a property central to the Jensen's inequality analysis in Section~\ref{sec:jensen}.
 
 \subsection{Segment Fuel and Total Voyage Fuel}
 \label{sec:fuel-total}
@@ -288,7 +249,7 @@ The decision variable in all three optimization approaches is $V_{g,i}$ --- the 
 \end{equation}
 where $T$ is the required voyage time (140~h for Experiment B, 163~h for Experiment D).
 
-Given a target SOG $V_{g,i}$ and the environmental conditions at leg $i$, the required SWS is obtained by inverting the speed correction model (Eqs.~\ref{eq:froude}--\ref{eq:sog}) via binary search. The optimizer selects $V_{g,i}$; the physics model determines $V_{s,i}$; and the FCR is evaluated at $V_{s,i}$ via Eq.~(\ref{eq:fcr}). This is the SOG-targeting paradigm: the ship adjusts its engine output to maintain a target ground speed under prevailing conditions.
+Given a target SOG $V_{g,i}$ and the environmental conditions at leg $i$, the required SWS is obtained by inverting the speed correction model via binary search. The optimizer selects $V_{g,i}$; the physics model determines $V_{s,i}$; and the FCR is evaluated at $V_{s,i}$. This is the SOG-targeting paradigm: the ship adjusts its engine output to maintain a target ground speed under prevailing conditions.
 
 The critical consequence is that even when the optimizer assigns a constant SOG across a segment (as LP does), the required SWS varies from node to node within that segment because weather conditions are not spatially uniform. Since FCR is cubic in SWS, the average fuel consumption under varying SWS exceeds the fuel consumption at the average SWS --- this is Jensen's inequality on the convex FCR function:
 \begin{equation}
@@ -310,7 +271,7 @@ This section presents the three optimization approaches --- static deterministic
 \subsection{Static Deterministic Optimization (LP)}
 \label{sec:lp}
 
-The LP formulation selects one SWS from a discrete set $\{v_1, v_2, \ldots, v_K\}$ for each of $S$ voyage segments. Nodes are aggregated into segments by averaging weather conditions (scalar fields by arithmetic mean, direction fields by circular mean). The SOG for segment $i$ at speed $v_k$ is precomputed using the speed correction model (Eqs.~\ref{eq:froude}--\ref{eq:sog}) applied to segment-averaged weather, yielding a matrix $SOG_{ik}$.
+The LP formulation selects one SWS from a discrete set $\{v_1, v_2, \ldots, v_K\}$ for each of $S$ voyage segments. Nodes are aggregated into segments by averaging weather conditions (scalar fields by arithmetic mean, direction fields by circular mean). The SOG for segment $i$ at speed $v_k$ is precomputed using the speed correction model \cite{Yang2020} applied to segment-averaged weather, yielding a matrix $SOG_{ik}$.
 
 The objective minimizes total fuel:
 \begin{equation}
@@ -407,7 +368,7 @@ The simulation engine takes the planned SOG schedule and determines the SWS the 
 
 \begin{enumerate}
     \item For each leg $i$, the simulator receives the target $V_{g,i}$ from the optimizer's plan.
-    \item The inverse speed correction model (binary search on Eqs.~\ref{eq:froude}--\ref{eq:sog}) finds the SWS $V_{s,i}$ required to achieve $V_{g,i}$ under the actual weather at node $i$.
+    \item The inverse speed correction model (binary search on the eight-step model of \cite{Yang2020}) finds the SWS $V_{s,i}$ required to achieve $V_{g,i}$ under the actual weather at node $i$.
     \item If $V_{s,i} \notin [11, 13]$~kn, it is clamped to the engine limits and the achieved SOG is recomputed. This constitutes an SWS violation.
     \item Fuel is computed as $FCR(V_{s,i}^{clamped}) \times d_i / V_{g,i}^{actual}$.
 \end{enumerate}
@@ -457,7 +418,7 @@ Weather data were collected using the Open-Meteo API, which provides free access
     \item \textbf{Ocean current velocity and direction:} Meteo-France SMOC ocean model, 0.08\degree{} resolution, initialized once daily, forecast horizon up to 168 hours.
 \end{itemize}
 
-The Beaufort number is not provided by the API but is calculated from the 10-metre wind speed using the WMO-standard threshold scale (Eq.~\ref{eq:beaufort}).
+The Beaufort number is not provided by the API but is calculated from the 10-metre wind speed using the WMO-standard threshold scale.
 
 At each sample hour, the collection script queries both the current conditions endpoint (actual weather) and the hourly forecast endpoint (predicted weather for the next 168 hours). The result is an HDF5 file with three tables: \texttt{/metadata} (static GPS coordinates and segment assignment per node), \texttt{/actual\_weather} (observed conditions at each node and sample hour), and \texttt{/predicted\_weather} (forecast conditions indexed by node, sample hour, and forecast hour).
 
@@ -604,114 +565,6 @@ RH & 364.4 & 364.8 \\
 \end{table}
 
 Under fixed-SWS simulation, LP appeared to be the best approach (361.8~mt) and DP the worst (367.8~mt). Under SOG-targeting, the ranking reversed: DP became best (366.9~mt) and LP worst (368.0~mt), equivalent to constant-speed sailing (367.9~mt). The mechanism is Jensen's inequality on the convex cubic FCR: LP assigns one SOG per segment from averaged weather, but maintaining that SOG at individual nodes where weather differs from the average requires SWS adjustments. The cubic relationship ensures that harsh-node penalties always outweigh calm-node savings.
-
-\subsection{Forecast Error Curves}
-\label{sec:results-forecast}
-
-Forecast accuracy was evaluated by comparing predicted weather (from the forecast issued at hour 0) against actual weather observations at 138 nodes across 134 sample hours. Table~\ref{tab:forecast-error} reports RMSE and bias at selected lead times.
-
-\begin{table}[htbp]
-\centering
-\caption{Forecast error versus lead time for Experiment B (138 nodes $\times$ 134 samples).}
-\label{tab:forecast-error}
-\begin{tabular}{ccccc}
-\toprule
-Lead Time (h) & Wind RMSE (km/h) & Wind Bias (km/h) & Wave RMSE (m) & Current RMSE (km/h) \\
-\midrule
-0   & 4.13 & +0.20 & 0.052 & 0.358 \\
-24  & 4.84 & +0.59 & 0.072 & 0.382 \\
-48  & 5.63 & +1.21 & 0.076 & 0.406 \\
-72  & 6.13 & +1.31 & 0.094 & 0.448 \\
-96  & 7.65 & +2.86 & 0.114 & 0.460 \\
-120 & 8.34 & +3.15 & 0.118 & 0.443 \\
-133 & 8.40 & +2.67 & 0.113 & 0.503 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Wind speed RMSE doubled from 4.13 to 8.40~km/h over 133 hours (+103\%), with accelerated deterioration beyond 72 hours consistent with the atmospheric predictability limit described by \cite{Lorenz1969}. The systematic positive bias (+0.20 to +3.15~km/h) indicated that forecasts overpredicted wind speed, causing the DP optimizer to prepare for headwinds that did not materialize. This overpreparation produced systematically higher planned SWS values, which in turn generated the SWS violations observed during simulation.
-
-Wave height RMSE remained modest (0.052--0.118~m), reflecting both the calm conditions on this route and the longer update cycle of the MFWAM wave model (12~h versus 6~h for GFS wind). Ocean current RMSE grew from 0.358 to 0.503~km/h, a 40\% increase that was operationally small relative to the ship's speed.
-
-\subsection{Factor Decomposition ($2 \times 2$ Factorial)}
-\label{sec:results-factorial}
-
-The $2 \times 2$ factorial design (Section~\ref{sec:factorial}) decomposed the effects of spatial resolution and weather source on fuel outcomes. Table~\ref{tab:factorial} presents the four conditions and the RH comparison point.
-
-\begin{table}[htbp]
-\centering
-\caption{$2 \times 2$ factorial results and decomposition (Experiments A and B).}
-\label{tab:factorial}
-\begin{tabular}{lcccc}
-\toprule
-Config & Nodes & Weather & Approach & Sim Fuel (mt) \\
-\midrule
-A-LP & 7 & actual & LP (6 seg) & 178.19 \\
-A-DP & 7 & predicted & DP & 181.20 \\
-B-LP & 138 & actual & LP (6 seg) & 180.63 \\
-B-DP & 138 & predicted & DP & 182.22 \\
-B-RH & 138 & pred + actual & RH & 176.40 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The decomposition yielded:
-\begin{itemize}
-    \item \textbf{Temporal effect} (forecast error): +3.02~mt --- the fuel penalty from using predicted rather than actual weather, holding spatial resolution constant. This was the largest single factor.
-    \item \textbf{Spatial effect} (segment averaging): +2.44~mt --- the fuel penalty from aggregating 138 nodes into 6 segments under actual weather.
-    \item \textbf{Interaction}: $-$1.43~mt --- finer spatial resolution partially compensated for forecast error, because per-node predicted weather was closer to per-node actual weather than segment averages were.
-    \item \textbf{RH benefit} (re-planning): $-$1.33~mt --- the additional improvement from periodic re-planning with fresh forecasts and actual weather injection.
-\end{itemize}
-
-The hierarchy temporal $>$ spatial $>$ re-planning was clear: forecast accuracy dominated spatial granularity, which in turn dominated re-planning frequency.
-
-\subsection{Re-planning Frequency Sweep}
-\label{sec:results-replan}
-
-A sweep of re-planning intervals from 1 to 24 hours was conducted on Experiment B (Table~\ref{tab:replan}).
-
-\begin{table}[htbp]
-\centering
-\caption{Re-planning frequency sweep for Experiment B (RH approach).}
-\label{tab:replan}
-\begin{tabular}{ccccc}
-\toprule
-Frequency (h) & Sim Fuel (mt) & $\Delta$ vs 1~h & Decision Points & New Info Rate \\
-\midrule
-1  & 180.63 & baseline & 73 & 53\% \\
-2  & 180.70 & +0.07 (+0.04\%) & 50 & 70\% \\
-3  & 180.73 & +0.11 (+0.06\%) & 37 & 76\% \\
-\textbf{6}  & \textbf{180.84} & \textbf{+0.21 (+0.12\%)} & \textbf{21} & \textbf{100\%} \\
-12 & 180.69 & +0.06 (+0.04\%) & 12 & 100\% \\
-24 & 181.22 & +0.59 (+0.33\%) & 6  & 100\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The fuel difference between 1-hour and 6-hour re-planning was 0.21~mt (0.12\%) --- operationally negligible. At 1-hour frequency, only 53\% of decision points received genuinely different forecasts from the previous decision point; the remaining 47\% re-optimized on identical data. At 6-hour frequency, every decision point received a fresh GFS wind update, matching the model initialization cycle at 00/06/12/18 UTC (Section~\ref{sec:nwp-cycles}). This confirmed that 6 hours is the optimal re-planning interval: it captures all available new information with the minimum number of solver invocations.
-
-\subsection{Forecast Horizon Sweep}
-\label{sec:results-horizon}
-
-The effect of forecast horizon length was evaluated by varying the maximum forecast hour available to the DP and RH optimizers (Table~\ref{tab:horizon}).
-
-\begin{table}[htbp]
-\centering
-\caption{Forecast horizon sweep for Experiment B ($\sim$140~h voyage).}
-\label{tab:horizon}
-\begin{tabular}{cccc}
-\toprule
-Horizon (h) & Horizon/Voyage & DP Fuel (mt) & RH Fuel (mt) \\
-\midrule
-24  & 17\% & 177.70 & 176.46 \\
-48  & 34\% & 177.72 & 176.41 \\
-72  & 51\% & 177.70 & 176.47 \\
-144 & 103\% & 177.78 & 176.54 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The results were completely flat: the DP fuel range across all horizons was 0.08~mt, and the RH range was 0.13~mt. Even a 24-hour forecast covering only 17\% of the voyage duration was sufficient. This occurred because the 140-hour voyage fitted entirely within the accurate forecast window ($\sim$72--96 hours for wind). The relevant variable was not absolute horizon length but the ratio of voyage duration to forecast accuracy horizon. For voyages that fit within the accurate window, any forecast horizon suffices; for voyages extending beyond the atmospheric predictability limit, longer horizons help up to the accuracy boundary. Experiment D (163~h, North Atlantic) is designed to test whether this plateau shifts under harsher conditions.
 
 \subsection{SWS Violation Analysis}
 \label{sec:results-violations}
