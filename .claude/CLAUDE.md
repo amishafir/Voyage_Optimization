@@ -126,6 +126,13 @@ For implementing the new pipeline (`pipeline/`), use these specialized agents:
 |-------|---------|
 | `lit-reviewer` | Full pipeline: validate paper, read PDF, assess relevance, produce entry for review |
 
+## Paper Quality Agents
+
+| Agent | Purpose |
+|-------|---------|
+| `paper-reviewer` | Constructive review: checklist-based quality, style, and completeness check |
+| `paper-critic` | Adversarial review: verify quotes in PDFs, find logical holes, flag vague writing, check citation accuracy |
+
 ## Project Planning
 
 - Work breakdown structure: `docs/WBS_next_phases.md`

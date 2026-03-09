@@ -21,7 +21,7 @@ LP formulations are polynomial in the number of segments and speed discretizatio
 pseudo-polynomial in the time discretization, but both yield provably optimal solutions for their respective
 problem representations.
 
-[CITE: Psaraftis 2013] surveyed over 40 speed models and classified them along 13 taxonomy parameters, establishing
+[CITE: Psaraftis 2013] surveyed speed optimization models and classified them along 13 taxonomy parameters, establishing
 that the cubic fuel consumption function ($FCR \propto V_s^3$; [EQ: 8]) is standard for tankers and bulk carriers.
 The survey documented "the scarcity of 'dynamic' speed models" and found zero papers employing rolling horizon or
 model predictive control for speed optimization. [CITE: Ronen 2011] formalized the economic rationale: a 20%
@@ -36,14 +36,15 @@ time is cubic in speed and the resulting objective function is convex. Speed is 
 arc, solved via mixed-integer linear programming. [CITE: Norstad 2011] extended this to tramp ship routing and
 scheduling, introducing a recursive smoothing algorithm (RSA) that exploits convexity to equalize speeds across
 legs. The RSA's optimality was formally proven by [CITE: Hvattum 2013], who showed that constant speed over
-unconstrained port sequences is optimal when the fuel cost function is convex and non-decreasing — a direct
-consequence of Jensen's inequality ([EQ: 17]). [CITE: Fagerholt 2010] demonstrated the computational advantage
+unconstrained port sequences is optimal when the fuel cost function is convex and non-decreasing. This result
+is a direct consequence of Jensen's inequality ([EQ: 17]), though the original proof uses a constructive
+equalization argument rather than invoking the inequality explicitly. [CITE: Fagerholt 2010] demonstrated the computational advantage
 of the alternative DP formulation: a directed acyclic graph (DAG) with discretized arrival times solves the same
 problem in approximately 2 ms versus 430 ms for nonlinear programming, with only 0.04% optimality gap.
 Per-leg speed optimization achieved 24.3% fuel savings compared to 19.4% from uniform speed reduction — the
 additional 5 percentage points arising precisely from the convexity-driven speed equalization.
 
-On the DP side, [CITE: Zaccone 2018] developed a three-dimensional Bellman-Ford optimizer on a discretized
+On the DP side, [CITE: Zaccone 2018] developed a three-dimensional dynamic programming optimizer on a discretized
 space-time grid, using NOAA WaveWatch III forecast maps as input. The ship model decomposes resistance into
 still-water, wave-added, and wind components (analogous to [EQ: 4]–[EQ: 5]) and evaluates fuel via a full
 propulsion chain including propeller diagrams and engine maps. The resulting Pareto frontier of fuel versus
@@ -56,8 +57,9 @@ The most comprehensive taxonomy of weather routing methods is provided by [CITE:
 journal papers and classified 40 in detail across 10 dimensions. The survey identified four dominant solution
 families — modified isochrone, dynamic programming, pathfinding/genetic algorithms, and AI/ML — but LP did not
 appear as a solution approach in any of the taxonomized papers. Rolling horizon was identified only as a future
-research direction. The survey also called for standardized benchmarking: "the weather routing community could
-benefit by a standardization of what constitutes a saving."
+research direction. The survey also called for standardized benchmarking, arguing that the weather routing community would
+benefit from "a standardization of the reporting of savings through weather routing, to facilitate
+comparisons between methodologies."
 
 Despite this extensive body of work, a systematic gap persists: no study has compared LP and DP optimization on
 the same route, with the same physics model, under the same weather data. Each paper evaluates a single method
@@ -88,7 +90,7 @@ Whether the cubic approximation holds under real operating conditions has been d
 reviewed recent regression analyses of operational data that report speed-power exponents well below 3 — in some
 cases below 2 or even below 1 — and identified these as statistical artifacts: confounding variables such as
 draft, hull fouling, and weather contaminate the regressions, biasing the exponent downward. When confounders
-are controlled, "the exponent cannot be less than 3 comes from basic hydrodynamic principles." [CITE: Wang 2012]
+are controlled, the exponent cannot be less than 3 based on basic hydrodynamic principles. [CITE: Wang 2012]
 calibrated exponents from operational data on five voyage legs, finding $b = 2.709$–$3.314$, consistent with
 the cubic approximation being reasonable but route-dependent. [CITE: Taskar 2020] used detailed ship performance
 modeling across six vessel types and found speed exponents ranging from 3.3 to 4.2, with the cubic assumption
@@ -99,9 +101,9 @@ The convexity of $FCR(V_s)$ has a direct consequence through Jensen's inequality
 function $f$, the expectation $E[f(X)] \geq f(E[X])$. Applied to fuel consumption, this means that if a ship's
 actual SWS varies around a mean (as it must when targeting a fixed SOG through spatially varying weather), the
 realized fuel consumption exceeds the fuel computed at the mean SWS. This inequality is well known in
-optimization theory and has been exploited constructively: [CITE: Norstad 2011] and [CITE: Hvattum 2013] proved
-that equalizing speeds across unconstrained legs minimizes total fuel precisely because the cost function is
-convex. [CITE: Fagerholt 2010] demonstrated that per-leg speed optimization achieves 5 percentage points more
+optimization theory and has been exploited constructively: [CITE: Norstad 2011] developed a recursive smoothing
+algorithm that equalizes speeds across legs, and [CITE: Hvattum 2013] proved its optimality for convex
+non-decreasing cost functions. [CITE: Fagerholt 2010] demonstrated that per-leg speed optimization achieves 5 percentage points more
 savings than uniform speed reduction, the difference arising from convexity-driven equalization.
 
 However, the same convexity that makes speed equalization optimal for planning creates a systematic bias in
@@ -145,7 +147,7 @@ The "Virtual Arrival" policy studied therein is precisely SOG-targeting at the v
 speed to arrive just in time rather than steaming at full power and waiting at anchor. The average VLCC port
 call lasts 4.0 days against 22.7 days of sailing (Table 1, p. 54), meaning approximately 15% of voyage time is
 unproductive waiting that could fund slower transit. Under current charterparty "utmost dispatch" clauses,
-however, most ships sail at maximum speed regardless of berth availability [CITE: Cariou 2011], creating a
+however, most ships sail at maximum speed regardless of berth availability [CITE: Jia 2017], creating a
 "sail-fast-then-wait" pattern that wastes fuel and inflates emissions.
 
 The implications of SOG-targeting for fuel estimation follow directly from the convexity established in
