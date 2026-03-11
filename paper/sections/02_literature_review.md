@@ -23,7 +23,7 @@ problem representations.
 
 [CITE: Psaraftis 2013] surveyed speed optimization models and classified them along 13 taxonomy parameters, establishing
 that the cubic fuel consumption function ($FCR \propto V_s^3$; [EQ: 8]) is standard for tankers and bulk carriers.
-The survey documented "the scarcity of 'dynamic' speed models" and found zero papers employing rolling horizon or
+The survey documented the scarcity of dynamic speed models and found no papers employing rolling horizon or
 model predictive control for speed optimization. [CITE: Ronen 2011] formalized the economic rationale: a 20%
 speed reduction yields approximately 50% bunker savings, following directly from the cubic relationship
 ($(0.8)^3 = 0.512$). [CITE: Wang 2012] calibrated the speed-power exponent from operational data on a global

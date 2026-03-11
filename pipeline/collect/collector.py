@@ -50,10 +50,14 @@ MARINE_CURRENT_VARIABLES = ["wave_height", "ocean_current_velocity", "ocean_curr
 # ---------------------------------------------------------------------------
 
 def setup_api_client():
-    """Setup Open-Meteo API client with caching and retry logic."""
-    cache_session = requests_cache.CachedSession(".cache_pipeline", expire_after=3600)
-    retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
-    return openmeteo_requests.Client(session=retry_session)
+    """Setup Open-Meteo API client with niquests session and 30s timeout.
+
+    No cache, no retry middleware — retries are handled explicitly in
+    the collection loop (run_all.py) to avoid blocking on rate limits.
+    """
+    import niquests
+    session = niquests.Session(timeout=30)
+    return openmeteo_requests.Client(session=session)
 
 
 # ---------------------------------------------------------------------------
@@ -347,22 +351,34 @@ def collect(config, hdf5_path=None):
             lons = waypoints_df["lon"].tolist()
             node_ids = waypoints_df["node_id"].tolist()
 
-            try:
-                wind_responses = fetch_wind_bulk(client, lats, lons, api_delay)
-                time.sleep(api_delay)
-                marine_responses = fetch_marine_bulk(client, lats, lons, api_delay)
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    wind_responses = fetch_wind_bulk(client, lats, lons, api_delay)
+                    time.sleep(api_delay)
+                    marine_responses = fetch_marine_bulk(client, lats, lons, api_delay)
 
-                actual_rows, predicted_rows, failed = _parse_bulk_responses(
-                    wind_responses, marine_responses, node_ids,
-                    sample_hour, voyage_start_time,
-                )
-                successful = len(node_ids) - failed
-            except Exception as e:
-                logger.error("Bulk API call failed: %s", e)
-                actual_rows = [_nan_actual_row(nid, sample_hour) for nid in node_ids]
-                predicted_rows = []
-                failed = len(node_ids)
-                successful = 0
+                    actual_rows, predicted_rows, failed = _parse_bulk_responses(
+                        wind_responses, marine_responses, node_ids,
+                        sample_hour, voyage_start_time,
+                    )
+                    successful = len(node_ids) - failed
+                    break  # success
+                except Exception as e:
+                    is_rate_limit = "rate" in str(e).lower() or "limit" in str(e).lower()
+                    if is_rate_limit and attempt < max_retries - 1:
+                        wait_secs = 60 * (attempt + 1)  # 60, 120, 180, 240s
+                        logger.warning("Rate limited (attempt %d/%d), waiting %ds: %s",
+                                       attempt + 1, max_retries, wait_secs, e)
+                        time.sleep(wait_secs)
+                        continue
+                    logger.error("Bulk API call failed (attempt %d/%d): %s",
+                                 attempt + 1, max_retries, e)
+                    actual_rows = [_nan_actual_row(nid, sample_hour) for nid in node_ids]
+                    predicted_rows = []
+                    failed = len(node_ids)
+                    successful = 0
+                    break
 
             # Batch append to HDF5
             append_actual(hdf5_path, pd.DataFrame(actual_rows))
