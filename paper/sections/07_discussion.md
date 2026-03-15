@@ -11,7 +11,7 @@ $$E[FCR(V_s)] \geq FCR(E[V_s])$$
 
 DP avoids this bias because it assigns speed at each node given local weather — there is no within-segment averaging. RH inherits this advantage and adds forecast freshness: by injecting actual weather for the committed 6-hour window, the SWS computed during planning matches the SWS required during simulation almost exactly.
 
-The magnitude of the Jensen's inequality effect depends on within-segment weather heterogeneity. Under the mild conditions of Route 1 (wind std 6.07 km/h, BN 3–4), the effect added approximately 4.4 mt to LP's simulated fuel above the optimal bound. Under the harsh conditions expected in Route 2 (BN 8–10), the effect is predicted to be substantially larger.
+The magnitude of the Jensen's inequality effect depends on within-segment weather heterogeneity. Under the mild conditions of Route 1 (wind std 6.07 km/h, BN 3–4), LP's plan-simulation gap was +4.67 mt (+2.7%). Under the harsh conditions of Route 2 (wind std 16.8 km/h, BN 6–8), the gap widened to +6.69 mt (+3.2%) and violation rates increased from 2.9% to 16.5%, confirming that the Jensen's inequality penalty scales with weather variability.
 
 ## 7.2 Information Value Hierarchy
 
@@ -28,16 +28,16 @@ This establishes a clear hierarchy: forecast quality matters more than node coun
 The theoretical bounds decompose total fuel into three components:
 
 - **Average bound** (170.06 mt): the minimum fuel in calm water at constant speed.
-- **Weather tax** (6.17 mt): the unavoidable cost of non-uniform weather, even with perfect foresight. This is the difference between optimal and average bounds.
-- **Information penalty**: the additional cost of imperfect weather knowledge or spatial averaging. LP: +4.40 mt (segment averaging). DP: +5.99 mt (forecast staleness). RH: +0.17 mt (near-zero).
+- **Weather tax**: Route 1: 6.17 mt (3.5% of optimal); Route 2: 17.78 mt (8.2% of optimal). The 2.9× increase reflects the substantially harsher North Atlantic conditions.
+- **Information penalty**: LP: +4.40 mt on Route 1 (segment averaging). DP: +5.99 mt on Route 1 (forecast staleness). RH: +0.17 mt on Route 1 (near-zero). On Route 2, RH's penalty remains small at +0.84 mt (+0.4%), while DP's violations make the penalty metric unreliable (simulated fuel falls below optimal due to SWS clamping).
 
-RH's near-zero information penalty (0.17 mt, or 0.1% of the optimal bound) confirms that the 6-hour re-planning cycle aligned to GFS updates effectively eliminates the practical consequences of forecast error for speed optimization.
+RH's near-zero information penalty on both routes (0.1–0.4% of the optimal bound) confirms that the 6-hour re-planning cycle aligned to GFS updates effectively eliminates the practical consequences of forecast error for speed optimization, even under harsh conditions.
 
 ## 7.4 Route-Length Dependence
 
 The forecast accuracy window — approximately 72 hours for reliable wind prediction — creates a route-length threshold. When the voyage fits within this window (as exp_b's 140 h nearly does), forecast error is modest across the entire voyage and the DP's single-forecast approach is adequate. When the voyage extends significantly beyond 72 hours, the final segments are planned on degraded forecasts, and RH's periodic refresh becomes critical.
 
-This explains the observed pattern: on Route 1 (mild, 140 h), the DP-to-RH improvement is 5.82 mt (3.2%). On longer or harsher routes where forecast error accumulates more aggressively, RH's advantage is expected to grow. Route 2 (163 h, North Atlantic winter) will test this prediction.
+This explains the observed pattern: on Route 1 (mild, 140 h), the DP-to-RH improvement is 5.82 mt (3.2%). On Route 2 (harsh, 163 h), forecast error accumulates far more aggressively — wind RMSE nearly quadruples over 144 h (+286%) compared to doubling on Route 1 (+103%). The DP's single-forecast approach produces 161 violations (41.5%), rendering the planned speed schedule largely infeasible. RH's periodic forecast refresh reduces violations to 15 (3.9%) and maintains fuel within 0.4% of the optimal bound.
 
 The critical variable is the ratio of voyage duration to forecast accuracy horizon. When this ratio exceeds approximately 2 (voyage > ~144 h for GFS), RH provides material benefit. Below this threshold, the static DP is sufficient.
 
@@ -65,7 +65,7 @@ The results are consistent with prior findings while extending them:
 
 ## 7.7 Limitations
 
-1. **Mild weather on exp_b.** The dominant Beaufort numbers (3–4) limit the absolute magnitude of algorithm separations. Under harsher conditions, Jensen's inequality effects, forecast error propagation, and violation rates are all expected to increase. Route 2 will address this.
+1. **Two routes with contrasting but not extreme conditions.** Route 1 (BN 3–4) provides a calm baseline; Route 2 (BN 6–8) provides harsh winter conditions. The findings are consistent across both, but validation on additional routes (e.g., transpacific, tropical cyclone regions) would strengthen generalizability.
 2. **Two routes.** Generalizability is limited to two ocean basins (Indian Ocean, North Atlantic). A third route (transpacific) was planned but dropped due to API rate limits on the 947-waypoint route.
 3. **Single ship type.** The reference vessel is a medium tanker. Results may differ for container ships (higher speeds, different resistance profiles) or LNG carriers (lower speeds).
 4. **Cubic FCR assumption.** The FCR coefficient (0.000706) and cubic exponent are not validated against engine-room data. Taskar and Andersen (2020) found exponents of 3.3–4.2, suggesting the cubic model may understate the Jensen's inequality effect.

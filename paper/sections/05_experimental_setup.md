@@ -34,7 +34,9 @@ Route 2 crosses the North Atlantic storm track from St. John's, Newfoundland (47
 
 The route traverses latitudes 47°N–56°N during winter, crossing the most active storm track in the Northern Hemisphere. Expected conditions include Beaufort 8–10, significant wave heights of 4–6 m, and frequent storm systems. The voyage duration at 12 kn is approximately 163 hours (~6.8 days), fitting within the GFS 168-hour forecast horizon. This means the DP has forecast coverage for the entire voyage, isolating the forecast freshness effect: any RH advantage over DP comes purely from using fresher forecasts at each decision point, not from extending beyond the forecast horizon.
 
-Data collection commenced on 25 February 2026 using 6-hour NWP-aligned sampling (Section 5.5). Results for Route 2 are reported in Section 6 once the collection period is complete.
+Data were collected from 8 March to 15 March 2026 using 6-hour NWP-aligned sampling (Section 5.5), yielding 29 actual-weather snapshots spanning hours 0–168 and 29 complete 168-hour forecast profiles per node. The collection period covers 168 hours — exceeding the 163-hour voyage duration, providing near-complete temporal coverage.
+
+Weather conditions during the collection period were harsh: mean wind speed 46.6 km/h (std 16.8 km/h), mean significant wave height 5.05 m (std 2.10 m), and mean ocean current velocity 1.35 km/h. The predominant Beaufort numbers were 6–8, with 22% of observations at BN 7 and 17% at BN 8. This represents conditions 2.7× windier and 6.2× wavier than Route 1, providing a strong contrast for testing the generalizability of the optimization hierarchy.
 
 [TABLE: route summary]
 

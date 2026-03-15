@@ -31,7 +31,7 @@ dynamic_det:
   time_window_hours: 6
   forecast_origin: 0
   speed_granularity: 0.1
-  time_granularity: 0.1
+  time_granularity: 0.01              # 5nm legs need finer dt than 25nm legs
   distance_granularity: 1
   nodes: all
   time_windows: all
