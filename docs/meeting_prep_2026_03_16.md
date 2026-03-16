@@ -8,7 +8,41 @@ Downloaded Route 2 (North Atlantic) data from TAU servers, ran the full LP/DP/RH
 
 ---
 
-## 2. The Two Routes
+## 2. Results at a Glance
+
+### Route 1 — Persian Gulf (mild weather, BN 3–4)
+*138 nodes, ~140 h, wind 17 km/h, waves 0.8 m*
+
+| Approach | Sim Fuel (mt) | Violations | Arrival |
+|---|---|---|---|
+| *Upper bound (SWS=13, no optimization)* | 203.91 | — | — |
+| DP (dynamic deterministic) | 182.22 | 17 (12.4%) | On time |
+| LP (static deterministic) | 180.63 | 4 (2.9%) | On time |
+| **RH (rolling horizon)** | **176.40** | **1 (0.7%)** | **On time** |
+| *Optimal bound (DP w/ actual weather)* | 176.23 | 0 | — |
+
+RH within **0.1%** of optimal. Captures 99.4% of the optimization span.
+
+### Route 2 — North Atlantic (harsh weather, BN 6–8)
+*389 nodes, ~163 h, wind 47 km/h, waves 5.0 m*
+
+| Approach | Sim Fuel (mt) | Violations | Arrival |
+|---|---|---|---|
+| *Upper bound (SWS=13, no optimization)* | 239.65 | — | — |
+| DP (dynamic deterministic) | 214.24 | **161 (41.5%)** | **+1.5 h late** |
+| LP (static deterministic) | 215.60 | 64 (16.5%) | +0.4 h late |
+| **RH (rolling horizon)** | **217.28** | **15 (3.9%)** | **On time** |
+| *Optimal bound (DP w/ actual weather)* | 216.44 | 0 | — |
+
+RH within **0.4%** of optimal. Only approach that arrives on time.
+
+> **Note**: On Route 2, DP and LP fuel appears lower than optimal — this is because the engine couldn't deliver planned speeds (clamped at 13 kn), so the ship arrived late and burned less fuel. Not better optimization — failing to meet the schedule.
+
+> **Takeaway**: RH works in both calm and storm. DP collapses under harsh weather (42% of legs infeasible). LP's segment averaging gets worse as weather variability increases.
+
+---
+
+## 3. Route Comparison — Detail
 
 | | Route 1 (Persian Gulf) | Route 2 (North Atlantic) |
 |---|---|---|
@@ -22,9 +56,9 @@ Downloaded Route 2 (North Atlantic) data from TAU servers, ran the full LP/DP/RH
 
 ---
 
-## 3. Key Results — Cross-Route Comparison
+## 4. Key Results — Cross-Route Comparison
 
-### 3.1 Theoretical Bounds
+### 4.1 Theoretical Bounds
 
 | Bound | Route 1 (mt) | Route 2 (mt) |
 |---|---|---|
@@ -35,7 +69,7 @@ Downloaded Route 2 (North Atlantic) data from TAU servers, ran the full LP/DP/RH
 
 The weather tax — fuel penalty from weather even with a perfect optimizer — scales super-linearly with weather severity.
 
-### 3.2 Three Approaches: Plan vs Reality
+### 4.2 Three Approaches: Plan vs Reality
 
 **Route 1 (mild)**
 
@@ -59,7 +93,7 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 
 *LP and DP appear "below optimal" but this is an artifact — they arrive late because the engine can't deliver planned speeds (SWS clamped at 13 kn). They burn less fuel by failing to meet the schedule, not by optimizing better.
 
-### 3.3 What This Tells Us
+### 4.3 What This Tells Us
 
 **RH is the only approach that works in both conditions:**
 - Route 1: within 0.1% of optimal, 1 violation, on time
@@ -75,7 +109,7 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 - Within-segment weather variability is much larger in North Atlantic winter
 - Jensen's inequality penalty scales with that variability
 
-### 3.4 Replan Frequency — Confirmed on Both Routes
+### 4.4 Replan Frequency — Confirmed on Both Routes
 
 | | Route 1 | Route 2 |
 |---|---|---|
@@ -87,7 +121,7 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 
 ---
 
-## 4. Validation of the Six Contributions
+## 5. Validation of the Six Contributions
 
 | # | Contribution | Validated? | Evidence |
 |---|---|---|---|
@@ -100,7 +134,7 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 
 ---
 
-## 5. Surprises / Things Worth Discussing
+## 6. Surprises / Things Worth Discussing
 
 1. **DP sim fuel below optimal bound** — On Route 2, DP "beats" the optimal bound (214.24 vs 216.44 mt) because SWS clamping makes the ship arrive 1.5 h late. It's not better optimization — it's the ship failing to execute the plan. How do we present this?
 
@@ -112,7 +146,7 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 
 ---
 
-## 6. Paper Status
+## 7. Paper Status
 
 ### Done
 - [x] Sections 1–4 in LaTeX
@@ -129,7 +163,7 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 
 ---
 
-## 7. Questions for Supervisor
+## 8. Questions for Supervisor
 
 1. **DP clamping narrative**: DP/LP fuel falls below optimal on Route 2 because the ship arrives late. Currently framed as "not genuine optimization." Right approach, or should we also report an ETA-penalized metric?
 
@@ -140,3 +174,45 @@ The weather tax — fuel penalty from weather even with a perfect optimizer — 
 4. **C3 (horizon dependence)**: Only partially validated — both routes fit within the 168 h GFS horizon. Should we acknowledge this gap prominently, or is the steeper forecast degradation on Route 2 sufficient evidence?
 
 5. **Timeline**: Sections 5–8 in LaTeX by Mar 20?
+
+---
+
+## 9. Decisions from Meeting (Mar 16)
+
+### D1. No SWS violations — relax ETA instead
+
+**Problem**: Current simulation clamps SWS to [11, 13] when required SWS exceeds engine limits. This creates "violations" and distorts fuel results (especially Route 2 where DP/LP sim fuel falls below optimal bound because the ship arrives late).
+
+**Decision**: Never violate SWS limits. If weather requires SWS > 13 to hit planned SOG, use SWS = 13 and accept lower SOG → ship arrives late. ETA is a soft constraint; engine limits are hard.
+
+**Impact**: Eliminates the "below optimal bound" artifact. All approaches will report:
+- Actual fuel consumed (always valid — no clamping)
+- Actual arrival time (may exceed ETA)
+- Arrival deviation as the key feasibility metric
+
+### D2. Test RH with LP (not just DP)
+
+**Problem**: Currently RH uses DP at each 6h decision point. LP is simpler and faster — if it works comparably in a rolling horizon framework, it's a more practical recommendation.
+
+**Decision**: Create an RH-LP variant: at each 6h cycle, re-solve LP (segment-averaged) with fresh weather, commit 6h of speeds, advance, repeat.
+
+**Impact**: Adds a fourth approach to the comparison. If RH-LP ≈ RH-DP, the practical recommendation becomes "use LP with 6h re-planning" — much simpler to implement operationally.
+
+### D3. Realistic upper bound = constant speed
+
+**Problem**: The SWS = 13 bound is unrealistic — no ship sails at max engine power for the entire voyage. It inflates the "optimization span."
+
+**Decision**: Use constant SOG = D/ETA as the practical baseline (what a captain would do with zero optimization — sail at constant speed to arrive on time).
+
+**Impact**: The "optimization span" becomes: constant-speed fuel − optimized fuel. This is what the optimizer actually saves compared to naive planning.
+
+### D4. Clarify planning vs simulation framework
+
+**Problem**: The two-phase evaluation (plan with one weather, simulate with another) needs to be crystal clear. What does each optimizer see? What does the simulation test?
+
+**Decision**: Write a clear matrix documenting for each approach:
+- **Planning phase**: what weather data, what resolution, what objective
+- **Simulation phase**: what weather data, how SOG is targeted, how SWS is determined
+- **Key question answered**: what mismatch is being tested
+
+See next-week document for the full framework.

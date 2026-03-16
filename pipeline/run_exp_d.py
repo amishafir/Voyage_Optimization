@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run all 3 approaches on experiment_d (Route 2, North Atlantic) and report violations."""
+"""Run all approaches on experiment_d (Route 2, North Atlantic) and compare."""
 
 import os
 import sys
@@ -16,6 +16,18 @@ with open(config_path) as f:
     config = yaml.safe_load(f)
 
 hdf5_path = os.path.join(pipeline_dir, "data", "experiment_d_391wp.h5")
+output_dir = os.path.join(pipeline_dir, "output")
+os.makedirs(output_dir, exist_ok=True)
+
+VALID_STATUS = ("Optimal", "Feasible", "ETA_relaxed")
+
+
+def run_constant_speed():
+    from compare.sensitivity import run_constant_speed_bound
+    result = run_constant_speed_bound(config, hdf5_path, output_dir)
+    # Extract simulated dict from sensitivity result format
+    sim = result.get("simulated", result)
+    return None, sim
 
 
 def run_lp():
@@ -24,7 +36,7 @@ def run_lp():
 
     t_out = transform(hdf5_path, config)
     planned = optimize(t_out, config)
-    if planned.get("status") != "Optimal":
+    if planned.get("status") not in VALID_STATUS:
         print(f"  LP status: {planned.get('status')}")
         return
     simulated = simulate_voyage(
@@ -40,7 +52,7 @@ def run_dp():
 
     t_out = transform(hdf5_path, config)
     planned = optimize(t_out, config)
-    if planned.get("status") not in ("Optimal", "Feasible"):
+    if planned.get("status") not in VALID_STATUS:
         print(f"  DP status: {planned.get('status')}")
         return
     simulated = simulate_voyage(
@@ -50,14 +62,14 @@ def run_dp():
     return planned, simulated
 
 
-def run_rh():
+def run_rh_dp():
     from dynamic_rh.transform import transform
     from dynamic_rh.optimize import optimize
 
     t_out = transform(hdf5_path, config)
     planned = optimize(t_out, config)
-    if planned.get("status") not in ("Optimal", "Feasible"):
-        print(f"  RH status: {planned.get('status')}")
+    if planned.get("status") not in VALID_STATUS:
+        print(f"  RH-DP status: {planned.get('status')}")
         return
     simulated = simulate_voyage(
         planned["speed_schedule"], hdf5_path, config,
@@ -66,49 +78,109 @@ def run_rh():
     return planned, simulated
 
 
-def print_result(name, planned, simulated):
-    # Check plan SWS range
-    sws_values = [s["sws_knots"] for s in planned["speed_schedule"]]
-    plan_min_sws = min(sws_values)
-    plan_max_sws = max(sws_values)
+def run_rh_lp():
+    from dynamic_rh.transform import transform
+    from dynamic_rh.optimize_lp import optimize
 
-    print(f"\n{'=' * 60}")
+    t_out = transform(hdf5_path, config)
+    planned = optimize(t_out, config)
+    if planned.get("status") not in VALID_STATUS:
+        print(f"  RH-LP status: {planned.get('status')}")
+        return
+    simulated = simulate_voyage(
+        planned["speed_schedule"], hdf5_path, config,
+        sample_hour=0, time_varying=True,
+    )
+    return planned, simulated
+
+
+def print_result(name, planned, simulated, weather_info=""):
+    print(f"\n{'=' * 70}")
     print(f"  {name}")
-    print(f"{'=' * 60}")
-    print(f"  Plan:  fuel={planned['planned_fuel_mt']:.2f} mt, time={planned['planned_time_h']:.2f}h")
-    print(f"  Plan SWS range: [{plan_min_sws:.2f}, {plan_max_sws:.2f}] kn")
-    print(f"  Sim:   fuel={simulated['total_fuel_mt']:.2f} mt, time={simulated['total_time_h']:.2f}h")
-    print(f"  Gap:   {simulated['total_fuel_mt'] - planned['planned_fuel_mt']:+.2f} mt")
-    print(f"  SWS violations: {simulated['sws_violations']}")
+    if weather_info:
+        print(f"  {weather_info}")
+    print(f"{'=' * 70}")
 
-    # Check simulation SWS details
-    ts = simulated["time_series"]
-    if "actual_sws_knots" in ts.columns and "planned_sws_knots" in ts.columns:
-        sim_sws = ts["actual_sws_knots"]
-        plan_sws_sim = ts["planned_sws_knots"]
-        violations = ts[abs(ts["actual_sws_knots"] - ts["planned_sws_knots"]) > 0.01]
-        print(f"  Sim SWS range: [{sim_sws.min():.4f}, {sim_sws.max():.4f}] kn")
-        print(f"  Sim planned SWS range: [{plan_sws_sim.min():.4f}, {plan_sws_sim.max():.4f}] kn")
-        if len(violations) > 0:
-            print(f"  Violation details ({len(violations)} legs):")
-            for _, row in violations.head(5).iterrows():
-                print(f"    node {int(row['node_id'])}: needed SWS={row['planned_sws_knots']:.3f}, "
-                      f"clamped to {row['actual_sws_knots']:.3f}")
-            if len(violations) > 5:
-                print(f"    ... and {len(violations) - 5} more")
+    if planned:
+        sws_values = [s["sws_knots"] for s in planned["speed_schedule"]]
+        print(f"  Plan:  fuel={planned['planned_fuel_mt']:.2f} mt, "
+              f"time={planned['planned_time_h']:.2f}h, "
+              f"status={planned.get('status', '?')}")
+        print(f"  Plan SWS range: [{min(sws_values):.2f}, {max(sws_values):.2f}] kn")
+
+    sim_time = simulated.get('total_time_h', simulated.get('voyage_time_h', 0))
+    sim_fuel = simulated.get('total_fuel_mt', 0)
+    arr_dev = simulated.get('arrival_deviation_h', 0)
+    adj = simulated.get('sws_adjustments', simulated.get('sws_violations', 0))
+    print(f"  Sim:   fuel={sim_fuel:.2f} mt, time={sim_time:.2f}h")
+    print(f"  Arrival deviation: {arr_dev:+.2f} h")
+    print(f"  SWS adjustments: {adj}")
+
+    if planned:
+        gap = sim_fuel - planned['planned_fuel_mt']
+        print(f"  Plan→Sim gap: {gap:+.2f} mt ({gap/planned['planned_fuel_mt']*100:+.1f}%)")
 
 
-print("Running LP on exp_d...")
+# ── Run all approaches ──────────────────────────────────────────────
+
+print("=" * 70)
+print("  EXPERIMENT D — Route 2 (North Atlantic, 389 nodes, ~163 h)")
+print("=" * 70)
+
+print("\nRunning constant speed baseline...")
+cs_result = run_constant_speed()
+if cs_result:
+    print_result("Constant Speed (baseline)",
+                 *cs_result,
+                 weather_info="plan=constant SOG | sim=actual@hour0")
+
+print("\nRunning LP...")
 lp_result = run_lp()
 if lp_result:
-    print_result("D-LP (Static Deterministic)", *lp_result)
+    print_result("D-LP (Static Deterministic)",
+                 *lp_result,
+                 weather_info="plan=actual@hour0 (segment-avg) | sim=actual@hour0 (per-node)")
 
-print("\nRunning DP on exp_d...")
+print("\nRunning DP...")
 dp_result = run_dp()
 if dp_result:
-    print_result("D-DP (Dynamic Deterministic)", *dp_result)
+    print_result("D-DP (Dynamic Deterministic)",
+                 *dp_result,
+                 weather_info="plan=predicted@hour0 (per-node) | sim=actual@hour0 (per-node)")
 
-print("\nRunning RH on exp_d...")
-rh_result = run_rh()
-if rh_result:
-    print_result("D-RH (Dynamic Rolling Horizon)", *rh_result)
+print("\nRunning RH-DP...")
+rh_dp_result = run_rh_dp()
+if rh_dp_result:
+    print_result("D-RH-DP (Rolling Horizon, DP solver)",
+                 *rh_dp_result,
+                 weather_info="plan=predicted+actual@6h | sim=actual (time-varying)")
+
+print("\nRunning RH-LP...")
+rh_lp_result = run_rh_lp()
+if rh_lp_result:
+    print_result("D-RH-LP (Rolling Horizon, LP solver)",
+                 *rh_lp_result,
+                 weather_info="plan=actual@6h (segment-avg) | sim=actual (time-varying)")
+
+# ── Summary table ────────────────────────────────────────────────────
+print(f"\n\n{'=' * 70}")
+print("  SUMMARY")
+print(f"{'=' * 70}")
+print(f"  {'Approach':<30} {'Fuel (mt)':>10} {'Arrival':>10} {'Adj':>5}")
+print(f"  {'-'*60}")
+
+for name, result in [
+    ("Constant Speed", cs_result),
+    ("LP", lp_result),
+    ("DP", dp_result),
+    ("RH-DP", rh_dp_result),
+    ("RH-LP", rh_lp_result),
+]:
+    if result:
+        _, sim = result
+        fuel = sim.get('total_fuel_mt', 0)
+        dev = sim.get('arrival_deviation_h', 0)
+        adj = sim.get('sws_adjustments', sim.get('sws_violations', 0))
+        print(f"  {name:<30} {fuel:>10.2f} {dev:>+10.2f}h {adj:>5}")
+
+print(f"  {'-'*60}")

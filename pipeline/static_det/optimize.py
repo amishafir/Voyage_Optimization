@@ -180,7 +180,11 @@ def optimize(transform_output: dict, config: dict) -> dict:
     logger.info("LP status: %s  (%.4f s, solver=%s)", status, elapsed, solver_name)
 
     if not optimal:
-        return {"status": status, "computation_time_s": elapsed}
+        # Soft-ETA fallback: use minimum SWS (index 0) for all segments
+        # This is the slowest, cheapest plan — ship arrives late but SWS is valid
+        logger.warning("LP %s — falling back to min-SWS plan (soft-ETA)", status)
+        selected = {i: 0 for i in range(num_segments)}
+        status = "ETA_relaxed"
 
     # ------------------------------------------------------------------
     # Extract solution

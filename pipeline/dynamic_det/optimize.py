@@ -166,17 +166,27 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
     elapsed = time.time() - start_time
 
+    status = "Optimal"
     if best_t is None:
-        logger.warning("DP: No feasible solution within ETA=%d h", ETA)
-        return {
-            "status": "Infeasible",
-            "computation_time_s": elapsed,
-            "solver": "bellman_dp",
-        }
+        # Soft-ETA fallback: find min-fuel path regardless of arrival time
+        for t, fuel in cost[dest].items():
+            if fuel < best_fuel:
+                best_fuel = fuel
+                best_t = t
+        if best_t is None:
+            logger.warning("DP: No reachable path to destination")
+            return {
+                "status": "Infeasible",
+                "computation_time_s": elapsed,
+                "solver": "bellman_dp",
+            }
+        status = "ETA_relaxed"
+        logger.warning("DP: No path within ETA=%d h — relaxed to %.1f h (soft-ETA)",
+                       ETA, best_t * dt)
 
     planned_time = best_t * dt
-    logger.info("DP optimal: %.2f mt fuel, %.1f h, solved in %.2f s",
-                best_fuel, planned_time, elapsed)
+    logger.info("DP %s: %.2f mt fuel, %.1f h, solved in %.2f s",
+                status.lower(), best_fuel, planned_time, elapsed)
 
     # ------------------------------------------------------------------
     # Backtrack to extract per-leg schedule

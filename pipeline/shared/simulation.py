@@ -59,7 +59,7 @@ def simulate_voyage(
 
     Returns:
         Dict with: total_fuel_mt, total_time_h, arrival_deviation_h,
-        speed_changes, co2_emissions_mt, sws_violations, time_series (DataFrame).
+        speed_changes, co2_emissions_mt, sws_adjustments, sws_violations (compat), time_series (DataFrame).
     """
     ship_params = load_ship_parameters(config)
     eta = config["ship"]["eta_hours"]
@@ -115,7 +115,7 @@ def simulate_voyage(
     cum_distance = 0.0
     cum_time = 0.0
     cum_fuel = 0.0
-    sws_violations = 0
+    sws_adjustments = 0
 
     for idx in range(num_nodes - 1):
         node_a = merged.iloc[idx]
@@ -160,7 +160,7 @@ def simulate_voyage(
         # Clamp SWS to engine limits
         clamped_sws = max(min_speed, min(max_speed, required_sws))
         if abs(clamped_sws - required_sws) > 0.01:
-            sws_violations += 1
+            sws_adjustments += 1
 
         # Compute actual SOG achieved with clamped SWS
         heading_rad = math.radians(heading_deg)
@@ -230,16 +230,17 @@ def simulate_voyage(
         "total_time_h": cum_time,
         "arrival_deviation_h": cum_time - eta,
         "speed_changes": speed_changes,
-        "sws_violations": sws_violations,
+        "sws_adjustments": sws_adjustments,
+        "sws_violations": sws_adjustments,  # backward compat
         "co2_emissions_mt": co2,
         "time_series": time_series,
     }
 
     logger.info(
-        "Simulation: %.1f mt fuel, %.1f h, deviation %.1f h, "
-        "%d speed changes, %d SWS violations",
+        "Simulation: %.1f mt fuel, %.1f h, deviation %+.1f h, "
+        "%d speed changes, %d SWS adjustments",
         cum_fuel, cum_time, result["arrival_deviation_h"],
-        speed_changes, sws_violations,
+        speed_changes, sws_adjustments,
     )
     return result
 

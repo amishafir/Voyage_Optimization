@@ -130,13 +130,13 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
         # Fallback: if actual weather injection made DP infeasible (tight ETA),
         # retry with forecast-only weather
-        if dp_result.get("status") not in ("Optimal", "Feasible") and use_actual and actual_weather:
+        if dp_result.get("status") not in ("Optimal", "Feasible", "ETA_relaxed") and use_actual and actual_weather:
             logger.info("RH decision %d: infeasible with actual weather, retrying with forecast only",
                         dp_idx)
             sub_transform["weather_grid"] = weather_grids[sample_hour]
             dp_result = dp_optimize(sub_transform, config)
 
-        if dp_result.get("status") not in ("Optimal", "Feasible"):
+        if dp_result.get("status") not in ("Optimal", "Feasible", "ETA_relaxed"):
             logger.warning("RH: DP infeasible at decision point %d (node=%d, remaining_eta=%.1f h). "
                            "Trying last decision point with all remaining legs.",
                            dp_idx, current_node_idx, remaining_eta)
