@@ -156,19 +156,42 @@ def optimize(transform_output: dict, config: dict) -> dict:
     # Find optimal arrival at destination
     # ------------------------------------------------------------------
     dest = num_legs  # node index 278 (0-based)
+    lambda_val = config.get("ship", {}).get("eta_penalty_mt_per_hour", None)
+    soft_eta = lambda_val is not None and lambda_val != float("inf")
+
     best_t = None
     best_fuel = INF
+    best_cost = INF
 
     for t, fuel in cost[dest].items():
-        if t * dt <= ETA and fuel < best_fuel:
+        arrival = t * dt
+        delay = max(0.0, arrival - ETA)
+        if soft_eta:
+            total_cost = fuel + lambda_val * delay
+        else:
+            if delay > 1e-6:
+                continue  # hard constraint: skip late arrivals
+            total_cost = fuel
+        if total_cost < best_cost:
+            best_cost = total_cost
             best_fuel = fuel
             best_t = t
 
     elapsed = time.time() - start_time
 
     status = "Optimal"
+    delay_hours = 0.0
+
     if best_t is None:
-        # Soft-ETA fallback: find min-fuel path regardless of arrival time
+        if soft_eta:
+            # Soft constraint should always find something if any path exists
+            logger.error("DP: No reachable path even with soft ETA (λ=%s)", lambda_val)
+            return {
+                "status": "Infeasible",
+                "computation_time_s": elapsed,
+                "solver": "bellman_dp",
+            }
+        # Hard ETA fallback: find min-fuel path regardless of arrival time
         for t, fuel in cost[dest].items():
             if fuel < best_fuel:
                 best_fuel = fuel
@@ -183,6 +206,8 @@ def optimize(transform_output: dict, config: dict) -> dict:
         status = "ETA_relaxed"
         logger.warning("DP: No path within ETA=%d h — relaxed to %.1f h (soft-ETA)",
                        ETA, best_t * dt)
+
+    delay_hours = max(0.0, best_t * dt - ETA)
 
     planned_time = best_t * dt
     logger.info("DP %s: %.2f mt fuel, %.1f h, solved in %.2f s",
@@ -260,11 +285,22 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
     status = "Optimal" if abs(best_fuel - total_fuel) < 1.0 else "Feasible"
 
-    return {
+    # Recompute delay from actual schedule time (more precise than slot-based)
+    delay_hours = max(0.0, total_time - ETA)
+
+    result = {
         "status": status,
         "planned_fuel_mt": total_fuel,
         "planned_time_h": total_time,
+        "planned_delay_h": delay_hours,
         "speed_schedule": schedule,
         "computation_time_s": round(elapsed, 4),
         "solver": "bellman_dp",
     }
+
+    if soft_eta:
+        result["planned_total_cost_mt"] = total_fuel + lambda_val * delay_hours
+    else:
+        result["planned_total_cost_mt"] = total_fuel
+
+    return result

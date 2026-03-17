@@ -13,6 +13,7 @@ ship:
   rated_power_kw: 10000.0
   speed_range_knots: [11, 13]
   eta_hours: 163                         # ~1,955 nm / 12 kn
+  eta_penalty_mt_per_hour: null          # null = hard ETA constraint (backward compat)
 
 # exp_d: North Atlantic storm track, 7-day voyage within forecast horizon
 # Isolates forecast freshness effect: DD has coverage but degrades over 7 days

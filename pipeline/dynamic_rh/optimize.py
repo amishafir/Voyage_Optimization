@@ -48,6 +48,8 @@ def optimize(transform_output: dict, config: dict) -> dict:
     rh_cfg = config["dynamic_rh"]
     replan_freq = rh_cfg["replan_frequency_hours"]
     use_actual = rh_cfg.get("use_actual_at_replan", False)
+    lambda_val = config.get("ship", {}).get("eta_penalty_mt_per_hour", None)
+    soft_eta = lambda_val is not None and lambda_val != float("inf")
 
     # Decision points: [0, replan_freq, 2*replan_freq, ...]
     decision_hours = []
@@ -79,9 +81,19 @@ def optimize(transform_output: dict, config: dict) -> dict:
         remaining_eta = ETA - elapsed_time
 
         if remaining_eta <= 0:
-            logger.warning("RH: No remaining ETA at decision point %d (elapsed=%.1f h)",
-                           dp_idx, elapsed_time)
-            break
+            if soft_eta:
+                # With soft ETA, continue with remaining_eta based on remaining distance
+                # at min speed, so the DP graph has enough time slots
+                remaining_dist = sum(distances[current_node_idx:])
+                min_sog = 8.0  # conservative lower bound for SOG
+                remaining_eta = remaining_dist / min_sog
+                logger.info("RH: Past ETA at decision %d (elapsed=%.1f h), "
+                            "continuing with soft ETA=%.1f h for %.1f nm",
+                            dp_idx, elapsed_time, remaining_eta, remaining_dist)
+            else:
+                logger.warning("RH: No remaining ETA at decision point %d (elapsed=%.1f h)",
+                               dp_idx, elapsed_time)
+                break
 
         grid_for_dp = weather_grids[sample_hour]
 
@@ -129,8 +141,8 @@ def optimize(transform_output: dict, config: dict) -> dict:
         dp_result = dp_optimize(sub_transform, config)
 
         # Fallback: if actual weather injection made DP infeasible (tight ETA),
-        # retry with forecast-only weather
-        if dp_result.get("status") not in ("Optimal", "Feasible", "ETA_relaxed") and use_actual and actual_weather:
+        # retry with forecast-only weather (only needed with hard ETA)
+        if dp_result.get("status") not in ("Optimal", "Feasible", "ETA_relaxed") and not soft_eta and use_actual and actual_weather:
             logger.info("RH decision %d: infeasible with actual weather, retrying with forecast only",
                         dp_idx)
             sub_transform["weather_grid"] = weather_grids[sample_hour]
@@ -215,6 +227,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
     total_fuel = sum(l["fuel_mt"] for l in committed_legs)
     total_time = sum(l["time_h"] for l in committed_legs)
+    delay_hours = max(0.0, total_time - ETA)
 
     status = "Optimal" if current_node_idx >= num_legs else "Feasible"
 
@@ -222,11 +235,17 @@ def optimize(transform_output: dict, config: dict) -> dict:
         "status": status,
         "planned_fuel_mt": total_fuel,
         "planned_time_h": total_time,
+        "planned_delay_h": delay_hours,
         "speed_schedule": committed_legs,
         "computation_time_s": round(total_elapsed, 4),
         "solver": "bellman_dp_rh",
         "decision_points": decision_log,
     }
+
+    if soft_eta:
+        result["planned_total_cost_mt"] = total_fuel + lambda_val * delay_hours
+    else:
+        result["planned_total_cost_mt"] = total_fuel
 
     logger.info("RH complete: %.2f mt fuel, %.2f h, %d decision points, %.2f s total",
                 total_fuel, total_time, len(decision_log), total_elapsed)

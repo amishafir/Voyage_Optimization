@@ -204,6 +204,8 @@ def optimize(transform_output: dict, config: dict) -> dict:
     rh_cfg = config["dynamic_rh"]
     replan_freq = rh_cfg["replan_frequency_hours"]
     use_actual = rh_cfg.get("use_actual_at_replan", False)
+    lambda_val = config.get("ship", {}).get("eta_penalty_mt_per_hour", None)
+    soft_eta = lambda_val is not None and lambda_val != float("inf")
 
     # Decision points
     decision_hours = []
@@ -233,8 +235,16 @@ def optimize(transform_output: dict, config: dict) -> dict:
         remaining_eta = ETA - elapsed_time
 
         if remaining_eta <= 0:
-            logger.warning("RH-LP: No remaining ETA at decision %d", dp_idx)
-            break
+            if soft_eta:
+                remaining_dist = sum(distances[current_node_idx:])
+                min_sog = 8.0
+                remaining_eta = remaining_dist / min_sog
+                logger.info("RH-LP: Past ETA at decision %d (elapsed=%.1f h), "
+                            "continuing with soft ETA=%.1f h for %.1f nm",
+                            dp_idx, elapsed_time, remaining_eta, remaining_dist)
+            else:
+                logger.warning("RH-LP: No remaining ETA at decision %d", dp_idx)
+                break
 
         # 2. Build weather dict for each node at the chosen sample_hour
         #    Use forecast_hour closest to elapsed_time
@@ -378,6 +388,7 @@ def optimize(transform_output: dict, config: dict) -> dict:
 
     total_fuel = sum(l["fuel_mt"] for l in committed_legs)
     total_time = sum(l["time_h"] for l in committed_legs)
+    delay_hours = max(0.0, total_time - ETA)
 
     status = "Optimal" if current_node_idx >= num_legs else "Feasible"
 
@@ -385,11 +396,17 @@ def optimize(transform_output: dict, config: dict) -> dict:
         "status": status,
         "planned_fuel_mt": total_fuel,
         "planned_time_h": total_time,
+        "planned_delay_h": delay_hours,
         "speed_schedule": committed_legs,
         "computation_time_s": round(total_elapsed, 4),
         "solver": "lp_rh",
         "decision_points": decision_log,
     }
+
+    if soft_eta:
+        result["planned_total_cost_mt"] = total_fuel + lambda_val * delay_hours
+    else:
+        result["planned_total_cost_mt"] = total_fuel
 
     logger.info("RH-LP complete: %.2f mt fuel, %.2f h, %d decisions, %.2f s",
                 total_fuel, total_time, len(decision_log), total_elapsed)

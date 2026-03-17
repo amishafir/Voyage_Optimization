@@ -103,8 +103,12 @@ def print_result(name, planned, simulated, weather_info=""):
 
     if planned:
         sws_values = [s["sws_knots"] for s in planned["speed_schedule"]]
+        delay_h = planned.get('planned_delay_h', 0)
+        cost_mt = planned.get('planned_total_cost_mt', planned['planned_fuel_mt'])
         print(f"  Plan:  fuel={planned['planned_fuel_mt']:.2f} mt, "
               f"time={planned['planned_time_h']:.2f}h, "
+              f"delay={delay_h:.2f}h, "
+              f"cost={cost_mt:.2f} mt, "
               f"status={planned.get('status', '?')}")
         print(f"  Plan SWS range: [{min(sws_values):.2f}, {max(sws_values):.2f}] kn")
 
@@ -163,11 +167,14 @@ if rh_lp_result:
                  weather_info="plan=actual@6h (segment-avg) | sim=actual (time-varying)")
 
 # ── Summary table ────────────────────────────────────────────────────
+lambda_val = config.get("ship", {}).get("eta_penalty_mt_per_hour", None)
+lambda_str = f"λ={lambda_val}" if lambda_val is not None else "λ=∞ (hard ETA)"
+
 print(f"\n\n{'=' * 70}")
-print("  SUMMARY")
+print(f"  SUMMARY  ({lambda_str})")
 print(f"{'=' * 70}")
-print(f"  {'Approach':<30} {'Fuel (mt)':>10} {'Arrival':>10} {'Adj':>5}")
-print(f"  {'-'*60}")
+print(f"  {'Approach':<25} {'Fuel(mt)':>10} {'Delay(h)':>10} {'Cost(mt)':>10} {'Arrival':>10} {'Adj':>5}")
+print(f"  {'-'*75}")
 
 for name, result in [
     ("Constant Speed", cs_result),
@@ -177,10 +184,12 @@ for name, result in [
     ("RH-LP", rh_lp_result),
 ]:
     if result:
-        _, sim = result
+        planned, sim = result
         fuel = sim.get('total_fuel_mt', 0)
         dev = sim.get('arrival_deviation_h', 0)
         adj = sim.get('sws_adjustments', sim.get('sws_violations', 0))
-        print(f"  {name:<30} {fuel:>10.2f} {dev:>+10.2f}h {adj:>5}")
+        delay = planned.get('planned_delay_h', 0) if planned else 0
+        cost = planned.get('planned_total_cost_mt', fuel) if planned else fuel
+        print(f"  {name:<25} {fuel:>10.2f} {delay:>10.2f} {cost:>10.2f} {dev:>+10.2f}h {adj:>5}")
 
-print(f"  {'-'*60}")
+print(f"  {'-'*75}")

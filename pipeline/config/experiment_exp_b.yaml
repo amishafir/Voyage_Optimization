@@ -13,6 +13,7 @@ ship:
   rated_power_kw: 10000.0
   speed_range_knots: [11, 13]
   eta_hours: 140                       # ~1,678 nm / 12 kn
+  eta_penalty_mt_per_hour: null        # null = hard ETA constraint (backward compat)
 
 # exp_b: ~138 interpolated waypoints, 144 samples — spatial + temporal
 # LP aggregates to 6 segments; DP uses all ~138 nodes
