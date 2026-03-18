@@ -35,6 +35,7 @@ WEATHER_FIELDS = [
 def execute_voyage(agent, hdf5_path: str, config: dict,
                    initial_plan: dict = None,
                    transform_output: dict = None,
+                   replan_transform: dict = None,
                    time_varying: bool = False,
                    sample_hour: int = 0) -> dict:
     """Execute a voyage with the given agent.
@@ -45,6 +46,8 @@ def execute_voyage(agent, hdf5_path: str, config: dict,
         config: Full experiment config.
         initial_plan: Pre-computed plan dict (if None, agent plans from transform_output).
         transform_output: Transform data for initial planning (required if initial_plan is None).
+        replan_transform: Transform data for re-planning (if different from transform_output).
+                          LP agents need the DP transform for re-planning (has node_metadata).
         time_varying: Use time-varying actual weather for simulation (for Connected).
         sample_hour: Which actual-weather snapshot to use (for Basic/Mid).
 
@@ -271,6 +274,7 @@ def execute_voyage(agent, hdf5_path: str, config: dict,
                 (action == Action.REPLAN_FRESH and agent.environment.can_compute)
             )
             if can_replan:
+                replan_data = replan_transform if replan_transform is not None else transform_output
                 new_schedule = _do_replan(
                     agent=agent,
                     action=action,
@@ -279,7 +283,7 @@ def execute_voyage(agent, hdf5_path: str, config: dict,
                     cum_time=cum_time,
                     config=config,
                     hdf5_path=hdf5_path,
-                    transform_output=transform_output,
+                    transform_output=replan_data,
                 )
                 if new_schedule is not None:
                     sog_schedule = _merge_schedule(sog_schedule, new_schedule, i + 1)
