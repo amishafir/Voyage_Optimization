@@ -6,10 +6,10 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| D1 | No SWS violations — relax ETA | TODO | Change simulation: SWS never exceeds [11, 13], accept late arrival |
-| D2 | Test RH with LP | TODO | New approach: LP re-solved every 6h with fresh weather |
-| D3 | Realistic upper bound (constant speed) | TODO | Replace SWS=13 bound with constant SOG = D/ETA |
-| D4 | Clarify plan vs simulation framework | TODO | Write clear matrix for all approaches |
+| D1 | No SWS violations — relax ETA | **DONE** | Implemented λ penalty in all optimizers (LP, DP, RH-DP, RH-LP). `ship.eta_penalty_mt_per_hour` config. |
+| D2 | Test RH with LP | **DONE** | RH-LP implemented and tested on both routes |
+| D3 | Realistic upper bound (constant speed) | **DONE** | Constant SOG = D/ETA baseline implemented |
+| D4 | Clarify plan vs simulation framework | **DONE** | Section 2 below + `pipeline/output/lambda_penalty_report.md` |
 
 ---
 
@@ -199,7 +199,75 @@ Once D1–D4 are implemented, the results table becomes:
 
 ---
 
-## 8. Questions for Next Meeting
+## 8. λ Penalty — Implementation & Results (Batch 1 done)
+
+### What is λ?
+
+`ship.eta_penalty_mt_per_hour` (λ) controls how the optimizer treats the ETA deadline:
+
+- **λ = null (hard ETA)**: The optimizer **must** produce a plan where `sum(distance/SOG) ≤ ETA`. This is a constraint in the math — if no feasible solution exists, the solver fails.
+- **λ = finite value (soft ETA)**: The objective becomes `min(fuel + λ × delay)`, where `delay = max(0, voyage_time − ETA)`. The optimizer **can** arrive late but pays a penalty.
+- **λ = 0**: No penalty at all — pure fuel minimization. Ship picks slowest speed.
+- **λ = ∞**: Equivalent to hard ETA (infinite cost for any lateness).
+
+### How it works end-to-end
+
+1. **Optimizer** (LP or DP): solves `min(fuel + λ × delay)`. With finite λ, this is always feasible — no more infeasibility fallbacks.
+2. **Simulator**: executes the plan with actual weather. For each leg, computes what SWS is needed to hit planned SOG. If SWS falls outside [11, 13] kn, it's clamped → actual SOG ≠ planned SOG → arrival time drifts.
+
+**SWS adjustments are NOT caused by the ETA constraint.** They come from weather mismatch between planning and simulation. The optimizer assumes certain weather → picks speeds → simulator runs with different weather → required SWS hits the physical limits.
+
+### Why RH has fewer adjustments
+
+RH re-plans every 6h with fresh weather. Each sub-plan is based on near-current conditions → fewer surprises in simulation → fewer clamps.
+
+### Results Summary
+
+**Hard ETA (λ = null) — Route D, North Atlantic:**
+
+| Approach | Plan Fuel | Sim Fuel | SWS Adj | Arrival Dev |
+|----------|----------|---------|---------|------------|
+| CS       | —        | 216.57  | 73      | +0.00 h    |
+| LP       | 208.91   | 215.60  | 64      | +0.43 h    |
+| DP       | 222.60   | 214.24  | 161     | +1.53 h    |
+| RH-DP    | 218.79   | 217.28  | 15      | +0.03 h    |
+| RH-LP    | 210.84   | 215.56  | 51      | +0.43 h    |
+
+Note: DP plan fuel > sim fuel because forecast predicted harder conditions than actual → optimizer picked faster (more expensive) speeds unnecessarily.
+
+**Soft ETA (λ = 2.0) — Route D:**
+
+| Approach | Fuel (mt) | Delay (h) | Cost (mt) |
+|----------|----------|-----------|-----------|
+| LP       | 191.72   | 7.83      | 207.38    |
+| DP       | 222.60   | 0.00      | 222.60    |
+| RH-DP    | 199.23   | 9.35      | 217.92    |
+| RH-LP    | 193.10   | 10.09     | 213.27    |
+
+DP chose zero delay — its hard-ETA solution was already within ETA so no trade-off needed. LP/RH saved 8–9% fuel by accepting 8–10h delay.
+
+**Soft ETA (λ = 2.0) — Route B, Persian Gulf:**
+
+| Approach | Fuel (mt) | Delay (h) | Cost (mt) |
+|----------|----------|-----------|-----------|
+| LP       | 153.93   | 9.94      | 173.81    |
+| DP       | 156.47   | 8.01      | 172.49    |
+| RH-DP    | 158.98   | 6.90      | 172.79    |
+| RH-LP    | 154.56   | 9.89      | 174.34    |
+
+All four approaches converge to nearly identical total cost (~172–174 mt). The Pareto frontier is flat on this route.
+
+### What λ = 2.0 means intuitively
+
+The ship burns ~1.0 mt/h at 11 kn and ~1.55 mt/h at 13 kn. With λ=2, one hour of delay "costs" 2 mt fuel-equivalent — roughly 1.3–2× the hourly fuel burn. This is a moderate penalty: the optimizer will slow down when it saves more than 2 mt/h of fuel, but won't dawdle.
+
+### Files changed
+
+Implemented in LP (PuLP + Gurobi), DP, RH-DP, RH-LP. Config: `ship.eta_penalty_mt_per_hour: null` (backward compatible). Full report: `pipeline/output/lambda_penalty_report.md`.
+
+---
+
+## 9. Questions for Next Meeting
 
 1. **RH-LP segment count**: How many segments per window? Same ratio as static LP (6 segments for 138 nodes), or fewer for shorter windows?
 2. **Soft-ETA penalty**: Should we add a fuel penalty for late arrival in the objective, or just report deviation as a separate metric?

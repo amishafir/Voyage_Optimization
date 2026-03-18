@@ -573,3 +573,597 @@ Agents (autonomous writers/reviewers):
 Writing workflow: outline → sections (intro first) → tables → bibliography → review → assembly.
 
 **FIRST TASK FOR TOMORROW (Mar 6):** Start writing the paper — begin with `01_introduction` using the `section-writer` agent. The introduction establishes all 6 gaps and states the numbered contributions, so it anchors the rest of the paper.
+
+### 2026-03-15 — Route 2 (exp_d) analysis complete
+
+**Data download & merge:** Downloaded exp_d HDF5 from Shlomo2 (29 samples, 389 nodes, 23 MB). Shlomo2 was missing predicted hours 6 and 12 — spliced from Edison. Final: 29/29 predicted hours, zero gaps.
+
+**Validation:** 389 nodes, BN 6–8 dominant, wind 46.6±16.8 km/h (2.7× Route 1), waves 5.05±2.10 m (6.2× Route 1). Genuinely harsh North Atlantic winter conditions.
+
+**DP infeasibility fix:** DP returned "Infeasible" with dt=0.1h — cumulative time rounding over 388 legs (5nm spacing) added ~17h. Fixed by reducing `time_granularity` to 0.01h in exp_d config. Root cause: 21 speeds collapse to only 2 distinct arrival time slots per 5nm leg at dt=0.1h.
+
+**Route 2 results:**
+
+| | D-LP | D-DP | D-RH | Optimal | Constant Speed |
+|--|--|--|--|--|--|
+| Sim fuel (mt) | 215.60 | 214.24 | **217.28** | 216.44 | 216.57 |
+| Violations | 64 (16.5%) | **161 (41.5%)** | **15 (3.9%)** | 0 | 73 |
+| Arrival dev | +0.4h | **+1.5h late** | **+0.03h** | 0 | 0 |
+
+**Key findings:**
+- Weather tax 17.78 mt (2.9× Route 1's 6.17 mt) — scales super-linearly with weather severity
+- DP/LP sim fuel falls *below* optimal bound — artefact of SWS clamping (ship arrives late, burns less)
+- RH within 0.4% of optimal, only approach arriving on time
+- Forecast error: wind RMSE +286% over 144h (vs +103% on Route 1)
+- Replan sweep: 0.50 mt range across all frequencies — 6h optimal confirmed
+- LP ≈ constant speed confirmed on harsh route too
+
+**Paper updates:** Rewrote §6 with both routes, updated §5.4, §7, §8 with Route 2 findings. All 6 contributions validated (C3 partially — both routes fit within forecast horizon).
+
+### 2026-03-16 — Supervisor meeting → four major decisions
+
+**D1: No SWS violations — relax ETA instead.** Plan limits [11, 13] kn are hard constraints; ETA is soft. If weather requires SWS > 13, use SWS = 13 and accept late arrival. Report arrival deviation instead of violation count. Eliminates the "below optimal bound" artefact on Route 2.
+
+**D2: Test RH with LP.** New approach: RH-LP — re-solve LP at every 6h decision point with fresh weather. If RH-LP ≈ RH-DP, LP is sufficient with re-planning (simpler operational recommendation).
+
+**D3: Realistic upper bound = constant speed.** Replace SWS=13 bound with constant SOG = D/ETA. This is "what a captain does with no optimization tool." Optimization span becomes: constant-speed fuel − optimized fuel.
+
+**D4: Clarify plan vs simulation framework.** Clear matrix of what each optimizer sees during planning and what the simulation tests.
+
+**Implementation (same day):**
+- DP optimizer: added soft-ETA fallback (status="ETA_relaxed" when no path within ETA)
+- LP optimizer: added soft-ETA fallback (min-SWS plan when infeasible)
+- RH-DP: accepts "ETA_relaxed" sub-problems
+- Simulation: renamed `sws_violations` → `sws_adjustments` (backward compat kept)
+- **New file: `dynamic_rh/optimize_lp.py`** — RH-LP optimizer. Same RH loop as RH-DP but calls LP at each decision point. Groups remaining legs by segment, averages weather, solves LP, maps segment SOG back to legs.
+- Constant-speed baseline added to runner via existing `sensitivity.run_constant_speed_bound()`
+
+**Route 2 results with all 5 approaches:**
+
+| Approach | Fuel (mt) | Arrival Dev | SWS Adj |
+|----------|----------|------------|---------|
+| Constant Speed | 216.57 | +0.00h | 73 |
+| LP | 215.60 | +0.43h | 64 |
+| DP | 214.24 | +1.53h late | 161 |
+| **RH-DP** | **217.28** | **+0.03h** | **15** |
+| RH-LP | 215.56 | +0.43h | 51 |
+
+**Interpretation:**
+- LP ≈ constant speed (215.60 vs 216.57 mt) — optimization adds nothing with segment averaging
+- RH-LP (215.56 mt) slightly better than static LP — re-planning helps but doesn't fix averaging
+- RH-DP is the only approach with near-zero arrival deviation AND low SWS adjustments
+- DP is operationally infeasible: 161 adjustments, 1.5h late
+
+### 2026-03-17 — API outage recovery + collector fixes
+
+**Problem:** exp_b wind endpoint (`/v1/forecast`) timing out on both servers since ~Mar 16 05:00 UTC. 30+ hours of consecutive failures. exp_d marine endpoint unaffected.
+
+**Root cause:** The old retry logic only retried on rate limits, not timeouts. Also, 60s inter-experiment delay was insufficient.
+
+**Fixes deployed to both servers:**
+1. **Retry on timeouts/504s/503s** — 5 retries with 2/4/6/8 min backoff (was: give up after first timeout)
+2. **5-minute gap between experiments** — `INTER_EXPERIMENT_DELAY` 60s → 300s (prevents API throttling)
+
+**Result:** Both exp_b and exp_d succeeded immediately on both servers after deploying the fix. exp_b recovered from ~30h outage. Shlomo2: 37 samples, Edison: 35 samples.
+
+**Gap-free Route 1 data:** The API outage created a permanent gap at hours 174–198 (both servers failed simultaneously). A new gap-free window starting from hour 222 will be ready by ~Mar 23 (need 24 consecutive 6h samples). The old Shlomo1 data (171 hourly samples, hours 0–225) remains the best Route 1 dataset.
+
+### 2026-03-17 — Experiment framework redesign
+
+**Major reframing** of the experimental setup. See `docs/experiment_framework.md` for full document.
+
+**Core idea:** Every experiment has two phases — **planning** (optimizer creates speed policy from forecast) and **realization** (ship executes policy under actual weather). Two possible flows during realization:
+- **Flow 1**: Ship achieves planned SOG → on schedule, fuel may differ
+- **Flow 2**: Weather too harsh for planned SOG at max SWS → ship falls behind → decision needed
+
+**3 environment settings × 2 model types = 6 combinations:**
+
+| | No compute (A) | Compute, stale forecast (B) | Compute, fresh forecast (C) |
+|--|--|--|--|
+| **LP** | Follow initial plan; sail max SWS if SOG unachievable, continue after segment | Re-solve LP from current position with original forecast | Re-solve LP from current position with fresh forecast |
+| **DP** | Follow initial plan; sail max SWS if SOG unachievable, continue after | Re-solve DP from current position with original forecast | Re-solve DP from current position with fresh forecast |
+
+**Fuel boundaries redefined:**
+- **Optimal**: Plan with actual weather, realization matches perfectly (zero gap)
+- **Upper bound (constant speed)**: SOG = D/ETA everywhere; same Flow 2 rules apply (re-plan constant speed after delay)
+
+**What this decomposition isolates:**
+1. **Averaging effect**: LP-A vs DP-A (same forecast, different resolution)
+2. **Re-planning effect**: X-A vs X-B (same forecast, with/without re-plan on Flow 2)
+3. **Forecast freshness effect**: X-B vs X-C (re-plan with stale vs fresh weather)
+
+**Implementation status:**
+- LP-A, DP-A, DP-C, LP-C: exist
+- LP-B, DP-B: **need implementation** (re-plan on Flow 2 with stale forecast)
+- Simulation Flow 2 detection: needs update (currently doesn't trigger re-planning mid-voyage)
+- Constant-speed Flow 2: needs update (re-plan constant SOG after delay)
+- **ETA penalty (λ)**: needs implementation in both LP and DP objectives + λ sensitivity sweep
+
+**ETA as soft constraint with penalty λ (mt/h):**
+- Objective becomes: minimize fuel + λ × max(0, arrival_time − ETA)
+- λ converts delay hours to fuel-equivalent cost
+- LP: linearize with delay variable δ ≥ 0, δ ≥ total_time − ETA, minimize fuel + λδ
+- DP: select min(fuel + λ × max(0, t − ETA)) across all reachable final states
+- Sweep λ ∈ [0.5, 1, 2, 5, 10, ∞] to map Pareto frontier per approach
+- **Key question**: At what λ does LP-C become competitive with DP-A?
+
+### 2026-03-18 — Agent-based reframing of the research
+
+**Motivation:** Reframe the thesis not as "LP vs DP for ship speed optimization" but as an autonomous agent problem: "Given an agent with fixed hardware, which combination of optimization plan + environment capabilities produces the best cost-performance trade-off for a given task?"
+
+---
+
+#### Agent Definition
+
+An **agent** is defined by five components:
+
+```
+Agent = (Planering Spec, Measurement System, Plan, Policy, Environment)
+```
+
+| Component | Role | Fixed/Variable | Our implementation |
+|-----------|------|---------------|-------------------|
+| Planering Spec | Physical constants of the platform | Fixed per agent | Ship params: 200m, 32m beam, 12m draft, 50,000t, 10,000 kW, SWS ∈ [11,13] kn |
+| Measurement System | Equations linking control input to cost | Fixed per agent | SOG from SWS (wind/wave/current resistance), FCR = 0.000706 × V_s³ |
+| Plan | Optimization algorithm that produces a speed schedule | Variable (3 choices) | Naive (constant SOG = D/ETA), LP (segment-averaged), DP (per-node, time-varying) |
+| Policy | Rules for when/how to execute and revise the plan | Variable | "Follow plan" / "Re-plan on trigger" / "Re-plan with fresh data" |
+| Environment | Capabilities available to the agent during the task | Variable (3 tiers) | Basic / Mid / Connected |
+
+**Planering Spec** — all constant inputs from the ship design: length, beam, draft, displacement, block coefficient, rated power, speed range. These don't change during a voyage.
+
+**Measurement System** — the set of equations (mostly derived from the engineering spec) that let the agent measure the relationship between SWS (control input) and fuel consumption (cost output). Includes: Holtrop-Mennen resistance decomposition, wind resistance (Isherwood coefficients), wave added resistance, current vector projection, and the cubic power-speed relationship.
+
+**Plan** — the optimization algorithm that, given a route, weather forecast, and constraints, produces a speed schedule. Three plans:
+1. **Naive**: constant SOG = total_distance / ETA. No optimization — just divide evenly.
+2. **LP**: linear program over segments. Weather averaged per segment, one SWS per segment. Fast, simple, but loses spatial/temporal resolution.
+3. **DP**: dynamic programming over per-node graph. Time-varying weather per node, fine-grained speed choices. Slower but captures environmental variation.
+
+**Policy** — the rules governing how the agent uses its plan during the voyage:
+- When to invoke the plan (once at departure? on schedule? on trigger?)
+- What data to feed the plan (departure forecast? stale forecast? fresh forecast?)
+- How to handle Flow 2 events (SWS hits physical limit, can't achieve planned SOG)
+
+Policy is coupled to environment (you can't re-plan without compute), but within an environment tier, multiple policies are possible (e.g., re-plan every 6h vs every 12h vs only on Flow 2).
+
+**Environment** — the capability tier the agent operates under:
+
+| Environment | Compute | Communication | Planning behavior |
+|-------------|---------|--------------|-------------------|
+| **Basic** | None | None | One-time plan at departure. Agent follows plan rigidly. On Flow 2: sail at max SWS, accept delay. Like a ship with no onboard optimization. |
+| **Mid** | Yes | None | Can re-plan during voyage, but only with the forecast loaded at departure (stale). On Flow 2: re-optimize remaining voyage with original forecast data. |
+| **Connected** | Yes | Yes | Can re-plan AND download fresh forecasts mid-voyage. On Flow 2 or on schedule: re-optimize with up-to-date weather. |
+
+---
+
+#### The 9 Combinations (3 Plans × 3 Environments)
+
+| | Basic (A) | Mid (B) | Connected (C) |
+|--|-----------|---------|---------------|
+| **Naive** | Constant speed, no re-plan | Re-plan constant speed on Flow 2 (stale) | Re-plan constant speed on Flow 2 (fresh) |
+| **LP** | LP plan at departure, follow rigidly | Re-solve LP on Flow 2 with departure forecast | Re-solve LP on Flow 2 with fresh forecast |
+| **DP** | DP plan at departure, follow rigidly | Re-solve DP on Flow 2 with departure forecast | Re-solve DP on Flow 2 with fresh forecast |
+
+Not all 9 are equally interesting:
+- **Naive-A** = constant speed baseline (already implemented)
+- **Naive-B/C** = re-planning a constant speed doesn't gain much (just recalculates D_remaining/ETA_remaining)
+- **LP-A, DP-A** = current static LP and static DP
+- **LP-B, DP-B** = re-plan on Flow 2 with stale forecast (need implementation)
+- **LP-C, DP-C** = current RH-LP and RH-DP (re-plan on schedule with fresh weather)
+
+Meaningful comparisons reduce to ~7 configurations: Naive-A, LP-A, LP-B, LP-C, DP-A, DP-B, DP-C.
+
+---
+
+#### Task Definition
+
+A **task** is what the agent is asked to do:
+
+```
+Task = (Route, Weather regime, ETA, λ)
+```
+
+| Parameter | What it captures | Our experiments |
+|-----------|-----------------|----------------|
+| Route | Distance, waypoints, heading changes | Route B (1,678 nm, Persian Gulf) vs Route D (1,955 nm, North Atlantic) |
+| Weather regime | Severity, variability, predictability | Mild/stable (PG) vs harsh/variable (NA) |
+| ETA | Time deadline | ~140h (Route B), ~163h (Route D) |
+| λ | Mission priority: fuel vs punctuality | Sweep [0, 0.5, 1, 2, 5, 10, ∞] |
+
+---
+
+#### Research Questions (reframed)
+
+1. **Plan value**: For a given environment, does upgrading the plan (Naive → LP → DP) improve performance? By how much? Is the improvement route-dependent?
+
+2. **Environment value**: For a given plan, does upgrading the environment (Basic → Mid → Connected) improve performance? What's the marginal value of compute? Of communication?
+
+3. **Interaction effects**: Does the plan × environment interaction matter? E.g., is DP-Basic better than LP-Connected? If so, plan choice matters more than environment. If not, even a simple plan benefits enough from re-planning to match a sophisticated plan without it.
+
+4. **Task sensitivity**: How do answers 1-3 change across tasks? On a calm route, maybe Naive-A ≈ DP-C. On a stormy route, maybe only DP-C achieves acceptable performance.
+
+5. **Cost-performance frontier**: For each task, what is the minimum-capability agent that achieves near-optimal performance? This is the practical recommendation: "don't deploy expensive compute/comms infrastructure if LP-Basic gets you within 2% of optimal."
+
+---
+
+#### What This Reframing Buys Us
+
+1. **Generalizability**: The agent framework applies beyond ships — any autonomous platform (drones, trucks, EVs) with a physics model, route, and weather uncertainty.
+
+2. **Clean taxonomy**: Instead of ad-hoc approach names (static det, dynamic det, rolling horizon), we have a structured decomposition: Plan × Environment × Policy.
+
+3. **Practical recommendations**: Operators don't ask "should I use LP or DP?" They ask "given my ship's capabilities and this route, what should I deploy?" The agent framework answers this directly.
+
+4. **λ fits naturally**: λ is a task parameter (mission priority), not an agent parameter. Same agent, different λ → different behavior. This separates the optimization question from the business question.
+
+5. **Narrative strength**: "We study autonomous agents under uncertainty" is a stronger story than "we compared two optimization algorithms for ships."
+
+---
+
+#### Mapping to Existing Work
+
+| Current name | Agent framing |
+|-------------|--------------|
+| Constant speed baseline | Naive-A |
+| Static LP | LP-A |
+| Static DP | DP-A |
+| RH-DP (stale forecast) | DP-B (if re-plan on Flow 2 only) |
+| RH-DP (fresh forecast) | DP-C |
+| RH-LP (fresh forecast) | LP-C |
+| New (not yet built) | LP-B, DP-B (re-plan on Flow 2 with stale forecast) |
+
+#### Open Questions
+
+1. **Is Naive-B/C worth implementing?** Re-planning a constant speed after Flow 2 just gives a new D_remaining/ETA_remaining — trivial but could be a useful data point.
+2. **Policy as a separate dimension?** Currently policy is locked to environment tier. Should we also vary policy within a tier (e.g., Mid with "re-plan every 6h" vs "re-plan on Flow 2 only")?
+3. **Paper venue**: Does this reframing point toward a different target journal? Autonomous systems / AI planning vs pure maritime OR?
+4. **Title candidates**: "Autonomous Speed Control Under Environmental Uncertainty: An Agent-Based Analysis of Maritime Voyage Optimization" or similar?
+
+### 2026-03-18 — Agent implementation deep dive: Policy and the execution loop
+
+---
+
+#### Agent Construction
+
+An agent is composed by selecting one option from each variable component:
+
+```python
+agent = Agent(
+    spec=ship_params,                      # fixed hardware
+    measurement=PhysicsModel(ship_params),  # fixed equations
+    plan=DPPlan(),                          # or LPPlan() or NaivePlan()
+    policy=ReplanOnFlow2Policy(),           # or FollowPlanPolicy() or ScheduledReplanPolicy()
+    environment=ConnectedEnvironment(),     # or BasicEnvironment() or MidEnvironment()
+)
+```
+
+The **spec** and **measurement system** are always the same — they're the ship. What varies between experiments is **plan × policy × environment**.
+
+---
+
+#### The Voyage Execution Loop (leg by leg)
+
+This is the core of how an agent operates. Every leg follows the same sequence:
+
+```
+For each leg i = 0, 1, ..., N-1:
+
+  1. OBSERVE
+     Read actual weather at current position and time.
+
+  2. ASSESS
+     What SWS do I need to achieve my planned SOG?
+     required_sws = measurement.inverse_sog(planned_sog[i], actual_weather)
+
+  3. CLASSIFY
+     if 11 ≤ required_sws ≤ 13  →  FLOW 1 (nominal)
+     if required_sws > 13        →  FLOW 2 (adverse — can't keep up)
+     if required_sws < 11        →  FLOW 3 (favorable — would overshoot)
+
+  4. EXECUTE
+     Flow 1: set SWS = required_sws → achieve planned SOG exactly
+     Flow 2: set SWS = 13 (max)    → achieve SOG < planned, fall behind
+     Flow 3: set SWS = 11 (min)    → achieve SOG > planned, get ahead
+
+  5. UPDATE STATE
+     actual_sog = measurement.forward_sog(actual_sws, actual_weather)
+     leg_time = distance[i] / actual_sog
+     leg_fuel = fcr(actual_sws) * leg_time
+     cumulative_time += leg_time
+     cumulative_fuel += leg_fuel
+     delay = cumulative_time - planned_cumulative_time
+
+  6. POLICY DECISION
+     Does the agent re-plan? → This is where environments diverge.
+```
+
+---
+
+#### The Three Policies in Detail
+
+**Basic Policy — "follow the plan, no matter what"**
+
+```
+Step 6: Never re-plan.
+  - Flow 2 → accept delay, continue with next leg's planned SOG
+  - Flow 3 → accept being ahead, continue with next leg's planned SOG
+  - Delay accumulates with no correction mechanism.
+```
+
+After a Flow 2 event, the agent is behind schedule. The next leg's planned SOG was computed assuming on-time arrival at this node. The agent is late but still targets the same SOG — so it arrives even later. **Delay compounds.**
+
+Critical property: the agent does NOT try to recover by going faster. It can't recalculate. It just follows the original speed schedule blindly.
+
+**Mid Policy — "re-plan with what I have"**
+
+```
+Step 6: On Flow 2 event:
+  a. Remaining route = legs [i+1 ... N-1]
+  b. Remaining ETA = original_ETA - cumulative_time
+  c. Re-run plan optimizer with STALE forecast (loaded at departure)
+  d. Get new speed schedule for remaining legs
+  e. Replace planned_sog[i+1:] with new schedule
+  f. Continue
+```
+
+Key properties:
+- Re-plans **reactively** — only when something goes wrong (Flow 2)
+- Uses **departure forecast** — weather data may be hours or days old
+- The re-plan knows the agent is behind and can try to recover (speed up) or accept delay (via λ)
+- Does NOT re-plan on Flow 3 (favorable). This is a policy choice — could be varied.
+
+**Connected Policy — "re-plan with fresh information"**
+
+```
+Step 6: On Flow 2 event OR on schedule (every 6h):
+  a. Download fresh weather forecast  ← key difference from Mid
+  b. Remaining route = legs [i+1 ... N-1]
+  c. Remaining ETA = original_ETA - cumulative_time
+  d. Re-run plan optimizer with FRESH forecast
+  e. Replace planned_sog[i+1:] with new schedule
+  f. Continue
+```
+
+Two differences from Mid:
+1. Fresh forecast → re-plan based on current reality, not stale assumptions
+2. Re-plans proactively on schedule, not just reactively on Flow 2
+
+---
+
+#### Flow 3: The Underexplored Case
+
+Flow 3 = favorable conditions, ship would go faster than planned. Agent is ahead of schedule. What should it do?
+
+- **Basic**: nothing. Keep following plan. Arrive early.
+- **Mid/Connected**: could re-plan to slow down and save fuel, exploiting the time buffer.
+
+With λ penalty: arriving early has no cost (delay = max(0, time - ETA)), so the fuel savings from slowing down are pure benefit. A Mid/Connected agent SHOULD re-plan on Flow 3 too. But Basic can't.
+
+**Design decision**: Should Flow 3 trigger re-planning in Mid/Connected? Probably yes — any significant divergence from plan is an opportunity to re-optimize.
+
+**Revised trigger logic:**
+- Basic: never re-plan
+- Mid: re-plan on Flow 2 (reactive, stale forecast)
+- Connected: re-plan on Flow 2 OR on schedule every 6h (proactive + reactive, fresh forecast)
+- Possible Mid variant: re-plan on Flow 2 OR Flow 3 (any divergence, stale forecast)
+
+---
+
+#### Delay Compounding Under Basic Policy
+
+After Flow 2 on leg i, the agent is Δt hours late. For remaining legs, the original plan assumed weather at time T_planned, but the agent experiences weather at time T_planned + Δt.
+
+On Route D (North Atlantic), weather changes significantly over hours. The delay shifts the agent into **different weather** than planned:
+- If the new weather is worse → more Flow 2 events → more delay → **cascading failure**
+- If the new weather is better → partial recovery → less total delay
+
+This cascading effect is the fundamental weakness of the Basic agent. Mid and Connected agents break the cascade by re-planning.
+
+**Testable prediction**: Basic agent delay variance should be much higher than Mid/Connected on harsh routes, but similar on calm routes.
+
+---
+
+#### Re-plan Mechanics: What Happens Inside
+
+When a Mid or Connected agent re-plans, it constructs a **sub-problem**:
+
+```
+Sub-problem at leg i:
+  - Remaining legs: [i+1 ... N-1]
+  - Remaining distance: sum(distances[i+1:])
+  - Remaining ETA: original_ETA - cumulative_time_so_far
+  - Weather: stale forecast (Mid) or fresh forecast (Connected)
+  - λ: same as original (mission priority doesn't change mid-voyage)
+  - Constraints: same SWS ∈ [11, 13]
+```
+
+The plan optimizer (LP or DP) solves this sub-problem from scratch. The new plan replaces everything from leg i+1 onward. Legs already executed are sunk cost — the optimizer only controls the future.
+
+**Key insight**: remaining_ETA can be negative (if already late). With hard ETA (λ=null), the sub-problem is infeasible. With soft ETA (λ finite), the optimizer naturally handles this — it minimizes fuel + λ × additional_delay.
+
+This is why λ is essential for the Mid/Connected agents. Without it, re-planning after delay is often infeasible.
+
+---
+
+#### Open Implementation Questions
+
+1. **Re-plan granularity**: Does the agent re-plan after every Flow 2 leg, or batch them? E.g., if legs 50-55 are all Flow 2, does it re-plan 6 times or once after leg 55?
+   - Proposal: re-plan once when transitioning OUT of a Flow 2 sequence (first Flow 1 after one or more Flow 2 legs). This avoids wasteful re-computation during a storm.
+
+2. **Connected re-plan schedule**: Every 6h aligns with NWP cycles (proven: 86% data redundancy at sub-6h). Should it ALSO re-plan on Flow 2 between scheduled points?
+   - Proposal: yes, hybrid trigger. Scheduled every 6h + reactive on Flow 2. This catches both gradual drift and sudden adverse events.
+
+3. **Flow 3 re-plan**: Worth the compute cost?
+   - Proposal: yes for Connected (cheap, and fresh forecast makes it valuable). Skip for Mid (stale forecast limits the benefit, and the agent is ahead anyway — low urgency).
+
+4. **State passed to re-planner**: Just remaining route + ETA? Or also the history of Flow 2/3 events? History could inform the re-planner about forecast reliability (if many Flow 2 events, maybe add a safety margin).
+   - Proposal: keep it simple for now — just remaining route + remaining ETA + weather. History-aware re-planning is future work.
+
+---
+
+#### Mapping to Existing Code
+
+| Agent concept | Existing code |
+|--------------|--------------|
+| Engineering Spec | `config['ship']` in experiment YAML |
+| Measurement System | `shared/physics.py` (calculate_speed_over_ground, calculate_fuel_consumption_rate) |
+| Naive Plan | `compare/sensitivity.py::run_constant_speed_bound()` |
+| LP Plan | `static_det/optimize.py::optimize()` |
+| DP Plan | `dynamic_det/optimize.py::optimize()` |
+| Basic Policy (execute loop) | `shared/simulation.py::simulate_voyage()` — currently does the leg loop but no re-planning |
+| Mid Policy | **New** — needs voyage executor with Flow 2 detection + re-plan with stale forecast |
+| Connected Policy | `dynamic_rh/optimize.py` — currently does scheduled re-plan, needs refactor to leg-by-leg execution |
+| Sub-problem builder (DP) | `dynamic_rh/optimize.py` lines 113-126 (slice arrays from current node) |
+| Sub-problem builder (LP) | `dynamic_rh/optimize_lp.py::_build_lp_sub_problem()` |
+
+**The missing piece is `pipeline/shared/voyage_executor.py`** — the unified leg-by-leg execution loop that implements all three policies. This is Phase 4 from the batch 2 plan.
+
+### 2026-03-18 — Composable agent architecture
+
+---
+
+#### Design Principle
+
+Every piece is a swappable component with a standard interface. You assemble an agent by picking one implementation per slot:
+
+```python
+agent = assemble(
+    spec = BulkCarrier200m(),
+    measurement = HoltropMennen(),
+    plan = DPPlan(granularity=0.1),
+    policy = ReactivePolicy(trigger="flow2"),
+    environment = Connected(forecast_source="open_meteo"),
+)
+
+result = agent.execute(route, initial_forecast, eta, lambda_val)
+```
+
+---
+
+#### Component Interfaces
+
+**Spec** — pure data container, no logic:
+```
+spec.length_m → 200
+spec.beam_m → 32
+spec.speed_range → (11, 13)
+spec.fcr_coefficient → 0.000706
+```
+
+**Measurement** — translates between control input (SWS) and outcomes (SOG, fuel). Two directions:
+```
+measurement.forward(sws, weather) → sog, fcr
+measurement.inverse(target_sog, weather) → required_sws
+```
+Currently `shared/physics.py`. Swappable in future work (e.g., Hollenbach instead of Holtrop-Mennen). Fixed for this thesis.
+
+**Plan** — static optimizer. Takes a snapshot problem, returns a speed schedule:
+```
+plan.optimize(route_segment, weather_data, eta, lambda_val) → speed_schedule
+```
+Same interface for Naive (trivial), LP, and DP. The plan knows nothing about voyage execution — it solves a one-shot optimization when asked.
+
+**Policy** — the decision brain. After each leg, decides what to do next:
+```
+policy.on_leg_complete(state) → CONTINUE | REPLAN | REPLAN_FRESH
+```
+The policy sees full state (current leg, delay, flow type, time since last replan) and decides. Implementations:
+- `PassivePolicy()` — always CONTINUE
+- `ReactivePolicy(trigger="flow2")` — REPLAN on Flow 2 only
+- `ReactivePolicy(trigger="any_divergence")` — REPLAN on Flow 2 or Flow 3
+- `ProactivePolicy(interval=6, also_on_flow2=True)` — REPLAN_FRESH every 6h + reactive on Flow 2
+
+**Environment** — provides capabilities that constrain what the policy can actually do:
+```
+environment.can_compute → bool
+environment.can_communicate → bool
+environment.get_forecast(time) → weather_data  # fresh download or stale cache
+```
+
+---
+
+#### Key Design Insight: Policy and Environment Are Separate Concerns
+
+- **Policy** decides WHEN to re-plan
+- **Environment** decides HOW (with what data, or not at all)
+
+A ReactivePolicy on a Basic environment = policy wants to re-plan but can't → same as PassivePolicy. Upgrade the environment to Mid → same policy now works. This separation is clean and testable.
+
+Default pairings (can be overridden):
+```
+Basic()       → PassivePolicy()
+Mid()         → ReactivePolicy(trigger="flow2")
+Connected()   → ProactivePolicy(interval=6, also_on_flow2=True)
+```
+
+---
+
+#### The Executor — Wires Components Together
+
+The executor is NOT a component — it's the runtime loop:
+
+```python
+def execute_voyage(agent, route, initial_forecast, eta, lambda_val):
+
+    # Initial planning
+    weather = initial_forecast
+    schedule = agent.plan.optimize(route, weather, eta, lambda_val)
+    state = VoyageState(position=0, time=0, fuel=0, schedule=schedule)
+
+    for leg_idx in range(route.num_legs):
+
+        # 1. OBSERVE — actual weather at current position and time
+        actual_wx = route.actual_weather(leg_idx, state.time)
+
+        # 2. ASSESS — what SWS needed?
+        required_sws = agent.measurement.inverse(schedule[leg_idx].sog, actual_wx)
+
+        # 3. CLASSIFY
+        flow = classify(required_sws, agent.spec.speed_range)
+
+        # 4. EXECUTE
+        actual_sws = clamp(required_sws, agent.spec.speed_range)
+        actual_sog, fcr = agent.measurement.forward(actual_sws, actual_wx)
+        leg_time = route.distances[leg_idx] / actual_sog
+        leg_fuel = fcr * leg_time
+
+        # 5. UPDATE STATE
+        state.advance(leg_time, leg_fuel, flow)
+
+        # 6. POLICY DECISION
+        action = agent.policy.on_leg_complete(state)
+
+        if action != CONTINUE and agent.environment.can_compute:
+            if action == REPLAN_FRESH and agent.environment.can_communicate:
+                weather = agent.environment.get_fresh_forecast(state.time)
+
+            remaining = route.slice(leg_idx + 1)
+            remaining_eta = eta - state.time
+            new_schedule = agent.plan.optimize(remaining, weather, remaining_eta, lambda_val)
+            state.replace_schedule(leg_idx + 1, new_schedule)
+
+    return state.to_result()
+```
+
+---
+
+#### Experiment Runner — Combinatorial
+
+```python
+for plan in [NaivePlan(), LPPlan(), DPPlan()]:
+    for env in [Basic(), Mid(), Connected()]:
+        for route in [route_b, route_d]:
+            for lam in [0.5, 1, 2, 5, None]:
+                agent = assemble(spec, measurement, plan, policy_for(env), env)
+                result = execute_voyage(agent, route, forecast, eta, lam)
+                results.append(result)
+```
+
+---
+
+#### Scope Decisions for This Thesis
+
+- **Measurement system**: Fixed (Holtrop-Mennen + Isherwood). Swappable interface is designed in but only one implementation. Alternative models (Hollenbach, CFD-based) are future work.
+- **Spec**: Fixed (single bulk carrier). Multi-vessel comparison is future work.
+- **Plan**: Three implementations (Naive, LP, DP). Interface supports adding MPC, GA, RL in future.
+- **Policy**: Three implementations (Passive, Reactive, Proactive). Flow 3 re-planning tested as a variant of Reactive.
+- **Environment**: Three tiers (Basic, Mid, Connected). Fleet-connected (ship-to-ship weather sharing) is future work.

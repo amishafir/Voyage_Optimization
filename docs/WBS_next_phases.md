@@ -779,11 +779,107 @@ Optimization span: 99.74 kg (24.3% of upper bound). Under SOG-target simulation,
 
 Range: <0.15 kg. Replan frequency has negligible impact on this dataset.
 
+### Phase 7: λ Penalty (Soft ETA) — COMPLETE
+
+| # | Task | File(s) | Status |
+|---|------|---------|--------|
+| 7.1 | Add λ penalty to LP (PuLP + Gurobi) | `static_det/optimize.py` | Done — `delta ≥ time − ETA`, objective `fuel + λδ` |
+| 7.2 | Add λ penalty to DP destination selection | `dynamic_det/optimize.py` | Done — `min(fuel + λ × delay)` across all reachable states |
+| 7.3 | Propagate λ through RH-DP | `dynamic_rh/optimize.py` | Done — soft ETA in sub-problems, continue past ETA |
+| 7.4 | Propagate λ through RH-LP | `dynamic_rh/optimize_lp.py` | Done — same soft ETA handling |
+| 7.5 | Config: `ship.eta_penalty_mt_per_hour` | `config/experiment_exp_b.yaml`, `config/experiment_exp_d.yaml` | Done — `null` = hard ETA (backward compat) |
+| 7.6 | Update runner with delay/cost reporting | `run_exp_d.py` | Done |
+| 7.7 | Validate backward compatibility | manual test | Done — all results identical with λ=null |
+| 7.8 | Validate soft ETA (λ=2.0, λ=0) | manual test | Done — LP saves 8-13% fuel for 7-10h delay |
+
+**Gate**: Passed. Committed `3414e61`. Full report: `pipeline/output/lambda_penalty_report.md`.
+
+### Phase 8: Agent Framework — IN PROGRESS
+
+Reframe the pipeline as composable autonomous agents. An agent is assembled from swappable components:
+
+```
+Agent = (Spec, Measurement, Plan, Policy, Environment)
+         fixed   fixed       choice  choice   tier
+```
+
+#### 8.0 Infrastructure (guardrails before code)
+
+| # | Task | File(s) | Status |
+|---|------|---------|--------|
+| 8.0.1 | Agent framework coding rules | `.claude/rules/agent-framework.md` | Done |
+| 8.0.2 | Backward compatibility test suite | `pipeline/tests/test_agent_backward_compat.py` | Done |
+| 8.0.3 | Update WBS with agent phases | `docs/WBS_next_phases.md` | Done |
+
+#### 8.1 Component Interfaces (thin wrappers)
+
+| # | Task | File(s) | Wraps |
+|---|------|---------|-------|
+| 8.1.1 | ShipSpec dataclass | `pipeline/agent/spec.py` | `config['ship']` dict |
+| 8.1.2 | Measurement (forward/inverse) | `pipeline/agent/measurement.py` | `shared/physics.py` |
+| 8.1.3 | Plan interface + 3 implementations | `pipeline/agent/plans.py` | `static_det/optimize.py`, `dynamic_det/optimize.py`, `compare/sensitivity.py` |
+| 8.1.4 | Policy interface + 3 implementations | `pipeline/agent/policies.py` | New logic (Passive, Reactive, Proactive) |
+| 8.1.5 | Environment interface + 3 tiers | `pipeline/agent/environments.py` | HDF5 weather access patterns |
+| 8.1.6 | Agent assembly function | `pipeline/agent/__init__.py` | Composes above |
+
+**Gate**: All components instantiate and pass type checks.
+
+#### 8.2 Voyage Executor (core new work)
+
+| # | Task | File(s) | Notes |
+|---|------|---------|-------|
+| 8.2.1 | VoyageState class | `pipeline/agent/executor.py` | Tracks position, time, fuel, delay, flow events |
+| 8.2.2 | Flow classification (1/2/3) | `pipeline/agent/executor.py` | `required_sws` vs `speed_range` |
+| 8.2.3 | Leg execution loop | `pipeline/agent/executor.py` | OBSERVE → ASSESS → CLASSIFY → EXECUTE → UPDATE → DECIDE |
+| 8.2.4 | Re-plan dispatch | `pipeline/agent/executor.py` | Calls `plan.optimize()` on sub-problem when policy says REPLAN |
+| 8.2.5 | Sub-problem builder (DP) | `pipeline/agent/executor.py` | Reuse pattern from `dynamic_rh/optimize.py` lines 113-126 |
+| 8.2.6 | Sub-problem builder (LP) | `pipeline/agent/executor.py` | Reuse pattern from `dynamic_rh/optimize_lp.py::_build_lp_sub_problem()` |
+
+**Gate**: `execute_voyage(LP-A)` matches `simulate_voyage(LP schedule)` within 0.01 mt/h.
+
+**Sanity checks (all must pass before proceeding):**
+
+| Check | Agent Config | Must Match | Known Value (Route D) |
+|-------|-------------|-----------|----------------------|
+| S1 | Naive-A | `run_constant_speed_bound()` | sim: 216.57 mt, 163.00h |
+| S2 | LP-A, λ=null | static LP + `simulate_voyage()` | plan: 208.91 mt, sim: 215.60 mt |
+| S3 | DP-A, λ=null | static DP + `simulate_voyage()` | plan: 222.60 mt, sim: 214.24 mt |
+| S4 | DP-C, 6h schedule | current RH-DP | plan: 218.79 mt, sim: 217.28 mt |
+| S5 | LP-C, 6h schedule | current RH-LP | plan: 210.84 mt, sim: 215.56 mt |
+| S6 | LP-A, λ=2.0 | LP soft ETA test | plan: 191.72 mt, delay: 7.83h |
+| S7 | λ=0 | Min SWS everywhere | SWS=11.0, max delay |
+
+#### 8.3 Experiment Runner + Reporting
+
+| # | Task | File(s) | Notes |
+|---|------|---------|-------|
+| 8.3.1 | Combinatorial runner | `pipeline/agent/runner.py` | Loop: plan × environment × route × λ |
+| 8.3.2 | Results table | `pipeline/agent/runner.py` | Fuel, delay, cost, flow2_count, replan_count |
+| 8.3.3 | Agent config in YAML | `config/experiment_exp_*.yaml` | New `agents:` section (additive, backward compat) |
+
+**Gate**: Full matrix (7 agents × 2 routes × 4 λ values = 56 runs) completes and produces comparison table.
+
+#### Edge Cases (must handle)
+
+| Edge Case | Where | How |
+|-----------|-------|-----|
+| `remaining_eta ≤ 0` during re-plan | Executor | With λ finite: estimate ETA from remaining distance / min SOG. With λ=null: skip re-plan. |
+| All remaining legs are Flow 2 | Executor | Re-plan once when exiting Flow 2 sequence, not per-leg |
+| Flow 2 on last leg | Executor | No re-plan (nothing remains). Execute and report. |
+| Re-plan triggers immediate Flow 2 | Executor | Don't re-plan again. Continue to next non-Flow-2 leg. |
+| Port B NaN weather | Measurement | Return calm defaults (0 wind, 0 current, 0 wave) |
+| DP sub-problem with < 5 legs | Sub-problem builder | Allow — DP handles small graphs fine |
+| LP sub-problem with 1 segment | Sub-problem builder | Allow — trivial LP, just pick best SWS |
+| λ=null + re-plan when already late | Executor | Sub-problem infeasible → fall back to min-SWS for remaining legs |
+
 ### Critical Path
 
 ```
-Phase 0 ─> Phase 1 ─> Phase 2 ─> Phase 3 ─> Phase 4 ─> Phase 5 ─> Phase 6
-  DONE       DONE       DONE       DONE       DONE       DONE       DONE
+Phase 0 ─> Phase 1 ─> Phase 2 ─> Phase 3 ─> Phase 4 ─> Phase 5 ─> Phase 6 ─> Phase 7
+  DONE       DONE       DONE       DONE       DONE       DONE       DONE       DONE
+
+Phase 8.0 (infrastructure) ─> Phase 8.1 (components) ─> Phase 8.2 (executor) ─> Phase 8.3 (runner)
+  IN PROGRESS
 ```
 
 ---
