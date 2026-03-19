@@ -157,3 +157,46 @@ Backward compat: LP-A and DP-A executor results match old `simulate_voyage()` to
 4. **λ for the paper**: Use λ=2.0 as default (literature-backed), show Pareto frontier via sweep?
 
 5. **Next priority**: Run agents on fresh data (servers collecting since Mar 17, ~40+ samples). Or focus on paper writing with current results?
+
+---
+
+## 9. Using Accumulated Data — Departure Sensitivity Analysis
+
+### Data status (as of Mar 19)
+
+| Server | Route B samples | Route D samples | Coverage |
+|--------|----------------|----------------|----------|
+| Shlomo2 | 46 | 47 | ~282h (12 days) |
+| Edison | ~44 | ~44 | ~264h |
+
+### The autocorrelation problem
+
+With 6h sampling, departures less than ~72h apart share most of their voyage weather. On a 160h voyage:
+
+| Departure separation | Weather overlap | Independence |
+|---------------------|----------------|-------------|
+| 6h | ~96% | Virtually identical |
+| 24h | ~85% | Slightly different |
+| 72h (3 days) | ~55% | Reasonable |
+| 120h (5 days) | ~25% | Good |
+
+With 282h of data and 160h voyages, we get at most **2–3 truly independent voyages**. Not enough for statistical claims.
+
+### Proposed framing: two experiments
+
+**Experiment A — Single voyage, 7 agents** (current results): One weather realization per route, compare agents. Answers: "given this weather, which agent is best?"
+
+**Experiment B — Departure sensitivity**: Run all 7 agents at departures SH=0, 6, 12, ..., 108 on Route D (~19 departures). Plot fuel vs departure hour per agent. Don't claim independence — present as sensitivity analysis:
+- If LP-C's fuel barely varies across departures → robust agent
+- If DP-A swings by 10 mt → sensitive to departure timing
+- The **spread** per agent is the finding, not the mean
+
+This honestly reports what the data supports without overstating statistical significance.
+
+### For true statistical claims (future work)
+
+Need data across multiple weeks or seasons — different synoptic weather patterns. Current 12-day window captures at most 2–3 independent weather regimes on the North Atlantic.
+
+### Question for supervisor
+
+Is the departure sensitivity analysis sufficient for the thesis, or do we need to collect longer (4+ weeks) for a proper statistical comparison?
