@@ -200,3 +200,33 @@ Need data across multiple weeks or seasons — different synoptic weather patter
 ### Question for supervisor
 
 Is the departure sensitivity analysis sufficient for the thesis, or do we need to collect longer (4+ weeks) for a proper statistical comparison?
+
+---
+
+## 10. Meeting Outcome — New Experiment Setup (Mar 23)
+
+### Simplified to 3 agents
+
+The supervisor directed a cleaner framing with **3 agents**, all re-planning on the same 6-hour cycle:
+
+| Agent | Planning method | Weather input | Key assumption |
+|-------|----------------|---------------|----------------|
+| **Naive** | Constant speed to ETA | None — no weather used | Averages the required speed to finish on time; re-computes every 6h based on remaining distance/time |
+| **Deterministic** | Optimizes per-segment speed | Actual weather (current observations) | Takes actual weather at each segment and treats it as constant for the entire remaining voyage |
+| **Stochastic** | Optimizes per-segment speed | Forecast + actual for current leg | Uses actual weather for the current 6h decision leg, then forecast weather for all future legs |
+
+### Key design decisions
+
+1. **All 3 agents re-plan every 6 hours** — same cycle, same decision points. The difference is only what information each agent uses.
+
+2. **Naive agent** does not use weather at all — it simply divides remaining distance by remaining time to get a constant speed. This is the "no-information" baseline.
+
+3. **Deterministic agent** uses actual weather but assumes it won't change — a "current-conditions-forever" assumption. This isolates the value of having weather data at all (vs Naive) without forecast complexity.
+
+4. **Stochastic agent** uses actual weather for the immediate 6h leg (where forecast = reality) and forecast weather for all future legs. This isolates the value of forecast information (vs Deterministic).
+
+### What this measures
+
+- **Naive vs Deterministic** → value of weather observation
+- **Deterministic vs Stochastic** → value of weather forecasting
+- **All three on same cycle** → fair comparison, differences are purely from information quality
