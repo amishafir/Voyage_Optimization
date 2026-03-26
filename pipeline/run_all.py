@@ -57,7 +57,7 @@ EXPERIMENTS = [
 API_DELAY = 5.0          # seconds between API chunks
 SAMPLE_INTERVAL = 6      # hours between samples
 NWP_OFFSET_UTC = 5       # GFS data arrives ~5h after cycle start
-INTER_EXPERIMENT_DELAY = 60  # seconds pause between experiments
+INTER_EXPERIMENT_DELAY = 300  # 5 min pause between experiments (avoid API throttling)
 WIND_MARINE_DELAY = 60   # seconds pause between wind and marine bulk calls
 
 # ---------------------------------------------------------------------------
@@ -112,11 +112,14 @@ def collect_one_sample(client, exp, sample_hour, base_dir):
             successful = n_wp - failed
             break
         except Exception as e:
-            is_rate_limit = "rate" in str(e).lower() or "limit" in str(e).lower()
-            if is_rate_limit and attempt < max_retries - 1:
-                wait = 60 * (attempt + 1)
-                logger.warning("[%s] Rate limited (attempt %d/%d), waiting %ds",
-                               exp["name"], attempt + 1, max_retries, wait)
+            err_str = str(e).lower()
+            is_retryable = ("rate" in err_str or "limit" in err_str
+                            or "timeout" in err_str or "timed out" in err_str
+                            or "504" in err_str or "503" in err_str)
+            if is_retryable and attempt < max_retries - 1:
+                wait = 120 * (attempt + 1)  # 2min, 4min, 6min, 8min backoff
+                logger.warning("[%s] API error (attempt %d/%d), retrying in %ds: %s",
+                               exp["name"], attempt + 1, max_retries, wait, e)
                 time.sleep(wait)
                 continue
             logger.error("[%s] API call failed (attempt %d/%d): %s",
