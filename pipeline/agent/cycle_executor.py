@@ -211,7 +211,20 @@ def execute_cycle_voyage(agent_type: str, hdf5_path: str, config: dict,
         # ---- PLAN ----
         remaining_legs = num_legs - current_leg
         remaining_dist = sum(distances[current_leg:])
-        remaining_eta = max(eta_hours - cum_time, 0.1)
+        remaining_eta_ideal = eta_hours - cum_time
+
+        # If behind schedule, use realistic ETA (remaining dist at mid speed)
+        # The optimizer plans with hard ETA, but we don't let it become infeasible
+        min_possible_time = remaining_dist / max_sws
+        if remaining_eta_ideal < min_possible_time:
+            remaining_eta = min_possible_time * 1.05  # 5% margin
+            behind_schedule = True
+            logger.info("  Behind schedule by %.1fh — extending ETA to %.1fh (dist=%.0f nm at max %.0f kn)",
+                        min_possible_time - remaining_eta_ideal,
+                        remaining_eta, remaining_dist, max_sws)
+        else:
+            remaining_eta = remaining_eta_ideal
+            behind_schedule = False
 
         sample_hour = _pick_sample_hour(available_actual_hours, nwp_hour)
 
@@ -222,7 +235,7 @@ def execute_cycle_voyage(agent_type: str, hdf5_path: str, config: dict,
             sog_schedule = _fill_schedule(target_sog, current_leg, num_legs)
             plan_fuel = 0.0
             plan_time = remaining_dist / target_sog
-            plan_status = "Optimal"
+            plan_status = "Late" if behind_schedule else "Optimal"
 
         elif agent_type == "deterministic":
             weather_grid, max_fh = assemble_deterministic(
@@ -238,11 +251,14 @@ def execute_cycle_voyage(agent_type: str, hdf5_path: str, config: dict,
                 sog_schedule = _apply_dp_result(result, current_leg, num_legs, sog_schedule)
                 plan_fuel = result.get("planned_fuel_mt", 0)
                 plan_time = result.get("planned_time_h", 0)
-                plan_status = result["status"]
+                plan_status = "Late" if behind_schedule else result["status"]
             else:
+                # DP infeasible — fall back to max speed (get there ASAP)
+                sog_schedule = _fill_schedule(max_sws, current_leg, num_legs)
                 plan_fuel = 0.0
-                plan_time = remaining_eta
-                plan_status = "Fallback"
+                plan_time = remaining_dist / max_sws
+                plan_status = "Late-MaxSpeed"
+                logger.warning("  DP infeasible — falling back to max speed %.0f kn", max_sws)
 
         elif agent_type == "stochastic":
             pred_sh = _pick_sample_hour(available_predicted_hours, nwp_hour) if available_predicted_hours else sample_hour
@@ -260,11 +276,13 @@ def execute_cycle_voyage(agent_type: str, hdf5_path: str, config: dict,
                 sog_schedule = _apply_dp_result(result, current_leg, num_legs, sog_schedule)
                 plan_fuel = result.get("planned_fuel_mt", 0)
                 plan_time = result.get("planned_time_h", 0)
-                plan_status = result["status"]
+                plan_status = "Late" if behind_schedule else result["status"]
             else:
+                sog_schedule = _fill_schedule(max_sws, current_leg, num_legs)
                 plan_fuel = 0.0
-                plan_time = remaining_eta
-                plan_status = "Fallback"
+                plan_time = remaining_dist / max_sws
+                plan_status = "Late-MaxSpeed"
+                logger.warning("  DP infeasible — falling back to max speed %.0f kn", max_sws)
         else:
             raise ValueError(f"Unknown agent type: {agent_type}")
 

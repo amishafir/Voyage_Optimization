@@ -10,7 +10,7 @@ ship:
   block_coefficient: 0.75
   rated_power_kw: 10000.0
   speed_range_knots: [11, 13]
-  eta_hours: 163                         # ~1,955 nm / 12 kn
+  eta_hours: 163                         # ~1,955 nm / 12 kn (avg within [9,15])
   eta_penalty_mt_per_hour: null          # null = hard ETA constraint
 
 # 3-agent experiment: Naive, Deterministic, Stochastic
