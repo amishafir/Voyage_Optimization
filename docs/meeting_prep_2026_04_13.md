@@ -243,24 +243,485 @@ From Tables A1/A2, the actual voyage data:
 
 ## 3. DP Graph Structure Revisited
 
-### Current structure (`speed_control_optimizer.py`)
-*(to be filled after review)*
+### 3.1 Current structure (`speed_control_optimizer.py`)
 
-### How forecast resolution enters the graph
-*(to be filled)*
+The legacy DP builds a **2D time-distance grid** and connects nodes via a custom "Sides" BFS algorithm.
 
-### Proposed changes
-*(to be filled)*
+**Classes:**
+- `Node`: Holds `(time, distance)` index, `minimal_fuel_consumption`, `minimal_input_arc`, list of `arcs`
+- `Side`: A row or column of nodes along a boundary (vertical = constant distance, horizontal = constant time)
+- `Arc`: An edge with `SWS`, `SOG`, `Travel_time`, `Distance`, `FCR`, `fuel_load`
+
+**Graph axes:**
+- **X-axis (columns):** Distance in nm, from 0 to 3,393 nm at `distance_granularity` = 1 nm → 3,394 columns
+- **Y-axis (rows):** Time in hours, from 0 to 280h at `time_granularity` = 1h → 281 rows
+- **Total grid:** 281 × 3,394 = **953,714 nodes** (dense numpy array, most unreachable)
+
+**Graph construction — Sides BFS:**
+1. Create initial vertical side: nodes at distance=0, time ∈ [0, cumulative_time_list[0]]
+2. For each side in queue, `locate_sides()` finds the next vertical boundary (at next cumulative segment distance) and horizontal boundary (at the time window end)
+3. `connect_sides()` creates arcs between all node pairs in source and destination sides
+4. Arcs are only created if the implied SOG falls within `speed_values_list` (11.0–13.0 at 0.1 kn step)
+
+**Weather lookup (line 577):** `self.weather_forecasts_list[0][index_of_segment]` — **always uses forecast window 0**, regardless of the node's time position. Weather is looked up by spatial segment only (which of the 12 segments the node's distance falls into). There is no time-varying weather — all nodes see the same static weather.
+
+**SWS inverse calculation:** Given a required SOG (from distance/time), binary search finds the SWS needed to achieve that SOG under the segment's weather conditions. FCR is then computed as `0.000706 × SWS³`.
+
+**Key limitations:**
+1. **No forecast resolution awareness** — hardcoded to `weather_forecasts_list[0]` (single forecast window)
+2. **Dense grid is wasteful** — 953K nodes allocated, most never touched by the Sides BFS
+3. **weather_forecasts.yaml is fully commented out** for multi-window mode — only the single 0–280h window is active
+4. **Sides BFS is complex** — custom graph traversal that's hard to extend for time-varying weather
+5. **Speed discretization is SOG-based** — arcs exist only where distance/time gives an exact SOG matching a speed value (0.1 kn grid). This misses some valid speed combinations
+
+**Comparison with pipeline DP (`pipeline/dynamic_det/optimize.py`):**
+
+| Dimension | Legacy DP | Pipeline DP |
+|-----------|-----------|-------------|
+| **Graph storage** | Dense 2D numpy array (953K nodes) | Sparse dict-of-dicts (reachable states only) |
+| **Spatial axis** | Distance in nm (1 nm steps) | Waypoint node index (138–391 nodes) |
+| **Temporal axis** | Time in hours (1h steps) | Time slots (0.1h steps) |
+| **Speed axis** | Implicit (SOG must match grid) | Explicit loop over candidate SWS values |
+| **Weather lookup** | By segment ID, single forecast window | By node_id × forecast_hour, time-varying |
+| **Forecast resolution** | None — static weather | `fh = min(round(current_hour + time_offset), max_fh)` |
+| **SWS/SOG** | SOG determines arc existence, then inverse for SWS | SWS is the decision variable, SOG computed forward |
+| **Solver** | Forward BFS via Sides, backtrack via `minimal_input_arc` | Forward Bellman DP, backtrack via parent pointers |
+
+### 3.2 How forecast resolution enters the graph
+
+**Legacy DP: it doesn't.** Line 577 always reads `self.weather_forecasts_list[0]`. The YAML was designed to support multiple forecast windows (commented-out examples show 0–2h, 2–4h, 4–6h windows), but the code never indexes by time. Every arc uses the same weather regardless of when the ship reaches that segment.
+
+**Pipeline DP: partial support.** The key line (optimize.py:95):
+```python
+fh = min(int(round(current_hour + time_offset)), max_fh)
+```
+This maps the ship's current time to a forecast hour in the weather grid. As the ship progresses through the voyage, later nodes see weather from later forecast hours. This creates **time-varying weather** — but it treats all forecast hours as equally reliable. There's no distinction between:
+- Forecast hour 1 (just issued, highly accurate)
+- Forecast hour 100 (issued days ago, heavily degraded)
+
+**Luo's approach: explicit forecast cycles.** Each graph stage = one 6h NWP cycle. Weather within a stage comes from a single forecast issuance. At each re-plan, the graph is rebuilt from scratch with the latest forecast. The structure guarantees that:
+- All nodes in stage k use the same forecast vintage
+- The first stage uses the freshest forecast (highest accuracy)
+- Later stages use increasingly stale forecast data (lower accuracy)
+
+**The gap:** Neither our legacy nor pipeline DP explicitly models **forecast degradation with lead time**. The pipeline DP does use different forecast hours for different times, but doesn't weight them by accuracy or distinguish "forecast issued 1h ago for 1h ahead" from "forecast issued 1h ago for 100h ahead."
+
+In the rolling-horizon executor, this is partially addressed: re-planning every 6h means the ship always gets a fresh forecast for the near future. But within a single DP solve, the optimizer doesn't know that forecast hour 50 is less reliable than forecast hour 5.
+
+### 3.3 Proposed changes
+
+Three levels of intervention, from simplest to most ambitious:
+
+**Level 1: Make the legacy DP time-aware (minimal change)**
+
+Modify `connect()` (line 577) to index weather by the source node's time position:
+```python
+# Current: always forecast window 0
+segment_data = self.weather_forecasts_list[0][index_of_segment]
+
+# Proposed: select forecast window based on node time
+time_hour = source_node.node_index[0]
+window_idx = self.get_forecast_window_for_time(time_hour)
+segment_data = self.weather_forecasts_list[window_idx][index_of_segment]
+```
+And un-comment the multi-window YAML config (e.g., 6h windows with different weather per window).
+
+**Effort:** Small. **Impact:** Enables time-varying weather in the legacy DP. Doesn't address forecast degradation.
+
+**Level 2: Add forecast confidence weighting to the pipeline DP**
+
+Currently, the pipeline DP treats all forecast hours equally in the cost function. We could add a **forecast confidence factor** that increases the uncertainty (and thus the conservatism) of speed choices at longer lead times:
+
+```python
+# In the DP inner loop:
+lead_time_hours = fh - sample_hour  # how old is this forecast?
+confidence = max(0.5, 1.0 - 0.005 * lead_time_hours)  # degrades with lead time
+
+# Option A: Add uncertainty penalty to fuel cost
+edge_cost = fuel + lambda_uncertainty * (1 - confidence) * fuel
+
+# Option B: Blend forecast weather with climatological mean
+wx_effective = confidence * wx_forecast + (1 - confidence) * wx_climatology
+```
+
+**Effort:** Medium. **Impact:** The optimizer would favor conservative speeds for distant segments (where forecast is unreliable) and aggressive optimization for near segments (where forecast is accurate). This directly models the "value of forecast freshness."
+
+**Level 3: Adopt Luo's time-based segmentation (structural change)**
+
+Restructure the DP graph so stages correspond to forecast cycles rather than spatial waypoints:
+- Stage boundaries at 0h, 6h, 12h, 18h, ... (NWP issuance times)
+- Nodes within each stage represent possible positions (remaining distance, discretized)
+- Weather within a stage comes from a single forecast vintage
+- At re-plan time, rebuild the graph from the ship's current position with fresh forecast
+
+This is Luo's architecture. It aligns the DP structure with the forecast structure.
+
+**Effort:** Large — essentially a rewrite. **Impact:** Direct comparability with Luo, natural forecast resolution alignment.
+
+**Recommendation for the meeting:**
+
+Present all three levels to the supervisor. The argument:
+
+- **Level 1** is already partially done in the pipeline DP (time-varying weather lookup). We should complete this for the legacy DP if we want legacy/pipeline parity.
+- **Level 2** is our **differentiator vs Luo**. They don't model forecast degradation at all — their optimizer trusts the forecast equally regardless of lead time. We can show that accounting for forecast confidence changes the optimal speed profile.
+- **Level 3** is interesting but risky for the timeline. It would make our results directly comparable to Luo's but requires significant implementation effort for marginal benefit over Level 2.
+
+Ask the supervisor: **Should we pursue Level 2 (forecast confidence weighting) as our primary contribution, or is the 3-agent information hierarchy experiment already sufficient differentiation from Luo?**
 
 ---
 
-## 4. Data Collection Status
+## 3.4 Full Architectural Comparison: Luo's DP vs Ours
 
-| Server | Status | Route B | Route D |
-|--------|--------|---------|---------|
-| Shlomo1 | Offline | - | - |
-| Shlomo2 | Running | 27 MB | 80 MB |
-| Edison | Running | 27 MB | 79 MB |
+### 3.4.1 Graph Topology
+
+**Luo — Time-based stages.** The graph is a DAG of stages, each stage = one NWP forecast cycle (T = 6h).
+
+```
+Stage 1          Stage 2          Stage 3         ...    Stage N
+(0 → T-Δt h)    (6h window)      (6h window)            (variable)
+
+  [L^k]           [lb..ub]         [lb..ub]              [0] ← sink
+   source          ζ=1nm            ζ=1nm
+```
+
+- Nodes = `(stage, remaining_distance_to_destination)`, discretized at ζ = 1 nm
+- Stages = time windows, not spatial positions. Count: `N^k = floor((T^k - (T - Δt)) / T) + 2`
+- Node count per stage: bounded by reachability from [v_min, v_max]. ~35,000 total nodes for a 3,584 nm voyage
+- Graph shrinks at each re-plan (remaining distance smaller → fewer stages and nodes)
+
+**Legacy DP (`speed_control_optimizer.py`) — Dense 2D grid.** A full numpy array indexed by `(time, distance)`.
+
+```
+Time (rows)  ↓
+  0h    [d=0] [d=1] [d=2] ... [d=3393]
+  1h    [d=0] [d=1] [d=2] ... [d=3393]
+  ...
+  280h  [d=0] [d=1] [d=2] ... [d=3393]
+```
+
+- Nodes = `(time_hours, distance_nm)` — every integer combination pre-allocated
+- Grid size: 281 rows × 3,394 columns = **953,714 Node objects** — most never touched
+- Time granularity: 1h. Distance granularity: 1 nm (from `ship_parameters.yaml`)
+
+**Pipeline DP (`pipeline/dynamic_det/optimize.py`) — Sparse forward Bellman.**
+
+```
+Node 0    Node 1    Node 2    ...   Node 278
+  t=0       t=?       t=?             t=?
+  t=1       t=?       t=?             t=?
+  ...       ...                       ...
+```
+
+- Nodes = `(waypoint_index, time_slot)`. Waypoints 0..278 (279 spatial nodes), time slots = `hours / dt` with dt = 0.1h
+- Only reachable `(node, time_slot)` pairs stored (dict-of-dicts, not a dense array)
+- Max time slots: `ceil(ETA/dt) + ceil(50/dt)` ≈ 21,300 for a 163h voyage at dt=0.1h
+
+### 3.4.2 What Nodes Represent
+
+| | Luo | Legacy DP | Pipeline DP |
+|---|---|---|---|
+| **Meaning** | "Ship has X nm remaining at stage k" | "Ship is at distance X nm at time T hours" | "Ship is at waypoint i at time slot t" |
+| **Spatial** | Remaining distance (continuous, ζ=1nm) | Absolute distance from origin (1nm) | Discrete waypoint index (irregular spacing) |
+| **Temporal** | Stage index (maps to 6h window) | Absolute time row (1h) | Time slot (dt=0.1h) |
+| **Destination** | remaining_distance = 0 | Column d = 3,393 | Node index = 278 |
+
+Luo's spatial axis is **continuous distance** (any 1 nm mark). Our pipeline DP uses **discrete waypoints** (138 or 391 pre-defined locations). This means Luo's optimizer can place the ship at any 1 nm mark after each 6h segment; our pipeline DP constrains the ship to be at a named waypoint.
+
+### 3.4.3 What Edges Represent and How Speed Works
+
+**Luo:** An edge from `(stage i, remaining L_a)` to `(stage i+1, remaining L_b)` implies speed `v = (L_a - L_b) / t_stage`. Speed is **not discretized into a candidate list** — it's a continuous variable determined by the (source, dest) pair. At ζ=1nm and T=6h, possible speeds are spaced at 1/6 ≈ 0.167 kn apart. Edge weight = `ANN(v, weather, ops) × t_stage`.
+
+**Legacy DP:** An edge from `(t1, d1)` to `(t2, d2)` requires the implied SOG = `(d2-d1)/(t2-t1)` to be **exactly in** `speed_values_list` (11.0, 11.1, ..., 13.0 at 0.1 kn). If SOG doesn't match after rounding to 1 decimal → no edge (line 551). This is a hard filter that severely limits connectivity. The SOG is then inverse-solved (binary search, lines 399–515) to find the SWS that produces that SOG under segment weather, and `FCR = 0.000706 × SWS³`.
+
+**Pipeline DP:** The inner loop (line 124) iterates over **every candidate SWS** (11.0, 11.1, ..., 13.0). For each SWS, SOG is computed forward via the physics model. Travel time = `distance / SOG`. Arrival time slot = `ceil(arrival_time / dt)`. Edge weight = `FCR[k] × travel_time`. Every SWS is tried; the physics determines SOG.
+
+### 3.4.4 Decision Variable: SWS vs SOG
+
+This is a fundamental architectural difference.
+
+| | Luo | Legacy DP | Pipeline DP |
+|---|---|---|---|
+| **Decision** | Speed (ambiguous — paper says "sailing speed") | SOG (implied by distance/time geometry) | **SWS** (explicit loop over engine speeds) |
+| **Weather effect** | Baked into ANN — speed → fuel, no SOG/SWS split | SOG → inverse → SWS → FCR | SWS → forward → SOG → travel time |
+| **Direction** | Forward (speed → fuel via ANN) | **Inverse** (target SOG → binary search → SWS) | **Forward** (SWS → physics → SOG) |
+
+Luo doesn't distinguish SWS from SOG. Their ANN takes "speed" as input and returns fuel rate. The ship achieves exactly the planned speed — there's no concept of the engine setting one speed and ground speed being different.
+
+Our pipeline DP makes the split cleanly: the captain chooses SWS (engine setting), weather modifies it to SOG (actual progress), and the optimizer accounts for this gap. The legacy DP does it backwards — it needs a specific SOG to connect two grid points, then binary-searches for the SWS that produces that SOG.
+
+### 3.4.5 FCR Model
+
+| | Luo | Ours (both) |
+|---|---|---|
+| **Type** | ANN (neural network) | Physics formula |
+| **Formula** | Black box: `ANN(v, wind_speed, wind_dir, wave_ht, wave_dir, temp, roughness, draught, condition)` → FCR | `0.000706 × SWS³` (mt/h) |
+| **Inputs** | 8 variables (6 weather + 2 operational) | 1 variable (SWS only) |
+| **Weather in FCR** | Yes — weather directly affects fuel consumption | No — weather affects SOG only; FCR is purely speed-dependent |
+| **Transferability** | None without retraining (vessel-specific) | Direct — change the cubic coefficient |
+
+Critical implication: in Luo's model, headwinds increase fuel *directly* (ANN input). In ours, headwinds slow the ship (lower SOG) → longer travel time → more total fuel. The pathway is indirect: weather → SOG loss → more hours at sea → more fuel.
+
+### 3.4.6 Weather Data Handling
+
+**Luo — during optimization:** NOAA GEFS forecast (0.5° spatial, 6h temporal). But GEFS only provides 3 of the 8 ANN inputs (wind speed, wind direction, 2m temperature). Wave height, wave direction, and surface roughness are needed by the ANN but **never explained** in the paper. "Meteorological conditions at the beginning of the segment represent those along the whole segment" — weather is constant within a 6h stage. Within a single DP solve, all stages use the same forecast issuance. No degradation modeling.
+
+**Luo — during evaluation:** ERA5 reanalysis (all 6 weather fields + noon report ops). All four FC metrics use ERA5 actual weather.
+
+**Legacy DP:** Always `self.weather_forecasts_list[0][index_of_segment]` (line 577). Weather varies by **spatial segment** (which of the 12 segments) but NOT by time. The YAML supports multiple forecast windows (commented out) but the code never indexes by time. Every node sees the same static weather regardless of when the ship reaches that segment.
+
+**Pipeline DP:** Weather grid `weather_grid[node_id][forecast_hour]`. Forecast hour selected as `fh = min(int(round(current_hour + time_offset)), max_fh)` (line 95). Later legs see weather from later forecast hours → **time-varying weather** is supported. But no distinction between forecast accuracy at different lead times. Hour 1 and hour 100 are treated equally. Falls back to nearest available hour if a forecast hour is missing.
+
+### 3.4.7 Graph Construction & Solver
+
+**Luo — Build-and-Dijkstra:**
+1. Compute stage durations (first stage shorter if between forecast cycles, last stage variable)
+2. For each stage, compute reachable remaining-distance bounds from [v_min, v_max]
+3. Enumerate all nodes within bounds at ζ spacing
+4. Connect all valid (source, dest) pairs across adjacent stages
+5. Prune: remove zero-outdegree nodes backwards from penultimate stage
+6. Dijkstra (NetworkX) shortest path
+7. ~35K nodes, O(n²) edges, ~19 min per solve
+
+**Legacy DP — Sides BFS:**
+1. Allocate 953K-node dense grid
+2. Create initial "Side" (vertical boundary at distance=0)
+3. BFS queue: for each Side, `locate_sides()` finds the next vertical boundary (at next cumulative segment distance) and horizontal boundary (at time window end)
+4. `connect_sides()` tries all (source_node, dest_node) pairs between Sides
+5. For each pair, compute SOG from distance/time. If SOG ∈ speed_values_list → create Arc
+6. Relaxation inline: `d_node.minimal_fuel_consumption` updated immediately (line 523)
+7. Solution: scan destination column for minimum fuel, backtrack via `minimal_input_arc` pointers
+8. Essentially Bellman-Ford relaxation embedded in a BFS over boundary Sides (not Dijkstra)
+
+**Pipeline DP — Forward Bellman:**
+1. `cost[0][0] = 0.0` (node 0, time slot 0)
+2. Triple loop: for each waypoint i, for each reachable time slot t, for each candidate SWS k:
+   - Compute SOG via physics, travel time, fuel
+   - `t_next = ceil(arrival_time / dt)`
+   - Update `cost[i+1][t_next]` if cheaper, record parent
+3. At destination, find min-cost time slot (fuel + optional λ × delay)
+4. Backtrack via parent pointers
+5. `O(num_legs × time_slots × num_speeds)` = 278 × 21,300 × 61 ≈ 360M edge evaluations, ~160s
+
+### 3.4.8 Rolling Horizon
+
+**Luo:**
+- Re-plan every 6h with fresh GEFS forecast
+- Rebuild **entire graph from scratch** (remaining distance shrinks → fewer stages/nodes)
+- Solve for all remaining segments, **commit only the first speed** (classic receding horizon)
+- ~44 re-plans for a 261h voyage, 146 min total compute
+
+**Ours (cycle executor):**
+- Re-plan every 6h aligned to NWP boundaries
+- Re-run the full DP (or LP) from current position for all remaining legs
+- Commit to the first 6h of speeds, then re-plan
+- Weather assembler provides different data by agent type:
+  - Naive: no weather (constant SOG assumption)
+  - Deterministic: actual weather at current time, assumed persistent
+  - Stochastic: actual for current window + forecast for future windows
+- Graph topology (waypoint structure) doesn't change between re-plans — only weather data and starting position
+
+### 3.4.9 Evaluation / Simulation — The Biggest Gap
+
+**Luo — No execution simulation.** All four FC metrics (Eq. 24–27) work the same way: take a speed profile, feed those speeds + ERA5 actual weather into the ANN, sum fuel. No executor. No plan-vs-reality gap. If the optimizer says "sail at 12 kn," the evaluation assumes the ship sailed at exactly 12 kn and asks the ANN "how much fuel for 12 kn in this weather?"
+
+Their e3 metric (4.1% and 15.3%) measures: "how much more fuel does the ANN predict when using forecast-optimized speeds vs actual-weather-optimized speeds, both evaluated under actual weather?" This is a **planning quality** metric, not an execution quality metric.
+
+**Ours — Full execution simulation.** The cycle executor simulates what actually happens:
+1. Optimizer produces a SWS schedule
+2. At each leg, executor computes resulting SOG under **actual** weather
+3. If SOG too slow (can't make ETA) → Flow 2: SWS clamped to max
+4. If SOG too fast (would arrive early) → Flow 3: SWS reduced to min
+5. Actual travel time = distance / actual_SOG
+6. Actual fuel = FCR(actual_SWS) × actual_travel_time
+
+This creates the plan-vs-execution gap that Luo ignores entirely. It's why our Stochastic agent without re-planning burns 220.09 mt while planning for less — planned speeds were wrong, execution deviated, and Jensen's inequality on the cubic FCR penalizes speed variation.
+
+### 3.4.10 Full Summary Table
+
+| Dimension | Luo 2024 | Legacy DP | Pipeline DP |
+|---|---|---|---|
+| **Graph type** | DAG (stages × remaining dist) | Dense 2D grid (time × distance) | Sparse (waypoint × time slot) |
+| **Spatial axis** | Remaining distance, ζ=1nm | Absolute distance, 1nm | Waypoint index (irregular) |
+| **Temporal axis** | Stages (6h each) | Time rows (1h each) | Time slots (0.1h each) |
+| **Decision variable** | Speed (no SWS/SOG split) | SOG (inverse → SWS) | **SWS** (forward → SOG) |
+| **Speed range** | [8, 18] kn continuous | [11, 13] kn, 0.1 grid, SOG must match | [11, 13] or [9, 15] kn, 0.1 grid on SWS |
+| **FCR model** | ANN (8 inputs, vessel-specific) | `0.000706 × SWS³` | `0.000706 × SWS³` |
+| **Weather in FCR** | Yes (direct ANN input) | No (weather → SOG only) | No (weather → SOG only) |
+| **Weather source** | GEFS forecast (3/8 fields??) | YAML static, single window | HDF5, time-varying lookup |
+| **Time-varying wx** | By stage (one forecast per stage) | **No** — always window 0 | **Yes** — `fh = f(current_hour)` |
+| **Forecast degradation** | Not modeled | Not modeled | Not modeled |
+| **Solver** | Dijkstra (NetworkX) | Sides BFS + inline relaxation | Forward Bellman DP |
+| **Graph size** | ~35K nodes | 953K nodes (mostly empty) | ~278 × reachable time slots |
+| **Solve time** | ~19 min | Not benchmarked (legacy) | ~160s |
+| **Execution sim** | **None** — ANN evaluation only | None (optimizer only) | Full (SOG-targeting, Flow 2/3) |
+| **Re-plan** | Rebuild from scratch, commit 1st speed | Not supported | 6h cycle, three agent types |
+| **ETA constraint** | Hard (T_max) | Hard (grid boundary) | Hard or soft (λ penalty) |
+
+---
+
+## 3.5 Q&A Session — Refined Understanding (Apr 11)
+
+A working session walked through Luo's planning logic step by step and clarified several over-stated differences from the prior comparison. Key refinements:
+
+### 3.5.1 The Axis Inversion (Core Insight)
+
+Both methods are structurally the same DP — they just **swap which axis is fixed and which floats**:
+
+| | Luo | Ours |
+|---|---|---|
+| **Fixed per step** | Time (6h stage) | Distance (waypoint spacing) |
+| **Floats per step** | Distance covered | Travel time |
+| **One step** | 6h of sailing | One waypoint-to-waypoint leg |
+| **Decision variable** | Speed for the next 6h | SWS for the next leg |
+| **Solve scope** | All remaining stages at once | All remaining legs at once |
+| **Commit** | First stage speed only | First 6h of speeds only |
+
+Everything else (build full graph, find min-cost path, commit near-term, re-plan) is identical in both.
+
+### 3.5.2 Luo's Stage Structure — How Nodes and Edges Work
+
+Each stage is a fixed 6h time window. Distance covered depends on chosen speed (12 kn → 72 nm, 18 kn → 108 nm). Nodes within a stage = possible remaining-distance values, discretized at ζ = 1 nm.
+
+**Connectivity**: Node `a` (remaining L_a) connects to every node `b` in the next stage where the implied speed `v = (L_a − L_b) / 6h` falls within [v_min, v_max]. This produces a band of reachable next nodes.
+
+**Why ζ = 1 nm?** Because speed is implied by node geometry: `Δv = ζ / t_stage = 1/6 ≈ 0.167 kn`. So ζ is the indirect knob for speed resolution. In ours, speed resolution is set explicitly via the SWS list (0.1 kn).
+
+**Solve**: Build the entire graph (all stages), prune zero-outdegree nodes, run Dijkstra once globally (not stage-by-stage). Commit only v_1, then re-plan.
+
+### 3.5.3 Weather Logic — Both Methods Use the Same Principle
+
+Both methods use **weather at the source node's position** for all edges leaving that node. The earlier framing that Luo "uses one weather for all edges from a" while we use "different weather per edge" was wrong — both follow the same per-source-node rule.
+
+The real difference is **spatial granularity**:
+
+| | Spatial step | Weather updates every... |
+|---|---|---|
+| Luo | 72–108 nm (= speed × 6h) | 72–108 nm |
+| Ours | 1–5 nm (route-dependent waypoint spacing, fixed per route) | 1–5 nm |
+
+**Our finer waypoint spacing is a substantial advantage** — much better spatial weather resolution along the route. This wasn't emphasized enough in the previous comparison.
+
+For temporal alignment, both methods get the right forecast time per stage/leg:
+- Luo: stage k uses GEFS forecast at `t + (k−1)×6h`
+- Ours: leg at time t uses `weather_grid[node_id][fh]` where `fh = round(t + time_offset)`
+
+Within a 6h cycle the optimizer assumes weather is constant — true for both.
+
+### 3.5.4 The Conditional Equivalence (Important Honest Finding)
+
+**If actual weather keeps SOG within [v_min, v_max] for every leg, then SWS = SOG and our method becomes equivalent to Luo's** in terms of execution behavior:
+- Planned speed = actual speed
+- Planned arrival = actual arrival
+- No Flow 2/3 events
+
+The two implementations only diverge at the boundaries:
+- **Flow 2** (weather too bad): even at SWS = max, SOG drops below the speed needed to make ETA → ship falls behind
+- **Flow 3** (weather too favorable): at SWS = min, SOG exceeds what's needed → ship arrives early
+
+Luo has no mechanism for either — his ship always achieves exactly the planned speed regardless of weather feasibility.
+
+**Implication for experiments**:
+- Narrow speed range [11, 13] kn → Flow 2/3 events frequent → big difference from Luo
+- Wide range [8, 18] kn (Luo's setup) → Flow 2/3 events rare → results converge toward Luo's
+
+This is the strongest argument for testing with [8, 18] kn — it isolates whether the remaining differences (FCR model, waypoint structure) matter independently of the SWS/SOG gap.
+
+### 3.5.5 The Real Fundamental Difference: FCR Model
+
+The previous comparison overstated the "execution simulation" difference. With known weather over a 6h cycle, both methods know exactly where the ship will be. The actual fundamental difference is the **FCR model**:
+
+```
+Luo:  fuel = ANN(speed, weather) × 6h
+            ↑ weather directly affects fuel rate
+
+Ours: fuel = 0.000706 × SWS³ × travel_time
+            ↑ weather only affects SOG → travel_time
+              weather has NO direct effect on fuel rate
+```
+
+In Luo, headwinds increase fuel directly (same speed → more fuel in bad weather). In ours, headwinds slow the ship → longer travel time → more total fuel. The pathway differs even when end results converge.
+
+### 3.5.6 Luo's "Simulation" — Refined Understanding
+
+Luo does re-plan ~44 times (every 6h) for a 261h voyage — that's the rolling horizon. But evaluation is post-hoc:
+
+```
+Planning phase:  44 re-plans → committed speed profile (v_1, v_2, ..., v_44)
+Evaluation:      feed (v_1..v_44) + ERA5 actual weather → ANN → total fuel
+```
+
+No ship movement, no execution loop. Just one ANN evaluation pass at the end.
+
+His four metrics (FC_proposed, FC_constant, FC_static, FC_actual) all use the same evaluation: ANN(speed, ERA5 actual weather). The differences come only from the **speed profile**, not from any plan-vs-reality gap.
+
+**FC_constant** = optimal constant speed = `v_c = L / T_max` (slowest feasible, since FCR is convex increasing). Same v_c every segment, weather varies → fuel rate varies.
+
+His 9.46% claim ("rolling horizon vs constant speed") is therefore a **planning quality** comparison — "were our planned speeds better than constant?" — not an **execution quality** claim.
+
+### 3.5.7 ETA Constraint — Both Hard
+
+Luo enforces T_max as a hard constraint via graph construction: `N^k = floor((T^k − (T − Δt)) / T) + 2`. Reachable node bounds per stage are computed from [v_min, v_max], and pruning removes nodes that can't reach the sink at remaining_distance = 0 within remaining time.
+
+Ours does the same via the time-slot iteration: paths exceeding `max_time_slots` are dropped, and the final selection picks min-cost arrival within ETA (or with λ penalty for soft-ETA).
+
+Identical in spirit.
+
+### 3.5.8 Algorithm Choice — Bellman vs Dijkstra
+
+Both graphs are DAGs (Luo's stages and our waypoints both go forward). Either algorithm works on either graph.
+
+- **Luo uses Dijkstra** (NetworkX): O(E log V) — general-purpose, discovers traversal order via priority queue
+- **Ours uses forward Bellman**: O(W × T × S) — exploits known topological order, sweep forward, no priority queue needed
+
+For a DAG, forward Bellman is slightly more efficient. Luo's Dijkstra choice is a minor inefficiency.
+
+### 3.5.9 Complexity Side-by-Side
+
+| | Luo | Ours |
+|---|---|---|
+| **Total nodes** | ~35K | ~8.3M (391 wp × 21,300 time slots) |
+| **Fan-out per node** | ~60 (speed band) | 61 (SWS candidates) |
+| **Total edges** | ~2.1M | ~500M |
+| **Solver** | Dijkstra O(E log V) → ~30M ops | Bellman O(W·T·S) → ~500M ops |
+| **Solve time** | ~19 min | ~160 s |
+
+Why the gap? Luo's coarse 6h time steps (44 stages for a 261h voyage) keep the graph small at the cost of temporal resolution. Our fine 0.1h time slots (21,300 per voyage) explode the state space but give much better travel time accuracy.
+
+### 3.5.10 Time-Granularity Gotcha (dt Matters)
+
+For our DP with dt = 1h (legacy): a typical leg takes `2 nm / 12 kn ≈ 0.167h`, ceiled to 1h — huge overestimate. With dt = 0.1h (pipeline): same leg ceiled to 0.2h — much better. **Finer waypoint spacing demands finer dt** to avoid accumulating rounding error across hundreds of legs.
+
+### 3.5.11 Updated Honest Differentiation Summary
+
+The cleaner story to tell the supervisor:
+
+| Aspect | Real difference? |
+|---|---|
+| Graph topology (time-stages vs waypoints) | Cosmetic — axis inversion of the same DP |
+| Solve algorithm (Dijkstra vs Bellman) | Cosmetic — both work on DAGs |
+| Per-cycle weather assumption | Same — both treat weather as constant within 6h |
+| Replan logic | Same — both rebuild and commit first speed |
+| ETA constraint | Same — both hard |
+| **Spatial weather resolution** | **Real — ours is 1–5 nm, theirs is 72–108 nm** |
+| **FCR model** | **Real — ANN with weather input vs cubic without** |
+| **SWS/SOG split** | **Real, but only matters at Flow 2/3 boundaries** |
+| **Execution simulation** | **Real, but only meaningful when SOG escapes [v_min, v_max]** |
+
+The narrow [11, 13] kn range amplifies the SWS/SOG and execution differences. A direct test against Luo at [8, 18] kn would isolate the FCR model and spatial resolution as the remaining distinguishers.
+
+---
+
+## 4. Data Collection Status (updated Apr 8)
+
+| Server | Status | Route B (138 wp) | Route D (391 wp) | Uptime |
+|--------|--------|-------------------|-------------------|--------|
+| Shlomo1 | **Offline** (no ping) | - | - | Down since ~Mar 21 |
+| Shlomo2 | Running | 37 MB (+10) | 107 MB (+27) | 33 days, load 4.25 |
+| Edison | Running | 37 MB (+10) | 107 MB (+28) | 30 days, load 0.00 |
+
+Both `collect_all` tmux sessions active since Mar 17-18. Shlomo2 under heavy load from other users' ML jobs (3 active python processes at ~140% CPU each). Edison is idle — collection running smoothly.
+
+Exp C (Yokohama-Long Beach) stalled at ~92 KB on both servers — still removed from `run_all.py`.
 
 ---
 
