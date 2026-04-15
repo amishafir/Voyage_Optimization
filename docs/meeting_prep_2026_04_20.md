@@ -152,7 +152,89 @@ To explore: build a "collapsed" view of the route — group consecutive waypoint
 
 ## 4. Progress Since Apr 13
 
-*(to be filled)*
+### 4.1 Implementation Completed
+
+Built Exp 1 infrastructure — three code changes, one new script:
+
+1. **`pipeline/dynamic_det/transform.py`** — added `weather_source: "actual_hindsight"` mode. Loads ALL actual weather rows from HDF5 across all sample hours, builds `weather_grid[node_id][sample_hour]` so the DP sees the real weather at every (location, time) pair.
+
+2. **`pipeline/dynamic_det/optimize.py`** — refactored into two solver paths controlled by `speed_lock_hours` config key:
+   - `null` → `_optimize_free()`: existing forward Bellman DP, speed changes at every leg.
+   - integer (e.g. 6) → `_optimize_locked()`: coarse outer DP via Dijkstra. Each transition simulates one lock-block — sail at fixed SWS for N hours, traverse multiple legs, accumulate fuel. Block boundaries are the only decision points.
+   - Shared helpers extracted: `_lookup_weather()`, `_sog_for()`, `_find_best_arrival()`, `_build_result()`.
+
+3. **`pipeline/config/experiment_exp1_luo.yaml`** — experiment config for Route D, [9,15] kn, `actual_hindsight` weather, with `speed_lock_hours` toggle.
+
+4. **`pipeline/experiments/run_exp1.py`** — comparison runner. Runs both free + locked on the same HDF5 + departure, prints side-by-side table with fuel, time, delay, gap %, speed change counts.
+
+### 4.2 Exp 1 Results — Single Plan, Full Hindsight
+
+**Route D** (391 wp, 1,955 nm), **SH=0** (calm departure), **hard ETA = 163h**.
+
+#### Run 1: [11, 13] kn speed range, dt=0.01h
+
+| Variant | Fuel (mt) | Time (h) | Delay | Speed changes | Compute |
+|---|---|---|---|---|---|
+| Free (ours) | 216.50 | 162.61 | 0 | 250 | 18s |
+| Locked 6h (Luo) | 215.74 | 162.92 | 0 | 20 | 2.3h |
+| **Gap** | **-0.76 mt (-0.35%)** | | | | |
+
+**Anomaly**: free > locked by 0.76 mt — violates the theoretical guarantee (free is unconstrained, should always be ≤ locked). **Cause**: ceiling-rounding accumulation. Each of 388 legs has travel time ceiled to dt=0.01h independently. Over 388 legs, tiny rounding errors compound (~0.003h × 388 ≈ 1.2h of phantom time). The locked DP rounds only ~27 times (once per block), so its total-time estimate is more accurate and it can choose slightly slower speeds. This is a numerical artifact — both results are effectively equal within rounding noise.
+
+#### Run 2: [9, 15] kn speed range
+
+| Variant | Fuel (mt) | Time (h) | Delay | Speed changes | Compute | dt |
+|---|---|---|---|---|---|---|
+| Free (ours) | 215.38 | 163.0 | 0 | — | 161s | 0.01h |
+| Locked 6h (Luo) | 215.88 | 162.7 | 0 | 20 (22 blocks) | 82 min | 0.1h |
+| **Gap** | **0.50 mt (0.23%)** | | | | | |
+
+Direction now correct (free ≤ locked), but the gap is **tiny — 0.50 mt, 0.23%**.
+
+Despite having [9, 15] kn available, the locked DP chose speeds entirely in the **11.4–12.5 kn** range. The optimizer doesn't touch the extremes.
+
+### 4.3 Analysis — Why the Gap Is So Small
+
+**Root cause: hard ETA + cubic FCR pinch the optimizer to ~12 kn regardless of granularity.**
+
+- Required average speed: 1,955 nm / 163h ≈ 12.0 kn
+- Going slow on one leg (9 kn) requires compensating fast on another (15 kn)
+- The cubic FCR heavily penalizes speed variation:
+  - FCR(9 kn) = 0.514 mt/h
+  - FCR(12 kn) = 1.219 mt/h
+  - FCR(15 kn) = 2.382 mt/h
+- Speeding up 3 kn above average costs 1.163 mt/h more; slowing down 3 kn saves only 0.705 mt/h → net loss from any speed variation around the mean
+- Jensen's inequality: `E[V³] > E[V]³` — variable speed always costs more fuel than constant speed at the same average, when FCR is convex
+- With a hard ETA forcing average speed ≈ 12 kn, both free and locked cluster around 12 kn and arrive at nearly the same total fuel
+
+**Implication**: fine-grained speed control has almost no value under hard ETA when the required average speed is near the middle of the range. The ETA constraint dominates; speed granularity doesn't matter.
+
+**This partially explains why our 3-agent experiments (Mar 30) showed <1% differences** — same mechanism. The agents all arrive at similar fuel totals because the ETA forces them to similar average speeds, and the cubic FCR punishes any deviation.
+
+### 4.4 Compute Time Issue
+
+The locked DP is too slow for practical use:
+
+| Config | Locked DP compute time |
+|---|---|
+| [11,13] kn, dt=0.01h | 2.3 hours |
+| [9,15] kn, dt=0.1h | 82 min |
+| [9,15] kn, dt=0.01h | Running (estimated 5+ hours) |
+
+**Cause**: Dijkstra over (leg, time_slot) state space with fine dt. With dt=0.01h and 61 speeds, the reachable state space is ~6M states × 61 speed evaluations × ~18 sub-legs per block = billions of operations.
+
+**Fix needed**: use coarser dt inside the locked solver (block-boundary decisions don't need 0.01h precision), or implement the locked DP as a pure block-index-based solver (state = block number, not time_slot) to decouple from dt entirely.
+
+### 4.5 Ceiling-Rounding Accumulation (dt Gotcha)
+
+Confirmed the gotcha from Apr 13 Section 3.5.10 in practice:
+
+| dt | Free DP behavior | Issue |
+|---|---|---|
+| 0.1h | **Cannot meet ETA** (relaxed to 198h) | Each ~0.42h leg ceiled to 0.5h → 388 × 0.08 = 31h phantom time |
+| 0.01h | Meets ETA (163.0h, 216.50 mt) | Rounding per leg ~0.003h → 388 × 0.003 ≈ 1.2h accumulated |
+
+Route D's 5 nm waypoint spacing requires dt ≤ 0.01h for the free DP. The locked DP is less sensitive because it rounds per block, not per leg.
 
 ---
 
@@ -166,21 +248,31 @@ To explore: build a "collapsed" view of the route — group consecutive waypoint
 
 ---
 
-## 6. Results
+## 6. Open Experiments
 
-*(to be filled as Exp 1 / Exp 2 complete)*
+| Experiment | Status | Purpose |
+|---|---|---|
+| Exp 1: SH=60 (storm) | Not yet run | Test if weather volatility widens the gap |
+| Exp 1: soft ETA (λ penalty) | Not yet run | Remove the hard-ETA pinch — does granularity matter more? |
+| Exp 1: locked at dt=0.01h, [9,15] | Running (background) | Precise locked result for confirmation |
+| Exp 2: rolling horizon | Not yet started | Does re-planning interact with granularity? |
 
 ---
 
 ## 7. Open Items / Discussion Points
 
-- Exp 1 and Exp 2 results (fine-speed vs 6h-locked speed, both on same data)
-- Node-collapsing brainstorm — does collapsing (same heading, same weather cell) change results?
+- **Hard ETA kills the experiment**: the 163h constraint forces ~12 kn average and the cubic FCR punishes any deviation. Fine vs coarse granularity both land at ~216 mt. Should we switch to soft ETA or relaxed ETA to give the optimizer room?
+- **Stormy departure**: SH=60 might show a larger gap if weather forces more speed variation.
+- **Node-collapsing brainstorm**: still relevant — if the free DP's 250 speed changes produce only 0.23% savings vs 20 changes, most of those changes are noise.
+- **Locked DP compute time**: needs optimization before running the full experiment matrix.
+- **Rounding accumulation**: fundamental limitation of the forward Bellman with fine waypoints. Worth documenting in the paper as a practical finding.
 
 ---
 
 ## 8. Questions for Supervisor
 
-1.
-2.
-3.
+1. **Hard ETA washes out the signal**: with ETA forcing ~12 kn average, fine granularity saves <0.25%. Should we (a) use soft ETA with λ penalty, (b) relax ETA significantly, or (c) accept this as a finding ("under operational ETA constraints, speed granularity doesn't matter")?
+
+2. **Is the <0.25% gap itself publishable?** It's a negative result — fine-grained speed control provides almost no benefit over 6h-locked decisions under realistic ETA constraints. This actually strengthens the case for Luo-style coarse planning in practice. Is that a contribution or a problem for our paper?
+
+3. **Next priority**: run Exp 1 with soft/relaxed ETA (to see if the gap opens up), or proceed to Exp 2 (rolling horizon) where forecast uncertainty might create a bigger differentiator?

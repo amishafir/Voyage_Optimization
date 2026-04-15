@@ -105,7 +105,35 @@ def transform(hdf5_path: str, config: dict) -> dict:
     weather_grid = {}
     max_forecast_hour = 0
 
-    if weather_source == "actual":
+    if weather_source == "actual_hindsight":
+        # Full hindsight: load ALL actual weather across all sample hours.
+        # Builds weather_grid[node_id][sample_hour] so the DP sees the real
+        # weather at each (location, time) pair — perfect knowledge.
+        actual_df = read_actual(hdf5_path)  # no sample_hour filter
+        logger.info("Using ACTUAL HINDSIGHT weather: %d rows across all sample hours",
+                     len(actual_df))
+
+        for _, row in actual_df.iterrows():
+            nid = int(row["node_id"])
+            if nid not in active_node_ids:
+                continue
+            sh = int(row["sample_hour"])
+            if nid not in weather_grid:
+                weather_grid[nid] = {}
+            wx = {}
+            for field in weather_fields:
+                val = float(row[field])
+                if math.isnan(val):
+                    val = 0.0
+                wx[field] = val
+            weather_grid[nid][sh] = wx
+            if sh > max_forecast_hour:
+                max_forecast_hour = sh
+
+        logger.info("Hindsight grid: %d nodes, max_hour=%d",
+                     len(weather_grid), max_forecast_hour)
+
+    elif weather_source == "actual":
         # Use actual (observed) weather — single snapshot
         actual_df = read_actual(hdf5_path, sample_hour=sample_hour)
         logger.info("Using ACTUAL weather: %d rows (sample_hour=%d)",
