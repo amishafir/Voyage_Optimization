@@ -91,6 +91,14 @@ def optimize(transform_output: dict, config: dict) -> dict:
     """
     dd_cfg = config["dynamic_det"]
     lock_hours = dd_cfg.get("speed_lock_hours")
+    solver = dd_cfg.get("solver")
+
+    if solver == "luo_lattice":
+        from dynamic_det.luo2024_reconstruction import optimize_luo_lattice
+        return optimize_luo_lattice(transform_output, config)
+    if solver == "fast_locked":
+        from dynamic_det.luo_style_fast import optimize_fast_locked
+        return optimize_fast_locked(transform_output, config)
 
     if lock_hours is not None:
         return _optimize_locked(transform_output, config)

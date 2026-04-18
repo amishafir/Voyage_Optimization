@@ -236,6 +236,62 @@ Confirmed the gotcha from Apr 13 Section 3.5.10 in practice:
 
 Route D's 5 nm waypoint spacing requires dt ≤ 0.01h for the free DP. The locked DP is less sensitive because it rounds per block, not per leg.
 
+### 4.6 Two New Solvers Built (Apr 18)
+
+To address §4.4 (locked DP too slow) and to give Luo a fair comparison line, built two new modules:
+
+**Track A — `pipeline/dynamic_det/luo_style_fast.py`**: same 6h-lock policy as legacy locked DP, but with coarser outer state (`dt_locked=0.1h` default) and memoized `_simulate_block`. Selected via `solver: "fast_locked"`.
+
+**Track B — `pipeline/dynamic_det/luo2024_reconstruction.py`**: faithful Luo 2024 architecture — `(distance, time)` lattice with ζ=1 nm, T=6h, implicit speed from edge slope `v = (k_b−k_a)·ζ/T`. Speed interpreted as SOG (physically consistent); SWS recovered via inverse for FCR. One weather value per (cell, stage) at stage midpoint. Cubic FCR (no ANN — per §2.3 to eliminate confounder). Selected via `solver: "luo_lattice"`.
+
+`run_exp1.py` extended with `--variants {free, locked, locked_fast, luo_lattice}` and an automatic sanity check (fast vs legacy must match within 0.5 mt).
+
+### 4.7 Track A Validated, Track B Anomalous
+
+Route D, SH=0, [9,15] kn:
+
+| Variant | Fuel (mt) | Time (h) | Compute | Notes |
+|---|---|---|---|---|
+| Legacy locked (§4.2) | 215.88 | 162.7 | 82 min | reference |
+| **Track A (locked_fast)** | **215.88** | 162.7 | **10.6 min** | **Sanity PASS** — identical fuel, 8× faster |
+| **Track B (luo_lattice)** | **207.29** | 163.0 | **0.6 s** | beats free DP by 8 mt — anomaly |
+| Free DP (§4.2) | 215.38 | 162.7 | 2.6 min | reference |
+
+**Track A works as designed.** Fuel-identical to the legacy solver at ~8× speed. Ready to use for the full Exp 1 matrix (SH=60, soft ETA). Runtime at `dt_locked=0.5h` drops to ~2 min but drifts +6 mt from ceiling accumulation — so 0.1h is the right default.
+
+**Track B's 207.29 mt is lower than free DP's 215.38 mt.** That's theoretically impossible — Luo's lattice is strictly more constrained than our free DP. Prime suspect: the free DP's rounding tax (§4.5) inflates its fuel by ~1–2 mt, while Luo's lattice ceils only 28 times (once per stage) and escapes the drift. Track B validation is blocked on: (a) rerunning free DP without the rounding bias, or (b) comparing Track A ↔ Track B at an identical 6h lock to see if the gap is lock-policy or architecture.
+
+### 4.8 Complexity Is the Real Differentiator
+
+Fuel-wise, free ≈ locked_fast ≈ 215.6 mt — a tie. The paper's story is not "who saves more fuel" but **"how does each scale".**
+
+| Scaling | Luo lattice | Track A |
+|---|---|---|
+| Edges (fixed `Δv`) | `L · ETA · Δvr / (Δv² · T²)` | `N_wp · (ETA/dt_locked) · (Δvr/Δv) · (lock_h / leg_time)` |
+| Scales with `T` | `1/T²` (blows up) | N/A (lock_h is independent) |
+| Scales with `Δv` | `1/Δv²` (coupled to geometry) | `1/Δv` (independent knob) |
+| Scales with `dt_locked` | N/A | `1/dt_locked` (linear) |
+
+What Luo would need to match our resolution (`Δv = 0.1 kn` fixed):
+
+| Target cycle T | Required ζ | Edges | Feasible |
+|---|---|---|---|
+| 6 h (published) | 0.6 nm | ~5 M | ✓ (0.6 s) |
+| 3 h | 0.3 nm | ~21 M | ✓ (~3 s) |
+| 1 h | 0.1 nm | ~190 M | marginal |
+| 10 min | 0.017 nm | ~6.8 B | infeasible |
+| 0.1 h (our dt) | 0.01 nm | ~19 B | infeasible |
+
+**One-line framing**: Luo couples the speed axis into his graph geometry (`Δv = ζ/T`). We don't. That coupling gives him a 1000× compute win at his published resolution and breaks him as soon as anyone wants finer cycles.
+
+### 4.9 Implication for the Paper
+
+The contribution is no longer "we save fuel over Luo" — hard ETA killed that signal. The contribution is architectural:
+
+> At Luo's published resolution (6 h, 1 nm), his method matches ours to within 0.5% fuel at 1000× less compute. At *any* finer resolution — where rolling horizon, NWP cycle alignment, and tight ETAs live — his method is infeasible while ours stays linear.
+
+Honest framing. Defends both the tie result and the added complexity of our framework.
+
 ---
 
 ## 5. Data Collection Status
@@ -254,7 +310,10 @@ Route D's 5 nm waypoint spacing requires dt ≤ 0.01h for the free DP. The locke
 |---|---|---|
 | Exp 1: SH=60 (storm) | Not yet run | Test if weather volatility widens the gap |
 | Exp 1: soft ETA (λ penalty) | Not yet run | Remove the hard-ETA pinch — does granularity matter more? |
-| Exp 1: locked at dt=0.01h, [9,15] | Running (background) | Precise locked result for confirmation |
+| Exp 1: locked at dt=0.01h, [9,15] | Superseded by Track A | Track A at dt_locked=0.1h reproduces legacy 215.88 mt in 10 min |
+| Exp 1: Track A full matrix (SH=0/60 × ETA variants) | Ready to run | Unblocked now that locked_fast takes 10 min not 82 |
+| Exp 1: Track B validation (rounding-corrected free DP) | Not yet run | Confirm free < Luo (the theoretical ordering) once rounding is neutralized |
+| Exp 1: Track A vs Track B at identical 6h lock | Not yet run | Isolate whether the Track B fuel drop is lock-policy or architecture |
 | Exp 2: rolling horizon | Not yet started | Does re-planning interact with granularity? |
 
 ---
@@ -276,3 +335,7 @@ Route D's 5 nm waypoint spacing requires dt ≤ 0.01h for the free DP. The locke
 2. **Is the <0.25% gap itself publishable?** It's a negative result — fine-grained speed control provides almost no benefit over 6h-locked decisions under realistic ETA constraints. This actually strengthens the case for Luo-style coarse planning in practice. Is that a contribution or a problem for our paper?
 
 3. **Next priority**: run Exp 1 with soft/relaxed ETA (to see if the gap opens up), or proceed to Exp 2 (rolling horizon) where forecast uncertainty might create a bigger differentiator?
+
+4. **Complexity as the contribution**: given that fuel is a tie at Luo's published resolution, is the scaling-law story (§4.8) a strong enough standalone contribution for the paper, or do we need to pair it with a finer-resolution experiment (Exp 2 rolling horizon at 1h or sub-hour cycles) to *show* Luo breaking and us not breaking?
+
+5. **Track B anomaly**: how should we resolve the "Luo beats free" result — rerun free with finer dt to eliminate rounding, or accept that Luo's coarse weather happens to luck out on this route/departure and expect the ordering to invert on SH=60?

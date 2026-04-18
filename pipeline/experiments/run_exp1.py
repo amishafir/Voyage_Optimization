@@ -2,15 +2,21 @@
 """
 Experiment 1 — DP vs Luo head-to-head (single plan, full hindsight).
 
-Runs both free-DP and locked-DP on the same HDF5 data and departure hour,
-then prints a side-by-side comparison table.
+Runs any subset of four variants on the same HDF5 data and departure:
+
+* ``free``           — our free-DP (speed changes at every leg).
+* ``locked``         — legacy locked DP (our framework + 6h SWS lock).
+* ``locked_fast``    — coarser-state, memoized version of ``locked``;
+                       should match its fuel within rounding noise.
+* ``luo_lattice``    — faithful Luo 2024 architecture: (distance, time)
+                       lattice with implicit speed from edge slope.
 
 Usage:
     cd pipeline
     python -m experiments.run_exp1 \
         --hdf5 data/experiment_d_391wp.h5 \
         --departure 0 \
-        [--departure 60] \
+        [--variants free locked_fast luo_lattice] \
         [--lock-hours 6] \
         [--speed-range 9 15]
 """
@@ -53,19 +59,37 @@ def load_config(speed_range=None):
     return config
 
 
-def run_variant(hdf5_path, config, departure_hour, lock_hours):
+VARIANTS = {
+    # label -> (lock_hours, solver) — solver=None uses the default dispatch
+    "free":         (None, None),
+    "locked":       ("use_arg", None),
+    "locked_fast":  ("use_arg", "fast_locked"),
+    "luo_lattice":  (None, "luo_lattice"),
+}
+
+
+def run_variant(hdf5_path, config, departure_hour, variant, lock_hours_arg):
     """Run one DP variant and return the result dict."""
+    if variant not in VARIANTS:
+        raise ValueError(f"Unknown variant: {variant}. Options: {list(VARIANTS)}")
+
+    lock_spec, solver = VARIANTS[variant]
+
     cfg = copy.deepcopy(config)
     cfg["dynamic_det"]["forecast_origin"] = departure_hour
     cfg["dynamic_det"]["weather_source"] = "actual_hindsight"
 
-    if lock_hours is None:
-        cfg["dynamic_det"].pop("speed_lock_hours", None)
-        label = "free"
+    if lock_spec == "use_arg":
+        cfg["dynamic_det"]["speed_lock_hours"] = lock_hours_arg
     else:
-        cfg["dynamic_det"]["speed_lock_hours"] = lock_hours
-        label = f"locked_{lock_hours}h"
+        cfg["dynamic_det"].pop("speed_lock_hours", None)
 
+    if solver is not None:
+        cfg["dynamic_det"]["solver"] = solver
+    else:
+        cfg["dynamic_det"].pop("solver", None)
+
+    label = variant
     logger.info("=== Running %s (departure SH=%d) ===", label, departure_hour)
     t0 = time.time()
 
@@ -110,19 +134,34 @@ def print_comparison(results):
                 f"{r.get('wall_time_s', 0):>12.2f}"
             )
 
-        if len(fuels) >= 2:
-            free_fuel = next(
-                (r.get("planned_fuel_mt", 0) for r in dep_results
-                 if r["label"] == "free"), None)
-            locked_fuel = next(
-                (r.get("planned_fuel_mt", 0) for r in dep_results
-                 if r["label"] != "free"), None)
+        # Pairwise gaps vs the free baseline
+        free_fuel = next(
+            (r.get("planned_fuel_mt", 0) for r in dep_results
+             if r["label"] == "free"), None)
+        if free_fuel:
+            print()
+            for r in dep_results:
+                if r["label"] == "free":
+                    continue
+                fuel = r.get("planned_fuel_mt", 0)
+                if fuel <= 0:
+                    continue
+                gap = fuel - free_fuel
+                gap_pct = 100.0 * gap / fuel
+                print(f"  Gap {r['label']:<14} vs free: {gap:+.2f} mt "
+                      f"({gap_pct:+.2f}%)")
 
-            if free_fuel and locked_fuel and locked_fuel > 0:
-                gap = locked_fuel - free_fuel
-                gap_pct = 100.0 * gap / locked_fuel
-                print(f"\n  Gap: {gap:+.2f} mt ({gap_pct:+.2f}%) — "
-                      f"fine-grained saves {gap:.2f} mt vs locked")
+        # Sanity check: locked_fast must match legacy locked
+        legacy = next(
+            (r for r in dep_results if r["label"] == "locked"), None)
+        fast = next(
+            (r for r in dep_results if r["label"] == "locked_fast"), None)
+        if legacy and fast:
+            delta = fast.get("planned_fuel_mt", 0) - legacy.get("planned_fuel_mt", 0)
+            pct = 100.0 * delta / max(legacy.get("planned_fuel_mt", 1e-9), 1e-9)
+            flag = "PASS" if abs(delta) < 0.5 else "FAIL"
+            print(f"\n  Sanity (locked_fast vs locked): "
+                  f"{delta:+.3f} mt ({pct:+.3f}%) [{flag}]")
 
         # Speed change counts
         for r in dep_results:
@@ -144,22 +183,23 @@ def main():
     parser.add_argument("--departure", type=int, nargs="+", default=[0],
                         help="Departure sample hours (e.g. 0 60)")
     parser.add_argument("--lock-hours", type=float, default=6.0,
-                        help="Lock block duration for Luo-style (default: 6)")
+                        help="Lock block duration for locked variants (default: 6)")
     parser.add_argument("--speed-range", type=float, nargs=2, default=None,
                         help="Override speed range (e.g. 9 15)")
+    parser.add_argument("--variants", nargs="+",
+                        default=["free", "locked_fast", "luo_lattice"],
+                        choices=list(VARIANTS.keys()),
+                        help="Which variants to run (default: free locked_fast luo_lattice)")
     args = parser.parse_args()
 
     config = load_config(speed_range=args.speed_range)
     results = []
 
     for dep in args.departure:
-        # Variant A: free (ours)
-        r_free = run_variant(args.hdf5, config, dep, lock_hours=None)
-        results.append(r_free)
-
-        # Variant B: locked (Luo-style)
-        r_locked = run_variant(args.hdf5, config, dep, lock_hours=args.lock_hours)
-        results.append(r_locked)
+        for variant in args.variants:
+            r = run_variant(args.hdf5, config, dep, variant,
+                            lock_hours_arg=args.lock_hours)
+            results.append(r)
 
     print_comparison(results)
 
