@@ -1167,3 +1167,376 @@ for plan in [NaivePlan(), LPPlan(), DPPlan()]:
 - **Plan**: Three implementations (Naive, LP, DP). Interface supports adding MPC, GA, RL in future.
 - **Policy**: Three implementations (Passive, Reactive, Proactive). Flow 3 re-planning tested as a variant of Reactive.
 - **Environment**: Three tiers (Basic, Mid, Connected). Fleet-connected (ship-to-ship weather sharing) is future work.
+
+---
+
+## 14. New DP Graph Structure — Brainstorm (2026-04-20)
+
+**Motivation.** Exp 1 (Apr 20 prep) landed on a tie: free DP and 6h-locked DP within 0.25% fuel
+under hard ETA. Both Track A and Track B exposed accumulated ceiling-rounding drift and a Track B
+anomaly where Luo's lattice beat the "free" solver (theoretically impossible). Before running more
+experiments on top of a graph that is already leaking ~1–2 mt of phantom fuel from rounding, the
+cleaner move is to rebuild the graph from first principles, using the legacy
+`Dynamic speed optimization/speed_control_optimizer.py` as the reference point for what's
+worth keeping.
+
+### 14.1 What the legacy DP actually does
+
+Three moving parts — the spine of any DP graph:
+
+**A. Grid / spacing**
+- Dense 2D numpy array indexed by `(time_hours, distance_nm)`.
+- Time rows: 0 → ~280h at `time_granularity = 1h` → 281 rows.
+- Distance cols: 0 → 3,393 nm at `distance_granularity = 1 nm` → 3,394 cols.
+- Total ≈ 953K `Node` objects allocated, most never touched.
+- Reachable region carved out by `Side` BFS: vertical sides at cumulative segment distances,
+  horizontal sides at time-window boundaries.
+
+**B. Edge (Arc) creation — `connect_sides()` + `connect()`**
+- For every pair (source_node in src_side, dest_node in dst_side), compute:
+  - `distance_diff = d2 − d1`, `time_diff = t2 − t1`
+  - `sog = round(distance_diff / time_diff, 1)`
+  - **Filter**: arc exists only if `sog ∈ speed_values_list` (e.g. 11.0, 11.1, …, 13.0)
+- If filter passes, **SWS inverse**: binary-search `calculate_sws_from_sog(sog, segment_weather)`
+  to get the engine setting that produces that SOG under the segment's weather.
+- `FCR = 0.000706 × SWS³` (mt/h).
+- `arc.fuel_consumption = FCR × time_diff`.
+- `arc.fuel_load = source.minimal_fuel_consumption` (cumulative fuel carried into this node).
+
+**C. Backward fuel calculation — inline Bellman relaxation + pointer backtrack**
+- Relaxation in `connect_sides()` line 523:
+  ```
+  if d_node.minimal_fuel_consumption > arc.fuel_load + arc.fuel_consumption:
+      d_node.minimal_fuel_consumption = arc.fuel_load + arc.fuel_consumption
+      d_node.minimal_input_arc = arc
+  ```
+- `find_solution_path()`: scan the destination column (`col = 3393`), pick the node with minimum
+  `minimal_fuel_consumption`, then walk `minimal_input_arc` pointers backwards to the source.
+- The speed schedule is reconstructed from the `SWS`/`SOG` fields stored on each arc along the
+  path.
+
+### 14.2 What's right about this design (keep)
+
+- **Explicit `Arc` carrying SWS, SOG, travel_time, distance, FCR, fuel_consumption, fuel_load.**
+  Backtrack gives you the entire schedule for free — no post-hoc recomputation.
+- **Inline Bellman relaxation** (no priority queue). DP on a DAG doesn't need Dijkstra; a forward
+  sweep is cleaner and faster.
+- **`Side` boundaries** as segment / window markers — even if we drop the dense grid, the concept
+  of "nodes aligned with segment distances" and "nodes aligned with window times" is useful
+  bookkeeping.
+- **Pointer-based backtrack** is elegant. The pipeline DP uses a parent dict; same info, same
+  cost, but the legacy style puts the schedule on the arcs, which is nicer.
+
+### 14.3 What's wrong about this design (fix)
+
+- **Dense array is mostly empty.** 953K nodes allocated, maybe 5–10% reachable.
+- **`dt = 1h` is fatal.** 1h × 1 nm means many legitimate SOGs are unreachable: `(d2−d1)/(t2−t1)`
+  must round exactly to a 0.1 kn grid point. Most (src, dst) pairs fail the filter → sparse
+  connectivity even though the array is dense.
+- **SOG-matching filter is the wrong primitive.** It couples speed resolution to grid spacing
+  (same trap as Luo). Pipeline DP's forward SWS loop is the right primitive — speed is an
+  explicit config knob, independent of geometry.
+- **Inverse SWS = binary search per arc.** Pipeline DP computes SOG forward from SWS (one shot);
+  legacy burns 50 iterations per arc. O(arcs) binary searches is pure overhead.
+- **Weather hardcoded to `weather_forecasts_list[0]`** (line 577). The multi-window YAML
+  infrastructure is there but the code never indexes by time. Time-varying weather is a must-have
+  from day one of the rebuild.
+- **No explicit ETA constraint**, only the grid boundary. Soft ETA (λ penalty) is not
+  expressible.
+- **No rolling horizon.** One-shot solve, no replan loop.
+- **Ceiling-rounding is implicit and uncontrolled.** `round(.. , 1)` in the SOG filter silently
+  drops feasible arcs. Rounding policy should be a deliberate design decision, not a side effect.
+
+### 14.4 Candidate topologies for the rebuild
+
+Four designs, each a deliberate choice about which axis floats and what a node means:
+
+**Option A — `(waypoint_idx, time_slot)` sparse (current pipeline DP, cleaned up)**
+- Axes: route position (discrete waypoints), time (slots of `dt`).
+- Decision: SWS (forward physics → SOG → travel time → arrival slot).
+- Pro: matches thesis infrastructure (HDF5, physics module), supports time-varying weather
+  natively (`fh = f(current_hour)`), sparse → small memory.
+- Con: ceiling-rounding per leg accumulates over 391 legs (documented drift).
+- Fix in rebuild: accumulate continuous travel time, round only at decision/replan boundaries.
+
+**Option B — `(distance, time)` dense grid (legacy, modernized)**
+- Axes: cumulative distance (nm), absolute time (hours).
+- Decision: SWS at each arc (forward, not inverse).
+- Pro: keeps the legacy `Side` bookkeeping and segment alignment; every (d, t) cell carries
+  accumulated fuel which is conceptually clean.
+- Con: dense array wasteful; forces pre-commitment to an integer `(dt, dx)` lattice.
+- Fix in rebuild: replace numpy array with sparse dict-of-dicts, keep Sides as logical markers.
+
+**Option C — `(stage, remaining_distance)` lattice (Luo-style)**
+- Axes: forecast cycle index (6h stages), remaining distance to destination.
+- Decision: speed per stage (one decision per stage, held for the full cycle).
+- Pro: aligns with NWP cycles and rolling horizon naturally; smallest graph.
+- Con: throws away within-stage granularity; couples speed resolution to geometry (Luo's trap).
+- Verdict: worth supporting as a **comparison mode**, not as the primary topology.
+
+**Option D — Two-layer: `(cell, heading)` decision units × `(time_slot)` for fuel**
+- Outer layer: consecutive waypoints collapsed into a decision unit whenever heading and
+  weather-cell are unchanged (brainstorm from Apr 20 §3). Pipeline DP at 391 waypoints may only
+  have ~50–100 true decision units.
+- Inner layer: within a unit, SWS is constant; arrival-time slot computed from actual physics.
+- Pro: matches the physics — speed shouldn't change if nothing physical has changed. Small state
+  space without throwing away spatial weather resolution.
+- Con: requires a route preprocessing step (cell-assignment, heading-bucketing).
+
+**Working recommendation**: Option A with two disciplined upgrades — (i) continuous time carried
+in state, ceilings only at decision/replan boundaries; (ii) decision-unit collapsing from
+Option D available as a preprocessing step that reduces the edge count without changing the
+state definition. Option C kept as a solver variant for direct Luo comparison.
+
+### 14.5 Three independent axes (non-negotiable)
+
+The rebuild must keep these **independent** (the Luo-lesson from Apr 20 §4.8):
+
+| Axis | Knob | Set by |
+|---|---|---|
+| Spatial resolution | waypoint spacing | route geometry (or cell collapse) |
+| Temporal resolution | `dt` | config |
+| Speed resolution | `Δv` (SWS step) | config |
+
+No axis implies another. This is the structural fix to Luo's coupling and to the legacy DP's
+SOG-matching filter.
+
+### 14.6 Edge semantics — forward, explicit, honest
+
+For every (source, candidate_SWS) pair:
+1. Look up weather at source position, at forecast_hour = f(source.time).
+2. Compute SOG = `physics.forward(SWS, weather, heading)` (one shot, no binary search).
+3. Compute `leg_time = leg_distance / SOG` (continuous float).
+4. Arrival state = `(next_waypoint, source.time + leg_time)` — keep continuous time in state.
+5. Edge weight = `FCR(SWS) × leg_time` (continuous, no ceilings).
+
+Ceilings enter **only** when we map continuous time to a time-slot for dict keying during
+relaxation, and we do it in one place with a documented policy (round-down + epsilon, or
+round-nearest, or two-slot dispersion — we pick one and defend it).
+
+### 14.7 Backward fuel calculation — two styles, pick one
+
+**Style 1 — Arc-as-record (legacy).** Each arc carries SWS, SOG, travel_time, fuel, and a
+pointer from dest to best incoming arc. Backtrack = walk pointers, read fields.
+- Pro: schedule reconstruction is trivial, no recomputation.
+- Con: memory per relaxed edge is larger.
+
+**Style 2 — Parent dict + recompute (pipeline).** Store only `parent[(i, t_slot)] = (i-1, t_slot', sws)`.
+Backtrack = walk parents, recompute SOG/time/fuel from SWS + stored weather.
+- Pro: minimal memory.
+- Con: slight recomputation at the end, needs weather still accessible.
+
+**Preference**: Style 1 (legacy). The backward pass is the one place where we want the full story
+on each leg (SWS, SOG, travel time, fuel, clamped-or-not) for the paper's plots. Paying the
+memory is worth it; backtrack clarity is a feature.
+
+### 14.8 ETA — both hard and soft as first-class
+
+- **Hard ETA**: reject any arrival state with `time > ETA`. Simple boundary filter.
+- **Soft ETA**: at destination, cost = `total_fuel + λ × max(0, arrival_time − ETA)`.
+- The graph is built once; ETA mode changes only the terminal cost. Both must be supported
+  natively — no monkey-patching.
+
+### 14.9 Time-varying weather and rolling horizon from day one
+
+- **Static (hard-ETA, single plan)**: weather grid `w[node][fh]`, `fh = round(current_time + offset)`.
+- **Replan every 6h (RH)**: at each replan, rebuild the subgraph from current state with the
+  latest forecast; carry state (fuel-so-far, time-so-far, position) forward.
+- Both modes must use the **same `optimize()` entry point** — differ only in how weather is
+  sourced and how the subgraph is sliced.
+
+### 14.10 Decision-unit collapsing (preprocessing)
+
+Before building the graph, walk the route once and collapse consecutive waypoints sharing
+`(weather_cell_id, heading_bucket)` into a single decision node. Output: a reduced route where
+each node has the same decision semantics but the total edge count is a fraction of the raw
+waypoint count.
+
+- Weather cell: grid_id from the NWP source (0.5° GEFS ≈ 30 nm, 0.1° Open-Meteo ≈ 6 nm).
+- Heading bucket: discretize heading to, say, 10° buckets.
+- Store the underlying waypoint list per unit — the executor still needs them for simulation,
+  but the optimizer decides once per unit.
+
+This is the mechanical form of the Apr 20 §3 brainstorm. It doesn't change the physics; it
+removes the optimizer's ability to fit noise.
+
+### 14.11 Sanity checks the rebuild must pass
+
+Before trusting any Exp 1 / Exp 2 result:
+1. **Degenerate lock check**: with `lock = dt` (no locking), locked-mode must equal free-mode
+   fuel to within <0.01 mt. (Fails today — Exp 1 had +0.76 mt drift.)
+2. **Single-speed check**: force SWS constant → must match hand-computed grid search over
+   constants.
+3. **Zero-weather check**: flat weather everywhere → optimizer picks `v = L / T_max`, matches
+   closed-form answer.
+4. **Lock-monotonicity**: `fuel(6h lock) ≥ fuel(3h lock) ≥ fuel(1h lock) ≥ fuel(free)`. Today
+   this fails by 0.76 mt on [11,13] dt=0.01h.
+5. **Cross-solver agreement at Luo's published resolution**: Track A, rebuilt free DP, and
+   Luo-lattice mode must agree within <0.1% at `dt=1h, Δv=0.167 kn, lock=6h`.
+6. **Backtrack reconstruction**: total fuel from backtrack path must equal `minimal_fuel_consumption`
+   at the chosen destination node. No discrepancy.
+
+### 14.12 Questions this brainstorm leaves open
+
+- How do we treat **partial legs** at replan boundaries — interpolate weather at mid-leg, or snap
+  the replan moment to the next waypoint?
+- If Option D (cell × heading collapsing) removes 70% of the edges, do the sanity checks in §14.11
+  still hold, or does the optimizer systematically prefer collapsed routes (which could be a real
+  finding or an artifact)?
+- Is **soft ETA via λ** the right formulation, or do we want a CII-style nonlinear penalty
+  that's cheap before ETA and steep after?
+- For the paper: do we present **one rebuilt graph with a config knob** for lock-hours and
+  topology, or **two explicit modes** (free / locked) documented as siblings? The former is more
+  honest as a "unified framework"; the latter is easier to explain.
+
+### 14.13 Next steps
+
+1. Write a one-page walkthrough of the legacy DP (A, B, C of §14.1) for the record — treat it as
+   the baseline documentation.
+2. Pick a topology (recommendation: Option A with Option D preprocessing).
+3. Define the data classes: `Node`, `Arc`, `Route`, `WeatherGrid`, `Result`. Shared across solver
+   modes.
+4. Implement the forward relaxation with continuous time + arc-as-record backtrack.
+5. Run §14.11 sanity checks before touching any experiment.
+6. Only then rerun Exp 1 free vs locked on the new graph and confirm the tie holds (or not)
+   without rounding drift.
+
+### 14.14 Spec Decisions — Q&A Session (2026-04-20)
+
+Working session with supervisor/Ami to lock the concrete graph spec. Setup: 4000 nm voyage,
+400 h ETA, x-axis = time from voyage start, y-axis = distance from voyage start. Nodes live only
+on horizontal lines (time boundaries) and vertical lines (course-change boundaries).
+
+**Q1 — Edge destination rule:** **(a)** Every edge terminates at the **very first boundary line**
+it crosses going forward (H or V — whichever is closer in (t, d) space). Every line crossing is a
+forced decision stop. No edges skip lines.
+- *Implication:* Keeps DP layers clean. Max edges per source ≈ |speed range discretization|.
+  Graph size stays bounded. Matches legacy Sides BFS in spirit.
+
+**Q2 — Horizontal line spacing:** **(b)** Fixed every `X` hours, **configurable** via config
+(default 6 h, aligned conceptually to GFS NWP cycle but not pinned to it). Plus a synthetic
+terminal horizontal line at exactly `t = ETA` for sink convergence.
+- *Implication:* Config knob lets us sweep lock-hours (1h, 3h, 6h, 12h) as an experiment without
+  touching graph code. Terminal line handles ETAs that aren't integer multiples of X.
+
+**Q3 — Vertical line placement:** **Resolved via Q8**. Vertical lines are placed at **course
+changes UNION weather-cell boundaries**. Both types of physical change force a decision stop.
+- *Implication:* On Route D (391 smooth-heading waypoints), vertical lines are driven primarily
+  by weather-cell transitions (NWP grid is ~30 nm for GFS, ~6 nm for Open-Meteo). A route
+  preprocessing step walks the waypoints and emits a vertical line wherever `(heading_bucket,
+  weather_cell_id)` changes. Number of vertical lines is route- and grid-dependent, not a
+  config knob.
+- *Implication:* This is the mechanical realization of decision-unit collapsing from §14.10,
+  but applied to **vertical line placement** rather than waypoint merging. Same principle: don't
+  give the optimizer the ability to change speed when nothing physical has changed.
+
+**Q4 — Node density on a horizontal line:** **(b)** Nodes at **every `ζ` nm** along the full
+0..4000 nm range of the horizontal line. `ζ` is **configurable, default 1 nm**. No reachability
+pruning at node creation — the graph carries all distance points; pruning happens via edge
+feasibility (Q1 + Q7 speed-range filter).
+- *Implication:* 4000 nodes/line at default. With ~67 horizontal lines (400h / 6h) that's
+  ~268K horizontal-line nodes alone before vertical lines are added. Still small compared to
+  legacy's 953K dense grid. Keeps ζ independent of dt and Δv — the "three independent axes"
+  principle from §14.5 holds.
+
+**Q5 — Node density on a vertical line:** **(a)** Same scheme as Q4 — nodes at **every `τ` h**
+along the full 0..ETA time range of the vertical line. `τ` is **configurable** (default likely
+0.1 h, to be finalized). Matches Q4's treatment of the horizontal axis — both line types use a
+dense, uniform, configurable discretization.
+- *Implication:* On a vertical line at course change `d_c`, with τ=0.1h and ETA=400h, that's
+  4000 nodes/line. Total vertical-line nodes scale linearly with number of vertical lines (Q3
+  deferred). Preserves the "three independent axes" principle: ζ, τ, and speed step are each
+  configurable and independent.
+
+**Q6 — Speed = Δd/Δt — SOG or SWS?** **(a)** Edge geometry fixes **SOG** (ground speed). For
+each edge, **SWS is recovered** by inverse-solving under the source-node weather (binary search
+or analytic inverse over the physics model). **FCR = 0.000706 × SWS³** then drives the edge
+cost. Legacy-DP style. Preserves the thesis's SWS/SOG split.
+- *Implication:* The speed-range filter (Q7) is applied to SOG (what the edge geometry
+  determines). SWS may land outside [v_min, v_max] in bad weather — that's exactly the **Flow 2
+  event** the thesis measures. Treat those edges as either (a) infeasible / pruned, or (b)
+  clamped with a penalty — deferred to a later question if needed.
+- *Implication:* Physics inverse is the bottleneck. If too slow, switch to a tabulated
+  `SWS(SOG, weather)` lookup precomputed per weather cell.
+
+**Q7 — Speed range filter:** **(a)** Continuous interval `[v_min, v_max]`. An edge is valid iff
+`v_min ≤ SOG ≤ v_max`, where `SOG = Δd/Δt`. No exact-match filter, no rounding to a discrete
+speed grid. Legacy's `round(sog, 1) in speed_values_list` filter is **dropped**.
+- *Implication:* Massively more edges per source than legacy. With Q4/Q5 dense grids (1 nm × 0.1
+  h) and v_range [9, 13] kn, each source fans out to the full band on the next boundary. Real
+  fan-out is bounded by `(v_max − v_min) × Δt / ζ` per horizontal target, and
+  `(1/v_min − 1/v_max) × Δd / τ` per vertical target.
+- *Implication:* Speed resolution is now set by the node grid (ζ, τ), not by a separate speed
+  list. Effective speed granularity on the next horizontal line ≈ `ζ / Δt` kn. For ζ=1 nm,
+  Δt=6h → 0.167 kn — matches Luo's implicit granularity. If we want finer speed resolution,
+  lower ζ (not a separate Δv knob). This re-couples speed to geometry — worth noting as a
+  tension with §14.5 "three independent axes". We lose one axis of independence here, but gain
+  simplicity (no separate speed list).
+
+**Q8 — Weather used for an edge:** **Deferred on formulation, locked on assumption.** For now,
+assume **weather stays constant between nodes** — one representative weather per edge (source-node
+weather is the natural choice). The formulation (source / midpoint / integrated) is left open
+because the structural fix in Q3 (vertical lines at weather-cell boundaries) guarantees no edge
+ever crosses a weather-cell boundary, so all three formulations collapse to the same value
+within a decision unit.
+- *Implication:* Couples Q8 to Q3 — the "weather constant between nodes" invariant **requires**
+  vertical lines at weather changes. Drop that requirement and Q8 becomes the hard question it
+  was.
+- *Implication:* Temporal weather drift within a single horizontal cycle (6h default) is ignored
+  by this assumption. If NWP cycle = horizontal line spacing, that drift is zero by construction
+  (forecast doesn't refresh within a cycle). If we ever decouple horizontal spacing from NWP
+  cycle, revisit.
+- *Open:* Later, if we want within-edge weather evolution (e.g., integrated FCR along a 6h
+  edge), this becomes a real design decision. For the first cut, constant is fine.
+
+**Q9 — Terminal node / ETA:** **(d)** Both **hard ETA** and **soft ETA** are supported as
+first-class modes, selected by config.
+- **Hard ETA mode**: sink is the **column of nodes at `d = route_length`, `t ∈ [t_min, ETA]`**.
+  Early arrival is allowed. Pick the minimum-cumulative-fuel sink node among all reachable ones
+  in that column. Paths that would arrive after ETA are pruned.
+- **Soft ETA mode**: sink is the **column `d = route_length, t ≥ t_min`** (no upper cap on t
+  beyond the graph extent). Terminal cost = `cumulative_fuel + λ × max(0, t_arrive − ETA)`. Pick
+  minimum terminal cost.
+- *Implication:* Graph is built once; only the terminal-node selection logic differs between
+  modes. No monkey-patching. `λ` is a config parameter in soft mode.
+- *Implication:* Early arrival in hard mode surfaces the Flow 3 story naturally — the optimizer
+  *chooses* to finish early when that's cheaper than holding min-SWS through favorable weather.
+
+**Q10 — Source node:** **(a)** Single source node at `(t=0, d=0)`. One voyage, one start.
+
+### 14.15 Spec Summary — The Graph We're Building
+
+Putting Q1–Q10 together:
+
+**Nodes live on two families of lines:**
+- **Horizontal lines** at every `Δt_h` hours from `t=0` to `t=ETA` (+ synthetic terminal line at
+  exactly `t=ETA` if ETA isn't a multiple). Default `Δt_h = 6h`, configurable.
+- **Vertical lines** at every physical change: **course change OR weather-cell boundary**.
+  Placement driven by a route preprocessing pass over `(heading_bucket, weather_cell_id)`.
+
+**Node density (per line):**
+- Horizontal lines: nodes every `ζ` nm across full `[0, L]` (default `ζ = 1 nm`).
+- Vertical lines: nodes every `τ` h across full `[0, ETA]` (default `τ = 0.1 h`).
+- Source: single node at `(0, 0)`.
+- Sink column: nodes at `d = L, t ∈ [t_min, ETA]` (hard ETA) or `t ≥ t_min` (soft ETA).
+
+**Edges:**
+- Every edge goes from a source node to a node on the **very first boundary line** it reaches
+  (whichever comes first — horizontal or vertical) with `Δt > 0, Δd > 0`.
+- Implied `SOG = Δd/Δt` must lie in continuous interval `[v_min, v_max]`.
+- For each valid edge: `SWS` recovered by physics inverse under **source-node weather**;
+  `FCR = 0.000706 × SWS³`; edge fuel `= FCR × Δt`.
+- Weather is constant over the edge by construction (vertical lines at every weather-cell
+  boundary guarantee no edge crosses one).
+
+**Objective:**
+- Forward Bellman relaxation: each node stores `minimal_cumulative_fuel` and `minimal_input_arc`.
+- Arc-as-record: edges carry SWS, SOG, Δt, Δd, FCR, fuel for trivial backtrack.
+- Terminal selection: min cumulative fuel (hard) or min `fuel + λ·delay⁺` (soft).
+
+**Still open:**
+- Heading bucket granularity for vertical-line placement.
+- Weather cell granularity (use Open-Meteo 0.1° or GFS 0.5°?).
+- Default `τ` (time spacing on vertical lines) — likely 0.1 h to match our pipeline DP.
+- Flow 2 handling when physics inverse says `SWS > v_max` (infeasible edge vs clamped + penalty).
+- Rolling-horizon replan mechanics on this graph structure.
