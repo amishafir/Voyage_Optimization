@@ -56,10 +56,14 @@ class SquareLabel:
 
 def label_at(t: float, d: float, route: Route, voyage: VoyageWeather,
              grid_deg: float = GRID_DEG) -> SquareLabel:
-    wp = voyage.nearest_waypoint(d)
+    # Segment via boundary-bisect (H-line-consistent).
+    seg = voyage.segment_for_distance(d)
+    # Cell from the nearest waypoint *within that segment* — this matches
+    # how weather_at resolves data, so label and weather agree.
+    wp = voyage.nearest_waypoint_in_segment(d, seg)
     window = route.window_for_time(t)
     return SquareLabel(
-        segment_id=wp.segment,
+        segment_id=seg,
         cell_lat_idx=int(np.floor(wp.lat / grid_deg)),
         cell_lon_idx=int(np.floor(wp.lon / grid_deg)),
         window_start=window.start,
@@ -267,7 +271,7 @@ def main() -> int:
     )
     h_lines = h_line_distances_from_h5(cfg, voyage, grid_deg=GRID_DEG)
     nodes = build_nodes(cfg, route, h_line_distances=h_lines)
-    edges = build_edges(cfg, nodes, voyage, sample_hour=0)
+    edges = build_edges(cfg, nodes, voyage, route, sample_hour=0)
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges, "
           f"{len(h_lines)} H lines, "
           f"{sum(1 for n in nodes if n.line_type == 'V' and not n.is_source)//4000 or 1} × V lines")

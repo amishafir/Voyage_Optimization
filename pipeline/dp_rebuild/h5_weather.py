@@ -12,6 +12,8 @@ Exposes the interface the rebuild graph needs:
   - weather_at(d, sample_hour=0, forecast_hour=None) -> dict
 """
 
+from bisect import bisect_right
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -59,6 +61,12 @@ class VoyageWeather:
             # Sort by distance just to be safe — metadata should already be ordered.
             self._waypoints.sort(key=lambda w: w.distance_nm)
             self._distances = np.array([w.distance_nm for w in self._waypoints])
+
+            # Pre-group waypoints by segment for segment-aware nearest lookups.
+            self._wps_by_seg: Dict[int, List[Waypoint]] = defaultdict(list)
+            for w in self._waypoints:
+                self._wps_by_seg[w.segment].append(w)
+            self._segments_in_order = sorted(self._wps_by_seg.keys())
 
             # Actual weather indexed as (node_id, sample_hour) -> row
             aw = f["actual_weather"][()]
@@ -123,29 +131,33 @@ class VoyageWeather:
     # ------------------------------------------------------------------
 
     def segment_boundaries_nm(self) -> List[float]:
-        """Cumulative distances at the *end* of each segment (interior only).
+        """Cumulative distances at segment transitions.
 
-        Boundary is taken as the midpoint between the last waypoint of segment k
-        and the first waypoint of segment k+1 (waypoints span but don't coincide
-        at segment joins in the HDF5 — e.g. seg 0 ends at 204 nm, seg 1 starts
-        at 223.74 nm).
+        Uses the distance of the **first waypoint of each new segment** — this
+        matches the YAML cumulative-segment-length semantic. E.g. the seg 0/1
+        boundary lands at wp18's d = 223.74 nm (≈ YAML's 223.86 within
+        interpolation rounding), not at the midpoint of the no-waypoint gap.
         """
         out: List[float] = []
         prev_seg = self._waypoints[0].segment
-        prev_d = self._waypoints[0].distance_nm
         for w in self._waypoints[1:]:
             if w.segment != prev_seg:
-                out.append((prev_d + w.distance_nm) / 2.0)
+                out.append(w.distance_nm)
             prev_seg = w.segment
-            prev_d = w.distance_nm
         return out
 
     def weather_cell_boundaries_nm(self, grid_deg: float = 0.5) -> List[float]:
         """Distances where the route crosses a `grid_deg` NWP cell boundary.
 
-        The route is sampled at waypoints (12 nm intervals here). We detect a
-        cell change between consecutive waypoints and mark the boundary at the
-        midpoint. Result can be used as H lines for weather-cell-driven decisions.
+        Placed at the **midpoint** between the two waypoints that straddle the
+        cell change. This matches the behaviour of `nearest_waypoint_in_segment`
+        (which flips the returned waypoint at the waypoint-pair midpoint), so
+        boundary placement and cell lookup stay internally consistent.
+
+        Note: segment boundaries (see `segment_boundaries_nm`) use a different
+        convention (first waypoint of the new segment) because segments have a
+        no-waypoint gap at the transition — there's no adjacent-waypoint pair
+        whose midpoint to use.
         """
         out: List[float] = []
         if not self._waypoints:
@@ -161,6 +173,30 @@ class VoyageWeather:
         return out
 
     # ------------------------------------------------------------------
+    # Segment-aware lookup
+    # ------------------------------------------------------------------
+
+    def segment_for_distance(self, d: float) -> int:
+        """Which segment the route is in at distance d (by cumulative boundary).
+
+        Uses `segment_boundaries_nm()` + bisect so the answer agrees with
+        H-line placement: d < boundary → prev segment; d >= boundary → new
+        segment. Handles the gap between segments consistently (gap zone is
+        attributed to the previous segment, matching YAML).
+        """
+        boundaries = self.segment_boundaries_nm()
+        first_seg = self._waypoints[0].segment if self._waypoints else 0
+        return first_seg + bisect_right(boundaries, d)
+
+    def nearest_waypoint_in_segment(self, d: float, seg: int) -> Waypoint:
+        """Nearest waypoint within segment `seg`. Falls back to route nearest
+        if the segment has no waypoints (shouldn't happen for real data)."""
+        lst = self._wps_by_seg.get(seg)
+        if not lst:
+            return self.nearest_waypoint(d)
+        return min(lst, key=lambda w: abs(w.distance_nm - d))
+
+    # ------------------------------------------------------------------
     # Weather lookup
     # ------------------------------------------------------------------
 
@@ -172,11 +208,19 @@ class VoyageWeather:
     ) -> Dict[str, float]:
         """Weather at distance d.
 
+        Looks up the segment containing d, then returns the weather of the
+        nearest waypoint **within that segment**. This matters at segment
+        joins where the HDF5 has a small gap between the last waypoint of
+        segment k and the first of segment k+1 — we want d in the gap to
+        take weather from segment k's last waypoint, not from the other
+        side of the boundary.
+
         `sample_hour`: when the observation (or forecast) was taken (0..11).
         `forecast_hour`: if not None, read predicted_weather at this forecast lead;
                         if None, read actual_weather.
         """
-        wp = self.nearest_waypoint(d)
+        seg = self.segment_for_distance(d)
+        wp = self.nearest_waypoint_in_segment(d, seg)
         if forecast_hour is None:
             key = (wp.node_id, int(sample_hour))
             row = self._actual.get(key)
