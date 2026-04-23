@@ -1401,52 +1401,55 @@ Before trusting any Exp 1 / Exp 2 result:
 6. Only then rerun Exp 1 free vs locked on the new graph and confirm the tie holds (or not)
    without rounding drift.
 
-### 14.14 Spec Decisions — Q&A Session (2026-04-20)
+### 14.14 Spec Decisions — Q&A Session (2026-04-20, convention flipped 2026-04-23)
 
 Working session with supervisor/Ami to lock the concrete graph spec. Setup: 4000 nm voyage,
-400 h ETA, x-axis = time from voyage start, y-axis = distance from voyage start. Nodes live only
-on horizontal lines (time boundaries) and vertical lines (course-change boundaries).
+400 h ETA, **x-axis = time** from voyage start, **y-axis = distance** from voyage start.
+
+**Geometric convention (as of 2026-04-23):**
+- **Vertical line (V)** = constant time — time-decision boundary (every dt_h hours,
+  default 6 h). Geometrically parallel to the distance axis.
+- **Horizontal line (H)** = constant distance — course-change / weather-cell / terminal-sink
+  boundary. Geometrically parallel to the time axis.
+
+Nodes live only on V and H lines; the space between lines is empty. Q&A answers below were
+originally logged under the inverse labels (H=time, V=distance) and have been re-cast to the
+geometric convention. Semantics of every decision are unchanged — only labels flipped.
 
 **Q1 — Edge destination rule:** **(a)** Every edge terminates at the **very first boundary line**
-it crosses going forward (H or V — whichever is closer in (t, d) space). Every line crossing is a
+it crosses going forward (V or H — whichever is closer in (t, d) space). Every line crossing is a
 forced decision stop. No edges skip lines.
 - *Implication:* Keeps DP layers clean. Max edges per source ≈ |speed range discretization|.
   Graph size stays bounded. Matches legacy Sides BFS in spirit.
 
-**Q2 — Horizontal line spacing:** **(b)** Fixed every `X` hours, **configurable** via config
-(default 6 h, aligned conceptually to GFS NWP cycle but not pinned to it). Plus a synthetic
-terminal horizontal line at exactly `t = ETA` for sink convergence.
-- *Implication:* Config knob lets us sweep lock-hours (1h, 3h, 6h, 12h) as an experiment without
-  touching graph code. Terminal line handles ETAs that aren't integer multiples of X.
+**Q2 — V-line (constant-time) spacing:** **(b)** V lines at every `dt_h` hours, **configurable**
+(default 6 h, aligned conceptually to GFS NWP cycle). Plus a synthetic terminal V line at
+exactly `t = ETA` for sink convergence.
+- *Implication:* Config knob lets us sweep lock-hours (1h, 3h, 6h, 12h) without touching graph
+  code. Terminal line handles ETAs that aren't integer multiples of `dt_h`.
+- **Tail policy (Apr 22):** keep every regular multiple of `dt_h` that is `< ETA`, *and* append
+  `t = ETA` even if the gap is smaller. Example for `dt_h=6, ETA=400`:
+  `[6, 12, ..., 390, 396, 400]` — 66 regular 6h blocks + 1 short 4h tail block.
 
-**Q3 — Vertical line placement:** **Resolved via Q8**. Vertical lines are placed at **course
-changes UNION weather-cell boundaries**. Both types of physical change force a decision stop.
-- *Implication:* On Route D (391 smooth-heading waypoints), vertical lines are driven primarily
-  by weather-cell transitions (NWP grid is ~30 nm for GFS, ~6 nm for Open-Meteo). A route
-  preprocessing step walks the waypoints and emits a vertical line wherever `(heading_bucket,
-  weather_cell_id)` changes. Number of vertical lines is route- and grid-dependent, not a
-  config knob.
-- *Implication:* This is the mechanical realization of decision-unit collapsing from §14.10,
-  but applied to **vertical line placement** rather than waypoint merging. Same principle: don't
-  give the optimizer the ability to change speed when nothing physical has changed.
+**Q3 — H-line (constant-distance) placement:** **Resolved via Q8**. H lines are placed at
+**course changes UNION weather-cell boundaries**. Both types of physical change force a
+decision stop.
+- *Implication:* On Route D (391 smooth-heading waypoints), H lines are driven primarily by
+  weather-cell transitions (NWP grid ~30 nm for GFS, ~6 nm for Open-Meteo). A route preprocessing
+  pass emits an H line wherever `(heading_bucket, weather_cell_id)` changes. Number of H lines
+  is route- and grid-dependent.
 
-**Q4 — Node density on a horizontal line:** **(b)** Nodes at **every `ζ` nm** along the full
-0..4000 nm range of the horizontal line. `ζ` is **configurable, default 1 nm**. No reachability
-pruning at node creation — the graph carries all distance points; pruning happens via edge
-feasibility (Q1 + Q7 speed-range filter).
-- *Implication:* 4000 nodes/line at default. With ~67 horizontal lines (400h / 6h) that's
-  ~268K horizontal-line nodes alone before vertical lines are added. Still small compared to
-  legacy's 953K dense grid. Keeps ζ independent of dt and Δv — the "three independent axes"
-  principle from §14.5 holds.
+**Q4 — Node density on a V line (varying distance):** **(b)** Nodes at every `ζ` nm across the
+full `[0, L]` distance axis on each V line. `ζ` **configurable, default 1 nm**. No reachability
+pruning at node creation — pruning happens via edge feasibility (Q1 + Q7 speed range).
+- *Implication:* With default `dt_h=6, L=4000, ζ=1`: 4001 nodes per V line × 67 V lines
+  ≈ 268K V-line nodes. Preserves the "three independent axes" principle.
 
-**Q5 — Node density on a vertical line:** **(a)** Same scheme as Q4 — nodes at **every `τ` h**
-along the full 0..ETA time range of the vertical line. `τ` is **configurable** (default likely
-0.1 h, to be finalized). Matches Q4's treatment of the horizontal axis — both line types use a
-dense, uniform, configurable discretization.
-- *Implication:* On a vertical line at course change `d_c`, with τ=0.1h and ETA=400h, that's
-  4000 nodes/line. Total vertical-line nodes scale linearly with number of vertical lines (Q3
-  deferred). Preserves the "three independent axes" principle: ζ, τ, and speed step are each
-  configurable and independent.
+**Q5 — Node density on an H line (varying time):** **(a)** Nodes at every `τ` h across the full
+`[0, ETA]` time axis on each H line. `τ` **configurable, default 0.1 h**. Matches Q4's treatment
+of the distance axis — both line types use a dense, uniform, configurable discretization.
+- *Implication:* With default `τ=0.1, ETA=400`: 4001 nodes per H line. Total H-line nodes
+  scale linearly with the number of H lines (Q3).
 
 **Q6 — Speed = Δd/Δt — SOG or SWS?** **(a)** Edge geometry fixes **SOG** (ground speed). For
 each edge, **SWS is recovered** by inverse-solving under the source-node weather (binary search
@@ -1462,16 +1465,15 @@ cost. Legacy-DP style. Preserves the thesis's SWS/SOG split.
 **Q7 — Speed range filter:** **(a)** Continuous interval `[v_min, v_max]`. An edge is valid iff
 `v_min ≤ SOG ≤ v_max`, where `SOG = Δd/Δt`. No exact-match filter, no rounding to a discrete
 speed grid. Legacy's `round(sog, 1) in speed_values_list` filter is **dropped**.
-- *Implication:* Massively more edges per source than legacy. With Q4/Q5 dense grids (1 nm × 0.1
-  h) and v_range [9, 13] kn, each source fans out to the full band on the next boundary. Real
-  fan-out is bounded by `(v_max − v_min) × Δt / ζ` per horizontal target, and
-  `(1/v_min − 1/v_max) × Δd / τ` per vertical target.
+- *Implication:* Massively more edges per source than legacy. With Q4/Q5 dense grids
+  (V-line ζ=1 nm, H-line τ=0.1 h) and `v_range=[9, 13]` kn, each source fans out to the full
+  band on the next boundary. Real fan-out is bounded by `(v_max − v_min) × Δt / ζ` per V-line
+  target and `(1/v_min − 1/v_max) × Δd / τ` per H-line target.
 - *Implication:* Speed resolution is now set by the node grid (ζ, τ), not by a separate speed
-  list. Effective speed granularity on the next horizontal line ≈ `ζ / Δt` kn. For ζ=1 nm,
-  Δt=6h → 0.167 kn — matches Luo's implicit granularity. If we want finer speed resolution,
-  lower ζ (not a separate Δv knob). This re-couples speed to geometry — worth noting as a
-  tension with §14.5 "three independent axes". We lose one axis of independence here, but gain
-  simplicity (no separate speed list).
+  list. Effective speed granularity on the next V line ≈ `ζ / Δt` kn. For ζ=1 nm, Δt=6h →
+  0.167 kn — matches Luo's implicit granularity. If we want finer speed resolution, lower ζ
+  (not a separate Δv knob). This re-couples speed to geometry — worth noting as a tension with
+  §14.5 "three independent axes". We lose one axis of independence here, but gain simplicity.
 
 **Q8 — Weather used for an edge:** **Deferred on formulation, locked on assumption.** For now,
 assume **weather stays constant between nodes** — one representative weather per edge (source-node
@@ -1504,39 +1506,296 @@ first-class modes, selected by config.
 
 **Q10 — Source node:** **(a)** Single source node at `(t=0, d=0)`. One voyage, one start.
 
-### 14.15 Spec Summary — The Graph We're Building
+### 14.15 Spec Summary — The Graph We're Building (geometric convention)
 
-Putting Q1–Q10 together:
+Putting Q1–Q10 together. Axes: **x = time, y = distance**.
 
-**Nodes live on two families of lines:**
-- **Horizontal lines** at every `Δt_h` hours from `t=0` to `t=ETA` (+ synthetic terminal line at
-  exactly `t=ETA` if ETA isn't a multiple). Default `Δt_h = 6h`, configurable.
-- **Vertical lines** at every physical change: **course change OR weather-cell boundary**.
-  Placement driven by a route preprocessing pass over `(heading_bucket, weather_cell_id)`.
+**Two line families:**
+- **Vertical lines (V)** — constant time. At `t = dt_h, 2·dt_h, ..., ETA` with default
+  `dt_h = 6h`, configurable. Tail policy: keep every multiple `< ETA`, append `t = ETA`.
+- **Horizontal lines (H)** — constant distance. At every **course change OR weather-cell
+  boundary**. Placement driven by route preprocessing over `(heading_bucket, weather_cell_id)`.
+- Plus a **dense terminal H line at `d = L`** for the sink column at `τ` granularity.
 
-**Node density (per line):**
-- Horizontal lines: nodes every `ζ` nm across full `[0, L]` (default `ζ = 1 nm`).
-- Vertical lines: nodes every `τ` h across full `[0, ETA]` (default `τ = 0.1 h`).
+**Node density:**
+- V lines: nodes every `ζ` nm across full `[0, L]` distance axis (default `ζ = 1 nm`).
+- H lines: nodes every `τ` h across full `[0, ETA]` time axis (default `τ = 0.1 h`).
 - Source: single node at `(0, 0)`.
-- Sink column: nodes at `d = L, t ∈ [t_min, ETA]` (hard ETA) or `t ≥ t_min` (soft ETA).
+- Sinks: all nodes at `d = L` (on the terminal H line + intersections with every V line).
 
 **Edges:**
-- Every edge goes from a source node to a node on the **very first boundary line** it reaches
-  (whichever comes first — horizontal or vertical) with `Δt > 0, Δd > 0`.
+- Every edge goes from a source to a node on the **very first boundary line** it reaches
+  (whichever comes first — next V or next H) with `Δt > 0, Δd > 0`.
 - Implied `SOG = Δd/Δt` must lie in continuous interval `[v_min, v_max]`.
 - For each valid edge: `SWS` recovered by physics inverse under **source-node weather**;
   `FCR = 0.000706 × SWS³`; edge fuel `= FCR × Δt`.
-- Weather is constant over the edge by construction (vertical lines at every weather-cell
-  boundary guarantee no edge crosses one).
+- Weather constant over each edge by construction (H lines at every weather-cell boundary
+  guarantee no edge crosses one).
 
 **Objective:**
-- Forward Bellman relaxation: each node stores `minimal_cumulative_fuel` and `minimal_input_arc`.
+- Forward Bellman relaxation: each node stores `minimal_cumulative_fuel` and
+  `minimal_input_arc`.
 - Arc-as-record: edges carry SWS, SOG, Δt, Δd, FCR, fuel for trivial backtrack.
-- Terminal selection: min cumulative fuel (hard) or min `fuel + λ·delay⁺` (soft).
+- Terminal selection: min cumulative fuel (hard ETA) or min `fuel + λ · delay⁺` (soft ETA).
 
 **Still open:**
-- Heading bucket granularity for vertical-line placement.
-- Weather cell granularity (use Open-Meteo 0.1° or GFS 0.5°?).
-- Default `τ` (time spacing on vertical lines) — likely 0.1 h to match our pipeline DP.
-- Flow 2 handling when physics inverse says `SWS > v_max` (infeasible edge vs clamped + penalty).
+- Heading bucket granularity for H-line placement.
+- Weather cell granularity (Open-Meteo 0.1° atmosphere, 0.5° marine, or GFS 0.25°/0.5°?).
+- Flow 2 handling when physics inverse says `SWS > v_max` (prune vs clamp + penalty).
 - Rolling-horizon replan mechanics on this graph structure.
+
+### 14.16 Implementation Status (2026-04-23)
+
+- `pipeline/dp_rebuild/build_nodes.py` — Stage 1: nodes only. Under default config
+  (L=4000 nm, ETA=400 h, dt_h=6 h, ζ=1 nm, τ=0.1 h, 39 H lines at 100 nm intervals +
+  1 terminal H line at d=L): **428,108 nodes** (1 source + 268,067 on 67 V lines +
+  160,040 on 40 H lines).
+- `pipeline/dp_rebuild/build_edges.py` — Stage 2: edges, no weather yet. **6,118,450 edges**,
+  avg fan-out 14.43, SOG range exactly `[9.0, 13.0]` kn.
+- Convention flipped 2026-04-23 from (H=time, V=distance) to geometric (V=time, H=distance).
+  Pure rename; node/edge counts identical before and after.
+
+### 14.17 YAML Integration — Q&A (2026-04-23)
+
+Locked decisions to switch from the 4000/400 toy to the YAML's real route
+(`Dynamic speed optimization/weather_forecasts.yaml`, 3393.24 nm, 280 h ETA, 12 segments).
+
+- **Q_yaml_1 — Default size.** Switch default `__main__` to YAML's **3393.24 nm / 280 h**. The
+  4000/400 toy is retired in favor of real data.
+- **Q_yaml_2 — `current_dir` vs `current_angle`.** Derived duplicates (identical in every
+  segment). Keep `current_dir`, drop `current_angle` at load.
+- **Q_yaml_3 — Segment 6 duplicate `distance` line.** Typo. Rely on YAML parser behavior
+  (last key wins) → 287.34.
+- **Q_yaml_4 — Multiple forecast windows.** Populate the structure with multiple 6 h windows
+  so the graph exercises time-varying weather from the start, even if the YAML only ships
+  with one (0-280) window. Implementation: `synthesize_multi_window(route, window_h=6.0)`
+  replicates the single window into multiple equal-length windows; a hook allows injecting
+  per-window variation when real multi-window data is available.
+- **Q_yaml_5 — Weather-cell sub-H-lines.** Add H lines every 30 nm (marine Open-Meteo cell
+  radius) *inside* each segment, all using the same segment weather. Gives the DP more
+  decision points without inventing physics. Segment boundaries remain the heading/weather
+  decision points; sub-H-lines are purely geometric checkpoints.
+
+---
+
+## 15. Graph Rebuild — Implementation Log
+
+Chronological record of the new DP graph construction in `pipeline/dp_rebuild/`. §14 holds
+the design spec and Q&A; this section is the running **build log**.
+
+### 15.1 Stage 1 — `build_nodes.py` initial toy (2026-04-22)
+
+- Created `Node` (frozen `(time_h, distance_nm, line_type, is_source, is_sink)`) and
+  `GraphConfig` (length, ETA, dt_h, ζ, τ, v_min, v_max).
+- Horizontal/vertical line generators; source at (0, 0).
+- **Tail policy**: V lines at `[6, 12, ..., 390, 396, 400]` — 66 regular 6 h blocks + one
+  shorter 4 h tail ending at ETA.
+- **First toy run** (L=4000 nm, ETA=400 h, only time lines, no distance lines):
+  67 lines × 4001 nodes + 1 source = **268,068 nodes**.
+
+### 15.2 Course-change H lines every 100 nm (2026-04-22)
+
+- Added `regular_course_change_distances(cfg, spacing_nm=100)` — excludes d=0 and d=L.
+- Result: 39 H lines at `[100, 200, ..., 3900]`. Total **424,107 nodes**.
+
+### 15.3 Dense terminal sink column (2026-04-22)
+
+- Per Q9: sink is a full column at d=L, not isolated points. Added d=L to H distances so
+  the last H line is dense at τ=0.1 h.
+- Result: 40 H lines. Total **428,108 nodes**. 4,068 sink candidates (67 from V-line
+  endpoints + 4001 from terminal H line; 67 duplicates at intersections — dedup deferred).
+
+### 15.4 Stage 2 — `build_edges.py` (2026-04-22 → 04-23)
+
+- Created `Edge` (frozen `(src_t, src_d, dst_t, dst_d, sog)`).
+- `index_nodes()` groups nodes into `by_v[t]` (sorted by distance) and `by_h[d]` (sorted
+  by time).
+- `edges_from_source()` emits edges per Q1 + Q7: enumerate candidates on the next V line
+  and the next H line; clamp so edges never overshoot the corner (enforces "first
+  boundary crossed").
+- **Result on the toy**: **6,118,450 edges**, avg fan-out 14.43, SOG exactly
+  `[9.0000, 13.0000]`.
+
+### 15.5 Convention flip — geometric V/H labels (2026-04-23)
+
+- Original Q&A labelled time boundaries as "horizontal" and distance boundaries as
+  "vertical". The whiteboard's geometric convention is the opposite (x=time, y=distance).
+- Renamed throughout both files: `line_type="V"` now means constant-time,
+  `line_type="H"` means constant-distance.
+- Pure rename. Node count and edge count identical before and after (sanity check).
+
+### 15.6 YAML integration — `load_route.py` (2026-04-23)
+
+- New file `load_route.py` with dataclasses `Segment`, `ForecastWindow`, `Route`.
+- Parses the legacy `weather_forecasts.yaml` — drops `current_angle` (Q_yaml_2 duplicate),
+  lets YAML parser pick last `distance:` for segment 6 (Q_yaml_3 typo = 287.34).
+- `Route.cumulative_segment_endpoints()`, `segment_for_distance()`, `window_for_time()`,
+  `weather_at(t, d)`.
+- `synthesize_multi_window(route, window_h=6)` replicates the single-window YAML into
+  equal-length windows so the graph exercises multi-window infrastructure (Q_yaml_4).
+- Loader validated on the YAML: **12 segments, 3393.24 nm, ETA=280 h**; multi-window
+  synthesis produces 47 windows (46 × 6 h + 1 × 4 h tail).
+
+### 15.7 `build_nodes.py` rewired for Route (2026-04-23)
+
+- `GraphConfig.from_route(route, **overrides)` — length and ETA flow from the Route,
+  everything else configurable.
+- `v_line_times_from_route(cfg, route)` = union of `dt_h` cadence + forecast-window
+  boundaries. (When `dt_h` matches window length they coincide.)
+- `h_line_distances_from_route(cfg, route)` = segment boundaries UNION weather-cell
+  sub-lines every `cfg.weather_cell_nm` UNION terminal sink column at d=L (Q_yaml_5).
+- Removed the old `regular_course_change_distances` (YAML-driven now).
+- Added `weather_cell_nm` (default 30, marine Open-Meteo cell radius) to `GraphConfig`.
+
+### 15.8 `build_edges.py` pointed at the Route (2026-04-23)
+
+- `__main__` now loads the YAML, synthesizes windows, builds nodes from the Route, then
+  builds edges. Edge construction logic itself is unchanged (still pure geometric — no
+  weather yet).
+
+### 15.9 Current numbers (2026-04-23)
+
+| Metric | Toy (4000/400, uniform 100 nm) | YAML (3393/280, segments + 30 nm cells) |
+|---|---|---|
+| Forecast windows | 1 | 47 (synthesized 6 h) |
+| V lines (time) | 67 | 47 |
+| H lines (distance) | 40 | 119 (11 segment + 107 weather-cell sub + 1 terminal) |
+| Nodes | 428,108 | **492,885** |
+| Edges | 6,118,450 | **3,268,555** |
+| Avg fan-out | 14.43 | **6.67** |
+| SOG range | [9.0, 13.0] | [9.0, 13.0] |
+
+**Why edge count dropped** despite more nodes: H-line spacing shrank from 100 nm to 30 nm,
+so `v* = 30/6 = 5 kn < v_min`. Every source now reaches an H line before reaching the next
+V line → smaller fan-out band per source.
+
+**Skew** (2.47 M H-targeted edges vs 0.80 M V-targeted): H lines are now close enough that
+almost every source terminates on an H line before hitting the next V line.
+
+### 15.10 What's in place
+
+```
+pipeline/dp_rebuild/
+  load_route.py     # YAML -> Route (Segment, ForecastWindow, synthesize_multi_window)
+  build_nodes.py    # GraphConfig.from_route(), V + H line node emission, sink flags
+  build_edges.py    # Edge enumeration under Q1 + Q7; no weather yet
+```
+
+### 15.11 What's still missing
+
+- **Weather on edges** — look up `route.weather_at(src_t, src_d)` per edge and store it.
+- **SWS inverse + FCR** — `Arc.SWS = inverse(SOG, weather)`, `Arc.FCR = 0.000706 × SWS³`,
+  `Arc.fuel = FCR × Δt`.
+- **Forward Bellman relaxation** — `node.min_cumulative_fuel`, `node.min_input_arc`;
+  backtrack to reconstruct schedule.
+- **Terminal selection** — hard ETA (Q9.b) and soft ETA with λ (Q9.c) modes.
+- **Visualization** — (t, d) scatter with line overlays, edge sample, sanity-check plots.
+- **§14.11 sanity checks** — degenerate lock, zero-weather, lock-monotonicity,
+  backtrack fidelity.
+- **Sink dedup** — 47 duplicated (t, L) pairs at V × terminal-H intersections; defer to
+  edge-construction / DP solve time.
+- **Heading-bucket / weather-cell switch to real data** — currently segments are the
+  only heading granularity and weather cells are uniform 30 nm placeholders; wire in real
+  (lat, lon) → NWP cell lookup when route geometry is available.
+
+### 15.12 Open design questions carried from §14
+
+- **Flow 2 handling** when inverse produces `SWS > v_max` — prune edge vs clamp + penalty.
+- **Rolling-horizon** mechanics on this graph structure.
+- **Weather cell source** — commit to marine Open-Meteo 0.5° everywhere, or mix sources
+  per variable (atmosphere 0.1°, marine 0.5°).
+- **Heading bucket size** — currently implicit at the YAML's segment granularity; if we
+  move beyond YAML-style routes we need to re-decide.
+
+### 15.13 HDF5 weather integration — `h5_weather.py` (2026-04-23)
+
+- Identified `pipeline/data/voyage_weather.h5` as the Persian Gulf → Malacca weather data
+  matching the YAML route. Verified: same route name, same 12 segments, same length (3395.84
+  nm HDF5 vs 3393.24 nm YAML — interpolation rounding). Local copy from Feb 16; servers were
+  flaky on SSH port 22 so we used the local copy directly.
+- Schema: `metadata` (279 waypoints with `node_id, lon, lat, distance_from_start_nm,
+  segment`), `actual_weather` (279 × 12 sample-hours), `predicted_weather` (279 × 192
+  forecast-hours × 12 sample-hours). Six weather fields per row: wind speed/dir, Beaufort
+  number, wave height, ocean current velocity/dir.
+- New file `pipeline/dp_rebuild/h5_weather.py` with `VoyageWeather` class exposing:
+  - `length_nm`, `waypoints`, `sample_hours`, `forecast_hours`, `route_name`
+  - `nearest_waypoint(d)` — O(log n) via `np.searchsorted`
+  - `segment_boundaries_nm()` — distances at segment transitions (midpoint between the last
+    waypoint of segment *k* and the first waypoint of segment *k+1*; segments don't share a
+    boundary waypoint in the HDF5 — e.g. seg 0 ends at 204 nm, seg 1 starts at 223.74 nm)
+  - `weather_cell_boundaries_nm(grid_deg=0.5)` — detects NWP grid-cell transitions between
+    consecutive waypoints and places the boundary at their midpoint. Parameterised by grid
+    resolution: 0.5° marine, 0.25° GFS, 0.1° Open-Meteo atmosphere.
+  - `weather_at(d, sample_hour=0, forecast_hour=None)` — `forecast_hour=None` reads
+    `actual_weather`, else reads `predicted_weather` at that lead.
+- `build_nodes.py`:
+  - New helper `h_line_distances_from_h5(cfg, voyage, grid_deg=0.5)`: segment boundaries
+    ∪ weather-cell crossings ∪ {terminal at L}.
+  - `build_nodes()` now takes an optional `h_line_distances` parameter so callers can
+    swap the YAML-derived list for the HDF5-derived list without touching the core.
+  - `__main__` runs both paths for comparison.
+
+**Numbers (Persian Gulf → Malacca, L=3393.24 nm, ETA=280 h, dt_h=6, ζ=1, τ=0.1,
+v∈[9,13]):**
+
+| Metric | Path A (YAML + uniform 30 nm) | Path B (HDF5 real 0.5° cells) |
+|---|---|---|
+| H lines | 119 | **138** (11 seg + 126 cells + 1 terminal) |
+| Nodes | 492,885 | **546,104** |
+
+The 19 extra H lines in Path B are real marine-grid crossings that didn't land on the
+uniform-30-nm multiples of Path A. At 0.25° grid: 230 cell boundaries; at 0.1° atmosphere
+grid: 278 (≈ one per waypoint).
+
+Known data caveat: waypoints near Port B (d ≈ 3000 nm) have `nan` for some marine fields
+(Malacca coastal proximity is outside Open-Meteo Marine API coverage, per memory). We'll
+handle when weather hits edges — probably clamp NaN to neighbouring-waypoint values.
+
+### 15.14 Weather on edges — `build_edges.py` refactor (2026-04-23)
+
+- New `Weather` dataclass (frozen, 6 fields matching `h5_weather.WEATHER_FIELDS`) with
+  `from_dict()` constructor and `has_nan()` check.
+- `Edge` now carries `weather: Weather` — the source-node snapshot used for later SWS
+  inverse + FCR.
+- `lookup_source_weather(src, voyage, sample_hour=0, forecast_hour=None)` isolates the
+  lookup policy. Default = actual weather at sample_hour 0; switch to predicted weather
+  by passing a `forecast_hour` (for RH experiments).
+- `build_edges()` now takes `voyage: VoyageWeather` plus `sample_hour` / `forecast_hour`
+  params. One HDF5 lookup per source node (not per destination) — O(|nodes| log |wps|)
+  total weather queries.
+- `edges_from_source()` signature gains `wx: Weather`, passed into every emitted Edge.
+
+**Numbers (Path B, HDF5 real geometry + weather on edges, sample_hour=0):**
+
+| Metric | Value |
+|---|---|
+| Nodes | 546,104 |
+| Edges | **3,344,167** |
+| Avg fan-out | 6.16 |
+| SOG range | [9.0, 13.0] kn |
+| Wind speed range (edges) | 1.94–42.41 kmh (mean 15.44) |
+| Wave height range (edges) | 0.08–1.98 m (mean 0.93) |
+| Beaufort range (edges) | 1–6 |
+| **NaN-weather edges** | **159,435 (4.77%)** — near Port B (Malacca coastal, marine API gap) |
+
+**Topology shift from v13→v14:** the first H line now sits at d = 6 nm (a 0.5° lon cell
+boundary detected between Port A at d=0 and the first interpolated waypoint at d=12 nm,
+placed at their midpoint). Edges from source therefore span only 6 nm / 6 h → v* = 1 kn,
+way below v_min=9. All feasible speeds [9, 13] reach the H line well before the V line,
+so source fan-out is constrained by τ = 0.1 h resolution on the destination H line.
+
+**NaN handling (deferred to next stage):** 4.77% of edges carry NaN in wave_height or
+similar. Options for when SWS inverse hits these: (a) fall back to nearest-valid waypoint;
+(b) use climatology; (c) treat as infeasible and prune. Decide when we wire the physics
+inverse in.
+
+### 15.15 File tree (2026-04-23)
+
+```
+pipeline/dp_rebuild/
+  load_route.py     # YAML -> Route (+ synthesize_multi_window)
+  h5_weather.py     # voyage_weather.h5 -> VoyageWeather (segments, cells, weather_at)
+  build_nodes.py    # GraphConfig.from_route + V/H line node emission
+                    #   (H lines from YAML OR from HDF5 geometry)
+  build_edges.py    # Edge(src, dst, sog, weather) enumeration under Q1 + Q7
+```
