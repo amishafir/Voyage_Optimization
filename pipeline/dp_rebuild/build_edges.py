@@ -111,16 +111,30 @@ def next_coord(sorted_coords: List[float], c: float) -> Optional[float]:
 def lookup_source_weather(
     src: Node,
     voyage: VoyageWeather,
+    next_v_time: Optional[float] = None,
+    next_h_distance: Optional[float] = None,
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
 ) -> Weather:
-    """Weather snapshot used for every edge emanating from `src`.
+    """Weather at the **center of the enter-square** (upper-right of src).
 
-    Defaults to `actual_weather` at `sample_hour=0`. Pass `forecast_hour` to
-    switch to `predicted_weather` (rolling-horizon / forecast experiments).
+    Probing the source's exact coordinates is unsafe: a source that sits on
+    a boundary line can hit a `nearest_waypoint` tie and resolve to the
+    waypoint on the *wrong* side of the boundary. Probing the enter-square's
+    center ((src.t + next_v)/2, (src.d + next_h)/2) guarantees we read the
+    weather of the square every edge from this source actually traverses.
+
+    Caller passes `next_v_time` / `next_h_distance`; if either is None, the
+    source coord itself is used along that axis.
     """
+    t_probe = src.time_h
+    if next_v_time is not None:
+        t_probe = (src.time_h + next_v_time) / 2.0
+    d_probe = src.distance_nm
+    if next_h_distance is not None:
+        d_probe = (src.distance_nm + next_h_distance) / 2.0
     wx_dict = voyage.weather_at(
-        src.distance_nm,
+        d_probe,
         sample_hour=sample_hour,
         forecast_hour=forecast_hour,
     )
@@ -204,7 +218,15 @@ def build_edges(
     for n in nodes:
         if n.is_sink:
             continue
-        wx = lookup_source_weather(n, voyage, sample_hour=sample_hour, forecast_hour=forecast_hour)
+        next_v = next_coord(v_times, n.time_h)
+        next_h = next_coord(h_distances, n.distance_nm)
+        wx = lookup_source_weather(
+            n, voyage,
+            next_v_time=next_v,
+            next_h_distance=next_h,
+            sample_hour=sample_hour,
+            forecast_hour=forecast_hour,
+        )
         edges.extend(edges_from_source(n, cfg, v_times, h_distances, by_v, by_h, wx))
     return edges
 

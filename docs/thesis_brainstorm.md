@@ -1798,4 +1798,49 @@ pipeline/dp_rebuild/
   build_nodes.py    # GraphConfig.from_route + V/H line node emission
                     #   (H lines from YAML OR from HDF5 geometry)
   build_edges.py    # Edge(src, dst, sog, weather) enumeration under Q1 + Q7
+  validate_graph.py # Structural validator: C1 square uniformity, C2 edge
+                    #   weather fidelity, C3 topology basics
 ```
+
+### 15.16 Structural validator + square-center weather policy (2026-04-23)
+
+- Added `pipeline/dp_rebuild/validate_graph.py` — first of the §14.11
+  sanity checks.
+- **C1 Square uniformity**: for each pair of adjacent V band × H band,
+  samples 25 interior points and verifies every one produces the same
+  `(segment_id, weather_cell_id, forecast_window_id)` label. A failure
+  here means an H line (segment or cell boundary) or V line (window
+  boundary) is missing.
+- **C2 Edge weather fidelity**: samples 2000 edges and confirms the
+  stored `Weather` equals `voyage.weather_at(enter-square center)`.
+- **C3 Topology basics**: source uniqueness, sink placement, SOG ∈
+  `[v_min, v_max]`, Δt > 0, Δd > 0, first-line-crossed rule.
+
+**Bug caught and fixed (square-center weather policy).** First run
+showed C2 failing on 881/2000 edges (44%). Root cause: a source sitting
+exactly on a boundary line (e.g., at `d = 496.97`, the midpoint between
+HDF5 waypoints 487.74 and 506.20 → the segment 1/2 boundary) triggered
+a `nearest_waypoint` tie; the tie-break picked the left waypoint
+(segment 1), but every edge from that source enters the square on the
+right (segment 2). Edges stored wrong-side weather.
+
+Fix: `lookup_source_weather` now probes at the **center of the
+enter-square**, not at the source's exact coordinates. The center is
+always unambiguously inside one segment and one cell, so the weather
+read matches the square the edges traverse. Same policy used in C2 →
+validator now passes cleanly.
+
+**Validator output (2026-04-23):**
+
+```
+  546,104 nodes, 3,344,167 edges, 138 H lines
+  [C1] Square uniformity …            PASS (6,486 squares)
+  [C2] Edge weather fidelity …        PASS (2000 sampled)
+  [C3] Topology basics …              PASS
+  Validator exit code: 0
+```
+
+**Invariant established**: every edge's `weather` field equals the
+weather at the center of the first square it enters. All edges leaving
+the same square share that weather (by construction). This is the
+weather the SWS inverse + FCR calculation will consume in the next stage.
