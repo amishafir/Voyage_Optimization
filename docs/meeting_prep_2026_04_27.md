@@ -110,7 +110,146 @@ Knowledge accumulated since the start of the project that should shape the rebui
 
 ---
 
-## 3. Supporting Material — Carry-Over From Apr 20
+## 3. Progress This Week — Graph Rebuild Stood Up End-to-End (Apr 22–23)
+
+Design session + implementation landed the first working cut of the rebuilt DP graph in
+`pipeline/dp_rebuild/`. Five modules, ~1.7 k lines. Full build + validate + render takes a
+few minutes on the YAML example route (3,393 nm / 280 h, the Persian Gulf → Malacca voyage
+from Table 8). Details in `docs/thesis_brainstorm.md` §14–§15.
+
+### 3.1 Locked design — Q1–Q10 multiple-choice session (§14.14)
+
+Answered 10 structural questions to pin the graph spec. Key decisions:
+
+| Q | Decision |
+|---|---|
+| Q1 — Edge destination | Every edge terminates at the **first boundary line** it crosses (no line-skipping). |
+| Q2 — V-line cadence | Fixed `dt_h` (default 6 h) + synthetic terminal line at `t = ETA`. |
+| Q3 — H-line placement | At **course changes ∪ weather-cell boundaries** (physical changes only). |
+| Q4/Q5 — Node density | V lines: every ζ=1 nm across distance. H lines: every τ=0.1 h across time. |
+| Q6 — Speed | SOG is the edge geometry; **SWS recovered by inverse** under source-square weather. |
+| Q7 — Speed range | Continuous `[v_min, v_max]` — drop legacy's exact-match SOG filter. |
+| Q8 — Weather per edge | Constant between nodes by construction (H lines at every cell boundary). |
+| Q9 — ETA | Both hard ETA and soft ETA (λ penalty) as first-class modes. |
+| Q10 — Source | Single node at (0, 0). |
+
+Plus a convention flip (Apr 23) to geometric labels: **V = constant-time (vertical in the
+plane), H = constant-distance (horizontal in the plane)**. Matches the whiteboard picture.
+
+### 3.2 YAML integration — `Q_yaml_1..5` (§14.17)
+
+Switched default from the 4000/400 toy to the YAML's **3,393.24 nm / 280 h** route.
+- `load_route.py` parses `weather_forecasts.yaml` into `Route / ForecastWindow / Segment`.
+- `synthesize_multi_window(window_h=6)` replicates the single YAML window into 47 equal
+  windows so the graph exercises time-varying-weather infrastructure from day one.
+- Dropped `current_angle` (it's a derived duplicate of `current_dir`).
+
+### 3.3 HDF5 weather loader — `h5_weather.py` (§15.13)
+
+Found the weather data on the laptop (servers were in an ICMP-only VPN state that morning).
+`pipeline/data/voyage_weather.h5` — 279 real interpolated waypoints with (lat, lon, segment,
+distance), 12 sample hours of actual weather, 192-hour forecast matrix per node. Matches the
+YAML route exactly (12 segments, 3,395.84 nm HDF5 vs 3,393.24 nm YAML — rounding).
+
+`VoyageWeather` exposes:
+- `segment_boundaries_nm()` / `weather_cell_boundaries_nm(grid_deg)` — drive H-line placement
+- `weather_at(d, sample_hour, forecast_hour)` — for both actual and predicted lookups
+- `nearest_waypoint_in_segment(d, seg)` — critical for correctness (see §3.6 below)
+
+### 3.4 Node + edge construction
+
+| Module | What it does |
+|---|---|
+| `build_nodes.py` | V lines from `v_line_times_from_route`; H lines from `h_line_distances_from_h5` (segments ∪ 0.5° marine cells ∪ terminal). GraphConfig decoupled from any hard-coded route. |
+| `build_edges.py` | Q1 + Q7 edge enumeration; each Edge carries `weather` (from square center), `heading_deg`, `sws` (via `shared.physics.calculate_sws_from_sog`), `fcr_mt_per_h`, `fuel_mt`. NaN weather (Port B coastal gap) propagates to NaN fuel cleanly. |
+
+**Final numbers** (YAML route, ETA=280 h, dt_h=6, ζ=1, τ=0.1, v∈[9,13] kn):
+
+| | Value |
+|---|---|
+| V lines | 47 |
+| H lines | 146 (11 segment + 134 marine-cell + 1 terminal) |
+| Nodes | 568,512 |
+| Edges | **3,344,829** |
+| NaN-fuel edges | 4.68% (Port B) |
+| SWS range | [8.25, 14.55] kn |
+| FCR range | [0.40, 2.18] mt/h |
+| Fuel per edge | [0.057, 6.37] mt (mean 2.07) |
+| Full-graph build time | ~3 min |
+
+### 3.5 Structural validator — `validate_graph.py` (§15.16)
+
+Three checks, all passing on the final graph:
+- **C1 Square uniformity** (6,862 squares) — every (V band × H band) square has one and only
+  one `(segment, cell, forecast_window)` triple.
+- **C2 Edge weather fidelity** (2,000 sampled) — every edge's stored `Weather` equals the
+  weather at the center of the square the edge enters.
+- **C3 Topology basics** — source unique at (0,0), sinks at d=L, SOG ∈ [v_min, v_max],
+  Δt > 0, Δd > 0, first-line-crossed rule.
+
+### 3.6 Two real bugs the validator caught
+
+1. **Boundary-tie weather bug.** A source sitting exactly on a boundary line hit a
+   `nearest_waypoint` tie; the tie-break picked the wrong-side waypoint for the square the
+   edges actually enter. 44% of sampled edges stored wrong-side weather.
+   **Fix**: probe weather at the *center* of the enter-square, not at the source's exact
+   coordinate.
+
+2. **YAML ↔ HDF5 segment-boundary mismatch (10 nm off).** The HDF5 has a 19.74 nm gap
+   between the last waypoint of segment 0 (d=204) and the first of segment 1 (d=223.74).
+   My original midpoint heuristic placed the segment boundary at **213.87**, but the YAML's
+   cumulative-segment-length semantic (and the paper's Table 8) puts it at **223.86**. Every
+   one of the 11 segment transitions was ~10 nm early → ~110 nm of the route was mis-segmented
+   → wrong heading in any downstream physics on those stretches.
+   **Fix**: segment-boundary H line at the first waypoint of the new segment (223.74 ≈ YAML
+   223.86 within rounding); `weather_at` made segment-aware so gap-zone lookups read the
+   correct-side waypoint.
+
+### 3.7 Visualisation — `visualize_squares.py`
+
+A matplotlib scatter of a 3×2 square patch around the segment 0/1 boundary showing:
+- Each square's `(segment, cell, window, sample_hour)` label + the 6 weather fields.
+- White-filled dots on every V-line / H-line node (ζ=1 nm and τ=0.1 h visible).
+- Three sample edges with physics annotations — one of each type:
+  - **V→H** (source on V line → destination on next H line)
+  - **H→V** (source on H line → destination on next V line)
+  - **H→H** (source on H line → destination on next H line)
+- Footer note: **V→V is not realised in our graph** — max H-line gap (48 nm, between
+  d=1875.58 and d=1923.58) is smaller than `v_max × Δt_h = 78 nm`, so every 6 h run at ≥ 9 kn
+  crosses at least one H line.
+
+Axis convention: x = time left→right, y = distance top→bottom (matches the whiteboard
+picture — ship starts at top-left, moves right and down).
+
+### 3.8 What the rebuild already delivers
+
+- **Clean separation of the three independent axes** (ζ, τ, `dt_h`) — no more Luo-style
+  speed/geometry coupling.
+- **Weather correctly indexed per (segment, cell, forecast window)** — with validator proof.
+- **Ship physics hooked in** via `shared.physics` (no new physics code; reuses the existing
+  thesis implementation).
+- **Hard and soft ETA both modelled as first-class sink policies** (sink column + optional λ).
+- **Every commit reproducible**: `build_nodes.py` → `build_edges.py` → `validate_graph.py`
+  → `visualize_squares.py`, all deterministic and independently runnable.
+
+### 3.9 What's still missing (next-week work)
+
+- **Forward Bellman solver** — consume the 3.34 M edges to produce a min-fuel path. The
+  edge records already carry everything the DP needs (fuel per edge, SWS, SOG).
+- **Backtrack + schedule reconstruction** — arc-as-record (legacy style) or parent-dict
+  (pipeline style). Decide in the meeting.
+- **Sink dedup** — 47 intersections at (t, d=L) appear in both the terminal H-line column
+  and each V line. Harmless for validation, will need a canonical pick for the DP terminal.
+- **NaN-weather policy at Port B** — currently edges with NaN fuel are kept but unusable
+  in the DP. Options: (a) prune, (b) clamp to nearest valid waypoint, (c) use a default.
+- **Rolling horizon mechanics** — graph is static right now; need to decide how to
+  parameterise `sample_hour` / `forecast_hour` per decision cycle.
+- **Sanity checks §14.11** — degenerate-lock check, lock-monotonicity, zero-weather.
+  C1 / C2 / C3 handle structural correctness; these add behavioural correctness.
+
+---
+
+## 4. Supporting Material — Carry-Over From Apr 20
 
 Still relevant if the rebuild discussion leaves time:
 
@@ -122,26 +261,42 @@ Still relevant if the rebuild discussion leaves time:
 
 ---
 
-## 4. Data Collection Status
+## 5. Data Collection Status (Apr 23)
 
-| Server | Status | Route B (138 wp) | Route D (391 wp) | Uptime |
-|--------|--------|-------------------|-------------------|--------|
-| Shlomo1 | | | | |
-| Shlomo2 | | | | |
-| Edison | | | | |
+| Server | Status | exp_b (138 wp) | exp_d (391 wp) | exp_c (968 wp) | Uptime |
+|--------|--------|---|---|---|--------|
+| Shlomo1 | Back online (~Apr 15) but **no collection running** — tmux wiped by reboot | — | — | — | 8 d |
+| Shlomo2 | ✅ Collecting | 55 M, updated Apr 23 08:03 | 153 M, updated Apr 23 08:10 | 96 KB (stalled) | 48 d |
+| Edison | ✅ Collecting | 55 M, updated Apr 23 05:03 (=08:03 IST) | 153 M, updated Apr 23 05:10 | 90 KB (stalled) | 45 d |
+
+Growth since Apr 13 (10 days): exp_b +18 M, exp_d +46 M (both servers identical). exp_c
+remains dead.
+
+**Action item**: kick off collection on Shlomo1? It's reachable again but idle.
 
 ---
 
-## 5. Questions for Supervisor
+## 6. Questions for Supervisor
 
-1. **Topology choice**: is there a preference between the three candidate layouts (time × distance
-   grid, waypoint × time_slot sparse, stage × remaining_distance lattice)? Each matches a different
-   paper the literature already tells stories about.
-2. **Keep the Sides abstraction?** The legacy `Side` boundary concept is elegant for segment-based
-   weather lookup, but adds complexity. Worth preserving or drop it in favor of per-node
-   enumeration?
-3. **How time-aware must the new graph be from day one?** Full forecast-hour indexing + rolling
-   horizon support in the first cut, or staged (static first, then time-varying, then RH)?
-4. **Where does this land in the paper story?** If the rebuild cleans up rounding drift and
-   unifies the three solvers, do we reframe the paper around "one graph, three planning modes"
-   rather than "ours vs Luo"?
+1. **Rebuild topology — locked, but worth sanity-checking.** We went with explicit
+   `(time, distance)` squares bounded by V and H lines (§14.15). Keeps both axes first-class,
+   no waypoint-major or remaining-distance bias. Anything about this we should reconsider
+   before building the solver on top?
+2. **Segment-boundary placement.** We now use the first waypoint of each new segment
+   (d=223.74 for the 0→1 join) to match the YAML cumulative distance (223.86) within
+   interpolation rounding. Legacy midpoint was 213.87 — off by ~10 nm. Comfortable with
+   this being the canonical rule?
+3. **Fuel formula for the rebuild.** Using `shared.physics` (forward-physics SOG model +
+   binary-search inverse for SWS + `0.000706 × SWS³` FCR). Same physics the existing pipeline
+   uses. Any concern about staying with this or want to revisit the FCR coefficient /
+   inverse tolerance?
+4. **V→V edges don't exist in our graph.** Max H-line gap is 48 nm; `v_max × Δt_h = 78 nm`
+   guarantees every 6 h edge hits at least one H line. This is an honest consequence of
+   dense weather cells. Worth mentioning in the paper as a structural property, or a side
+   note?
+5. **What's in the first solver run?** Forward Bellman on the rebuilt graph, same YAML
+   example, compare total fuel to legacy/pipeline DP for a sanity check. Is that the right
+   first target, or go straight to Exp 1 / Exp 2 on the new graph?
+6. **Where does this rebuild land in the paper story?** §14.16/§15 describes "one graph,
+   three planning modes" (hard-ETA, soft-ETA, rolling-horizon all share the same V/H
+   structure). Does that reframing replace the "ours vs Luo" pitch, or complement it?

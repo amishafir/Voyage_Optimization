@@ -162,17 +162,30 @@ def lookup_source_state(
     line can hit `nearest_waypoint` ties and resolve to the wrong-side
     waypoint. Probing the square's center guarantees we read the conditions
     every edge from this source actually traverses.
+
+    Both weather AND heading are resolved against the **HDF5 segment index**
+    (the same lookup that drives H-line placement). This avoids the 0.12 nm
+    inconsistency zone between YAML cumulative-length boundaries (e.g.
+    223.86) and HDF5 first-waypoint boundaries (e.g. 223.74). HDF5 is the
+    single source of truth for which segment a (t, d) point is in; the YAML
+    is consulted only for the segment's *attributes* (heading, etc.).
     """
-    t_probe = src.time_h
-    if next_v_time is not None:
-        t_probe = (src.time_h + next_v_time) / 2.0
+    # Probe at the enter-square center along the distance axis (time axis
+    # doesn't affect segment / waypoint lookups in the current setup).
     d_probe = src.distance_nm
     if next_h_distance is not None:
         d_probe = (src.distance_nm + next_h_distance) / 2.0
+
+    # Single source of truth for the segment ID — HDF5 first-wp boundaries
+    # (same lookup used for H-line placement and weather).
+    seg_idx = voyage.segment_for_distance(d_probe)
+    yaml_segments = route.windows[0].segments
+    seg_idx_clamped = max(0, min(seg_idx, len(yaml_segments) - 1))
+    heading = yaml_segments[seg_idx_clamped].ship_heading
+
     wx = Weather.from_dict(
         voyage.weather_at(d_probe, sample_hour=sample_hour, forecast_hour=forecast_hour)
     )
-    heading = route.segment_for_distance(d_probe).ship_heading
     return SourceState(weather=wx, heading_deg=heading)
 
 
@@ -185,7 +198,7 @@ def lookup_source_weather(
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
 ) -> Weather:
-    t_probe = src.time_h if next_v_time is None else (src.time_h + next_v_time) / 2.0
+    _ = next_v_time  # accepted for signature symmetry; unused (lookup is d-only)
     d_probe = src.distance_nm if next_h_distance is None else (src.distance_nm + next_h_distance) / 2.0
     return Weather.from_dict(
         voyage.weather_at(d_probe, sample_hour=sample_hour, forecast_hour=forecast_hour)
