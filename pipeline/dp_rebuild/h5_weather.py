@@ -196,6 +196,66 @@ class VoyageWeather:
             return self.nearest_waypoint(d)
         return min(lst, key=lambda w: abs(w.distance_nm - d))
 
+    def _row_has_nan(self, row) -> bool:
+        """True if any of the marine fields on this weather row is NaN."""
+        if row is None:
+            return True
+        for f in ("wind_speed_10m_kmh", "wind_direction_10m_deg",
+                  "wave_height_m",
+                  "ocean_current_velocity_kmh", "ocean_current_direction_deg"):
+            v = row[f]
+            if v != v:  # NaN check (NaN != NaN)
+                return True
+        return False
+
+    def nearest_valid_waypoint_in_segment(
+        self,
+        d: float,
+        seg: int,
+        sample_hour: int,
+        forecast_hour: Optional[int] = None,
+    ) -> Waypoint:
+        """Nearest waypoint within `seg` whose weather row at the given
+        (sample_hour, forecast_hour) has no NaN fields.
+
+        Fallback chain:
+          1. nearest valid wp in `seg`
+          2. nearest valid wp anywhere on the route
+          3. plain nearest wp (NaN may propagate)
+
+        Used by `weather_at` to keep the optimizer from dead-ending at the
+        ~15 waypoints in segments 7/10/11 that the marine API leaves blank
+        (Port B coastal & a few mid-voyage spots).
+        """
+        candidates = self._wps_by_seg.get(seg, [])
+        valid_in_seg = []
+        for w in candidates:
+            row = self._row_for(w.node_id, sample_hour, forecast_hour)
+            if not self._row_has_nan(row):
+                valid_in_seg.append(w)
+        if valid_in_seg:
+            return min(valid_in_seg, key=lambda w: abs(w.distance_nm - d))
+
+        valid_anywhere = []
+        for w in self._waypoints:
+            row = self._row_for(w.node_id, sample_hour, forecast_hour)
+            if not self._row_has_nan(row):
+                valid_anywhere.append(w)
+        if valid_anywhere:
+            return min(valid_anywhere, key=lambda w: abs(w.distance_nm - d))
+
+        return self.nearest_waypoint(d)
+
+    def _row_for(
+        self,
+        node_id: int,
+        sample_hour: int,
+        forecast_hour: Optional[int],
+    ):
+        if forecast_hour is None:
+            return self._actual.get((node_id, int(sample_hour)))
+        return self._predicted.get((node_id, int(forecast_hour), int(sample_hour)))
+
     # ------------------------------------------------------------------
     # Weather lookup
     # ------------------------------------------------------------------
@@ -209,18 +269,19 @@ class VoyageWeather:
         """Weather at distance d.
 
         Looks up the segment containing d, then returns the weather of the
-        nearest waypoint **within that segment**. This matters at segment
-        joins where the HDF5 has a small gap between the last waypoint of
-        segment k and the first of segment k+1 — we want d in the gap to
-        take weather from segment k's last waypoint, not from the other
-        side of the boundary.
+        **nearest valid waypoint within that segment** (fallback chain in
+        `nearest_valid_waypoint_in_segment`). This both:
+        (a) handles the no-waypoint gap at segment joins by pulling weather
+            from the correct side of the boundary, and
+        (b) skips the ~15 NaN waypoints (marine API gaps near Port B and a
+            few mid-voyage spots) that would otherwise dead-end the DP.
 
         `sample_hour`: when the observation (or forecast) was taken (0..11).
         `forecast_hour`: if not None, read predicted_weather at this forecast lead;
                         if None, read actual_weather.
         """
         seg = self.segment_for_distance(d)
-        wp = self.nearest_waypoint_in_segment(d, seg)
+        wp = self.nearest_valid_waypoint_in_segment(d, seg, sample_hour, forecast_hour)
         if forecast_hour is None:
             key = (wp.node_id, int(sample_hour))
             row = self._actual.get(key)
