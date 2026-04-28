@@ -1576,6 +1576,50 @@ Locked decisions to switch from the 4000/400 toy to the YAML's real route
   decision points without inventing physics. Segment boundaries remain the heading/weather
   decision points; sub-H-lines are purely geometric checkpoints.
 
+### 14.18 H-line Geographic Reconstruction — Q&A (2026-04-28)
+
+Triggered by a quieter issue with the original H-line placement: weather-cell boundaries
+were anchored at the *midpoint between adjacent 12 nm interpolated waypoints* whose
+(lat, lon) fall in different 0.5° NWP cells. That's a heuristic — only an approximation
+of where the route actually crosses a NWP grid line. Goal: replace the heuristic with
+real geographic crossings.
+
+- **Qg1 — Segment endpoints (lat, lon).** **(c)** Paper Table 1 — 13 waypoints with
+  explicit `(lat°, lon°)`. Loaded into `pipeline/dp_rebuild/route_waypoints.py` along
+  with each segment's heading, distance, BN, wind, wave, current. Confirmed match with
+  HDF5's first-waypoint-of-each-segment within rounding.
+- **Qg2 — Path shape inside a segment.** **(a)** Rhumb line (loxodrome). Constant
+  compass bearing, matches the YAML's `ship_heading`. Implemented in
+  `geo_grid.rhumb_distance_nm` / `rhumb_bearing_deg`.
+- **Qg3 — NWP grid resolution + alignment.** **(a)** 0.5° marine grid axis-aligned at
+  integer multiples of 0.5°. Single source of truth for now; can union with finer
+  atmosphere grid later.
+- **Qg4 — Distance metric for cumulative `d`.** **(a)** Rhumb-line distance. YAML segment
+  lengths become a sanity check (within ±1 nm/segment, ±0.4 nm cumulative on the full
+  voyage — accumulated paper-rounding).
+- **Qg5 — Weather lookup.** **(b)** Per-cell aggregation: one canonical weather row per
+  (cell_id, sample_hour). **Deferred** until the geometry was validated visually; will be
+  the next change once we cut over from waypoint-midpoint H-lines to grid-crossing H-lines.
+- **Qg6 — Implement immediately?** **(b)** No — first build a map-style visualizer to
+  confirm crossings translate sanely from globe to (t, d) graph. *Did this; numbers are
+  clean (see §15.18).*
+- **Qg7 — Visualization scope.** Started with WP1 → WP2 → WP3, extended to full
+  12-segment voyage once the math checked out.
+- **Qg8 — Map projection.** **(b)** Cartopy / Mercator. Bonus: rhumb lines render as
+  straight lines on Mercator, which makes the math visually obvious.
+
+**Implementation status (Qg-set):**
+
+| Done | What |
+|---|---|
+| ✓ | `route_waypoints.py` with the 13-waypoint table |
+| ✓ | `geo_grid.py` rhumb-line + crossing primitives |
+| ✓ | `visualize_geo_grid.py` (Mercator chart + (t, d) translation) |
+| ✓ | Verified all 12 segments — 152 grid crossings, ±0.2° bearing match, ±0.4 nm cumulative distance |
+| TODO | Cut over `build_nodes.h_line_distances_from_h5` → use new `geo_grid` crossings |
+| TODO | Per-cell weather aggregation (Qg5(b)) — depends on cut-over |
+| TODO | Validator label_at update for new cell semantics |
+
 ---
 
 ## 15. Graph Rebuild — Implementation Log
@@ -1844,3 +1888,76 @@ validator now passes cleanly.
 weather at the center of the first square it enters. All edges leaving
 the same square share that weather (by construction). This is the
 weather the SWS inverse + FCR calculation will consume in the next stage.
+
+### 15.17 Locked-mode (Luo-style) edge builder + sanity check (2026-04-26..28)
+
+Added `pipeline/dp_rebuild/build_edges_locked.py` and
+`run_demo_locked.py` to compare a Luo-style "one constant SWS per 6 h
+block" decision policy against the per-square free DP, on the same node
+set.
+
+**Two real bugs caught by the sanity check (`verify_locked_schedule`)**
+
+1. **Snap-drift.** First implementation enumerated SWS at 0.1 kn step,
+   simulated each block forward, and snapped the resulting `dst_d` to
+   the 1 nm V-line grid. Bellman picked the cheapest = lowest SWS in
+   each snap bucket → continuous `final_d` always at the lower edge of
+   the bucket → **systematic undershoot of 25.6 nm cumulative** by the
+   end of the voyage. Bellman claimed the schedule reached L = 3393.24
+   nm in 280 h burning 360.7 mt, but the actual continuous trajectory
+   landed at d = 3367.6 nm. Phantom voyage 25 nm short of Port B.
+
+2. **Wrong fuel-time on early-arrival blocks.** Replaced (1) with
+   inverse integration: for each `(src, integer-nm dst)` pair, binary-
+   search SWS so simulate ends *exactly* at `dst`. First run reported
+   the last block's fuel as 156 mt — turned out the formula was
+   `FCR × final_t_solved` (absolute time 279.9 h) instead of
+   `FCR × (final_t_solved − t_k)` (elapsed time 3.9 h). One-line fix.
+
+**Final clean numbers** (after both fixes):
+
+| Mode | Total fuel | End time | End d |
+|---|---|---|---|
+| Free DP | 367.561 mt | 280.000 h | 3393.240 nm |
+| Locked DP (Bellman) | 366.480 mt | 280.000 h | 3393.240 nm |
+| Locked DP (continuous resim) | 366.491 mt | 279.991 h | 3393.240 nm |
+| **Δ (locked vs free)** | **−1.081 mt (−0.29 %)** | | |
+
+Continuous resim matches Bellman fuel to 0.01 mt. Per-block drift over
+all 47 blocks ≤ 0.12 nm. Trajectory genuinely reaches Port B in 280 h.
+
+**Why locked is *still* slightly under free** (0.29 %): both grids are
+discrete, but the locked mode's inverse-search SWS lands each integer-nm
+dst exactly, while free-DP's per-edge SOG must round to the (1 nm × 0.1 h)
+grid. The residual ~0.3 % gap is grid-resolution noise, not a correctness
+bug. Refining the free-DP grid (smaller τ on H lines) should close it.
+
+### 15.18 Geographic H-line reconstruction — exploration (2026-04-28)
+
+Per §14.18 (Qg-set), built `route_waypoints.py`, `geo_grid.py`,
+`visualize_geo_grid.py` to compute and visualise where the 12 rhumb-line
+segments of the YAML voyage actually cross the 0.5° NWP grid.
+
+**Numbers across all 12 segments**:
+
+| | Total |
+|---|---|
+| Rhumb sum | 3,393.595 nm |
+| Paper sum | 3,393.240 nm |
+| Δ | +0.36 nm (+0.01 %) — paper-rounding |
+| Bearings vs paper β | match within ±0.2° per segment |
+| Grid crossings | 152 (95 lon + 57 lat) |
+| + segment-boundary H-lines | 11 |
+| + terminal H-line at d = L | 1 |
+| **Total H-lines (new)** | **164** |
+| Total H-lines (old midpoint policy) | 146 |
+
+The new generator is exact (analytical rhumb-vs-grid intersection on
+Mercator) and within 0.4 nm of the paper across the whole voyage.
+Per-segment crossing distribution behaves as expected: diagonal
+segments produce more crossings, axis-aligned segments fewer.
+
+**Status**: the new generator works as a stand-alone module used by the
+visualizer. Cut-over into `build_nodes.h_line_distances_from_h5` is the
+next change, alongside the per-cell weather aggregation deferred from
+Qg5(b).
