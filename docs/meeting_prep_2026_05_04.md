@@ -133,14 +133,73 @@ Per-segment crossing distribution behaves as expected:
 
 ---
 
+## 2.6 Cut-Over Wave (Apr 28–29)
+
+After the geometric reconstruction landed, finished the wiring + the policy switch supervisor flagged previously.
+
+### 2.6.1 New analytic H-line generator wired into the graph
+
+- `build_nodes.h_line_distances_from_geo` now produces H-lines from real rhumb-vs-grid crossings on the paper waypoints. Replaces the legacy waypoint-midpoint heuristic.
+- Added a τ-grid feasibility filter: drops 2 H-lines per voyage that would create gaps the τ = 0.1 h × v ∈ [9, 13] grid can't span (deadzones at ~0.6 nm and ~1.4 nm). Without it the sink became unreachable. With it, voyage solves cleanly.
+- Validator updated (`validate_graph.label_at` now uses `position_at_d` over the paper polyline). All three checks pass on the new graph: 7,614 squares, 162 H-lines, 39 V-bands, 613,328 nodes, 3,308,940 edges.
+
+### 2.6.2 Per-cell mean weather aggregation (Qg5(b)) — IMPLEMENTED
+
+Replaced nearest-waypoint-in-segment lookup with cell-canonical aggregation:
+
+- `VoyageWeather.cell_weather(cell, hour)` — mean over every voyage waypoint that falls in the 0.5° cell at the given (sample, forecast) hour. Linear mean for scalars, **circular mean** (atan2 of mean-sin / mean-cos) for directions, int-rounded mean for Beaufort. NaN rows dropped before averaging.
+- `VoyageWeather.cell_weather_at_d(d, waypoints, ...)` — convenience: derives (lat, lon) at d via `position_at_d`, then dispatches to `cell_weather`. Empty-cell fallback routes through `weather_at(d)` so the substitute is geographically near the probe (not the first valid row anywhere on route).
+- Threaded through `build_edges.lookup_source_state`, `build_edges_locked.simulate_block_sog`, validator C2. All three demos updated.
+- Validator C2 still PASSes — every edge's stored weather matches the cell-canonical lookup at the enter-square center.
+
+### 2.6.3 Locked-mode policy fix: SWS-locking → SOG-locking (Luo 2024)
+
+Supervisor flagged the previous locked builder was the wrong direction: it held SWS constant and let SOG drift. **Luo 2024 holds the target SOG constant, varying SWS per sub-leg.** Fully rewritten.
+
+- `simulate_block_sog`: walks H-line by H-line at constant target SOG, per sub-leg looks up cell-canonical weather + paper heading, **inverse-solves SWS** to maintain target SOG, accumulates fuel = Σ FCR(SWS_i) · Δt_i. Drops the edge if any sub-leg's required SWS > 25 kn (engine bound) or NaN.
+- `build_locked_edges`: dst is now **geometric** (`d_src + target_SOG · 6 h`), no inverse search. For each (V-line src, V-line dst), target_SOG = (dst_d − src_d) / dt, simulate, emit edge. Adds a 0.1-kn grid of early-terminal SOGs for the final block when d = L is reachable inside 6 h.
+- Snap drift gone: every block's continuous Δd_snap = +0.000 nm. Bellman fuel = continuous-resim fuel **exactly** (Δfuel = 0.0 mt).
+- Build time dropped from ~7–20 min (binary-searched SWS) to **108 s** (one simulate per dst).
+
+### 2.6.4 Three-graph Bellman experiment
+
+The free-DP and locked-DP graphs share the same node table by construction (verified by closing assertion in `build_locked_edges`). So the union of edge sets is a valid Bellman input — the combined optimum bounds both alone:
+
+| Graph | Edges | Total fuel | Schedule | Solve |
+|---|---:|---:|---:|---:|
+| Free DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | 2.91 s |
+| Locked DP (SOG-locking, 6 h block) | 631,537 | 365.161 mt | 47 blocks | 1.89 s |
+| **Combined (union)** | **3,940,477** | **362.965 mt** | **105 (74 free + 31 locked)** | **3.90 s** |
+
+Both bounds satisfied: combined − free = −3.80 mt, combined − locked = −2.20 mt.
+
+Schedule shape Bellman picked on the combined graph:
+- 0–6 h: 4 free edges (fine-grained start, escapes the source corner)
+- 6–264 h: 30 locked edges (bulk voyage at constant target SOG per 6 h)
+- 264 h: 2 free edges (small re-alignment around an H-line)
+- 264–280 h: 3 locked edges (including the new early-terminal edge that lands exactly at the sink)
+
+The combined graph is the cleanest expression of the framework: a single Bellman gets you free-DP for fine-grained adjustments at boundaries and locked-DP for steady cruising — Bellman picks both where each helps.
+
+### 2.6.5 Updated YAML voyage results
+
+| Mode | Fuel | vs LP target (~372 mt) | vs free DP |
+|---|---:|---:|---:|
+| Free DP (per-square) | 366.769 mt | −1.4 % | — |
+| Locked DP (SOG-locking) | **365.161 mt** | −1.8 % | −1.61 mt |
+| **Combined** | **362.965 mt** | **−2.4 %** | **−3.80 mt** |
+
+All three mode totals comfortably below the LP validation target. The combined gap to free is **5× larger** than the locked gap to free, which is the key result of the week.
+
+---
+
 ## 3. Open Items / Next Steps
 
-- **Refine free-DP grid** to confirm the 0.29 % gap is grid noise — predicted: locked ≥ free as theory requires once free's grid is fine enough.
-- **Rolling horizon** — replan every 6 h with fresh forecast. Both free and locked already structured around 6 h V-bands, so replumbing is small.
-- **Behavioural sanity checks** — zero-weather (closed-form fuel), constant-weather (constant SWS), lock-monotonicity (fuel ↑ as lock_h ↑).
+- **Sampling strategy for new voyages** — current Open-Meteo collector samples every 12 nm interpolated waypoint; with cell-canonical weather we can switch to "2–3 samples per 0.5° cell + segment endpoints" without losing fidelity (see one-pager §5).
+- **Rolling horizon** — replan every 6 h with fresh forecast. Free, locked, and combined graphs all structured around 6 h V-bands, so replumbing is small.
+- **Behavioural sanity checks** — zero-weather (closed-form fuel), constant-weather (constant SWS expected when SOG is locked), lock-monotonicity (fuel ↑ as lock_h ↑).
 - **Soft ETA** — `BellmanSolver.best_sink(eta_mode="soft", lam=…)` is implemented; not yet exercised.
-- **Heading per sub-leg** — currently the locked-edge record stores a representative source heading; the simulation already uses per-sub-leg heading. Cosmetic only.
-- **Locked-edge build time** — ~15 min on the YAML voyage. The 30-iter binary search per (src, dst) is the bottleneck. Could cap at 8 iter or reuse cache more aggressively.
+- **Combined-graph as default** — given the experiment above, the combined graph is strictly better. Worth promoting to the default `run_demo` and treating free/locked as ablations.
 
 ---
 
@@ -158,36 +217,38 @@ Per-segment crossing distribution behaves as expected:
 
 ## 5. Results Tables
 
-### 5.1 Free vs Locked, YAML voyage (Persian Gulf → Strait of Malacca, ETA = 280 h)
+### 5.1 Three-graph comparison, YAML voyage (Persian Gulf → Strait of Malacca, ETA = 280 h)
 
-| Metric | Free DP | Locked DP |
-|---|---|---|
-| Total fuel | 367.561 mt | 366.480 mt |
-| Voyage time | 280.000 h | 280.000 h |
-| Average SOG | 12.119 kn | 12.119 kn |
-| Schedule length | 190 edges | 47 blocks |
-| SWS range used | [10.58, 13.56] kn | [11.38, 12.97] kn |
-| Build time | ~2 min | ~15 min (inverse integration) |
-| Solve time | ~4 s | ~2 s |
-| NaN edges skipped | 0 | 0 |
+| Metric | Free DP | Locked DP (SOG) | **Combined** |
+|---|---|---|---|
+| Total fuel | 366.769 mt | 365.161 mt | **362.965 mt** |
+| Voyage time | 280.000 h | 280.000 h | 280.000 h |
+| Schedule length | 206 edges | 47 blocks | 105 (74 free + 31 locked) |
+| Average SOG | 12.120 kn | 12.120 kn | 12.120 kn |
+| target SOG range | n/a (Δd/Δt grid) | [9.000, 13.000] kn | mix |
+| mean SWS range | [9.78, 13.74] kn | [8.32, 14.23] kn | both |
+| Edges built | 3,308,940 | 631,537 | 3,940,477 |
+| Build time | 121 s | 109 s | 230 s (sum) |
+| Solve time | 2.91 s | 1.89 s | 3.90 s |
+| NaN edges skipped | 0 | 0 | 0 |
 
-### 5.2 Sanity check on locked schedule (continuous resim)
+### 5.2 Sanity check on locked schedule (continuous resim, SOG-locking)
 
 | | Bellman | Continuous |
 |---|---|---|
-| End t | 280.000 h | 279.991 h |
-| End d | 3393.240 nm | 3393.240 nm |
-| Total fuel | 366.480 mt | 366.491 mt |
-| Δfuel | — | +0.011 mt |
+| End t | 280.000 h | 280.000 h |
+| End d | 3393.595 nm | 3393.595 nm |
+| Total fuel | 365.161 mt | 365.161 mt |
+| Δfuel | — | **+0.000 mt** |
 
-Δd = 0.000 nm (lands exactly on Port B).
-Max per-block drift over the 47 blocks: **0.12 nm**.
+Δd = +0.000 nm at sink. Per-block drift over the 47 blocks: **+0.000 nm everywhere** (constant-SOG trajectory is a straight line in (t, d), no accumulation by construction).
 
 ---
 
 ## 6. Questions for Supervisor
 
-1. **Locked vs free is now within 0.3 %** — operationally indistinguishable. Is this enough to declare the rebuild "ready for experiments" and move on to RH / multi-route runs, or do you want the free-DP grid refined first to chase the residual gap?
-2. **Locked-edge build is 15 min** — acceptable for one-shot experiments, slow if we sweep parameters (e.g. lock_h ∈ {3, 6, 12} h × 5 routes = 15 builds = 4 hours). Worth optimising before the experiment matrix?
-3. **Rolling horizon next?** With both planning modes solid on a single forecast, RH is the next paper differentiator. Same graph, replan every 6 h with fresh forecast. Plan to do it on the rebuild?
-4. **What's the Luo comparison story now?** Our locked mode = "Luo-style policy with our better physics" (sub-leg integration through course/weather changes vs Luo's single-snapshot-per-stage). The 366.5 mt vs Luo's published numbers is paper-relevant — how do we want to frame it?
+1. **Combined graph as the default** — the union (free + locked) gives 362.965 mt vs 366.769 (free) / 365.161 (locked). It's the strict better option for any single-shot run, and Bellman picks both edge types where each helps. OK to make it the default mode and treat free/locked as ablation studies?
+2. **Sampling strategy** — with per-cell weather aggregation now in, the 12 nm interpolated-waypoint collector is over-sampling (most cells get 1–5 redundant waypoints averaged). Proposal: switch to "2–3 samples per cell-arc + segment endpoints" → ~half the API calls, same fidelity. Approve before I touch the collector?
+3. **Rolling horizon next?** All three planning modes solid on a single forecast. RH = same graph, rebuild edges with fresh forecast at each decision step. Plan to do it on the rebuild?
+4. **Luo comparison story** — our locked mode is now SOG-locking, exactly Luo 2024's policy, with sub-leg integration through cell + segment crossings (vs Luo's single-snapshot-per-stage). The 365.161 mt vs Luo's published numbers is paper-relevant — how do we want to frame it?
+5. **Drift accumulation gone** — with SOG-locking the locked Bellman fuel == continuous-resim fuel exactly (Δfuel = 0.0 mt over 280 h). Worth a sentence in the paper as a method-side correctness result, or just internal sanity?

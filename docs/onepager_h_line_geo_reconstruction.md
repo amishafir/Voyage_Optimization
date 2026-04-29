@@ -18,7 +18,7 @@ Fix: replace the midpoint heuristic with **exact analytic crossings** between th
 | Qg2 | Path shape inside a segment | (a) **Rhumb line** (constant compass bearing) |
 | Qg3 | NWP grid resolution | (a) **0.5° marine grid**, axis-aligned |
 | Qg4 | Cumulative-distance metric | (a) **Rhumb-line (loxodromic) distance** |
-| Qg5 | Weather lookup | (b) Per-cell aggregation — deferred to next stage |
+| Qg5 | Weather lookup | (b) **Per-cell mean aggregation** — implemented (see §5) |
 | Qg6 | Implement immediately? | (b) **Visualise first**, then implement |
 | Qg7 | Visualisation scope | WP1 → WP2 → WP3 → WP4 (sample) and full 12-segment |
 | Qg8 | Map projection | (b) **Cartopy / Mercator** (rhumb lines render straight) |
@@ -45,3 +45,95 @@ Robustness pass (Qg9 + Qg10) added: latitude clamp `|φ| ≤ 89.5°`, Δlon norm
 WP1 → WP2 → WP3 → WP4 — left: **Mercator chart with 0.5° NWP grid**, orange dots = lon-line crossings, teal dots = lat-line crossings, black stars = waypoints. Right: same crossings as **H-lines on the DP graph (t, d)** plane, with V-lines (blue dashed, every 6 h) marking the time-decision cadence.
 
 ![H-line geographic reconstruction — 3 segments](../pipeline/dp_rebuild/visualize_geo_grid.png)
+
+## 5. Weather sampling strategy (Qg5(b))
+
+### 5.1 What "per-cell aggregation" means
+
+Once the route + 0.5° grid carve the (t, d) plane into squares, every square sits inside exactly one **cell** = 0.5° × 0.5° NWP tile. The DP graph treats the cell as the meteorological unit: every (t, d) probe inside one cell must read **the same** weather, otherwise edges leaving a single source see inconsistent conditions and the optimum is biased.
+
+The lookup chain for any (t, d) probe:
+
+```
+(t, d)  ──position_at_d(d, WAYPOINTS)──►  (lat, lon, segment_idx)
+                                                  │
+                              cell = (⌊lat/0.5⌋, ⌊lon/0.5⌋)
+                                                  │
+                  cell_weather(cell, sample_hour, forecast_hour)
+                                                  │
+            mean over every voyage waypoint sitting in `cell`:
+              · linear mean ─ wind speed, wave height, current speed
+              · circular mean (atan2 of mean-sin / mean-cos) ─ directions
+              · int-rounded mean ─ Beaufort
+              · NaN rows dropped before averaging
+                                                  │
+                       fallback if cell has 0 valid rows:
+                       weather_at(d) — segment-aware nearest-valid waypoint
+```
+
+Result is cell-canonical (every square in one cell agrees) and boundary-tie-free (probe at square center, never on a line).
+
+### 5.2 Sampling strategy for a *new* voyage
+
+Adding a new voyage = re-deciding where to query Open-Meteo along the rhumb-line polyline. Three options:
+
+| Option | Query points | Avg per cell | Pros | Cons |
+|---|---|---|---|---|
+| **A. Dense (current)** | every 12 nm interpolated waypoint | 1–5 | smooths API noise via cell mean; matches the existing collector | ~280 API calls per route; many redundant calls inside one cell |
+| **B. One-per-cell** | exit-midpoint of the rhumb arc inside each cell | 1 | minimum API calls (~80–150); cell mean is exactly the queried point | no smoothing; one outlier API row contaminates the whole cell |
+| **C. Hybrid** | 2–3 evenly-spaced points per cell-arc, plus segment endpoints | 2–4 | smoothing + bounded API calls; segment heading change always sampled | slightly more bookkeeping; needs route-walker that knows about cell entries/exits |
+
+### 5.3 Recommendation
+
+Default to **C (hybrid)**: 2–3 samples per cell along the in-cell arc, and force a query at every segment endpoint so heading discontinuities are always anchored by data. This keeps the cell mean meaningful (averages out forecast micro-noise) without ballooning API calls when a cell happens to contain a long rhumb arc.
+
+Falls back gracefully: if a cell turns out to contain only one voyage waypoint anyway, the per-cell mean degenerates to that single value — still cell-canonical, no special-case code.
+
+### 5.4 What still needs to be decided
+
+- **Sampling distance metric**: rhumb-distance (loxodromic) vs great-circle for the in-cell arc length. Consistent with §2 Qg4, default = rhumb.
+- **Endpoint inclusion rule**: whether a sample lands *on* a cell boundary (skip → next cell, or duplicate → both cells). Current code uses strict `<` interior so a boundary point is unambiguous.
+- **Forecast horizon density**: how many `(sample_hour, forecast_hour)` tuples per query point. Orthogonal to the spatial strategy above; driven by which optimization mode (LP / DP / RH) is being run.
+
+## 6. Locked-mode policy & combined Bellman
+
+### 6.1 SOG-locking (Luo 2024) — the captain holds ground speed, the engine adapts
+
+The earlier "locked-mode" prototype held **SWS** constant per 6 h block; SOG drifted as weather changed underneath the ship. That was the wrong direction. The corrected model — **SOG-locking** — matches Luo 2024 exactly:
+
+| | SWS-locking (deprecated) | **SOG-locking (current)** |
+|---|---|---|
+| Decision per block | one engine SWS | **one target SOG** |
+| What varies inside the block | SOG (and trajectory bends) | **SWS** (engine adapts per sub-leg) |
+| dst node lookup | inverse binary search | **geometric: `d_src + SOG · 6 h`** |
+| Block fuel | `FCR(SWS) · 6h` (one term) | **`Σ FCR(SWS_i) · Δt_i`** (sum over sub-legs) |
+| Build time | 7–20 min | **~110 s** |
+| Bellman ↔ continuous-resim drift | up to 1.84 nm at sink | **0.000 nm everywhere** |
+
+In code: each sub-leg looks up cell-canonical weather + paper-segment heading, **inverts SWS** from the target SOG, accumulates `FCR(SWS) · Δt`. If any sub-leg's required SWS exceeds the engine bound (default 25 kn) the edge is dropped — that target SOG is infeasible across that block under those conditions.
+
+### 6.2 Combined Bellman — free ⊕ locked on the same nodes
+
+Both edge sets share the free-DP node table by construction (verified by closing assertion). The union of edges is a valid Bellman input — Bellman picks the lowest-fuel outgoing edge at every node, regardless of type. The combined optimum is bounded above by both alone:
+
+| Graph | Edges | Total fuel | Schedule | Δ vs free |
+|---|---:|---:|---:|---:|
+| Free DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | — |
+| Locked DP (SOG-locking) | 631,537 | 365.161 mt | 47 blocks | −1.61 mt |
+| **Combined (union)** | **3,940,477** | **362.965 mt** | **105 (74 free + 31 locked)** | **−3.80 mt** |
+
+Bellman's combined schedule mixes both policies:
+
+```
+0 .. 6 h     : 4 free edges        — fine-grained start (escape source)
+6 .. 264 h   : 30 locked edges     — bulk voyage at constant SOG per 6h
+264 h        : 2 free edges        — small re-alignment around an H-line
+264 .. 280 h : 3 locked edges      — including the early-terminal edge
+                                     that lands EXACTLY at (280h, 3393.595 nm)
+```
+
+Locked dominates the bulk because its target-SOG choices are continuous (any SOG in [9, 13]); free dominates at boundaries where a 6 h block is too coarse for the source corner / final-mile alignment.
+
+### 6.3 Implication for the experimental matrix
+
+The combined graph is the cleanest single-shot solver: one Bellman, one node table, two edge generators, strictly better fuel than either alone. All future single-forecast experiments default to combined; free and locked become ablations.
