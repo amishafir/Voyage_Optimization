@@ -55,8 +55,8 @@ def main() -> None:
         cfg, route, voyage,
         h_line_distances=h_lines,
         waypoints=WAYPOINTS,
+        nodes=nodes,
         sample_hour=0,
-        zeta_d_locked=1.0,
         tau_h_locked=0.1,
     )
     print(f"     {len(edges):,} locked edges  (build time {time.time() - t0:.1f}s)")

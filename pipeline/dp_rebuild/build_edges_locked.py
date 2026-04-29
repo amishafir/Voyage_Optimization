@@ -34,8 +34,8 @@ from shared.physics import (  # noqa: E402
     calculate_speed_over_ground,
 )
 
-from build_edges import Weather
-from build_nodes import GraphConfig, v_line_times_from_route
+from build_edges import Weather, index_nodes
+from build_nodes import GraphConfig, Node, v_line_times_from_route
 from h5_weather import VoyageWeather
 from load_route import Route
 
@@ -182,9 +182,9 @@ def build_locked_edges(
     voyage: VoyageWeather,
     h_line_distances: List[float],
     waypoints,
+    nodes: List[Node],
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
-    zeta_d_locked: float = 1.0,
     tau_h_locked: float = 0.1,
     sws_search_min: float = 4.0,
     sws_search_max: float = 22.0,
@@ -195,15 +195,27 @@ def build_locked_edges(
 ) -> List[LockedEdge]:
     """Inverse-integration locked-mode edge builder.
 
-    For every (V-line source, integer-nm destination) pair, **binary-search
-    the SWS** so that `simulate_block(SWS)` ends exactly at the destination
-    (within `tolerance_nm`). This eliminates the snap-drift bias that the
-    earlier forward-enumeration version had: every edge's continuous
-    trajectory now matches its declared destination.
+    For every (V-line source, V-line destination at `t_next`) pair,
+    **binary-search the SWS** so that `simulate_block(SWS)` ends exactly
+    at the destination (within `tolerance_nm`). This eliminates the
+    snap-drift bias that the earlier forward-enumeration version had:
+    every edge's continuous trajectory now matches its declared
+    destination.
+
+    Same-node invariant
+    -------------------
+    Destinations are taken **directly from the free-DP V-line node set**:
+    `nodes_by_v[t_next]` filtered to the reachable distance window
+    `[d_src + v_min·dt, d_src + v_max·dt]`. When the ship reaches `d = L`
+    before `t_next`, the destination is the H-line@L node whose time is
+    `final_t` rounded to the `tau_h_locked` grid (also already in the
+    free-DP node set since H-line@L has nodes at every τ-grid cell).
+    A final assertion confirms every produced edge's `(src_t, src_d)`
+    and `(dst_t, dst_d)` exist as nodes in `nodes`.
 
     Per source we first build a coarse `(SWS, final_d)` cache at
-    `cache_sws_step` step, then bracket each target d in the cache and
-    refine with binary search.
+    `cache_sws_step` step, then bracket each candidate dst_d in the
+    cache and refine with binary search.
 
     Same-logic filter as free-DP: edge accepted iff
     `avg_SOG = Δd/Δt ∈ [v_min, v_max]`. SWS itself is unbounded (matches
@@ -215,6 +227,20 @@ def build_locked_edges(
     L = cfg.length_nm
     eta = cfg.eta_h
     n_yaml = len(route.windows[0].segments)
+
+    # --- Same-node enumeration: pull dst candidates from free-DP node set ----
+    nodes_by_v, nodes_by_h = index_nodes(nodes)
+    # Pre-extract sorted distance arrays per V-time for fast range lookup.
+    v_dist_by_time: Dict[float, List[float]] = {
+        t: [n.distance_nm for n in lst]  # already sorted by index_nodes
+        for t, lst in nodes_by_v.items()
+    }
+    # H-line@L node times (for early-terminal dst snapping).
+    h_at_L_times: List[float] = sorted(
+        n.time_h for n in nodes_by_h.get(L, []) if not n.is_source
+    )
+    # Whole-graph node-key set for the closing invariant assertion.
+    node_key_set = {(round(n.time_h, 6), round(n.distance_nm, 6)) for n in nodes}
 
     reachable_at_t: Dict[float, Set[float]] = {0.0: {0.0}}
     edges: List[LockedEdge] = []
@@ -267,23 +293,20 @@ def build_locked_edges(
             min_reach = cache[0][1]
             max_reach = cache[-1][1]
 
-            # ---- 2) Enumerate integer-nm dst targets in reachable range ----
+            # ---- 2) Enumerate dst targets directly from free-DP V-line nodes ----
+            # Same-node invariant: every dst is a real node in the free-DP graph.
             dst_min_geom = d_src + cfg.v_min * dt
             dst_max_geom = min(L, d_src + cfg.v_max * dt)
             dst_lo_eff = max(dst_min_geom, min_reach)
             dst_hi_eff = min(dst_max_geom, max_reach)
 
-            dst_targets: List[float] = []
-            d = math.ceil(dst_lo_eff / zeta_d_locked) * zeta_d_locked
-            while d <= dst_hi_eff + 1e-9:
-                dst_targets.append(round(d, 6))
-                d += zeta_d_locked
-            # Always include L itself as a target if reachable, so the sink
-            # (which sits at the YAML's exact length, not necessarily on the
-            # integer-nm grid) is hit.
-            if dst_lo_eff - 1e-6 <= L <= dst_hi_eff + 1e-6:
-                if not dst_targets or abs(dst_targets[-1] - L) > 1e-6:
-                    dst_targets.append(L)
+            v_line_dists = v_dist_by_time.get(t_next, [])
+            # Linear scan is fine — the list is short (~3393 entries) and we
+            # need every match anyway. bisect would be a marginal win.
+            dst_targets: List[float] = [
+                d for d in v_line_dists
+                if dst_lo_eff - 1e-9 <= d <= dst_hi_eff + 1e-9
+            ]
 
             # ---- 3) Per dst target, inverse-solve SWS via bracket+binary search ----
             for dst_d in dst_targets:
@@ -343,9 +366,14 @@ def build_locked_edges(
                 # final_t < dt; otherwise the block ran the full duration.
                 hit_terminal = abs(final_d_solved - L) < 1e-6 and final_t_solved < t_next - 1e-6
                 if hit_terminal:
-                    dst_t = round(final_t_solved / tau_h_locked) * tau_h_locked
-                    dst_t = min(dst_t, eta)
-                    elapsed = final_t_solved - t_k       # block duration actually used
+                    # Snap to a real H-line@L node time (the τ-grid cells
+                    # already in the free-DP node set), so dst is on a node.
+                    dst_t_raw = min(final_t_solved, eta)
+                    if h_at_L_times:
+                        dst_t = min(h_at_L_times, key=lambda t: abs(t - dst_t_raw))
+                    else:
+                        dst_t = round(dst_t_raw / tau_h_locked) * tau_h_locked
+                    elapsed = dst_t - t_k                 # block duration actually used (snapped)
                     fuel = 0.000706 * sws_solved ** 3 * elapsed
                 else:
                     dst_t = t_next
@@ -373,6 +401,17 @@ def build_locked_edges(
                     next_reachable.add(dst_d)
 
         reachable_at_t.setdefault(t_next, set()).update(next_reachable)
+
+    # Same-node invariant: every produced edge endpoint must coincide with
+    # an existing free-DP node. This is what lets Bellman run on the union
+    # of free-DP and locked edges with a single canonical-node table.
+    for e in edges:
+        src_key = (round(e.src_t, 6), round(e.src_d, 6))
+        dst_key = (round(e.dst_t, 6), round(e.dst_d, 6))
+        if src_key not in node_key_set:
+            raise AssertionError(f"locked edge src {src_key} not in node set")
+        if dst_key not in node_key_set:
+            raise AssertionError(f"locked edge dst {dst_key} not in node set")
 
     return edges
 
