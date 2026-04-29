@@ -217,3 +217,21 @@ def cell_index(lat_deg: float, lon_deg: float, grid_deg: float = 0.5) -> Tuple[i
     """NWP cell (lat_idx, lon_idx) containing the given point."""
     return (int(math.floor(lat_deg / grid_deg)),
             int(math.floor(lon_deg / grid_deg)))
+
+
+def rhumb_total_nm(waypoints) -> float:
+    """Total rhumb-line distance for a polyline through `waypoints`.
+
+    `waypoints` is iterable of objects with `.lat_deg` / `.lon_deg` (or
+    tuples (lat, lon)). Returns the sum of consecutive rhumb distances.
+    """
+    pts = []
+    for w in waypoints:
+        if hasattr(w, "lat_deg"):
+            pts.append((w.lat_deg, w.lon_deg))
+        else:
+            pts.append((w[0], w[1]))
+    total = 0.0
+    for i in range(len(pts) - 1):
+        total += rhumb_distance_nm(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
+    return total

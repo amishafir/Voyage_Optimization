@@ -143,6 +143,10 @@ def h_line_distances_from_h5(cfg: GraphConfig, voyage, grid_deg: float = 0.5) ->
     `grid_deg` = NWP grid resolution (0.5° for Open-Meteo marine / GFS,
                  0.1° for Open-Meteo atmosphere). Cell crossings are detected
     between consecutive waypoints and placed at their midpoint distance.
+
+    NOTE: This is the *legacy* H-line generator. Per Qg1-Qg4 (logged in
+    docs/thesis_brainstorm.md §14.18) we now prefer
+    `h_line_distances_from_geo` for new work.
     """
     distances = set()
     for d in voyage.segment_boundaries_nm():
@@ -151,6 +155,96 @@ def h_line_distances_from_h5(cfg: GraphConfig, voyage, grid_deg: float = 0.5) ->
         distances.add(round(d, 9))
     distances.add(round(cfg.length_nm, 9))
     return sorted(distances)
+
+
+def h_line_distances_from_geo(
+    cfg: GraphConfig,
+    waypoints,
+    grid_deg: float = 0.5,
+) -> List[float]:
+    """H-line distances from analytic rhumb-line ↔ NWP-grid crossings.
+
+    Per Qg1..Qg4: each segment is a rhumb line between two paper-table
+    waypoints; H-lines are placed at every analytic crossing of a 0.5°
+    `lat = 0.5·k` or `lon = 0.5·k` grid line, plus segment boundaries
+    (heading changes) and the terminal sink at d = L.
+
+    `waypoints` is a list of `Waypoint` from `route_waypoints.py` (or
+    `test_routes.py`); each must expose `.lat_deg` and `.lon_deg`.
+
+    Distance along the route is the rhumb-line (loxodromic) distance,
+    accumulated segment by segment.
+    """
+    from geo_grid import rhumb_distance_nm, rhumb_grid_crossings
+
+    h_set: set[float] = set()
+    cumulative = 0.0
+    n_seg = len(waypoints) - 1
+
+    for seg_idx in range(n_seg):
+        wp1 = waypoints[seg_idx]
+        wp2 = waypoints[seg_idx + 1]
+        seg_dist = rhumb_distance_nm(
+            wp1.lat_deg, wp1.lon_deg, wp2.lat_deg, wp2.lon_deg,
+        )
+        crossings = rhumb_grid_crossings(
+            wp1.lat_deg, wp1.lon_deg,
+            wp2.lat_deg, wp2.lon_deg,
+            grid_deg=grid_deg,
+        )
+        for c in crossings:
+            d_voy = cumulative + c.distance_nm
+            if 1e-6 < d_voy < cfg.length_nm - 1e-6:
+                h_set.add(round(d_voy, 9))
+        cumulative += seg_dist
+        # Segment-boundary H-line (interior only)
+        if seg_idx < n_seg - 1 and 1e-6 < cumulative < cfg.length_nm - 1e-6:
+            h_set.add(round(cumulative, 9))
+
+    # Terminal sink H-line at d = L
+    h_set.add(round(cfg.length_nm, 9))
+
+    # Enforce τ-grid traversable gaps. A gap G between consecutive H-lines
+    # is traversable iff some integer k ≥ 1 satisfies
+    #     k · τ_h · v_min  ≤  G  ≤  k · τ_h · v_max
+    # i.e. some k τ-steps land at SOG inside [v_min, v_max]. Otherwise the
+    # source on the lower H-line has no feasible H→H edge to the next H-line.
+    # For (v_min=9, v_max=13, τ_h=0.1) the deadzones are
+    # (0, 0.9), (1.3, 1.8), (2.6, 2.7) nm.
+    def feasible(G: float) -> bool:
+        if G <= 1e-9:
+            return False
+        import math as _m
+        k_min = max(1, int(_m.ceil(G / (cfg.v_max * cfg.tau_h) - 1e-9)))
+        k_max = int(_m.floor(G / (cfg.v_min * cfg.tau_h) + 1e-9))
+        return k_min <= k_max
+
+    sorted_h = sorted(h_set)
+    L_rounded = round(cfg.length_nm, 9)
+    kept: List[float] = []
+    dropped = 0
+    prev = 0.0  # implicit voyage start
+    for d in sorted_h:
+        if feasible(d - prev):
+            kept.append(d)
+            prev = d
+        else:
+            dropped += 1
+
+    # Ensure the terminal sink stays reachable. If the gap from the last
+    # kept H-line to L is in a deadzone, walk backward dropping kept
+    # entries until the residual gap is feasible.
+    while len(kept) >= 1 and kept[-1] != L_rounded \
+            and not feasible(L_rounded - (kept[-2] if len(kept) >= 2 else 0.0)):
+        dropped += 1
+        kept.pop()
+    if not kept or kept[-1] != L_rounded:
+        kept.append(L_rounded)
+
+    if dropped:
+        print(f"[h_line_distances_from_geo] dropped {dropped} H-lines that would "
+              f"create τ-grid-infeasible gaps")
+    return kept
 
 
 def build_h_line_nodes(cfg: GraphConfig, d: float) -> List[Node]:

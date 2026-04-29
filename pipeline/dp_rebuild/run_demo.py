@@ -16,9 +16,11 @@ from pathlib import Path
 
 from bellman import BellmanSolver
 from build_edges import build_edges
-from build_nodes import GraphConfig, build_nodes, h_line_distances_from_h5
+from build_nodes import GraphConfig, build_nodes, h_line_distances_from_geo
+from geo_grid import rhumb_total_nm
 from h5_weather import VoyageWeather
 from load_route import load_yaml_route, synthesize_multi_window
+from route_waypoints import WAYPOINTS
 
 
 def main() -> None:
@@ -31,8 +33,18 @@ def main() -> None:
     route = synthesize_multi_window(load_yaml_route(yaml_path), window_h=6.0)
     voyage = VoyageWeather(h5_path)
 
-    cfg = GraphConfig.from_route(
-        route,
+    # Use the rhumb-sum length from the paper-table waypoints (Qg1..Qg4)
+    # instead of YAML's reported sum. Difference is ~0.4 nm out of 3393
+    # — paper-rounding — but this keeps the graph self-consistent with the
+    # analytic rhumb-vs-grid H-line generator below.
+    L_rhumb = rhumb_total_nm(WAYPOINTS)
+    print(f"     rhumb-sum L = {L_rhumb:.3f} nm  "
+          f"(YAML paper sum: {route.length_nm:.3f} nm, "
+          f"Δ = {L_rhumb - route.length_nm:+.3f} nm)")
+
+    cfg = GraphConfig(
+        length_nm=L_rhumb,
+        eta_h=route.eta_h,
         dt_h=6.0,
         zeta_nm=1.0,
         tau_h=0.1,
@@ -41,9 +53,9 @@ def main() -> None:
         v_max=13.0,
     )
 
-    # 2. Build nodes
-    print("[2] Building V/H lines + nodes …")
-    h_lines = h_line_distances_from_h5(cfg, voyage, grid_deg=0.5)
+    # 2. Build nodes — H-lines from analytic rhumb-line ↔ 0.5° grid crossings.
+    print("[2] Building V/H lines + nodes (geo H-lines) …")
+    h_lines = h_line_distances_from_geo(cfg, WAYPOINTS, grid_deg=0.5)
     nodes = build_nodes(cfg, route, h_line_distances=h_lines)
     print(f"     {len(nodes):,} nodes, {len(h_lines)} H lines")
 
