@@ -219,6 +219,48 @@ def cell_index(lat_deg: float, lon_deg: float, grid_deg: float = 0.5) -> Tuple[i
             int(math.floor(lon_deg / grid_deg)))
 
 
+def position_at_d(d_voy: float, waypoints) -> Tuple[float, float, int]:
+    """Geographic position (lat°, lon°, segment_idx_0_indexed) at cumulative
+    voyage distance `d_voy` along the rhumb-line polyline.
+
+    Walks the polyline summing rhumb distances; once the running cumulative
+    exceeds `d_voy`, interpolates the final position inside that segment by
+    rhumb-line interpolation (lon linear, lat via Mercator).
+    `segment_idx_0_indexed` is the index of the segment that contains the
+    point — i.e. for d_voy in (0, length(seg 1)] we return 0; for d_voy
+    in (length(seg 1), length(seg 1+2)] we return 1; and so on.
+    """
+    if not waypoints or len(waypoints) < 2:
+        if waypoints:
+            return (waypoints[0].lat_deg, waypoints[0].lon_deg, 0)
+        return (0.0, 0.0, 0)
+
+    cumulative = 0.0
+    n_seg = len(waypoints) - 1
+    for seg_idx in range(n_seg):
+        wp1 = waypoints[seg_idx]
+        wp2 = waypoints[seg_idx + 1]
+        seg_dist = rhumb_distance_nm(
+            wp1.lat_deg, wp1.lon_deg, wp2.lat_deg, wp2.lon_deg,
+        )
+        if d_voy <= cumulative + seg_dist + 1e-9:
+            f = 0.0 if seg_dist <= 1e-12 else (d_voy - cumulative) / seg_dist
+            f = max(0.0, min(1.0, f))
+            dlon = _normalize_dlon(wp2.lon_deg - wp1.lon_deg)
+            lon_at = wp1.lon_deg + f * dlon
+            # Wrap back to [-180, 180] for storage.
+            lon_at = ((lon_at + 180.0) % 360.0) - 180.0
+            my1 = _mercator_y(wp1.lat_deg)
+            my2 = _mercator_y(wp2.lat_deg)
+            lat_at = _inverse_mercator_lat_deg(my1 + f * (my2 - my1))
+            return (lat_at, lon_at, seg_idx)
+        cumulative += seg_dist
+
+    # Past the route end — clamp to the final waypoint, last segment.
+    last = waypoints[-1]
+    return (last.lat_deg, last.lon_deg, n_seg - 1)
+
+
 def rhumb_total_nm(waypoints) -> float:
     """Total rhumb-line distance for a polyline through `waypoints`.
 

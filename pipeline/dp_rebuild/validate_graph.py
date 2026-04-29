@@ -32,10 +32,12 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from build_nodes import GraphConfig, Node, build_nodes, h_line_distances_from_h5
+from build_nodes import GraphConfig, Node, build_nodes, h_line_distances_from_geo
 from build_edges import Edge, build_edges, index_nodes
+from geo_grid import position_at_d, rhumb_total_nm
 from h5_weather import VoyageWeather
 from load_route import Route, load_yaml_route, synthesize_multi_window
+from route_waypoints import WAYPOINTS
 
 
 # ---------------------------------------------------------------------------
@@ -56,16 +58,21 @@ class SquareLabel:
 
 def label_at(t: float, d: float, route: Route, voyage: VoyageWeather,
              grid_deg: float = GRID_DEG) -> SquareLabel:
-    # Segment via boundary-bisect (H-line-consistent).
-    seg = voyage.segment_for_distance(d)
-    # Cell from the nearest waypoint *within that segment* — this matches
-    # how weather_at resolves data, so label and weather agree.
-    wp = voyage.nearest_waypoint_in_segment(d, seg)
+    """Square label using the *same paper-waypoint geometry* the analytic
+    H-line generator uses. Segment + (lat, lon) at d come from rhumb
+    interpolation along the polyline (`position_at_d`); cell is the
+    floor of (lat, lon) over `grid_deg`. This guarantees C1 sees a
+    constant label inside each (V band × H band) square as long as the
+    H-lines are placed at every segment-boundary AND every cell-crossing
+    along the rhumb route — which is what `h_line_distances_from_geo`
+    produces.
+    """
+    lat_at, lon_at, seg_idx = position_at_d(d, WAYPOINTS)
     window = route.window_for_time(t)
     return SquareLabel(
-        segment_id=seg,
-        cell_lat_idx=int(np.floor(wp.lat / grid_deg)),
-        cell_lon_idx=int(np.floor(wp.lon / grid_deg)),
+        segment_id=seg_idx,
+        cell_lat_idx=int(np.floor(lat_at / grid_deg)),
+        cell_lon_idx=int(np.floor(lon_at / grid_deg)),
         window_start=window.start,
         window_end=window.end,
     )
@@ -260,8 +267,9 @@ def main() -> int:
     route = synthesize_multi_window(route, window_h=6.0)
     voyage = VoyageWeather(h5_path)
 
-    cfg = GraphConfig.from_route(
-        route,
+    cfg = GraphConfig(
+        length_nm=rhumb_total_nm(WAYPOINTS),
+        eta_h=route.eta_h,
         dt_h=6.0,
         zeta_nm=1.0,
         tau_h=0.1,
@@ -269,7 +277,7 @@ def main() -> int:
         v_min=9.0,
         v_max=13.0,
     )
-    h_lines = h_line_distances_from_h5(cfg, voyage, grid_deg=GRID_DEG)
+    h_lines = h_line_distances_from_geo(cfg, WAYPOINTS, grid_deg=GRID_DEG)
     nodes = build_nodes(cfg, route, h_line_distances=h_lines)
     edges = build_edges(cfg, nodes, voyage, route, sample_hour=0)
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges, "
