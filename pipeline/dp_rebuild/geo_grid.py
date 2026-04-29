@@ -22,14 +22,41 @@ from typing import List, Tuple
 # 60 nm per degree of latitude → R_earth = 60 × 360 / (2π) = 3437.747 nm.
 R_EARTH_NM = 60.0 * 180.0 / math.pi
 
+# Mercator y(φ) → ∞ at φ = ±90°. Clamp the input slightly inside that to
+# keep the math finite for high-latitude / polar-region voyages.
+_LAT_LIMIT_DEG = 89.5
+
+
+def _clamp_lat(lat_deg: float) -> float:
+    """Clamp latitude to [−89.5°, 89.5°] to dodge the Mercator singularity."""
+    if lat_deg > _LAT_LIMIT_DEG:
+        return _LAT_LIMIT_DEG
+    if lat_deg < -_LAT_LIMIT_DEG:
+        return -_LAT_LIMIT_DEG
+    return lat_deg
+
+
+def _normalize_dlon(dlon_deg: float) -> float:
+    """Normalize a longitude difference into (−180°, 180°].
+
+    Handles antimeridian-crossing routes: Tokyo (139°E) → Honolulu (−158°E)
+    has naïve Δlon = −297°; this returns +63° (the short way east through
+    the antimeridian).
+    """
+    dlon = (dlon_deg + 180.0) % 360.0 - 180.0
+    # Edge case: -180° and +180° are the same line; prefer +180°.
+    if dlon == -180.0:
+        dlon = 180.0
+    return dlon
+
 
 def _mercator_y(lat_deg: float) -> float:
     """Mercator y-coordinate (radians) for a given latitude in degrees.
 
-    M(φ) = ln(tan(π/4 + φ/2)).  Singular at the poles; safe for our route
-    which stays within ±27°.
+    M(φ) = ln(tan(π/4 + φ/2)). Singular at the poles; we clamp φ to
+    ±89.5° via `_clamp_lat` so this is always finite even for arctic routes.
     """
-    lat_rad = math.radians(lat_deg)
+    lat_rad = math.radians(_clamp_lat(lat_deg))
     return math.log(math.tan(math.pi / 4 + lat_rad / 2))
 
 
@@ -43,13 +70,16 @@ def rhumb_distance_nm(
 ) -> float:
     """Loxodromic (rhumb-line) distance between two points, in nautical miles.
 
-    Standard formula. For E–W legs (Δφ → 0), uses cos(φ) limit to avoid
-    division by zero.
+    Lat is clamped to ±89.5° before use; Δlon is normalised to (−180°, 180°]
+    so antimeridian-crossing routes take the short way around.
     """
+    lat1_deg = _clamp_lat(lat1_deg)
+    lat2_deg = _clamp_lat(lat2_deg)
     phi1 = math.radians(lat1_deg)
     phi2 = math.radians(lat2_deg)
     dphi = phi2 - phi1
-    dlam = math.radians(lon2_deg - lon1_deg)
+    dlon_deg = _normalize_dlon(lon2_deg - lon1_deg)
+    dlam = math.radians(dlon_deg)
 
     dpsi = _mercator_y(lat2_deg) - _mercator_y(lat1_deg)
     if abs(dpsi) > 1e-12:
@@ -66,10 +96,15 @@ def rhumb_bearing_deg(
 ) -> float:
     """Constant compass bearing along the rhumb line from p1 → p2 (degrees).
 
-    Returned in [0, 360). 0 = north, 90 = east, etc.
+    Returned in [0, 360). 0 = north, 90 = east, etc. Δlon is normalised so
+    the bearing reflects the short way around (e.g. Tokyo → Honolulu →
+    east, not west).
     """
+    lat1_deg = _clamp_lat(lat1_deg)
+    lat2_deg = _clamp_lat(lat2_deg)
     dpsi = _mercator_y(lat2_deg) - _mercator_y(lat1_deg)
-    dlam = math.radians(lon2_deg - lon1_deg)
+    dlon_deg = _normalize_dlon(lon2_deg - lon1_deg)
+    dlam = math.radians(dlon_deg)
     if abs(dpsi) < 1e-12:
         # Pure east-west leg. Bearing is +90 (east) or 270 (west).
         return 90.0 if dlam > 0 else 270.0
@@ -107,31 +142,43 @@ def rhumb_grid_crossings(
       - For each lon target g: f = (g − lon1)/(lon2 − lon1).
       - For each lat target g: f = (M(g) − M(lat1))/(M(lat2) − M(lat1)).
     """
+    lat1_deg = _clamp_lat(lat1_deg)
+    lat2_deg = _clamp_lat(lat2_deg)
+    # Normalise Δlon so antimeridian-crossing routes go the short way.
+    # `lon2_eff` is the unwrapped lon2: lon1 + (signed normalised Δlon).
+    dlon = _normalize_dlon(lon2_deg - lon1_deg)
+    lon2_eff = lon1_deg + dlon
+
     D_total = rhumb_distance_nm(lat1_deg, lon1_deg, lat2_deg, lon2_deg)
+
+    def _wrap_lon(lon: float) -> float:
+        """Wrap a longitude back to [-180°, 180°] for storage."""
+        return ((lon + 180.0) % 360.0) - 180.0
 
     crossings: List[Crossing] = []
 
     # --- longitude-line crossings ---------------------------------------
-    if abs(lon2_deg - lon1_deg) > 1e-12:
-        lon_lo, lon_hi = sorted([lon1_deg, lon2_deg])
-        # First grid value strictly above lon_lo and at most lon_hi.
+    # Iterate in the *unwrapped* coordinate system [lon1, lon2_eff] so we
+    # never miss crossings on antimeridian routes; wrap the stored lon
+    # value back to [-180°, 180°].
+    if abs(dlon) > 1e-12:
+        lon_lo, lon_hi = sorted([lon1_deg, lon2_eff])
         k_first = math.ceil(lon_lo / grid_deg)
         k_last = math.floor(lon_hi / grid_deg)
-        # Skip the endpoint match — only interior crossings, otherwise we'd
-        # emit a crossing at fraction 0 or 1.
         for k in range(k_first, k_last + 1):
-            g = round(k * grid_deg, 9)
-            if abs(g - lon1_deg) < 1e-12 or abs(g - lon2_deg) < 1e-12:
+            g_unwrapped = round(k * grid_deg, 9)
+            if abs(g_unwrapped - lon1_deg) < 1e-12 or abs(g_unwrapped - lon2_eff) < 1e-12:
                 continue
-            f = (g - lon1_deg) / (lon2_deg - lon1_deg)
+            f = (g_unwrapped - lon1_deg) / dlon
             if not (0.0 < f < 1.0):
                 continue
             my = _mercator_y(lat1_deg) + f * (_mercator_y(lat2_deg) - _mercator_y(lat1_deg))
             lat_at = _inverse_mercator_lat_deg(my)
+            g_stored = _wrap_lon(g_unwrapped)
             crossings.append(Crossing(
                 fraction=f, distance_nm=f * D_total,
-                lat_deg=lat_at, lon_deg=g,
-                axis="lon", grid_value=g,
+                lat_deg=lat_at, lon_deg=g_stored,
+                axis="lon", grid_value=g_stored,
             ))
 
     # --- latitude-line crossings ----------------------------------------
@@ -149,10 +196,10 @@ def rhumb_grid_crossings(
             f = (myg - my1) / (my2 - my1)
             if not (0.0 < f < 1.0):
                 continue
-            lon_at = lon1_deg + f * (lon2_deg - lon1_deg)
+            lon_unwrapped = lon1_deg + f * dlon
             crossings.append(Crossing(
                 fraction=f, distance_nm=f * D_total,
-                lat_deg=g, lon_deg=lon_at,
+                lat_deg=g, lon_deg=_wrap_lon(lon_unwrapped),
                 axis="lat", grid_value=g,
             ))
 

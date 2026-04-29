@@ -1620,6 +1620,46 @@ real geographic crossings.
 | TODO | Per-cell weather aggregation (Qg5(b)) — depends on cut-over |
 | TODO | Validator label_at update for new cell semantics |
 
+### 14.18.x Robustness for remote / polar / antimeridian routes (2026-04-29)
+
+**Trigger:** request to make the geo layer robust enough to handle voyages
+"even to remote up north distances". Three real failure modes in the
+current code:
+
+1. **Mercator singularity at the poles.** `_mercator_y(φ) = ln(tan(π/4 + φ/2))`
+   blows up as φ → ±90°. Manageable up to 89° but should never accept a polar
+   waypoint without clamping.
+2. **Antimeridian (180°) crossings.** A trans-Pacific route stored as
+   `(lat₁=35°, lon₁=139°)` → `(lat₂=37°, lon₂=−122°)` has a naïve
+   `Δlon = −261°` — the rhumb formulas would compute the route going the
+   long way (Atlantic) instead of the short way (Pacific). Standard fix:
+   normalise so `|Δlon| ≤ 180°`.
+3. **Cartopy Mercator on polar routes.** Past ~80° latitude Mercator
+   stretches to unusable. Need projection auto-selection
+   (Mercator / NorthPolarStereo / PlateCarree) based on route extent.
+
+- **Qg9 = (b)** Math layer + visualization. `geo_grid.py` got `_clamp_lat`
+  (caps |lat| ≤ 89.5° before any Mercator math) and `_normalize_dlon`
+  (folds Δlon into (−180°, 180°] so antimeridian-crossing routes go the
+  short way). All four primitives (`_mercator_y`, `rhumb_distance_nm`,
+  `rhumb_bearing_deg`, `rhumb_grid_crossings`) updated; lon-line crossings
+  iterate in unwrapped coordinates and wrap the stored value back to
+  [-180°, 180°]. `visualize_geo_grid.py` got `pick_projection(...)` —
+  Mercator by default, NorthPolarStereo if min lat > 70°, SouthPolarStereo
+  if max lat < −70°, PlateCarree centered on mean lon if span > 180°.
+  Tests deferred to a separate pass when there's a clean fixture set.
+
+- **Qg10 = (a)** Iceland → Tromsø, 4 waypoints over the Norwegian Sea
+  (lat 64.13° → 69.65°, lon −21.95° → 18.96°). Lives in the new
+  `pipeline/dp_rebuild/test_routes.py` under registry key `iceland_tromso`.
+  Run with `python3 visualize_geo_grid.py iceland_tromso`. Numbers:
+  rhumb-sum 1033.2 nm; **88 grid crossings** (79 lon + 9 lat) over 3
+  segments; auto-projection picks Mercator (max lat 69.65° below the 70°
+  threshold).
+
+  YAML paper route still produces 43 H-lines on the same code path → no
+  regression.
+
 ---
 
 ## 15. Graph Rebuild — Implementation Log
