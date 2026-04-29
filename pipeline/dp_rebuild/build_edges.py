@@ -151,10 +151,12 @@ def lookup_source_state(
     src: Node,
     voyage: VoyageWeather,
     route: Route,
+    waypoints,
     next_v_time: Optional[float] = None,
     next_h_distance: Optional[float] = None,
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
+    grid_deg: float = 0.5,
 ) -> SourceState:
     """Weather + heading at the center of the enter-square (upper-right of src).
 
@@ -163,28 +165,43 @@ def lookup_source_state(
     waypoint. Probing the square's center guarantees we read the conditions
     every edge from this source actually traverses.
 
-    Both weather AND heading are resolved against the **HDF5 segment index**
-    (the same lookup that drives H-line placement). This avoids the 0.12 nm
-    inconsistency zone between YAML cumulative-length boundaries (e.g.
-    223.86) and HDF5 first-waypoint boundaries (e.g. 223.74). HDF5 is the
-    single source of truth for which segment a (t, d) point is in; the YAML
-    is consulted only for the segment's *attributes* (heading, etc.).
+    Weather is resolved by **per-cell mean aggregation** (Qg5(b)): the
+    enter-square center maps to a (lat, lon) on the rhumb-line polyline of
+    `waypoints`, the cell at that point is the 0.5°-grid bin, and the
+    canonical weather is the mean over every voyage waypoint in that cell
+    (NaN-tolerant; circular for directions). This makes weather *cell-
+    canonical* — every (t, d) inside one cell sees the same value — and
+    eliminates the boundary-tie ambiguity that plagued nearest-waypoint
+    lookup.
+
+    Heading is still pulled from the YAML segment containing `d_probe`
+    (paper-waypoint segment index from `position_at_d`).
     """
+    # Local import so build_edges keeps working when geo_grid is not on the
+    # path (rare, but matches h5_weather.cell_weather_at_d's pattern).
+    from geo_grid import position_at_d
+
     # Probe at the enter-square center along the distance axis (time axis
-    # doesn't affect segment / waypoint lookups in the current setup).
+    # doesn't affect cell / segment lookups in the current setup).
     d_probe = src.distance_nm
     if next_h_distance is not None:
         d_probe = (src.distance_nm + next_h_distance) / 2.0
 
-    # Single source of truth for the segment ID — HDF5 first-wp boundaries
-    # (same lookup used for H-line placement and weather).
-    seg_idx = voyage.segment_for_distance(d_probe)
+    # Paper-waypoint geometry: same source of truth used by the H-line
+    # generator and the validator.
+    _lat, _lon, seg_idx = position_at_d(d_probe, waypoints)
     yaml_segments = route.windows[0].segments
     seg_idx_clamped = max(0, min(seg_idx, len(yaml_segments) - 1))
     heading = yaml_segments[seg_idx_clamped].ship_heading
 
     wx = Weather.from_dict(
-        voyage.weather_at(d_probe, sample_hour=sample_hour, forecast_hour=forecast_hour)
+        voyage.cell_weather_at_d(
+            d_probe,
+            waypoints=waypoints,
+            sample_hour=sample_hour,
+            forecast_hour=forecast_hour,
+            grid_deg=grid_deg,
+        )
     )
     return SourceState(weather=wx, heading_deg=heading)
 
@@ -306,8 +323,10 @@ def build_edges(
     nodes: List[Node],
     voyage: VoyageWeather,
     route: Route,
+    waypoints,
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
+    grid_deg: float = 0.5,
 ) -> List[Edge]:
     by_v, by_h = index_nodes(nodes)
     v_times = sorted(by_v.keys())
@@ -320,11 +339,12 @@ def build_edges(
         next_v = next_coord(v_times, n.time_h)
         next_h = next_coord(h_distances, n.distance_nm)
         state = lookup_source_state(
-            n, voyage, route,
+            n, voyage, route, waypoints,
             next_v_time=next_v,
             next_h_distance=next_h,
             sample_hour=sample_hour,
             forecast_hour=forecast_hour,
+            grid_deg=grid_deg,
         )
         edges.extend(edges_from_source(n, cfg, v_times, h_distances, by_v, by_h, state))
     return edges
@@ -392,7 +412,9 @@ def summarize_edges(edges: List[Edge], nodes: List[Node], cfg: GraphConfig) -> N
 if __name__ == "__main__":
     from pathlib import Path
     from load_route import load_yaml_route, synthesize_multi_window
-    from build_nodes import h_line_distances_from_h5
+    from build_nodes import h_line_distances_from_geo
+    from geo_grid import rhumb_total_nm
+    from route_waypoints import WAYPOINTS
 
     yaml_path = Path(__file__).resolve().parent.parent.parent / \
         "Dynamic speed optimization" / "weather_forecasts.yaml"
@@ -402,8 +424,9 @@ if __name__ == "__main__":
     route = synthesize_multi_window(route, window_h=6.0)
     voyage = VoyageWeather(h5_path)
 
-    cfg = GraphConfig.from_route(
-        route,
+    cfg = GraphConfig(
+        length_nm=rhumb_total_nm(WAYPOINTS),
+        eta_h=route.eta_h,
         dt_h=6.0,
         zeta_nm=1.0,
         tau_h=0.1,
@@ -412,10 +435,10 @@ if __name__ == "__main__":
         v_max=13.0,
     )
 
-    # H lines from HDF5 real geometry (segment boundaries + 0.5° marine cells + terminal)
-    h_lines = h_line_distances_from_h5(cfg, voyage, grid_deg=0.5)
+    # H-lines from analytic rhumb-vs-grid crossings on the paper waypoints.
+    h_lines = h_line_distances_from_geo(cfg, WAYPOINTS, grid_deg=0.5)
     nodes = build_nodes(cfg, route, h_line_distances=h_lines)
     print(f"Nodes: {len(nodes):,}   H lines: {len(h_lines)}")
 
-    edges = build_edges(cfg, nodes, voyage, route, sample_hour=0)
+    edges = build_edges(cfg, nodes, voyage, route, WAYPOINTS, sample_hour=0)
     summarize_edges(edges, nodes, cfg)

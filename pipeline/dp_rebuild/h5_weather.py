@@ -16,7 +16,7 @@ from bisect import bisect_right
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import h5py
 import numpy as np
@@ -30,6 +30,20 @@ WEATHER_FIELDS = (
     "ocean_current_velocity_kmh",
     "ocean_current_direction_deg",
 )
+
+
+def _circular_mean_deg(angles_deg: List[float]) -> float:
+    """Circular mean of angles in degrees, NaN-tolerant. Returns NaN if all NaN.
+
+    Uses atan2 of mean(sin), mean(cos) to avoid wrap-around bias near 0°/360°.
+    """
+    valid = [a for a in angles_deg if not (a != a)]  # drop NaN
+    if not valid:
+        return float("nan")
+    rads = np.deg2rad(np.asarray(valid, dtype=float))
+    sin_mean = float(np.mean(np.sin(rads)))
+    cos_mean = float(np.mean(np.cos(rads)))
+    return float(np.rad2deg(np.arctan2(sin_mean, cos_mean)) % 360.0)
 
 
 @dataclass
@@ -85,6 +99,12 @@ class VoyageWeather:
             self._forecast_hours = sorted({int(r["forecast_hour"]) for r in pw})
 
             self._attrs = dict(f.attrs)
+
+        # Per-cell aggregation cache + index. Lazy by grid_deg.
+        # _cell_index[grid_deg][(lat_idx, lon_idx)] -> [Waypoint]
+        # _cell_cache[(grid_deg, cell, sample_hour, forecast_hour)] -> dict
+        self._cell_index: Dict[float, Dict[Tuple[int, int], List[Waypoint]]] = {}
+        self._cell_cache: Dict[Tuple[float, Tuple[int, int], int, Optional[int]], Dict[str, float]] = {}
 
     # ------------------------------------------------------------------
     # Route geometry
@@ -293,6 +313,133 @@ class VoyageWeather:
             if row is None:
                 raise KeyError(f"predicted_weather missing for {key3}")
         return {f: float(row[f]) for f in WEATHER_FIELDS}
+
+    # ------------------------------------------------------------------
+    # Per-cell mean weather aggregation (Qg5(b))
+    # ------------------------------------------------------------------
+
+    def _build_cell_index(self, grid_deg: float) -> None:
+        """Lazy-build the cell -> [Waypoint] index for `grid_deg`."""
+        if grid_deg in self._cell_index:
+            return
+        idx: Dict[Tuple[int, int], List[Waypoint]] = defaultdict(list)
+        for w in self._waypoints:
+            cell = (
+                int(np.floor(w.lat / grid_deg)),
+                int(np.floor(w.lon / grid_deg)),
+            )
+            idx[cell].append(w)
+        self._cell_index[grid_deg] = idx
+
+    def cell_weather(
+        self,
+        cell: Tuple[int, int],
+        sample_hour: int = 0,
+        forecast_hour: Optional[int] = None,
+        grid_deg: float = 0.5,
+    ) -> Dict[str, float]:
+        """Cell-canonical weather (Qg5(b)).
+
+        Returns the mean weather over every voyage waypoint that falls in
+        `cell` = (lat_idx, lon_idx) at the given (sample_hour, forecast_hour):
+          - linear mean for `wind_speed_10m_kmh`, `wave_height_m`,
+            `ocean_current_velocity_kmh`
+          - circular mean for `wind_direction_10m_deg`, `ocean_current_direction_deg`
+          - int-rounded mean for `beaufort_number`
+        Rows with any NaN field are dropped before averaging.
+
+        If no valid waypoint sits in this cell, falls back to the nearest
+        valid waypoint anywhere on the route. If the entire route's data
+        is unavailable for this (sample_hour, forecast_hour), returns
+        all-NaN.
+        """
+        sample_hour = int(sample_hour)
+        fh = None if forecast_hour is None else int(forecast_hour)
+        cache_key = (grid_deg, cell, sample_hour, fh)
+        cached = self._cell_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        self._build_cell_index(grid_deg)
+        wps = self._cell_index[grid_deg].get(cell, [])
+
+        rows = []
+        for w in wps:
+            row = self._row_for(w.node_id, sample_hour, fh)
+            if row is None or self._row_has_nan(row):
+                continue
+            rows.append(row)
+
+        if not rows:
+            # No geographic anchor here — return NaN. Callers with a distance
+            # context (e.g. `cell_weather_at_d`) should fall back via
+            # `weather_at(d)` so the substitute is *spatially* near, not just
+            # the first valid row anywhere on the route.
+            result = {f: float("nan") for f in WEATHER_FIELDS}
+        else:
+            wind_speeds = [float(r["wind_speed_10m_kmh"]) for r in rows]
+            wave_heights = [float(r["wave_height_m"]) for r in rows]
+            currents = [float(r["ocean_current_velocity_kmh"]) for r in rows]
+            wind_dirs = [float(r["wind_direction_10m_deg"]) for r in rows]
+            current_dirs = [float(r["ocean_current_direction_deg"]) for r in rows]
+            bns = [float(r["beaufort_number"]) for r in rows]
+            result = {
+                "wind_speed_10m_kmh": float(np.mean(wind_speeds)),
+                "wind_direction_10m_deg": _circular_mean_deg(wind_dirs),
+                "beaufort_number": int(round(float(np.mean(bns)))),
+                "wave_height_m": float(np.mean(wave_heights)),
+                "ocean_current_velocity_kmh": float(np.mean(currents)),
+                "ocean_current_direction_deg": _circular_mean_deg(current_dirs),
+            }
+
+        self._cell_cache[cache_key] = result
+        return result
+
+    def cell_weather_at_d(
+        self,
+        d: float,
+        waypoints,
+        sample_hour: int = 0,
+        forecast_hour: Optional[int] = None,
+        grid_deg: float = 0.5,
+    ) -> Dict[str, float]:
+        """Cell-canonical weather at voyage distance `d`.
+
+        Computes (lat, lon) at d via rhumb-line interpolation along the
+        paper-waypoint polyline (`geo_grid.position_at_d`), derives the
+        cell, and returns `cell_weather` for that cell.
+        """
+        # Local import keeps h5_weather.py free of a hard dependency on
+        # geo_grid for code paths that don't use cell aggregation.
+        from geo_grid import position_at_d
+
+        lat_at, lon_at, _seg = position_at_d(d, waypoints)
+        cell = (
+            int(np.floor(lat_at / grid_deg)),
+            int(np.floor(lon_at / grid_deg)),
+        )
+        wx = self.cell_weather(
+            cell,
+            sample_hour=sample_hour,
+            forecast_hour=forecast_hour,
+            grid_deg=grid_deg,
+        )
+        # Empty cell (no valid waypoints in this lat/lon bin at this hour) —
+        # fall back to the segment-aware nearest-valid lookup at this d so
+        # the substitute is geographically near the probe point, not the
+        # first valid waypoint on the route.
+        if any(v != v for v in (
+            wx["wind_speed_10m_kmh"],
+            wx["wave_height_m"],
+            wx["ocean_current_velocity_kmh"],
+        )):
+            fb = self.weather_at(
+                d, sample_hour=sample_hour, forecast_hour=forecast_hour,
+            )
+            # weather_at returns BN as float; mirror cell_weather's int contract.
+            fb["beaufort_number"] = int(round(float(fb["beaufort_number"])))
+            return fb
+        return wx
 
 
 def summarize(vw: VoyageWeather) -> None:

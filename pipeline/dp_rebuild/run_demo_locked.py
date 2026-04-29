@@ -17,9 +17,11 @@ from pathlib import Path
 
 from bellman import BellmanSolver
 from build_edges_locked import build_locked_edges, summarize_locked, verify_locked_schedule
-from build_nodes import GraphConfig, build_nodes, h_line_distances_from_h5
+from build_nodes import GraphConfig, build_nodes, h_line_distances_from_geo
+from geo_grid import rhumb_total_nm
 from h5_weather import VoyageWeather
 from load_route import load_yaml_route, synthesize_multi_window
+from route_waypoints import WAYPOINTS
 
 
 def main() -> None:
@@ -31,8 +33,9 @@ def main() -> None:
     route = synthesize_multi_window(load_yaml_route(yaml_path), window_h=6.0)
     voyage = VoyageWeather(h5_path)
 
-    cfg = GraphConfig.from_route(
-        route,
+    cfg = GraphConfig(
+        length_nm=rhumb_total_nm(WAYPOINTS),
+        eta_h=route.eta_h,
         dt_h=6.0,
         zeta_nm=1.0,
         tau_h=0.1,
@@ -41,16 +44,17 @@ def main() -> None:
         v_max=13.0,
     )
 
-    print("[2] Building V/H lines + nodes (same as free-DP) …")
-    h_lines = h_line_distances_from_h5(cfg, voyage, grid_deg=0.5)
+    print("[2] Building V/H lines + nodes (geo H-lines, same as free-DP) …")
+    h_lines = h_line_distances_from_geo(cfg, WAYPOINTS, grid_deg=0.5)
     nodes = build_nodes(cfg, route, h_line_distances=h_lines)
     print(f"     {len(nodes):,} nodes, {len(h_lines)} H lines")
 
-    print("[3] Building LOCKED edges (one SWS per 6h block) …")
+    print("[3] Building LOCKED edges (one SWS per 6h block, cell-canonical weather) …")
     t0 = time.time()
     edges = build_locked_edges(
         cfg, route, voyage,
         h_line_distances=h_lines,
+        waypoints=WAYPOINTS,
         sample_hour=0,
         zeta_d_locked=1.0,
         tau_h_locked=0.1,
@@ -99,7 +103,7 @@ def main() -> None:
     verify = verify_locked_schedule(
         result.schedule, route, voyage,
         h_line_distances=h_lines, L=cfg.length_nm, eta_h=cfg.eta_h,
-        sample_hour=0,
+        waypoints=WAYPOINTS, sample_hour=0,
     )
 
     # Quick comparison line if free-DP value is known.

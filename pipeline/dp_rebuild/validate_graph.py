@@ -141,11 +141,15 @@ def check_edge_weather(
     nodes: List[Node],
     voyage: VoyageWeather,
     sample_size: int = 2000,
+    grid_deg: float = GRID_DEG,
 ) -> List[str]:
     """Sample edges; verify stored weather matches the enter-square center.
 
-    Probe at the center of the enter-square — the canonical lookup used by
-    `lookup_source_weather` in build_edges.py.
+    Probe at the center of the enter-square using the **cell-canonical**
+    lookup (`cell_weather_at_d` over the paper-waypoint polyline) — the
+    same policy `lookup_source_state` in build_edges.py applies. So this
+    check now verifies the new Qg5(b) per-cell mean aggregation, not the
+    old nearest-waypoint lookup.
     """
     from bisect import bisect_right
 
@@ -167,7 +171,9 @@ def check_edge_weather(
         next_h = h_dist_sorted[ih] if ih < len(h_dist_sorted) else None
         t_in = (e.src_t + next_v) / 2.0 if next_v is not None else e.src_t
         d_in = (e.src_d + next_h) / 2.0 if next_h is not None else e.src_d
-        wx_interior = voyage.weather_at(d_in, sample_hour=0)
+        wx_interior = voyage.cell_weather_at_d(
+            d_in, waypoints=WAYPOINTS, sample_hour=0, grid_deg=grid_deg,
+        )
         # Compare field-by-field with nan handling
         for f, stored in (
             ("wind_speed_10m_kmh", e.weather.wind_speed_10m_kmh),
@@ -279,7 +285,8 @@ def main() -> int:
     )
     h_lines = h_line_distances_from_geo(cfg, WAYPOINTS, grid_deg=GRID_DEG)
     nodes = build_nodes(cfg, route, h_line_distances=h_lines)
-    edges = build_edges(cfg, nodes, voyage, route, sample_hour=0)
+    edges = build_edges(cfg, nodes, voyage, route, WAYPOINTS,
+                        sample_hour=0, grid_deg=GRID_DEG)
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges, "
           f"{len(h_lines)} H lines, "
           f"{sum(1 for n in nodes if n.line_type == 'V' and not n.is_source)//4000 or 1} × V lines")

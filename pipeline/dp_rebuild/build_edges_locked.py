@@ -94,19 +94,25 @@ def simulate_block(
     voyage: VoyageWeather,
     h_line_distances: List[float],
     L: float,
+    waypoints,
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
+    grid_deg: float = 0.5,
 ) -> Optional[Tuple[float, float, float, int]]:
     """Forward-simulate `duration_h` of constant-SWS sailing from (t0, d0).
 
     Walks through each H-line crossing inside the block, looking up
-    weather + heading at every sub-leg. Returns
+    weather + heading at every sub-leg using the paper-waypoint geometry
+    (`position_at_d` for segment + cell index, `cell_weather_at_d` for the
+    per-cell mean Qg5(b) weather). Returns
         (final_t, final_d, total_fuel_mt, sub_legs_count)
     or None if the simulation hits a degenerate state (SOG ≤ 0 or NaN).
 
     If the ship reaches d=L before duration_h elapses, the simulation
     terminates early and final_t < t0 + duration_h.
     """
+    from geo_grid import position_at_d
+
     fcr = calculate_fuel_consumption_rate(sws)
     yaml_segments = route.windows[0].segments
     n_yaml = len(yaml_segments)
@@ -125,11 +131,17 @@ def simulate_block(
         if next_h > L:
             next_h = L
 
-        # Weather + heading at the ship's current position
-        seg_idx = voyage.segment_for_distance(d)
+        # Weather + heading at the ship's current position (paper-waypoint
+        # segment, per-cell mean weather — same policy as the free-DP edge
+        # builder via lookup_source_state).
+        _lat, _lon, seg_idx = position_at_d(d, waypoints)
         seg_clamped = max(0, min(seg_idx, n_yaml - 1))
         heading_deg = yaml_segments[seg_clamped].ship_heading
-        wx = voyage.weather_at(d, sample_hour=sample_hour, forecast_hour=forecast_hour)
+        wx = voyage.cell_weather_at_d(
+            d, waypoints=waypoints,
+            sample_hour=sample_hour, forecast_hour=forecast_hour,
+            grid_deg=grid_deg,
+        )
 
         sog = _forward_sog(sws, wx, heading_deg)
         if not (sog > 1e-6) or sog != sog:  # also catches NaN
@@ -169,6 +181,7 @@ def build_locked_edges(
     route: Route,
     voyage: VoyageWeather,
     h_line_distances: List[float],
+    waypoints,
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
     zeta_d_locked: float = 1.0,
@@ -178,6 +191,7 @@ def build_locked_edges(
     cache_sws_step: float = 0.5,
     tolerance_nm: float = 0.01,
     max_refine_iter: int = 30,
+    grid_deg: float = 0.5,
 ) -> List[LockedEdge]:
     """Inverse-integration locked-mode edge builder.
 
@@ -220,11 +234,15 @@ def build_locked_edges(
                 continue  # already at sink
 
             # Representative source weather + heading (for the LockedEdge record).
-            seg_src = voyage.segment_for_distance(d_src)
+            # Paper-waypoint geometry + cell-canonical weather (Qg5(b)).
+            from geo_grid import position_at_d as _pos_at_d
+            _lat_s, _lon_s, seg_src = _pos_at_d(d_src, waypoints)
             seg_src_clamped = max(0, min(seg_src, n_yaml - 1))
             heading_src = route.windows[0].segments[seg_src_clamped].ship_heading
-            wx_src_dict = voyage.weather_at(
-                d_src, sample_hour=sample_hour, forecast_hour=forecast_hour,
+            wx_src_dict = voyage.cell_weather_at_d(
+                d_src, waypoints=waypoints,
+                sample_hour=sample_hour, forecast_hour=forecast_hour,
+                grid_deg=grid_deg,
             )
             wx_src = Weather.from_dict(wx_src_dict)
 
@@ -236,7 +254,9 @@ def build_locked_edges(
                     t0=t_k, d0=d_src, sws=sws, duration_h=dt,
                     route=route, voyage=voyage,
                     h_line_distances=h_line_distances, L=L,
+                    waypoints=waypoints,
                     sample_hour=sample_hour, forecast_hour=forecast_hour,
+                    grid_deg=grid_deg,
                 )
                 if result is not None:
                     cache.append((round(sws, 6), result[1]))
@@ -289,7 +309,9 @@ def build_locked_edges(
                         t0=t_k, d0=d_src, sws=mid_sws, duration_h=dt,
                         route=route, voyage=voyage,
                         h_line_distances=h_line_distances, L=L,
+                        waypoints=waypoints,
                         sample_hour=sample_hour, forecast_hour=forecast_hour,
+                        grid_deg=grid_deg,
                     )
                     if result is None:
                         break
@@ -366,8 +388,10 @@ def verify_locked_schedule(
     h_line_distances: List[float],
     L: float,
     eta_h: float,
+    waypoints,
     sample_hour: int = 0,
     forecast_hour: Optional[int] = None,
+    grid_deg: float = 0.5,
 ) -> Dict[str, float]:
     """Resimulate the locked schedule **continuously** (no inter-block snap).
 
@@ -397,7 +421,9 @@ def verify_locked_schedule(
             t0=t, d0=d, sws=sws, duration_h=dt,
             route=route, voyage=voyage,
             h_line_distances=h_line_distances, L=L,
+            waypoints=waypoints,
             sample_hour=sample_hour, forecast_hour=forecast_hour,
+            grid_deg=grid_deg,
         )
         if result is None:
             print(f"  Block {k}: infeasible at continuous src ({t:.3f}, {d:.4f})")

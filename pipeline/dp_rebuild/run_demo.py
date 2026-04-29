@@ -62,7 +62,7 @@ def main() -> None:
     # 3. Build edges + per-edge fuel
     print("[3] Building edges + SWS inverse + FCR + fuel …")
     t0 = time.time()
-    edges = build_edges(cfg, nodes, voyage, route, sample_hour=0)
+    edges = build_edges(cfg, nodes, voyage, route, WAYPOINTS, sample_hour=0)
     print(f"     {len(edges):,} edges  (build time {time.time() - t0:.1f}s)")
 
     # 4. Solve Bellman
