@@ -16,6 +16,7 @@ from pathlib import Path
 
 from bellman import BellmanSolver
 from build_edges import build_edges
+from build_edges_locked import simulate_steady_voyage
 from build_nodes import GraphConfig, build_nodes, h_line_distances_from_geo
 from geo_grid import rhumb_total_nm
 from h5_weather import VoyageWeather
@@ -115,7 +116,30 @@ def main() -> None:
         print(f"  {e.src_t:>6.2f} {e.src_d:>8.2f}  {e.dst_t:>6.2f} {e.dst_d:>8.2f}  "
               f"{e.sog:>6.2f} {sws_s:>6} {e.heading_deg:>6.1f} {fuel_s:>8}")
 
-    # 7. Aggregates over the chosen path
+    # 7. Steady-SOG baseline (constant SOG = L/ETA over the whole voyage)
+    print()
+    baseline_sog = cfg.length_nm / cfg.eta_h
+    res_b = simulate_steady_voyage(
+        L=cfg.length_nm, eta_h=cfg.eta_h,
+        route=route, voyage=voyage,
+        h_line_distances=h_lines, waypoints=WAYPOINTS,
+        sample_hour=0,
+    )
+    if res_b is None:
+        print(f"Baseline (steady SOG {baseline_sog:.3f} kn): INFEASIBLE")
+    else:
+        _t, _d, baseline_fuel, n_sub, sws_mean, sws_max, sws_min = res_b
+        delta = result.total_fuel_mt - baseline_fuel
+        pct = 100.0 * delta / baseline_fuel
+        print("Steady-SOG baseline (constant SOG = L/ETA):")
+        print(f"  Baseline SOG:      {baseline_sog:>10.3f} kn")
+        print(f"  Baseline fuel:     {baseline_fuel:>10.3f} mt  "
+              f"({n_sub} sub-legs, SWS [{sws_min:.2f}, {sws_max:.2f}] kn, "
+              f"mean {sws_mean:.2f})")
+        print(f"  Free DP fuel:      {result.total_fuel_mt:>10.3f} mt")
+        print(f"  Δ (free − base):   {delta:>+10.3f} mt  ({pct:+.2f} %)")
+
+    # 8. Aggregates over the chosen path
     print("\nPath aggregates:")
     swss = [e.sws for e in result.schedule if not isnan(e.sws)]
     sogs = [e.sog for e in result.schedule]

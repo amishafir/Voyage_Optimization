@@ -116,11 +116,21 @@ In code: each sub-leg looks up cell-canonical weather + paper-segment heading, *
 
 Both edge sets share the free-DP node table by construction (verified by closing assertion). The union of edges is a valid Bellman input — Bellman picks the lowest-fuel outgoing edge at every node, regardless of type. The combined optimum is bounded above by both alone:
 
-| Graph | Edges | Total fuel | Schedule | Δ vs free |
-|---|---:|---:|---:|---:|
-| Free DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | — |
-| Locked DP (SOG-locking) | 631,537 | 365.161 mt | 47 blocks | −1.61 mt |
-| **Combined (union)** | **3,940,477** | **362.965 mt** | **105 (74 free + 31 locked)** | **−3.80 mt** |
+| Graph | Edges | Total fuel | Schedule | Δ vs baseline | Δ vs free |
+|---|---:|---:|---:|---:|---:|
+| **Baseline (steady SOG = 12.120 kn)** | — | **366.519 mt** | 1 (continuous) | — | −0.25 mt |
+| Free DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | **+0.25 mt** | — |
+| Locked DP (SOG-locking) | 631,537 | 365.161 mt | 47 blocks | −1.36 mt | −1.61 mt |
+| **Combined (union)** | **3,940,477** | **362.965 mt** | **105 (74 free + 31 locked)** | **−3.55 mt (−0.97 %)** | **−3.80 mt** |
+
+The steady-SOG baseline holds `SOG = L/ETA` constant over the whole voyage,
+inverse-solving SWS per H-line sub-leg under the same cell-canonical weather
+the DP graphs see. Free DP is **+0.25 mt worse than the baseline** — its
+1 nm × 0.1 h snap grid can't match the continuous SOG the baseline runs at
+when the optimum is near-uniform. Locked DP wins by 1.36 mt (continuous
+target SOG, no snap penalty) and combined wins by 3.55 mt (locked
+sub-cruise + free boundary fixups). The combined-vs-baseline gap is the
+**value-of-optimization headline number**.
 
 Bellman's combined schedule mixes both policies:
 
@@ -137,3 +147,21 @@ Locked dominates the bulk because its target-SOG choices are continuous (any SOG
 ### 6.3 Implication for the experimental matrix
 
 The combined graph is the cleanest single-shot solver: one Bellman, one node table, two edge generators, strictly better fuel than either alone. All future single-forecast experiments default to combined; free and locked become ablations.
+
+## 7. Complexity vs Luo 2024 (TRC 167, 2024)
+
+Luo et al. 2024 report 146 min (voyage I, 2701 nm, 39 RH runs) and 220 min (voyage II, 3584 nm, 45 runs) for the full rolling-horizon solve — i.e. **~3.7–4.9 min per graph build + Dijkstra solve**. Our combined DP builds in ~230 s and Bellman-solves in 3.9 s on a 3393 nm voyage (~4 min per build). **Per-graph wall-clock is comparable**; the advantage is what we get for that cost.
+
+| Aspect | Luo 2024 | **Combined DP (ours)** |
+|---|---|---|
+| Per-edge weight | ANN forward pass (10 inputs, hidden up to 32 neurons) | Closed-form `0.000706·SWS³` + analytic SWS inverse — **~5–10× cheaper per edge** |
+| Speed range / discretisation | [8, 18] kn × 0.1 step → 101 speeds per node | [9, 13] kn × 0.1 step → 41 speeds — **~2.5× smaller per-source fan-out** |
+| Locked-edge dst enumeration | n/a (single-policy) | **Geometric** `d_src + target_SOG·6h`, one edge per (V-src, V-dst), no inverse search |
+| Edge sets per build | One graph per RH run | **Free ⊕ locked share the same node table** — one canonicalisation, one Bellman pass |
+| Solver | Dijkstra (NetworkX, Python) — `O((V+E) log V)`, priority queue | Forward Bellman in lex topological order — **`O(V+E)`, no PQ** — solve **~10–15× faster** at our V, E |
+| Decision per stage | One scalar speed (101 discrete options) | Per-square (1 nm × 0.1 h) free **+** continuous-SOG 6 h locked, mixed by Bellman |
+| Within-stage weather | Single snapshot at segment start | **Sub-leg `Σ FCR(SWS_i)·Δt_i`** through every cell + segment crossing |
+| Spatial weather aggregation | Point sample at segment-start coordinate | **Cell-canonical mean** (linear for scalars, circular for directions) over every voyage waypoint in the 0.5° NWP cell |
+| Continuous SOG choice | Discretised at 0.1 kn | **Continuous in [9, 13] kn** in locked mode (snap-drift = +0.000 nm everywhere) |
+
+**Honest framing**: our build-time edge over Luo is in the **constant factors** — closed-form physics vs ANN, geometric vs search-based locked-edge dst, single Bellman vs multiple Dijkstra runs — not in the asymptotic order. On the solve side, the asymptotic order does drop (`O(V+E)` topological Bellman vs `O((V+E) log V)` Dijkstra). At comparable per-graph wall-clock, we deliver **finer decision granularity** (per-square free + continuous-SOG locked, blended by Bellman) and **better weather fidelity** (sub-leg integration + cell-canonical aggregation). That is the paper-relevant complexity story.

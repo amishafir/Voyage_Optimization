@@ -347,6 +347,44 @@ def build_locked_edges(
 
 
 # ----------------------------------------------------------------------
+# Steady-SOG baseline (constant SOG over the entire voyage)
+# ----------------------------------------------------------------------
+
+def simulate_steady_voyage(
+    L: float,
+    eta_h: float,
+    route: Route,
+    voyage: VoyageWeather,
+    h_line_distances: List[float],
+    waypoints,
+    target_sog: Optional[float] = None,
+    sample_hour: int = 0,
+    forecast_hour: Optional[int] = None,
+    grid_deg: float = 0.5,
+    sws_max_feasible: float = 25.0,
+) -> Optional[Tuple[float, float, float, int, float, float, float]]:
+    """Steady-SOG baseline: hold one constant SOG for the entire voyage.
+
+    Defaults to ``target_sog = L / eta_h`` (the SOG that lands at L exactly
+    at eta_h). SWS varies per sub-leg via inverse physics, fuel is the
+    integral of FCR(SWS_i) · Δt_i over every H-line crossing. Returns the
+    same tuple as `simulate_block_sog`, or None if any sub-leg's required
+    SWS exceeds the engine bound.
+    """
+    if target_sog is None:
+        target_sog = L / eta_h
+    return simulate_block_sog(
+        t0=0.0, d0=0.0,
+        target_sog=target_sog, target_dst_d=L,
+        route=route, voyage=voyage,
+        h_line_distances=h_line_distances, L=L,
+        waypoints=waypoints,
+        sample_hour=sample_hour, forecast_hour=forecast_hour,
+        grid_deg=grid_deg, sws_max_feasible=sws_max_feasible,
+    )
+
+
+# ----------------------------------------------------------------------
 # Continuous-resim sanity check
 # ----------------------------------------------------------------------
 

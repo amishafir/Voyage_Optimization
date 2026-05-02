@@ -23,7 +23,7 @@ from pathlib import Path
 
 from bellman import BellmanSolver
 from build_edges import Edge, build_edges
-from build_edges_locked import LockedEdge, build_locked_edges
+from build_edges_locked import LockedEdge, build_locked_edges, simulate_steady_voyage
 from build_nodes import GraphConfig, build_nodes, h_line_distances_from_geo
 from geo_grid import rhumb_total_nm
 from h5_weather import VoyageWeather
@@ -77,7 +77,25 @@ def main() -> None:
     )
     print(f"     {len(edges_locked):,} locked edges  (build {time.time()-t0:.1f}s)")
 
-    print("[5] Solving Bellman on each graph …")
+    print("[5] Steady-SOG baseline (constant SOG = L/ETA over the whole voyage) …")
+    baseline_sog = cfg.length_nm / cfg.eta_h
+    res_baseline = simulate_steady_voyage(
+        L=cfg.length_nm, eta_h=cfg.eta_h,
+        route=route, voyage=voyage,
+        h_line_distances=h_lines, waypoints=WAYPOINTS,
+        sample_hour=0,
+    )
+    if res_baseline is None:
+        baseline_fuel = float("nan")
+        print(f"     INFEASIBLE at steady SOG {baseline_sog:.3f} kn "
+              f"(some sub-leg requires SWS > engine bound)")
+    else:
+        _bt, _bd, baseline_fuel, n_sub, sws_mean, sws_max, sws_min = res_baseline
+        print(f"     SOG = {baseline_sog:.3f} kn  →  {baseline_fuel:.3f} mt  "
+              f"({n_sub} sub-legs, SWS [{sws_min:.2f}, {sws_max:.2f}] kn, "
+              f"mean {sws_mean:.2f})")
+
+    print("[6] Solving Bellman on each graph …")
 
     def solve(label, edges):
         t0 = time.time()
@@ -96,16 +114,24 @@ def main() -> None:
     print("BELLMAN RESULT — three graphs, same nodes, hard ETA = "
           f"{cfg.eta_h:.0f} h")
     print("=" * 78)
-    print(f"  {'graph':<18} {'edges':>12} {'fuel (mt)':>12}  {'sched':>6}  "
-          f"{'solve s':>8}")
-    print("  " + "-" * 64)
+    print(f"  {'graph':<22} {'edges':>12} {'fuel (mt)':>12}  {'Δ vs base':>11}  "
+          f"{'sched':>6}  {'solve s':>8}")
+    print("  " + "-" * 76)
+    base_str = f"{baseline_fuel:.3f}" if baseline_fuel == baseline_fuel else "   NaN"
+    print(f"  {'baseline (steady SOG)':<22} {'—':>12} {base_str:>12}  "
+          f"{'—':>11}  {'1':>6}  {'—':>8}")
     for label, r, edges, dt in [
         ("free (per-square)", r_free, edges_free, dt_free),
         ("locked (6h block)", r_lock, edges_locked, dt_lock),
         ("combined (union)", r_comb, edges_free + edges_locked, dt_comb),
     ]:
-        print(f"  {label:<18} {len(edges):>12,} {r.total_fuel_mt:>12.3f}  "
-              f"{len(r.schedule):>6,}  {dt:>8.2f}")
+        if baseline_fuel == baseline_fuel:
+            delta_base = r.total_fuel_mt - baseline_fuel
+            delta_str = f"{delta_base:+8.3f}"
+        else:
+            delta_str = "    —"
+        print(f"  {label:<22} {len(edges):>12,} {r.total_fuel_mt:>12.3f}  "
+              f"{delta_str:>11}  {len(r.schedule):>6,}  {dt:>8.2f}")
     print("=" * 78)
 
     delta_free = r_comb.total_fuel_mt - r_free.total_fuel_mt
@@ -114,6 +140,11 @@ def main() -> None:
           f"(must be ≤ 0; combined ⊇ free)")
     print(f"  combined − locked : {delta_lock:+8.3f} mt   "
           f"(must be ≤ 0; combined ⊇ locked)")
+    if baseline_fuel == baseline_fuel:
+        delta_b_comb = r_comb.total_fuel_mt - baseline_fuel
+        pct = 100.0 * delta_b_comb / baseline_fuel
+        print(f"  combined − baseline: {delta_b_comb:+8.3f} mt   "
+              f"({pct:+.2f} % vs steady SOG = {baseline_sog:.3f} kn)")
     print()
 
     # Schedule mix on the combined graph

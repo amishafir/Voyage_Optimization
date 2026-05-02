@@ -16,7 +16,12 @@ from math import isnan
 from pathlib import Path
 
 from bellman import BellmanSolver
-from build_edges_locked import build_locked_edges, summarize_locked, verify_locked_schedule
+from build_edges_locked import (
+    build_locked_edges,
+    simulate_steady_voyage,
+    summarize_locked,
+    verify_locked_schedule,
+)
 from build_nodes import GraphConfig, build_nodes, h_line_distances_from_geo
 from geo_grid import rhumb_total_nm
 from h5_weather import VoyageWeather
@@ -106,18 +111,36 @@ def main() -> None:
         waypoints=WAYPOINTS, sample_hour=0,
     )
 
-    # Quick comparison line if free-DP value is known.
+    # Steady-SOG baseline (constant SOG = L/ETA over the whole voyage)
     print()
-    print("Comparison vs free-DP (per-square decisions):")
+    baseline_sog = cfg.length_nm / cfg.eta_h
+    res_b = simulate_steady_voyage(
+        L=cfg.length_nm, eta_h=cfg.eta_h,
+        route=route, voyage=voyage,
+        h_line_distances=h_lines, waypoints=WAYPOINTS,
+        sample_hour=0,
+    )
+
+    # Quick comparison line if free-DP value is known.
+    print("Comparison vs steady-SOG baseline + free-DP:")
     free_dp = 367.561
-    diff = result.total_fuel_mt - free_dp
+    diff_free = result.total_fuel_mt - free_dp
+    if res_b is None:
+        print(f"  Baseline (steady SOG {baseline_sog:.3f} kn): INFEASIBLE")
+    else:
+        _t, _d, baseline_fuel, n_sub, sws_mean, sws_max, sws_min = res_b
+        diff_b = result.total_fuel_mt - baseline_fuel
+        pct_b = 100.0 * diff_b / baseline_fuel
+        print(f"  Baseline (steady SOG):      {baseline_fuel:>10.3f} mt  "
+              f"(SOG = {baseline_sog:.3f} kn, {n_sub} sub-legs)")
+        print(f"  Δ (locked − base):          {diff_b:>+10.3f} mt  ({pct_b:+.2f} %)")
     print(f"  Free DP   (run_demo.py):    {free_dp:>10.3f} mt")
     print(f"  Locked DP (Bellman):        {result.total_fuel_mt:>10.3f} mt")
     if verify:
         print(f"  Locked DP (continuous):     {verify['continuous_fuel']:>10.3f} mt  "
               f"(d_final = {verify['continuous_d']:.3f} nm, Δd = {verify['delta_d']:+.3f} nm)")
-    print(f"  Δ (Bellman vs free):        {diff:>+10.3f} mt  "
-          f"({diff / free_dp * 100:+.2f}%)")
+    print(f"  Δ (Bellman vs free):        {diff_free:>+10.3f} mt  "
+          f"({diff_free / free_dp * 100:+.2f}%)")
 
 
 if __name__ == "__main__":
