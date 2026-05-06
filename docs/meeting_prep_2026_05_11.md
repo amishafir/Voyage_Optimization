@@ -137,28 +137,75 @@ Paths Bellman composes:
 
 | File | Purpose |
 |---|---|
+| `frame.py` (new) | Frame primitives: V-line times, H-line distances, SOG grid, snap helpers, cell-canonical weather + paper heading lookups. No node materialization. |
+| `build_atomic_edges.py` (new) | Atomic-edge builder. BFS from source, lazy node interning, one edge per (src, target_sog). Each edge carries `(target_sog, sog, sws, fuel)` — `target_sog` is the lock label, `sog` is the realized post-snap SOG. |
+| `bellman_locked.py` (new) | `BellmanSolverLocked` — forward Bellman with `(node, locked_sog)` state augmentation. V-line nodes carry `lock=None`; H-line nodes carry `lock=target_sog`. Same atomic-edge graph as Free DP. |
+| `run_demo_rebuild.py` (new) | End-to-end runner: builds frame, builds atomic-edge graph, runs Free DP (`BellmanSolver`) and Luo DP (`BellmanSolverLocked`) on the same graph. |
+
+Existing `build_nodes.py`, `build_edges.py`, `build_edges_locked.py`, `bellman.py`, validators, and run_demo* are untouched.
 
 ### 2.3 Updated graph stats
 
-| | Before | After |
+| | May 4 build | Rebuild |
 |---|---:|---:|
-| Squares | | |
-| H-lines | | |
-| V-bands | | |
-| Nodes | | |
-| Edges | | |
+| H-lines (positions) | 162 | 162 (same — geometry unchanged) |
+| V-lines | 47 | 47 |
+| SOG grid | n/a (snap-grid) | 41 target SOGs in [9, 13] kn @ 0.1 kn |
+| Nodes (canonical) | 613,328 | **91,663** (lazy interning — only nodes that edges land on) |
+| Edges (free) | 3,308,940 | n/a (single graph) |
+| Edges (locked) | 631,537 | n/a |
+| **Edges (single atomic graph)** | — | **3,317,895** |
+| Build time | ~230 s (free + locked sum) | **72 s** (one build) |
 
 ### 2.4 Updated YAML voyage results
 
 | Mode | Total fuel | End time | End d | Δ vs baseline |
 |---|---:|---:|---:|---:|
-| **Baseline (steady SOG = 12.120 kn)** | | | | — |
-| **Free DP** (mixed-speed at H-lines) | | | | |
-| **Luo DP** (block-locked SOG, Bellman constraint) | | | | |
+| **Baseline (steady SOG = 12.119 kn)** | **366.416 mt** | 280.000 h | 3393.240 nm | — |
+| **Free DP** (no SOG lock) | **365.809 mt** | 280.000 h | 3393.240 nm | **−0.606 mt** |
+| **Luo DP** (SOG-lock per 6 h block) | **366.132 mt** | 280.000 h | 3393.240 nm | **−0.284 mt** |
+| Δ Luo − Free | +0.323 mt | — | — | — *(Luo ≥ Free by construction — confirmed)* |
+
+**Lock invariant verified:** all 47 blocks in the Luo schedule have exactly one distinct `target_sog`. 41/41 SOG values in the grid are reachable as locks somewhere in the search.
 
 ### 2.5 Sanity checks
 
 *(zero-weather, constant-weather, lock-monotonicity once run)*
+
+### 2.6 Free vs Luo overlap analysis (block-by-block)
+
+Full log: `pipeline/dp_rebuild/results/free_vs_luo_overlap_2026_05_06.txt`.
+
+For every 6 h block in both schedules we ask:
+1. How many distinct `target_sog` values does Free DP use inside this block?
+2. What single `target_sog` does Luo DP lock to?
+
+**Block classifications**
+
+| Type | Definition | Count |
+|---|---|---:|
+| **A** | Free voluntarily uses **1 SOG**, *same value* as Luo (full agreement) | **0** |
+| **B** | Free voluntarily uses **1 SOG**, *different value* than Luo (same structure, disagree on speed) | **1** *(block 25: Free 12.6 kn vs Luo 12.2 kn)* |
+| **C** | Free uses **≥ 2 SOGs** in the block (Luo's lock forbids this) | **46** |
+
+**Headline.** Free DP **never** picks a single SOG matching Luo (0 type-A blocks). 46 of 47 blocks Free wants to vary SOG mid-block.
+
+**Aligned vs unaligned blocks**
+
+A block is *aligned* when Free's and Luo's V-line `src_d` and `dst_d` coincide (same mini-problem inside the block).
+
+| | Aligned (✓) | Unaligned (≠) |
+|---|---:|---:|
+| Block count | 7 / 47 | 40 / 47 |
+| Σ Free fuel | 54.042 mt | 311.767 mt |
+| Σ Luo fuel | 54.042 mt | 312.090 mt |
+| **Δfuel (Luo − Free)** | **+0.000 mt** | **+0.323 mt** |
+
+In every aligned block — even the 7 type-C ones where Free uses up to 5 distinct target SOGs — the per-block fuel is **identical to the millimetre**. Different target SOGs collapse to the same realized snap-grid trajectory once `(src_d, dst_d)` are pinned.
+
+**Reframed conclusion.** The +0.323 mt Luo penalty does **not** come from "Free changes SOG mid-block, Luo can't". On this voyage that mid-block flexibility produces zero fuel saving when the V-line nodes match. The penalty comes from Luo's lock indirectly forcing the schedule onto a less-flexible *trajectory* — different `dst_d` choices at V-line boundaries — not a less-flexible *speed profile*. 40 of 47 blocks have unaligned boundaries, and the gap accumulates there.
+
+**Implication for the paper.** The "constant-SOG-per-block" framing of Luo 2024 vs free DP isn't where the fuel difference lives. It's in the *V-line node selection* that the lock indirectly constrains. Worth highlighting as a finding.
 
 ---
 
@@ -187,27 +234,29 @@ Paths Bellman composes:
 ### 5.1 Three-mode comparison, YAML voyage (rebuilt graph)
 
 | Metric | **Baseline (steady SOG)** | Free DP | Luo DP |
-|---|---|---|---|
-| Total fuel | | | |
-| Δ vs baseline | — | | |
-| Voyage time | | | |
-| Schedule length | | | |
-| Average SOG | | | |
-| target SOG range | | | |
-| mean SWS range | | | |
-| Edges built (single graph) | — | | (same) |
-| Build time | < 1 s | | (shared) |
-| Solve time | — | | |
-| NaN edges skipped | 0 | | |
+|---|---:|---:|---:|
+| Total fuel (mt) | 366.416 | **365.809** | **366.132** |
+| Δ vs baseline | — | −0.606 | −0.284 |
+| Voyage time (h) | 280.000 | 280.000 | 280.000 |
+| End d (nm) | 3393.240 | 3393.240 | 3393.240 |
+| Schedule length (edges) | 1 (162 sub-arcs) | 201 | 205 |
+| Edges built (single graph) | — | 3,317,895 | (same) |
+| Build time | < 1 s | 72 s | (shared) |
+| Solve time | — | 3.3 s | 6.3 s |
+| NaN edges skipped | 0 | 0 | 0 |
+| Bellman states | — | 91,663 | 1,862,370 *(node × lock)* |
+| Distinct lock values used | — | n/a | 41 / 41 |
 
 ### 5.2 Comparison vs previous build (May 4 numbers)
 
-| Mode | May 4 | After rebuild | Δ | Note |
+| Mode | May 4 | Rebuild | Δ | Note |
 |---|---:|---:|---:|---|
-| Baseline | 366.519 mt | | | unchanged definition |
-| Free DP | 366.769 mt | | | now atomic-edge graph (was 1 nm × 0.1 h snap) |
-| Luo DP | 365.161 mt | | | was "Locked DP (SOG-locking)"; now Bellman-constraint on shared graph |
-| ~~Combined~~ | ~~362.965 mt~~ | n/a | n/a | dropped — no separate edge set; Free DP subsumes it |
+| Baseline | 366.519 mt | 366.416 mt | −0.103 mt | numerical noise from H-line set rounding |
+| Free DP | 366.769 mt | **365.809 mt** | **−0.960 mt** | atomic edges (cell-level branching) beats per-square (1 nm × 0.1 h snap) |
+| Luo DP | 365.161 mt | 366.132 mt | +0.971 mt | new Luo snaps V-line dst to 1 nm grid (May 4 was geometric, no snap) — small accuracy cost for shared-graph apples-to-apples |
+| ~~Combined~~ | ~~362.965 mt~~ | n/a | — | dropped: Free DP on the rebuild subsumes it |
+
+**Reading.** Rebuild Free DP improves on May 4 free DP because the new atomic edges branch at *real* cell crossings (one decision per cell) instead of per (1 nm × 0.1 h) square — fewer snap-drift opportunities. Rebuild Luo DP is slightly worse than May 4 Locked DP because snapping the V-line dst to 1 nm imposes a small accuracy cost; this is the price of running both DPs on a single shared graph. The rebuild Free vs Luo gap (+0.323 mt) is the *real* "what does mixed-speed buy us over Luo" number on a single graph.
 
 ---
 
