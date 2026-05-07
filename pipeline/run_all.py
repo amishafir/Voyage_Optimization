@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified collector — runs exp_b, exp_c, exp_d sequentially per NWP cycle.
+"""Unified collector — runs Route 1, Route 2 sequentially per NWP cycle.
 
 Avoids API rate limits by ensuring only one experiment hits the API at a time.
 Shares a single API client and respects a configurable delay between chunks.
@@ -40,13 +40,13 @@ logger = logging.getLogger(__name__)
 
 EXPERIMENTS = [
     {
-        "name": "exp_b",
+        "name": "Route 1",
         "route": "persian_gulf_malacca",
         "interval_nm": 25,
         "hdf5": "data/experiment_b_138wp.h5",
     },
-{
-        "name": "exp_d",
+    {
+        "name": "Route 2",
         "route": "st_johns_liverpool",
         "interval_nm": 5,
         "hdf5": "data/experiment_d_391wp.h5",
@@ -158,7 +158,7 @@ def main():
 
     client = setup_api_client()
 
-    # Determine next sample_hour from existing data (use exp_b as reference)
+    # Determine next sample_hour from existing data (use Route 1 as reference)
     ref_path = os.path.join(base_dir, EXPERIMENTS[0]["hdf5"])
     if os.path.exists(ref_path):
         completed = get_completed_runs(ref_path)
