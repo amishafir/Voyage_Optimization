@@ -89,6 +89,7 @@ def _emit_from_src(
     frame: Frame,
     forecast_hour: Optional[int] = None,
     override_sample_hour: Optional[int] = None,
+    perturber=None,
 ) -> List[AtomicEdge]:
     """Enumerate every atomic edge out of (src_t, src_d).
 
@@ -98,6 +99,11 @@ def _emit_from_src(
     `override_sample_hour`: if set, used for ALL edges (matches today's
     single-snapshot behavior and the test HDF5 which only has hours 0–11).
     If `None`, uses block-start sample_hour (Luo 2024 spec).
+
+    `perturber`: optional `WeatherPerturber`. If supplied, the cell-canonical
+    weather is post-processed by `perturber.perturb(base, src_t, src_d, waypoints)`
+    BEFORE the SWS inverse-solve — injects within-block temporal variation
+    that Free DP can exploit at H-line crossings (and Luo cannot).
     """
     if abs(src_d - frame.cfg.length_nm) < 1e-9:
         return []
@@ -110,6 +116,12 @@ def _emit_from_src(
     weather = frame.cell_weather_at(src_d, sample_hour, forecast_hour)
     if weather.has_nan():
         return []
+
+    if perturber is not None:
+        weather = perturber.perturb(weather, t_h=src_t, d_nm=src_d,
+                                    waypoints=frame.waypoints)
+        if weather.has_nan():
+            return []
     weather_dict = {
         "wind_speed_10m_kmh": weather.wind_speed_10m_kmh,
         "wind_direction_10m_deg": weather.wind_direction_10m_deg,
@@ -223,6 +235,7 @@ def build_atomic_edges(
     frame: Frame,
     forecast_hour: Optional[int] = None,
     override_sample_hour: Optional[int] = None,
+    perturber=None,
     verbose: bool = False,
 ) -> Tuple[List[Node], List[AtomicEdge]]:
     """Build the atomic-edge graph by BFS from the source.
@@ -234,6 +247,9 @@ def build_atomic_edges(
     `override_sample_hour`: if set, all edges read weather at this single
     sample_hour (matches today's behavior). If `None`, edges use block-start
     sample_hour per Luo 2024 spec (requires HDF5 to cover all block hours).
+
+    `perturber`: optional `WeatherPerturber` for stress-testing — wraps the
+    cell-canonical weather lookup to inject within-block temporal variation.
     """
     L = frame.cfg.length_nm
     eps_key = 9
@@ -276,6 +292,7 @@ def build_atomic_edges(
             n.time_h, n.distance_nm, frame,
             forecast_hour=forecast_hour,
             override_sample_hour=override_sample_hour,
+            perturber=perturber,
         )
         for e in out:
             edges.append(e)
@@ -359,3 +376,20 @@ if __name__ == "__main__":
     nodes, edges = build_atomic_edges(frame, override_sample_hour=0, verbose=True)
     print(f"\nBuild time: {time.time() - t0:.2f} s\n")
     summarize(nodes, edges)
+
+    # Optional smoke test: build with a stress-test perturber and confirm
+    # the call surface works end-to-end.
+    import os
+    if os.environ.get("DP_REBUILD_STRESS_SMOKE"):
+        from weather_perturb import WeatherPerturber
+        print("\n--- stress-perturber smoke test ---")
+        perturber = WeatherPerturber(
+            mode="random_walk_ou", sigma_wind=15.0, sigma_wave=1.0,
+            tau_h=4.0, seed=42,
+        )
+        t0 = time.time()
+        nodes_p, edges_p = build_atomic_edges(
+            frame, override_sample_hour=0, perturber=perturber,
+        )
+        print(f"perturbed build: {len(nodes_p):,} nodes, {len(edges_p):,} edges, "
+              f"{time.time() - t0:.1f} s")

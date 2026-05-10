@@ -119,6 +119,73 @@ def load_yaml_route(path: Path | str) -> Route:
     return Route(windows=windows)
 
 
+def build_route_from_waypoints_yaml(
+    yaml_path: "Path | str",
+    eta_h: Optional[float] = None,
+    cruise_sog_kn: float = 12.0,
+):
+    """Build (Route, List[Waypoint]) from a waypoint-only YAML.
+
+    For routes that DON'T ship with paper β / segment metadata (Route 2 onwards).
+    Bearings are computed via rhumb_bearing_deg between consecutive waypoints;
+    distances via rhumb_distance_nm. Weather fields on each Segment are
+    placeholder zeros — the rebuild reads weather from the HDF5 cell-canonical
+    lookup, not from the segment.
+
+    YAML schema (`pipeline/config/routes/<name>.yaml`):
+        name: <human label>
+        description: …
+        waypoints:
+          - {lat: …, lon: …, name: <optional>}
+          - …
+
+    `eta_h`: voyage ETA in hours. If None, defaults to total rhumb / cruise_sog_kn.
+
+    Returns `(route, waypoints)` — `route` is a single-window Route ready for
+    `synthesize_multi_window`; `waypoints` is the canonical Waypoint list used
+    by `frame.from_route`, `geo_grid.position_at_d`, etc.
+    """
+    # Local imports keep load_route importable without geo_grid / route_waypoints.
+    from geo_grid import rhumb_bearing_deg, rhumb_distance_nm
+    from route_waypoints import Waypoint
+
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f)
+
+    raw_wps = data.get("waypoints", []) or []
+    if len(raw_wps) < 2:
+        raise ValueError(f"Route YAML {yaml_path} must list ≥ 2 waypoints, got {len(raw_wps)}")
+
+    waypoints: List[Waypoint] = [
+        Waypoint(idx=i + 1,
+                 lat_deg=float(wp["lat"]), lon_deg=float(wp["lon"]),
+                 name=wp.get("name"))
+        for i, wp in enumerate(raw_wps)
+    ]
+
+    segments: List[Segment] = []
+    total_d = 0.0
+    for i in range(len(waypoints) - 1):
+        w1, w2 = waypoints[i], waypoints[i + 1]
+        d = rhumb_distance_nm(w1.lat_deg, w1.lon_deg, w2.lat_deg, w2.lon_deg)
+        b = rhumb_bearing_deg(w1.lat_deg, w1.lon_deg, w2.lat_deg, w2.lon_deg)
+        segments.append(Segment(
+            id=i + 1,
+            distance=d,
+            ship_heading=b,
+            # Placeholder weather fields — ignored by the rebuild (HDF5 wins).
+            wind_dir=0.0, beaufort=0, wave_height=0.0,
+            current_dir=0.0, current_speed=0.0,
+        ))
+        total_d += d
+
+    if eta_h is None:
+        eta_h = total_d / cruise_sog_kn
+
+    window = ForecastWindow(start=0.0, end=float(eta_h), segments=segments)
+    return Route(windows=[window]), waypoints
+
+
 def synthesize_multi_window(
     route: Route,
     window_h: float = 6.0,
