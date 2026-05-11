@@ -80,14 +80,25 @@ int main(int argc, char* argv[]) {
     if (eta_override)       base_cfg.eta_h = *eta_override;
     if (min_speed_override) base_cfg.v_min = *min_speed_override;
     if (max_speed_override) base_cfg.v_max = *max_speed_override;
+    // In baseline mode we must NOT narrow the speed range yet: the τ-feasibility
+    // filter in h_line_distances_from_geo drops H-line gaps that can't be crossed
+    // at any integer multiple of tau_h within [v_min, v_max]. With v_min==v_max the
+    // window collapses to a point and almost all H-lines are discarded, leaving no
+    // path from source to sink. We therefore build the frame with a wide range, then
+    // pin the SOG grid to mean_sog before build_atomic_edges (which reads it lazily).
     if (baseline_mode) {
         double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
-        printf("Baseline mode: mean SOG = %.4f nm / %.1f h = %.4f kn\n",
-               base_cfg.length_nm, base_cfg.eta_h, mean_sog);
-        base_cfg.v_min = mean_sog;
-        base_cfg.v_max = mean_sog;
+        base_cfg.v_min = mean_sog * 0.5;
+        base_cfg.v_max = mean_sog * 2.0;
     }
     Frame frame = make_frame(route, voyage, WAYPOINTS, &base_cfg);
+    if (baseline_mode) {
+        double mean_sog = frame.cfg.length_nm / frame.cfg.eta_h;
+        frame.cfg.v_min = mean_sog;
+        frame.cfg.v_max = mean_sog;
+        printf("Baseline mode: mean SOG = %.4f kn  (%.0f nm / %.1f h)\n",
+               mean_sog, frame.cfg.length_nm, frame.cfg.eta_h);
+    }
     summarize_frame(frame);
 
     // ---- Build atomic-edge graph ----
