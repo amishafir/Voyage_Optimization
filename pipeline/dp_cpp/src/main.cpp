@@ -11,7 +11,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -53,56 +52,47 @@ static void write_arc_csv(const std::string& path,
     printf("  CSV written: %s  (%zu arcs)\n", path.c_str(), schedule.size());
 }
 
-// Write one CSV row per 6h block (Luo DP).
-// Within a block the locked SOG is constant; arcs are aggregated so that
-// sog_kn × duration_h = distance_nm for the block as a whole.
+// Write one CSV row per arc for Luo DP.
+// sog_kn = target_sog (the block-level lock, constant within each 6h block).
+// sws_kn, fcr, fuel, and weather vary per arc as the vessel crosses weather
+// zones and heading changes — SOG is locked but SWS/FCR respond to conditions.
 static void write_block_csv(const std::string& path,
                               const std::vector<int>& schedule,
                               const std::vector<AtomicEdge>& edges,
                               const std::vector<Waypoint>& waypoints,
                               double dt_h) {
-    // Group arc indices by block number (floor(src_t / dt_h))
-    std::map<int, std::vector<int>> by_block;
-    for (int ei : schedule)
-        by_block[(int)(edges[ei].src_t / dt_h)].push_back(ei);
-
     std::ofstream f(path);
     f << "block,time_h,distance_nm,lat_deg,lon_deg,bearing_deg,"
          "sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
          "wind_speed_kmh,wind_dir_deg,beaufort,wave_height_m,"
          "current_vel_kmh,current_dir_deg\n";
 
-    for (auto& [blk, arc_ids] : by_block) {
-        const auto& first = edges[arc_ids.front()];
-        const auto& last  = edges[arc_ids.back()];
-        double sog_kn  = first.target_sog;          // locked speed for this block
-        double dur     = last.dst_t - first.src_t;  // total block duration
-        double fuel    = 0.0;
-        for (int ei : arc_ids) fuel += edges[ei].fuel_mt;
-
-        // SWS/FCR at the locked SOG using the first arc's weather (block start)
-        const auto& w = first.weather;
-        auto [lat, lon, _seg] = position_at_d(first.src_d, waypoints);
-
+    int n_arcs = 0;
+    for (int ei : schedule) {
+        const auto& e = edges[ei];
+        int blk = (int)(e.src_t / dt_h);
+        auto [lat, lon, _seg] = position_at_d(e.src_d, waypoints);
+        const auto& w = e.weather;
         f << blk                            << ','
-          << first.src_t                    << ','
-          << first.src_d                    << ','
+          << e.src_t                        << ','
+          << e.src_d                        << ','
           << lat                            << ','
           << lon                            << ','
-          << first.heading_deg              << ','
-          << sog_kn                         << ','
-          << first.sws                      << ','
-          << first.fcr_mt_per_h             << ','
-          << fuel                           << ','
-          << dur                            << ','
+          << e.heading_deg                  << ','
+          << e.target_sog                   << ','  // locked SOG, constant in block
+          << e.sws                          << ','  // varies with weather/heading
+          << e.fcr_mt_per_h                 << ','  // varies with weather/heading
+          << e.fuel_mt                      << ','
+          << (e.dst_t - e.src_t)            << ','
           << w.wind_speed_10m_kmh           << ','
           << w.wind_direction_10m_deg       << ','
           << w.beaufort_number              << ','
           << w.wave_height_m                << ','
           << w.ocean_current_velocity_kmh   << ','
           << w.ocean_current_direction_deg  << '\n';
+        ++n_arcs;
     }
-    printf("  CSV written: %s  (%zu blocks)\n", path.c_str(), by_block.size());
+    printf("  CSV written: %s  (%d arcs)\n", path.c_str(), n_arcs);
 }
 
 static void print_header(const char* title) {
