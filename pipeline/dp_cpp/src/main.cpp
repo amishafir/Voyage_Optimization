@@ -85,7 +85,12 @@ int main(int argc, char* argv[]) {
     // at any integer multiple of tau_h within [v_min, v_max]. With v_min==v_max the
     // window collapses to a point and almost all H-lines are discarded, leaving no
     // path from source to sink. We therefore build the frame with a wide range, then
-    // pin the SOG grid to mean_sog before build_atomic_edges (which reads it lazily).
+    // pin the SOG grid before build_atomic_edges (which reads the grid lazily).
+    //
+    // We also cannot use mean_sog = L/ETA directly: the BFS snaps every node's
+    // arrival time to the nearest tau_h, so a single rounding-up pushes the sink
+    // past ETA and best_sink rejects it. Using L/(ETA - tau_h) makes the "true"
+    // arrival tau_h early; after snapping (+tau_h/2 at most) it still lands ≤ ETA.
     if (baseline_mode) {
         double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
         base_cfg.v_min = mean_sog * 0.5;
@@ -93,11 +98,11 @@ int main(int argc, char* argv[]) {
     }
     Frame frame = make_frame(route, voyage, WAYPOINTS, &base_cfg);
     if (baseline_mode) {
-        double mean_sog = frame.cfg.length_nm / frame.cfg.eta_h;
+        double mean_sog = frame.cfg.length_nm / (frame.cfg.eta_h - frame.cfg.tau_h);
         frame.cfg.v_min = mean_sog;
         frame.cfg.v_max = mean_sog;
-        printf("Baseline mode: mean SOG = %.4f kn  (%.0f nm / %.1f h)\n",
-               mean_sog, frame.cfg.length_nm, frame.cfg.eta_h);
+        printf("Baseline mode: adjusted SOG = %.4f kn  (%.0f nm / (%.1f - %.1f) h)\n",
+               mean_sog, frame.cfg.length_nm, frame.cfg.eta_h, frame.cfg.tau_h);
     }
     summarize_frame(frame);
 
