@@ -29,7 +29,8 @@ static void usage(const char* prog) {
         "  --h5   PATH       HDF5 file   (default: ../data/voyage_weather.h5)\n"
         "  --eta  HOURS      Override ETA in hours (e.g. 240)\n"
         "  --min_speed KNOTS Override minimum SOG in knots (default: 9)\n"
-        "  --max_speed KNOTS Override maximum SOG in knots (default: 13)\n",
+        "  --max_speed KNOTS Override maximum SOG in knots (default: 13)\n"
+        "  --baseline        Fix SOG to route_length / ETA (mean speed); overrides min/max_speed\n",
         prog);
 }
 
@@ -39,6 +40,7 @@ int main(int argc, char* argv[]) {
     std::optional<double> eta_override;
     std::optional<double> min_speed_override;
     std::optional<double> max_speed_override;
+    bool baseline_mode = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -49,11 +51,12 @@ int main(int argc, char* argv[]) {
             }
             return argv[++i];
         };
-        if      (arg == "--yaml")      yaml_path         = need_next();
-        else if (arg == "--h5")        h5_path           = need_next();
-        else if (arg == "--eta")       eta_override      = std::stod(need_next());
+        if      (arg == "--yaml")      yaml_path          = need_next();
+        else if (arg == "--h5")        h5_path            = need_next();
+        else if (arg == "--eta")       eta_override       = std::stod(need_next());
         else if (arg == "--min_speed") min_speed_override = std::stod(need_next());
         else if (arg == "--max_speed") max_speed_override = std::stod(need_next());
+        else if (arg == "--baseline")  baseline_mode      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", arg.c_str()); usage(argv[0]); return 1; }
     }
@@ -77,6 +80,13 @@ int main(int argc, char* argv[]) {
     if (eta_override)       base_cfg.eta_h = *eta_override;
     if (min_speed_override) base_cfg.v_min = *min_speed_override;
     if (max_speed_override) base_cfg.v_max = *max_speed_override;
+    if (baseline_mode) {
+        double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
+        printf("Baseline mode: mean SOG = %.4f nm / %.1f h = %.4f kn\n",
+               base_cfg.length_nm, base_cfg.eta_h, mean_sog);
+        base_cfg.v_min = mean_sog;
+        base_cfg.v_max = mean_sog;
+    }
     Frame frame = make_frame(route, voyage, WAYPOINTS, &base_cfg);
     summarize_frame(frame);
 
