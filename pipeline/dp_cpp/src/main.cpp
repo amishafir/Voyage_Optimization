@@ -25,8 +25,8 @@ static void print_header(const char* title) {
 static void usage(const char* prog) {
     fprintf(stderr,
         "Usage: %s [OPTIONS]\n"
-        "  --yaml PATH       Route YAML  (default: ../../Dynamic speed optimization/weather_forecasts.yaml)\n"
-        "  --h5   PATH       HDF5 file   (default: ../data/voyage_weather.h5)\n"
+        "  --yaml PATH       Route YAML  (default: weather_forecasts.yaml in executable directory)\n"
+        "  --h5   PATH       HDF5 file   (default: voyage_weather.h5 in executable directory)\n"
         "  --eta  HOURS      Override ETA in hours (e.g. 240)\n"
         "  --min_speed KNOTS Override minimum SOG in knots (default: 9)\n"
         "  --max_speed KNOTS Override maximum SOG in knots (default: 13)\n"
@@ -35,8 +35,8 @@ static void usage(const char* prog) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string yaml_path = "../../Dynamic speed optimization/weather_forecasts.yaml";
-    std::string h5_path   = "../data/voyage_weather.h5";
+    std::string yaml_path = "weather_forecasts.yaml";
+    std::string h5_path   = "voyage_weather.h5";
     std::optional<double> eta_override;
     std::optional<double> min_speed_override;
     std::optional<double> max_speed_override;
