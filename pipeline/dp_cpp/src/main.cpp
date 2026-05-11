@@ -24,7 +24,7 @@ static void write_schedule_csv(const std::string& path,
                                 const std::vector<Waypoint>& waypoints) {
     std::ofstream f(path);
     f << "time_h,distance_nm,lat_deg,lon_deg,bearing_deg,"
-         "sog_kn,target_sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
+         "sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
          "wind_speed_kmh,wind_dir_deg,beaufort,wave_height_m,"
          "current_vel_kmh,current_dir_deg\n";
     for (int ei : schedule) {
@@ -36,7 +36,6 @@ static void write_schedule_csv(const std::string& path,
           << lat                            << ','
           << lon                            << ','
           << e.heading_deg                  << ','
-          << e.sog                          << ','
           << e.target_sog                   << ','
           << e.sws                          << ','
           << e.fcr_mt_per_h                 << ','
