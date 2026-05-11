@@ -11,17 +11,19 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
 
 namespace fs = std::filesystem;
 
-// Write one CSV row per arc in `schedule` to `path`, overwriting any existing file.
-static void write_schedule_csv(const std::string& path,
-                                const std::vector<int>& schedule,
-                                const std::vector<AtomicEdge>& edges,
-                                const std::vector<Waypoint>& waypoints) {
+// Write one CSV row per arc (Free DP / baseline).
+// sog_kn = realized dd/dt, consistent with sws/fcr and duration.
+static void write_arc_csv(const std::string& path,
+                           const std::vector<int>& schedule,
+                           const std::vector<AtomicEdge>& edges,
+                           const std::vector<Waypoint>& waypoints) {
     std::ofstream f(path);
     f << "time_h,distance_nm,lat_deg,lon_deg,bearing_deg,"
          "sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
@@ -49,6 +51,58 @@ static void write_schedule_csv(const std::string& path,
           << w.ocean_current_direction_deg  << '\n';
     }
     printf("  CSV written: %s  (%zu arcs)\n", path.c_str(), schedule.size());
+}
+
+// Write one CSV row per 6h block (Luo DP).
+// Within a block the locked SOG is constant; arcs are aggregated so that
+// sog_kn × duration_h = distance_nm for the block as a whole.
+static void write_block_csv(const std::string& path,
+                              const std::vector<int>& schedule,
+                              const std::vector<AtomicEdge>& edges,
+                              const std::vector<Waypoint>& waypoints,
+                              double dt_h) {
+    // Group arc indices by block number (floor(src_t / dt_h))
+    std::map<int, std::vector<int>> by_block;
+    for (int ei : schedule)
+        by_block[(int)(edges[ei].src_t / dt_h)].push_back(ei);
+
+    std::ofstream f(path);
+    f << "block,time_h,distance_nm,lat_deg,lon_deg,bearing_deg,"
+         "sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
+         "wind_speed_kmh,wind_dir_deg,beaufort,wave_height_m,"
+         "current_vel_kmh,current_dir_deg\n";
+
+    for (auto& [blk, arc_ids] : by_block) {
+        const auto& first = edges[arc_ids.front()];
+        const auto& last  = edges[arc_ids.back()];
+        double sog_kn  = first.target_sog;          // locked speed for this block
+        double dur     = last.dst_t - first.src_t;  // total block duration
+        double fuel    = 0.0;
+        for (int ei : arc_ids) fuel += edges[ei].fuel_mt;
+
+        // SWS/FCR at the locked SOG using the first arc's weather (block start)
+        const auto& w = first.weather;
+        auto [lat, lon, _seg] = position_at_d(first.src_d, waypoints);
+
+        f << blk                            << ','
+          << first.src_t                    << ','
+          << first.src_d                    << ','
+          << lat                            << ','
+          << lon                            << ','
+          << first.heading_deg              << ','
+          << sog_kn                         << ','
+          << first.sws                      << ','
+          << first.fcr_mt_per_h             << ','
+          << fuel                           << ','
+          << dur                            << ','
+          << w.wind_speed_10m_kmh           << ','
+          << w.wind_direction_10m_deg       << ','
+          << w.beaufort_number              << ','
+          << w.wave_height_m                << ','
+          << w.ocean_current_velocity_kmh   << ','
+          << w.ocean_current_direction_deg  << '\n';
+    }
+    printf("  CSV written: %s  (%zu blocks)\n", path.c_str(), by_block.size());
 }
 
 static void print_header(const char* title) {
@@ -179,11 +233,11 @@ int main(int argc, char* argv[]) {
     printf("  Solve time:        %.3f s\n", free_t);
     printf("  NaN edges skipped: %d\n", free_res.nan_edges_skipped);
     if (write_csv && !baseline_mode)
-        write_schedule_csv("free_dp.csv", free_res.schedule, edges, WAYPOINTS);
+        write_arc_csv("free_dp.csv", free_res.schedule, edges, WAYPOINTS);
 
     if (baseline_mode) {
         if (write_csv)
-            write_schedule_csv("baseline.csv", free_res.schedule, edges, WAYPOINTS);
+            write_arc_csv("baseline.csv", free_res.schedule, edges, WAYPOINTS);
         print_header("SUMMARY — baseline (fixed mean SOG)");
         printf("  Mean SOG:    %.4f kn\n", frame.cfg.v_min);
         printf("  Total fuel:  %.3f mt\n", free_res.total_fuel_mt);
@@ -227,7 +281,7 @@ int main(int argc, char* argv[]) {
            one_sog_blocks, by_block.size(),
            one_sog_blocks == (int)by_block.size() ? " ✓" : " ✗ VIOLATED");
     if (write_csv)
-        write_schedule_csv("luo_dp.csv", luo_res.schedule, edges, WAYPOINTS);
+        write_block_csv("luo_dp.csv", luo_res.schedule, edges, WAYPOINTS, frame.cfg.dt_h);
 
     // ---- Summary ----
     print_header("SUMMARY — single graph, two DP modes");
