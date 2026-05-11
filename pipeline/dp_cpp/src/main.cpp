@@ -10,11 +10,47 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <set>
 #include <string>
 
 namespace fs = std::filesystem;
+
+// Write one CSV row per arc in `schedule` to `path`, overwriting any existing file.
+static void write_schedule_csv(const std::string& path,
+                                const std::vector<int>& schedule,
+                                const std::vector<AtomicEdge>& edges,
+                                const std::vector<Waypoint>& waypoints) {
+    std::ofstream f(path);
+    f << "time_h,distance_nm,lat_deg,lon_deg,bearing_deg,"
+         "sog_kn,target_sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
+         "wind_speed_kmh,wind_dir_deg,beaufort,wave_height_m,"
+         "current_vel_kmh,current_dir_deg\n";
+    for (int ei : schedule) {
+        const auto& e = edges[ei];
+        auto [lat, lon, _seg] = position_at_d(e.src_d, waypoints);
+        const auto& w = e.weather;
+        f << e.src_t                        << ','
+          << e.src_d                        << ','
+          << lat                            << ','
+          << lon                            << ','
+          << e.heading_deg                  << ','
+          << e.sog                          << ','
+          << e.target_sog                   << ','
+          << e.sws                          << ','
+          << e.fcr_mt_per_h                 << ','
+          << e.fuel_mt                      << ','
+          << (e.dst_t - e.src_t)            << ','
+          << w.wind_speed_10m_kmh           << ','
+          << w.wind_direction_10m_deg       << ','
+          << w.beaufort_number              << ','
+          << w.wave_height_m                << ','
+          << w.ocean_current_velocity_kmh   << ','
+          << w.ocean_current_direction_deg  << '\n';
+    }
+    printf("  CSV written: %s  (%zu arcs)\n", path.c_str(), schedule.size());
+}
 
 static void print_header(const char* title) {
     printf("\n%s\n%s\n%s\n",
@@ -30,7 +66,8 @@ static void usage(const char* prog) {
         "  --eta  HOURS      Override ETA in hours (e.g. 240)\n"
         "  --min_speed KNOTS Override minimum SOG in knots (default: 9)\n"
         "  --max_speed KNOTS Override maximum SOG in knots (default: 13)\n"
-        "  --baseline        Fix SOG to route_length / ETA (mean speed); overrides min/max_speed\n",
+        "  --baseline        Fix SOG to route_length / ETA (mean speed); overrides min/max_speed\n"
+        "  --csv             Write per-arc solution CSVs (free_dp.csv, luo_dp.csv, baseline.csv)\n",
         prog);
 }
 
@@ -41,6 +78,7 @@ int main(int argc, char* argv[]) {
     std::optional<double> min_speed_override;
     std::optional<double> max_speed_override;
     bool baseline_mode = false;
+    bool write_csv     = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -57,6 +95,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--min_speed") min_speed_override = std::stod(need_next());
         else if (arg == "--max_speed") max_speed_override = std::stod(need_next());
         else if (arg == "--baseline")  baseline_mode      = true;
+        else if (arg == "--csv")       write_csv          = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", arg.c_str()); usage(argv[0]); return 1; }
     }
@@ -140,8 +179,12 @@ int main(int argc, char* argv[]) {
     printf("  Schedule length:   %zu edges\n", free_res.schedule.size());
     printf("  Solve time:        %.3f s\n", free_t);
     printf("  NaN edges skipped: %d\n", free_res.nan_edges_skipped);
+    if (write_csv && !baseline_mode)
+        write_schedule_csv("free_dp.csv", free_res.schedule, edges, WAYPOINTS);
 
     if (baseline_mode) {
+        if (write_csv)
+            write_schedule_csv("baseline.csv", free_res.schedule, edges, WAYPOINTS);
         print_header("SUMMARY — baseline (fixed mean SOG)");
         printf("  Mean SOG:    %.4f kn\n", frame.cfg.v_min);
         printf("  Total fuel:  %.3f mt\n", free_res.total_fuel_mt);
@@ -184,6 +227,8 @@ int main(int argc, char* argv[]) {
     printf("  Lock invariant:    %d/%zu blocks have a single target SOG%s\n",
            one_sog_blocks, by_block.size(),
            one_sog_blocks == (int)by_block.size() ? " ✓" : " ✗ VIOLATED");
+    if (write_csv)
+        write_schedule_csv("luo_dp.csv", luo_res.schedule, edges, WAYPOINTS);
 
     // ---- Summary ----
     print_header("SUMMARY — single graph, two DP modes");
