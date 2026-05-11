@@ -83,11 +83,12 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
         double dd = dst_d - src_d;
         if (dt <= eps || dd <= eps) continue;
 
-        // Use target_sog (the intended speed from the SOG grid) for SWS/FCR
-        // calculation. realized_sog = dd/dt can differ due to time snapping
-        // and is not used to reject edges — target_sog is already bounded by
-        // [v_min, v_max] by construction of sog_grid().
-        double sws = calculate_sws_from_sog(target_sog, wx_dict, heading,
+        // Compute SWS/FCR from the realized SOG (dd/dt) so that every arc is
+        // self-consistent: speed × duration = distance, and physics matches speed.
+        // Time-snapping shifts dst_t, making realized_sog slightly different from
+        // target_sog; target_sog is retained only as the Luo-lock label.
+        double realized_sog = dd / dt;
+        double sws = calculate_sws_from_sog(realized_sog, wx_dict, heading,
                                              DEFAULT_SHIP_PARAMS);
         if (std::isnan(sws) || sws > SWS_MAX_FEASIBLE) continue;
 

@@ -36,7 +36,7 @@ static void write_schedule_csv(const std::string& path,
           << lat                            << ','
           << lon                            << ','
           << e.heading_deg                  << ','
-          << e.target_sog                   << ','
+          << e.sog                          << ','
           << e.sws                          << ','
           << e.fcr_mt_per_h                 << ','
           << e.fuel_mt                      << ','
