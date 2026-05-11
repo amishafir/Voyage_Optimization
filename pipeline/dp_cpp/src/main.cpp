@@ -3,15 +3,15 @@
 #include "bellman_locked.hpp"
 #include "frame.hpp"
 #include "nodes.hpp"
-#include "physics.hpp"
 #include "route.hpp"
 #include "weather.hpp"
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <set>
-#include <stdexcept>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -22,15 +22,41 @@ static void print_header(const char* title) {
            std::string(78, '=').c_str());
 }
 
+static void usage(const char* prog) {
+    fprintf(stderr,
+        "Usage: %s [OPTIONS]\n"
+        "  --yaml PATH       Route YAML  (default: ../../Dynamic speed optimization/weather_forecasts.yaml)\n"
+        "  --h5   PATH       HDF5 file   (default: ../data/voyage_weather.h5)\n"
+        "  --eta  HOURS      Override ETA in hours (e.g. 240)\n"
+        "  --min_speed KNOTS Override minimum SOG in knots (default: 9)\n"
+        "  --max_speed KNOTS Override maximum SOG in knots (default: 13)\n",
+        prog);
+}
+
 int main(int argc, char* argv[]) {
-    // Locate data files relative to this binary's parent (pipeline/).
-    // Adjust these paths if running from a different working directory.
-    std::string yaml_path =
-        argc > 1 ? argv[1]
-                 : "../../Dynamic speed optimization/weather_forecasts.yaml";
-    std::string h5_path =
-        argc > 2 ? argv[2]
-                 : "../data/voyage_weather.h5";
+    std::string yaml_path = "../../Dynamic speed optimization/weather_forecasts.yaml";
+    std::string h5_path   = "../data/voyage_weather.h5";
+    std::optional<double> eta_override;
+    std::optional<double> min_speed_override;
+    std::optional<double> max_speed_override;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        auto need_next = [&]() -> const char* {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: %s requires a value\n", arg.c_str());
+                std::exit(1);
+            }
+            return argv[++i];
+        };
+        if      (arg == "--yaml")      yaml_path         = need_next();
+        else if (arg == "--h5")        h5_path           = need_next();
+        else if (arg == "--eta")       eta_override      = std::stod(need_next());
+        else if (arg == "--min_speed") min_speed_override = std::stod(need_next());
+        else if (arg == "--max_speed") max_speed_override = std::stod(need_next());
+        else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
+        else { fprintf(stderr, "Unknown option: %s\n", arg.c_str()); usage(argv[0]); return 1; }
+    }
 
     if (!fs::exists(yaml_path)) {
         fprintf(stderr, "YAML not found: %s\n", yaml_path.c_str());
@@ -47,7 +73,11 @@ int main(int argc, char* argv[]) {
 
     // ---- Build frame ----
     print_header("DP REBUILD — frame");
-    Frame frame = make_frame(route, voyage, WAYPOINTS);
+    GraphConfig base_cfg = GraphConfig::from_route(route);
+    if (eta_override)       base_cfg.eta_h = *eta_override;
+    if (min_speed_override) base_cfg.v_min = *min_speed_override;
+    if (max_speed_override) base_cfg.v_max = *max_speed_override;
+    Frame frame = make_frame(route, voyage, WAYPOINTS, &base_cfg);
     summarize_frame(frame);
 
     // ---- Build atomic-edge graph ----
