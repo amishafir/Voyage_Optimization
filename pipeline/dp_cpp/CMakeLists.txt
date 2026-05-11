@@ -41,3 +41,26 @@ target_link_libraries(dp_rebuild PRIVATE
     ${HDF5_LIBRARIES}
     yaml-cpp
 )
+
+# ---- Luo DP (integer-nm block grid, separate program) ----
+set(LUO_SOURCES
+    src/physics.cpp
+    src/geo_grid.cpp
+    src/route.cpp
+    src/nodes.cpp
+    src/weather.cpp
+    src/frame.cpp
+    src/luo_main.cpp
+)
+
+add_executable(luo_rebuild ${LUO_SOURCES})
+
+target_include_directories(luo_rebuild PRIVATE
+    src
+    ${HDF5_INCLUDE_DIRS}
+)
+
+target_link_libraries(luo_rebuild PRIVATE
+    ${HDF5_LIBRARIES}
+    yaml-cpp
+)
