@@ -9,12 +9,16 @@ struct AtomicEdge {
     double  src_t, src_d;
     double  dst_t, dst_d;
     double  sog;          // realized SOG = Δd/Δt (post-snap)
-    double  target_sog;   // decision SOG ∈ {9.0, …, 13.0} — Luo lock label
+    double  target_sog;   // decision SOG ∈ {v_min, …, v_max} — Luo lock label
     Weather weather;
     double  heading_deg;
     double  sws;
     double  fcr_mt_per_h;
     double  fuel_mt;
+    // True iff this arc crosses a V-line (block boundary) in time.
+    // Used by the Luo DP to release the SOG lock.
+    // H-line arcs that happen to snap onto a V-line time do NOT set this.
+    bool    crosses_v_line = false;
 };
 
 // BFS edge builder: discovers (t,d) nodes lazily from source (0,0).

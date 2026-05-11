@@ -8,11 +8,6 @@ struct Segment {
     int    id;
     double distance;      // nm
     double ship_heading;  // deg
-    double wind_dir;      // deg
-    int    beaufort;
-    double wave_height;   // m
-    double current_dir;   // deg
-    double current_speed; // knots
 };
 
 struct ForecastWindow {

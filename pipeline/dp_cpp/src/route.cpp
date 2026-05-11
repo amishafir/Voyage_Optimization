@@ -70,11 +70,6 @@ Route load_yaml_route(const std::string& path) {
             seg.id           = snode["id"].as<int>();
             seg.distance     = snode["distance"].as<double>();
             seg.ship_heading = snode["ship_heading"].as<double>();
-            seg.wind_dir     = snode["wind_dir"].as<double>();
-            seg.beaufort     = snode["beaufort"].as<int>();
-            seg.wave_height  = snode["wave_height"].as<double>();
-            seg.current_dir  = snode["current_dir"].as<double>();
-            seg.current_speed= snode["current_speed"].as<double>();
             fw.segments.push_back(seg);
         }
         route.windows.push_back(fw);
@@ -131,8 +126,6 @@ build_route_from_waypoints_yaml(const std::string& yaml_path,
                                             wps[i+1].lat_deg, wps[i+1].lon_deg);
         s.ship_heading = rhumb_bearing_deg(wps[i].lat_deg, wps[i].lon_deg,
                                             wps[i+1].lat_deg, wps[i+1].lon_deg);
-        s.wind_dir = s.beaufort = 0;
-        s.wave_height = s.current_dir = s.current_speed = 0.0;
         total_d += s.distance;
         segs.push_back(s);
     }

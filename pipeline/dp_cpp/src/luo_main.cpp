@@ -1,17 +1,18 @@
-// luo_main.cpp — Pure integer-nm block Luo DP
+// luo_main.cpp — Pure block Luo DP with configurable distance resolution
 //
-// Graph: nodes (col, d_nm) where col indexes a time column.
+// Graph: nodes (col, d_idx) where col indexes a time column and d_idx is a
+//   distance index; physical distance = d_idx * res_nm.
 //   Regular columns:  col = 0..T_steps,  t = 0, dt_h, 2·dt_h, … T_steps·dt_h
 //   ETA column:       col = T_steps+1,   t = ETA   (added when ETA % dt_h ≠ 0)
 //
 // Arcs span one column (one block):
-//   Regular arc:  duration = dt_h,     SOG = (d2-d1)/dt_h
-//   Partial arc:  duration = dt_last,  SOG = (d2-d1)/dt_last  (last column → ETA)
+//   Regular arc:  duration = dt_h,     SOG = (d2-d1)*res_nm / dt_h
+//   Partial arc:  duration = dt_last,  SOG = (d2-d1)*res_nm / dt_last
 //
-// Arc cost is computed by walking through weather-zone / course-change
-// boundaries between d1 and d2 and summing sub-segment fuel at the fixed SOG.
+// Arc cost: walk sub-segments between weather-zone / course-change boundaries
+// from d1*res_nm to d2*res_nm, summing fuel at the fixed block SOG.
 //
-// Shortest path from (0, 0) to any (col, L_int) with col ≤ last_col.
+// Shortest path from (0, 0) to any (col, L_scaled) with col ≤ last_col.
 
 #include "frame.hpp"
 #include "geo_grid.hpp"
@@ -55,16 +56,16 @@ struct ArcResult {
     std::vector<Seg> segs;
 };
 
-// Evaluate arc (d1_nm → d2_nm) departing at absolute time t_h over block_dur_h hours.
-// Weather is read at sample_hour=0 (static-deterministic snapshot, matching dp_rebuild
-// which uses override_sample_hour=0). forecast_hour=-1 → actual_weather table.
-// Returns ok=false if any sub-segment has NaN weather or infeasible SWS.
-static ArcResult eval_arc(int d1_nm, int d2_nm, int t_h, double block_dur_h,
+// Evaluate arc from grid index d1_idx to d2_idx, departing at t_h [h] over
+// block_dur_h hours. Physical distances are d_idx * res_nm.
+// Weather is read at sample_hour=0 (static-deterministic). forecast_hour=-1 →
+// actual_weather table. Returns ok=false on NaN weather or infeasible SWS.
+static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h,
                            const std::vector<double>& bounds,
-                           const Frame& fr) {
+                           const Frame& fr, double res_nm) {
     ArcResult r;
-    double d1  = (double)d1_nm;
-    double d2  = (double)d2_nm;
+    double d1  = d1_idx * res_nm;
+    double d2  = d2_idx * res_nm;
     double sog = (d2 - d1) / block_dur_h;
 
     // Collect sub-segment breakpoints strictly inside [d1, d2]
@@ -98,8 +99,68 @@ static ArcResult eval_arc(int d1_nm, int d2_nm, int t_h, double block_dur_h,
     return r;
 }
 
-// ── CSV writer ────────────────────────────────────────────────────────────
-// One row per sub-segment; block index and block SOG included for context.
+// ── Baseline: fixed mean SOG, no graph ───────────────────────────────────
+static std::vector<Seg> eval_baseline(const Frame& fr,
+                                       const std::vector<double>& bounds) {
+    double sog = fr.cfg.length_nm / fr.cfg.eta_h;
+    std::vector<Seg> segs;
+
+    for (size_t i = 0; i + 1 < bounds.size(); ++i) {
+        double sd = bounds[i], ed = bounds[i + 1];
+        if (ed > fr.cfg.length_nm + 1e-9) ed = fr.cfg.length_nm;
+        if (ed <= sd + 1e-9) continue;
+
+        double heading = fr.paper_heading_at(sd);
+        Weather wx = fr.cell_weather_at(sd, /*sample_hour=*/0, /*forecast_hour=*/-1);
+        if (wx.has_nan()) {
+            fprintf(stderr, "  NaN weather at d=%.1f nm — sub-segment skipped\n", sd);
+            continue;
+        }
+        WeatherDict wd = wx.to_dict();
+        double sws  = calculate_sws_from_sog(sog, wd, heading, SHIP);
+        double fcr  = calculate_fuel_consumption_rate(sws);
+        double dur  = (ed - sd) / sog;
+        double fuel = fcr * dur;
+
+        double src_t = sd / sog;
+        segs.push_back({sd, ed, src_t, sog, heading, wx, sws, fcr, fuel, dur});
+    }
+    return segs;
+}
+
+// Write baseline.csv — one row per sub-segment, no block column.
+static void write_baseline_csv(const std::string& path,
+                                const std::vector<Seg>& segs,
+                                const std::vector<Waypoint>& wps) {
+    std::ofstream f(path);
+    f << "time_h,distance_nm,lat_deg,lon_deg,bearing_deg,"
+         "sog_kn,sws_kn,fcr_mt_per_h,fuel_mt,duration_h,"
+         "wind_speed_kmh,wind_dir_deg,beaufort,wave_height_m,"
+         "current_vel_kmh,current_dir_deg\n";
+
+    for (const auto& s : segs) {
+        auto [lat, lon, _seg] = position_at_d(s.src_d, wps);
+        const auto& w = s.weather;
+        f << s.src_t     << ','
+          << s.src_d     << ','
+          << lat << ',' << lon << ','
+          << s.heading_deg << ','
+          << s.sog       << ','
+          << s.sws       << ','
+          << s.fcr       << ','
+          << s.fuel_mt   << ','
+          << s.dur_h     << ','
+          << w.wind_speed_10m_kmh       << ','
+          << w.wind_direction_10m_deg   << ','
+          << w.beaufort_number          << ','
+          << w.wave_height_m            << ','
+          << w.ocean_current_velocity_kmh   << ','
+          << w.ocean_current_direction_deg  << '\n';
+    }
+    printf("  CSV written: %s  (%zu sub-segments)\n", path.c_str(), segs.size());
+}
+
+// ── CSV writer (Luo DP path) ──────────────────────────────────────────────
 static void write_csv(const std::string& path,
                       const std::vector<std::pair<ArcResult, int>>& path_arcs,
                       const std::vector<Waypoint>& wps) {
@@ -140,21 +201,27 @@ static void write_csv(const std::string& path,
 static void usage(const char* prog) {
     fprintf(stderr,
         "Usage: %s [OPTIONS]\n"
-        "  --yaml PATH       Route YAML  (default: weather_forecasts.yaml)\n"
+        "  --yaml PATH       Route YAML  (default: route.yaml)\n"
         "  --h5   PATH       HDF5 file   (default: voyage_weather.h5)\n"
         "  --eta  HOURS      Override ETA in hours\n"
-        "  --min_speed KNOTS Minimum SOG  (default: 9)\n"
-        "  --max_speed KNOTS Maximum SOG  (default: 13)\n"
-        "  --csv             Write luo_dp2.csv\n"
+        "  --min_speed KNOTS Minimum SOG in knots (default: mean_sog - 3)\n"
+        "  --max_speed KNOTS Maximum SOG in knots (default: mean_sog + 3)\n"
+        "  --res_nm  NM      Distance grid resolution in NM (default: 1.0, range [0.1, 10])\n"
+        "  --baseline        Compute fixed mean-SOG baseline (no graph)\n"
+        "  --csv             Write output CSV(s)\n"
+        "                    Luo DP  → luo_dp.csv\n"
+        "                    Baseline → baseline.csv\n"
         "  -h / --help       Show this message\n",
         prog);
 }
 
 int main(int argc, char* argv[]) {
-    std::string yaml_path = "weather_forecasts.yaml";
+    std::string yaml_path = "route.yaml";
     std::string h5_path   = "voyage_weather.h5";
     std::optional<double> eta_ov, vmin_ov, vmax_ov;
-    bool do_csv = false;
+    double res_nm    = 1.0;
+    bool do_csv      = false;
+    bool do_baseline = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -164,14 +231,21 @@ int main(int argc, char* argv[]) {
             }
             return argv[++i];
         };
-        if      (a == "--yaml")      yaml_path = nxt();
-        else if (a == "--h5")        h5_path   = nxt();
-        else if (a == "--eta")       eta_ov    = std::stod(nxt());
-        else if (a == "--min_speed") vmin_ov   = std::stod(nxt());
-        else if (a == "--max_speed") vmax_ov   = std::stod(nxt());
-        else if (a == "--csv")       do_csv    = true;
+        if      (a == "--yaml")      yaml_path    = nxt();
+        else if (a == "--h5")        h5_path      = nxt();
+        else if (a == "--eta")       eta_ov       = std::stod(nxt());
+        else if (a == "--min_speed") vmin_ov      = std::stod(nxt());
+        else if (a == "--max_speed") vmax_ov      = std::stod(nxt());
+        else if (a == "--res_nm")    res_nm       = std::stod(nxt());
+        else if (a == "--baseline")  do_baseline  = true;
+        else if (a == "--csv")       do_csv       = true;
         else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", a.c_str()); usage(argv[0]); return 1; }
+    }
+
+    if (res_nm < 0.1 || res_nm > 10.0) {
+        fprintf(stderr, "Error: --res_nm must be in [0.1, 10.0], got %.3f\n", res_nm);
+        return 1;
     }
 
     if (!fs::exists(yaml_path)) { fprintf(stderr,"YAML not found: %s\n",yaml_path.c_str()); return 1; }
@@ -181,60 +255,88 @@ int main(int argc, char* argv[]) {
     VoyageWeather voyage(h5_path);
 
     GraphConfig cfg = GraphConfig::from_route(route);
-    if (eta_ov)  cfg.eta_h = *eta_ov;
-    if (vmin_ov) cfg.v_min = *vmin_ov;
-    if (vmax_ov) cfg.v_max = *vmax_ov;
+    if (eta_ov) cfg.eta_h = *eta_ov;
+    double mean_sog = cfg.length_nm / cfg.eta_h;
+    cfg.v_min = vmin_ov.value_or(mean_sog - 3.0);
+    cfg.v_max = vmax_ov.value_or(mean_sog + 3.0);
 
     Frame frame = make_frame(route, voyage, WAYPOINTS, &cfg);
 
     // ── Grid parameters ──────────────────────────────────────────────────
-    const int    L_int    = (int)std::round(cfg.length_nm);     // destination [nm]
-    const int    T_steps  = (int)(cfg.eta_h / cfg.dt_h);        // # regular blocks
-    const double T_max_h  = T_steps * cfg.dt_h;                 // last regular t [h]
-    const double dt_last  = cfg.eta_h - T_max_h;                // partial block [h]
-    const bool   has_eta  = dt_last > 1e-9;                     // extra ETA column?
+    const int    L_scaled = (int)std::round(cfg.length_nm / res_nm); // destination index
+    const double L_snapped = L_scaled * res_nm;                       // snapped length [nm]
+    const int    T_steps  = (int)(cfg.eta_h / cfg.dt_h);             // # regular blocks
+    const double T_max_h  = T_steps * cfg.dt_h;
+    const double dt_last  = cfg.eta_h - T_max_h;
+    const bool   has_eta  = dt_last > 1e-9;
 
-    // Regular block step range [nm]
-    const int step_min = (int)std::ceil (cfg.v_min * cfg.dt_h);
-    const int step_max = (int)std::floor(cfg.v_max * cfg.dt_h);
-
-    // Partial block step range [nm] (only used if has_eta)
-    const int step_min_eta = has_eta ? (int)std::ceil (cfg.v_min * dt_last) : 0;
-    const int step_max_eta = has_eta ? (int)std::floor(cfg.v_max * dt_last) : 0;
+    // Step range in grid-index units for regular and partial blocks
+    const int step_min     = (int)std::ceil (cfg.v_min * cfg.dt_h / res_nm);
+    const int step_max     = (int)std::floor(cfg.v_max * cfg.dt_h / res_nm);
+    const int step_min_eta = has_eta ? (int)std::ceil (cfg.v_min * dt_last / res_nm) : 0;
+    const int step_max_eta = has_eta ? (int)std::floor(cfg.v_max * dt_last / res_nm) : 0;
 
     printf("============================================================\n");
-    printf("Luo DP (integer-nm block grid)\n");
+    printf("Luo DP  (%.2f nm grid resolution)\n", res_nm);
     printf("============================================================\n");
-    printf("Route:      %.2f nm  →  L = %d nm\n", cfg.length_nm, L_int);
+    printf("Route:      %.2f nm  →  L_scaled = %d  (%.2f nm)\n",
+           cfg.length_nm, L_scaled, L_snapped);
     printf("Speed:      [%.1f, %.1f] kn\n", cfg.v_min, cfg.v_max);
-    printf("Regular:    %d blocks × %.0f h, step [%d, %d] nm\n",
-           T_steps, cfg.dt_h, step_min, step_max);
+    printf("Regular:    %d blocks × %.0f h, step [%d, %d] idx  ([%.2f, %.2f] nm)\n",
+           T_steps, cfg.dt_h, step_min, step_max,
+           step_min * res_nm, step_max * res_nm);
     if (has_eta)
-        printf("ETA block:  1 × %.1f h (t=%.0f→%.0f), step [%d, %d] nm\n",
+        printf("ETA block:  1 × %.1f h (t=%.0f→%.0f), step [%d, %d] idx\n",
                dt_last, T_max_h, cfg.eta_h, step_min_eta, step_max_eta);
     else
         printf("ETA = %.0f h is a multiple of %.0f h — no partial block\n",
                cfg.eta_h, cfg.dt_h);
     printf("H-lines:    %zu boundaries\n", frame.h_line_distances.size());
 
-    // ── Sub-segment boundaries (sorted, deduplicated) ─────────────────────
+    // ── Sub-segment boundaries (sorted, deduplicated, physical NM) ────────
     std::vector<double> bounds = frame.h_line_distances;
     bounds.push_back(0.0);
-    bounds.push_back((double)L_int);
+    bounds.push_back(cfg.length_nm);
     std::sort(bounds.begin(), bounds.end());
     bounds.erase(
         std::unique(bounds.begin(), bounds.end(),
                     [](double a, double b){ return std::abs(a-b) < 1e-9; }),
         bounds.end());
 
+    // ── Baseline mode (fixed mean SOG, no graph) ──────────────────────────
+    if (do_baseline) {
+        printf("============================================================\n");
+        printf("Baseline (fixed mean SOG)\n");
+        printf("============================================================\n");
+        printf("Route:      %.2f nm  ETA: %.1f h\n", cfg.length_nm, cfg.eta_h);
+        printf("Mean SOG:   %.4f kn\n", mean_sog);
+        printf("Boundaries: %zu sub-segments\n", bounds.size() - 1);
+
+        auto segs = eval_baseline(frame, bounds);
+        double total_fuel = 0.0;
+        for (const auto& s : segs) total_fuel += s.fuel_mt;
+
+        printf("Total fuel: %.3f mt\n", total_fuel);
+        if (do_csv)
+            write_baseline_csv("baseline.csv", segs, WAYPOINTS);
+        return 0;
+    }
+
+    // For the Luo DP the terminal boundary must be L_snapped (the grid-snapped
+    // destination). Replace the exact cfg.length_nm endpoint with L_snapped.
+    bounds.erase(std::remove_if(bounds.begin(), bounds.end(),
+                     [&](double b){ return std::abs(b - cfg.length_nm) < 1e-9
+                                        && std::abs(b - L_snapped) > 1e-9; }),
+                 bounds.end());
+    if (bounds.empty() || std::abs(bounds.back() - L_snapped) > 1e-9)
+        bounds.push_back(L_snapped);
+    std::sort(bounds.begin(), bounds.end());
+
     // ── DP arrays ─────────────────────────────────────────────────────────
-    // dp[d]             = min fuel to reach d at current column
-    // parent[col][d]    = d at previous column on optimal path  (-1 = unreachable)
-    // col_t[col]        = absolute time [h] at column col
     const int last_col = T_steps + (has_eta ? 1 : 0);
-    std::vector<double> dp(L_int + 1, INF_COST);
+    std::vector<double> dp(L_scaled + 1, INF_COST);
     std::vector<std::vector<int>> parent(last_col + 1,
-                                          std::vector<int>(L_int + 1, -1));
+                                          std::vector<int>(L_scaled + 1, -1));
     std::vector<double> col_t(last_col + 1);
     for (int k = 0; k <= T_steps; ++k) col_t[k] = k * cfg.dt_h;
     if (has_eta) col_t[last_col] = cfg.eta_h;
@@ -248,60 +350,60 @@ int main(int argc, char* argv[]) {
 
     // ── Regular blocks ────────────────────────────────────────────────────
     for (int blk = 0; blk < T_steps; ++blk) {
-        int    t_h       = (int)col_t[blk];
-        std::vector<double> ndp(L_int + 1, INF_COST);
+        double t_h = col_t[blk];
+        std::vector<double> ndp(L_scaled + 1, INF_COST);
 
-        for (int d1 = 0; d1 < L_int; ++d1) {
+        for (int d1 = 0; d1 < L_scaled; ++d1) {
             if (dp[d1] >= INF_COST) continue;
 
-            int d2_lo = std::min(d1 + step_min, L_int);
-            int d2_hi = std::min(d1 + step_max, L_int);
+            int d2_lo = std::min(d1 + step_min, L_scaled);
+            int d2_hi = std::min(d1 + step_max, L_scaled);
 
             for (int d2 = d2_lo; d2 <= d2_hi; ++d2) {
-                auto arc = eval_arc(d1, d2, t_h, cfg.dt_h, bounds, frame);
+                auto arc = eval_arc(d1, d2, t_h, cfg.dt_h, bounds, frame, res_nm);
                 if (!arc.ok) continue;
 
                 double nc = dp[d1] + arc.fuel;
                 if (nc < ndp[d2]) {
-                    ndp[d2]               = nc;
+                    ndp[d2]             = nc;
                     parent[blk + 1][d2] = d1;
                 }
             }
         }
         dp = ndp;
 
-        if (dp[L_int] < best_fuel) {
-            best_fuel = dp[L_int];
+        if (dp[L_scaled] < best_fuel) {
+            best_fuel = dp[L_scaled];
             best_col  = blk + 1;
         }
     }
 
     // ── Partial ETA block ─────────────────────────────────────────────────
     if (has_eta) {
-        int    t_h = (int)T_max_h;
-        std::vector<double> ndp(L_int + 1, INF_COST);
+        double t_h = T_max_h;
+        std::vector<double> ndp(L_scaled + 1, INF_COST);
 
-        for (int d1 = 0; d1 < L_int; ++d1) {
+        for (int d1 = 0; d1 < L_scaled; ++d1) {
             if (dp[d1] >= INF_COST) continue;
 
-            int d2_lo = std::min(d1 + step_min_eta, L_int);
-            int d2_hi = std::min(d1 + step_max_eta, L_int);
+            int d2_lo = std::min(d1 + step_min_eta, L_scaled);
+            int d2_hi = std::min(d1 + step_max_eta, L_scaled);
 
             for (int d2 = d2_lo; d2 <= d2_hi; ++d2) {
-                auto arc = eval_arc(d1, d2, t_h, dt_last, bounds, frame);
+                auto arc = eval_arc(d1, d2, t_h, dt_last, bounds, frame, res_nm);
                 if (!arc.ok) continue;
 
                 double nc = dp[d1] + arc.fuel;
                 if (nc < ndp[d2]) {
-                    ndp[d2]               = nc;
+                    ndp[d2]              = nc;
                     parent[last_col][d2] = d1;
                 }
             }
         }
         dp = ndp;
 
-        if (dp[L_int] < best_fuel) {
-            best_fuel = dp[L_int];
+        if (dp[L_scaled] < best_fuel) {
+            best_fuel = dp[L_scaled];
             best_col  = last_col;
         }
     }
@@ -320,34 +422,20 @@ int main(int argc, char* argv[]) {
     printf("============================================================\n");
 
     // ── Backtrack optimal path ────────────────────────────────────────────
-    // path_d[k] = distance [nm] at column k, for k = 0..best_col
     std::vector<int> path_d(best_col + 1);
-    path_d[best_col] = L_int;
+    path_d[best_col] = L_scaled;
     for (int k = best_col; k > 0; --k)
         path_d[k - 1] = parent[k][path_d[k]];
-
-    // Print block schedule
-    printf("  Block SOG schedule:\n");
-    double fuel_check = 0.0;
-    for (int k = 0; k < best_col; ++k) {
-        double dur = col_t[k + 1] - col_t[k];
-        double sog = (double)(path_d[k + 1] - path_d[k]) / dur;
-        auto arc = eval_arc(path_d[k], path_d[k + 1], (int)col_t[k], dur, bounds, frame);
-        fuel_check += arc.fuel;
-        printf("    block %2d: t=%.0f→%.0f h,  d=%4d→%4d nm,  SOG=%.3f kn,  fuel=%.3f mt\n",
-               k, col_t[k], col_t[k+1], path_d[k], path_d[k+1], sog, arc.fuel);
-    }
-    printf("  Total fuel (recomputed): %.3f mt\n", fuel_check);
 
     // ── CSV ───────────────────────────────────────────────────────────────
     if (do_csv) {
         std::vector<std::pair<ArcResult, int>> path_arcs;
         for (int k = 0; k < best_col; ++k) {
             double dur = col_t[k + 1] - col_t[k];
-            auto arc = eval_arc(path_d[k], path_d[k+1], (int)col_t[k], dur, bounds, frame);
+            auto arc = eval_arc(path_d[k], path_d[k+1], col_t[k], dur, bounds, frame, res_nm);
             path_arcs.push_back({std::move(arc), k});
         }
-        write_csv("luo_dp2.csv", path_arcs, WAYPOINTS);
+        write_csv("luo_dp.csv", path_arcs, WAYPOINTS);
     }
 
     return 0;

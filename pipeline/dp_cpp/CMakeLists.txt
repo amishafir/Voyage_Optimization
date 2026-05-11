@@ -17,7 +17,7 @@ find_package(HDF5 REQUIRED COMPONENTS C)
 find_package(yaml-cpp REQUIRED)
 
 # ---- Sources ----
-set(SOURCES
+set(SR_SOURCES
     src/physics.cpp
     src/geo_grid.cpp
     src/route.cpp
@@ -26,23 +26,22 @@ set(SOURCES
     src/frame.cpp
     src/atomic_edges.cpp
     src/bellman.cpp
-    src/bellman_locked.cpp
-    src/main.cpp
+    src/SR_main.cpp
 )
 
-add_executable(dp_rebuild ${SOURCES})
+add_executable(dp_SR ${SR_SOURCES})
 
-target_include_directories(dp_rebuild PRIVATE
+target_include_directories(dp_SR PRIVATE
     src
     ${HDF5_INCLUDE_DIRS}
 )
 
-target_link_libraries(dp_rebuild PRIVATE
+target_link_libraries(dp_SR PRIVATE
     ${HDF5_LIBRARIES}
     yaml-cpp
 )
 
-# ---- Luo DP (integer-nm block grid, separate program) ----
+# ---- Luo DP (integer-nm block grid) ----
 set(LUO_SOURCES
     src/physics.cpp
     src/geo_grid.cpp
@@ -53,14 +52,14 @@ set(LUO_SOURCES
     src/luo_main.cpp
 )
 
-add_executable(luo_rebuild ${LUO_SOURCES})
+add_executable(dp_luo ${LUO_SOURCES})
 
-target_include_directories(luo_rebuild PRIVATE
+target_include_directories(dp_luo PRIVATE
     src
     ${HDF5_INCLUDE_DIRS}
 )
 
-target_link_libraries(luo_rebuild PRIVATE
+target_link_libraries(dp_luo PRIVATE
     ${HDF5_LIBRARIES}
     yaml-cpp
 )

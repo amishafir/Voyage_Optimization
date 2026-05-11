@@ -61,11 +61,22 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
             if (snapped <= src_t + eps) { use_h = false; h_too_close = true; }
         }
 
+        // crosses_v_line: true iff this arc reaches a V-line as its terminal boundary.
+        // - V-line arcs always cross (dst_t = *next_v, set in the else branch).
+        // - H-line arcs whose snapped time overshoots the V-line are clipped to it
+        //   (the `if (next_v && dst_t > *next_v - eps)` clip below) — those also cross.
+        // - H-line arcs that merely happen to snap onto a V-line time do NOT cross;
+        //   treating them as block-boundary unlocks would let the Luo DP change SOG
+        //   mid-block whenever an H-line coincides with a V-line discretization point.
+        bool crosses_v_line = !use_h;  // V-line arc: always true; H-line arc: may be set below
         if (use_h) {
             dst_d = *next_h;
             double dst_t_raw = src_t + dt_to_h;
             dst_t = frame.snap_h_dst_t(dst_t_raw);
-            if (next_v && dst_t > *next_v - eps) dst_t = *next_v;
+            if (next_v && dst_t > *next_v - eps) {
+                dst_t = *next_v;
+                crosses_v_line = true;  // H-line clipped to V-line: genuine block boundary
+            }
         } else {
             if (!next_v) continue;
             dst_t = *next_v;
@@ -98,7 +109,7 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
 
         edges.push_back({src_t, src_d, dst_t, dst_d,
                          dd / dt, target_sog, wx, heading,
-                         sws, fcr, fuel});
+                         sws, fcr, fuel, crosses_v_line});
     }
     return edges;
 }
