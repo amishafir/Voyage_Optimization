@@ -39,7 +39,6 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
     auto next_h = frame.next_h_distance(src_d);
     if (!next_v && !next_h) return {};
 
-    double v_min = frame.cfg.v_min, v_max = frame.cfg.v_max;
     double L = frame.cfg.length_nm;
     static constexpr double eps = 1e-9;
 
@@ -52,8 +51,17 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
 
         double dst_t, dst_d;
 
-        if (dt_to_h <= dt_to_v + eps) {
-            if (!next_h) continue;
+        // Prefer whichever boundary comes first, but if the H-line is so close
+        // that snapping collapses the time step (dst_t rounds back to src_t),
+        // fall back to the V-line boundary instead.
+        bool use_h = (dt_to_h <= dt_to_v + eps) && next_h;
+        bool h_too_close = false;
+        if (use_h && next_v) {
+            double snapped = frame.snap_h_dst_t(src_t + dt_to_h);
+            if (snapped <= src_t + eps) { use_h = false; h_too_close = true; }
+        }
+
+        if (use_h) {
             dst_d = *next_h;
             double dst_t_raw = src_t + dt_to_h;
             dst_t = frame.snap_h_dst_t(dst_t_raw);
@@ -64,17 +72,22 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
             double dst_d_raw = src_d + target_sog * dt_to_v;
             dst_d = frame.snap_v_dst_d(dst_d_raw);
             if (dst_d > L) dst_d = L;
-            if (next_h && dst_d > *next_h - eps) dst_d = *next_h;
+            // Only clip to next_h when it was legitimately chosen as the first
+            // boundary. If we fell back to V-line because next_h was too close
+            // to snap, clipping here would create a near-zero-distance edge that
+            // wastes the entire 6h block.
+            if (!h_too_close && next_h && dst_d > *next_h - eps) dst_d = *next_h;
         }
 
         double dt = dst_t - src_t;
         double dd = dst_d - src_d;
         if (dt <= eps || dd <= eps) continue;
 
-        double realized_sog = dd / dt;
-        if (realized_sog < v_min - eps || realized_sog > v_max + eps) continue;
-
-        double sws = calculate_sws_from_sog(realized_sog, wx_dict, heading,
+        // Use target_sog (the intended speed from the SOG grid) for SWS/FCR
+        // calculation. realized_sog = dd/dt can differ due to time snapping
+        // and is not used to reject edges — target_sog is already bounded by
+        // [v_min, v_max] by construction of sog_grid().
+        double sws = calculate_sws_from_sog(target_sog, wx_dict, heading,
                                              DEFAULT_SHIP_PARAMS);
         if (std::isnan(sws) || sws > SWS_MAX_FEASIBLE) continue;
 
@@ -83,7 +96,7 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
         if (std::isnan(fuel)) continue;
 
         edges.push_back({src_t, src_d, dst_t, dst_d,
-                         realized_sog, target_sog, wx, heading,
+                         dd / dt, target_sog, wx, heading,
                          sws, fcr, fuel});
     }
     return edges;

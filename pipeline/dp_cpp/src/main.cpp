@@ -87,10 +87,11 @@ int main(int argc, char* argv[]) {
     // path from source to sink. We therefore build the frame with a wide range, then
     // pin the SOG grid before build_atomic_edges (which reads the grid lazily).
     //
-    // We also cannot use mean_sog = L/ETA directly: the BFS snaps every node's
-    // arrival time to the nearest tau_h, so a single rounding-up pushes the sink
-    // past ETA and best_sink rejects it. Using L/(ETA - tau_h) makes the "true"
-    // arrival tau_h early; after snapping (+tau_h/2 at most) it still lands ≤ ETA.
+    // Baseline: build H-lines with a wide speed range so the τ-feasibility filter
+    // keeps all crossings, then pin the SOG grid to mean_sog before build_atomic_edges
+    // reads it (lazy). We use soft-ETA (lam=0) when solving so that the hard ETA
+    // boundary does not reject the sink — time-snapping in 160+ H-line edges can push
+    // the arrival a few tenths of an hour past ETA.
     if (baseline_mode) {
         double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
         base_cfg.v_min = mean_sog * 0.5;
@@ -98,11 +99,11 @@ int main(int argc, char* argv[]) {
     }
     Frame frame = make_frame(route, voyage, WAYPOINTS, &base_cfg);
     if (baseline_mode) {
-        double mean_sog = frame.cfg.length_nm / (frame.cfg.eta_h - frame.cfg.tau_h);
+        double mean_sog = frame.cfg.length_nm / frame.cfg.eta_h;
         frame.cfg.v_min = mean_sog;
         frame.cfg.v_max = mean_sog;
-        printf("Baseline mode: adjusted SOG = %.4f kn  (%.0f nm / (%.1f - %.1f) h)\n",
-               mean_sog, frame.cfg.length_nm, frame.cfg.eta_h, frame.cfg.tau_h);
+        printf("Baseline mode: mean SOG = %.4f kn  (%.0f nm / %.1f h)\n",
+               mean_sog, frame.cfg.length_nm, frame.cfg.eta_h);
     }
     summarize_frame(frame);
 
@@ -117,21 +118,39 @@ int main(int argc, char* argv[]) {
     printf("\nBuild time: %.2f s\n", build_t);
     summarize_atomic_edges(nodes, edges);
 
-    // ---- Free DP ----
-    print_header("DP REBUILD — Free DP (no SOG lock)");
+    // ---- Free DP (or Baseline) ----
+    // In baseline mode there is only one SOG, so we use soft-ETA (lam=0) to
+    // retrieve the fixed-SOG cost without being rejected by the hard ETA boundary.
+    print_header(baseline_mode ? "BASELINE — fixed mean SOG" : "DP REBUILD — Free DP (no SOG lock)");
     t0 = std::chrono::steady_clock::now();
     BellmanSolver free_solver(nodes, edges);
     free_solver.solve();
-    BellmanResult free_res = free_solver.result("hard", frame.cfg.eta_h);
+    BellmanResult free_res = baseline_mode
+        ? free_solver.result("soft", frame.cfg.eta_h, 0.0)
+        : free_solver.result("hard", frame.cfg.eta_h);
     double free_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
     printf("  Total fuel:        %.3f mt\n", free_res.total_fuel_mt);
     printf("  Voyage time:       %.3f h\n",  free_res.voyage_time_h);
+    if (baseline_mode && free_res.voyage_time_h > frame.cfg.eta_h + 1e-6)
+        printf("  (arrived %.2f h after ETA — discretization rounding)\n",
+               free_res.voyage_time_h - frame.cfg.eta_h);
     printf("  Sink:              (%.3f h, %.3f nm)\n",
            free_res.sink_node.first, free_res.sink_node.second);
     printf("  Schedule length:   %zu edges\n", free_res.schedule.size());
     printf("  Solve time:        %.3f s\n", free_t);
     printf("  NaN edges skipped: %d\n", free_res.nan_edges_skipped);
+
+    if (baseline_mode) {
+        print_header("SUMMARY — baseline (fixed mean SOG)");
+        printf("  Mean SOG:    %.4f kn\n", frame.cfg.v_min);
+        printf("  Total fuel:  %.3f mt\n", free_res.total_fuel_mt);
+        printf("  Voyage time: %.3f h  (ETA = %.1f h)\n",
+               free_res.voyage_time_h, frame.cfg.eta_h);
+        printf("  Graph: %zu nodes, %zu atomic edges, build %.1f s\n\n",
+               nodes.size(), edges.size(), build_t);
+        return 0;
+    }
 
     // ---- Luo DP ----
     print_header("DP REBUILD — Luo DP (SOG-lock per 6 h block)");
