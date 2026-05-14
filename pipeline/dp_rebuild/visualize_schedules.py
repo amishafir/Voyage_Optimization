@@ -45,7 +45,7 @@ if str(_HERE) not in sys.path:
 
 from bellman import BellmanSolver  # noqa: E402
 from bellman_locked import BellmanSolverLocked  # noqa: E402
-from build_atomic_edges import build_atomic_edges  # noqa: E402
+from atomic_edges import build_atomic_edges  # noqa: E402
 from frame import from_route as frame_from_route  # noqa: E402
 from geo_grid import (  # noqa: E402
     rhumb_distance_nm,
@@ -53,8 +53,8 @@ from geo_grid import (  # noqa: E402
     _mercator_y,
     _inverse_mercator_lat_deg,
 )
-from h5_weather import VoyageWeather  # noqa: E402
-from load_route import load_yaml_route, synthesize_multi_window  # noqa: E402
+from weather import VoyageWeather  # noqa: E402
+from route import load_yaml_route, synthesize_multi_window  # noqa: E402
 from route_waypoints import WAYPOINTS  # noqa: E402
 
 

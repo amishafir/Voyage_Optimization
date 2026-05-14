@@ -46,8 +46,8 @@ from shared.physics import (  # noqa: E402
     calculate_sws_from_sog,
 )
 
-from build_edges import Weather  # noqa: E402
-from build_nodes import Node  # noqa: E402
+from weather import Weather  # noqa: E402
+from nodes import Node  # noqa: E402
 from frame import Frame  # noqa: E402
 
 
@@ -59,21 +59,28 @@ from frame import Frame  # noqa: E402
 class AtomicEdge:
     """One sub-arc through one cell at one target SOG.
 
-    Field names match `build_edges.Edge` so `BellmanSolver` works on
-    `List[AtomicEdge]` without modification. Adds `target_sog` —
-    the captain's decision SOG, used as the lock label in Luo Bellman.
+    Mirrors the ``AtomicEdge`` struct in ``pipeline/dp_cpp/src/atomic_edges.hpp``.
+    Field names match ``build_edges.Edge`` so ``BellmanSolver`` works on
+    ``List[AtomicEdge]`` without modification.
+
+    ``crosses_v_line``: True iff this arc reaches a V-line as its terminal
+    boundary. Used by Luo DP to release the SOG lock at block boundaries.
+    V-line arcs always set this; H-line arcs do NOT (even if they happen to
+    snap onto a V-line time) unless they were clipped to a V-line because
+    their snapped time overshot one.
     """
     src_t: float
     src_d: float
     dst_t: float
     dst_d: float
     sog: float            # REALIZED SOG = Δd / Δt (post-snap) — physics
-    target_sog: float     # DECISION SOG ∈ {9.0, 9.1, …, 13.0} — Luo lock label
+    target_sog: float     # DECISION SOG (Luo lock label)
     weather: Weather      # cell-canonical weather at src_d, block sample_hour
     heading_deg: float    # paper-β at src_d
     sws: float            # SWS inverse-solved at realized SOG
     fcr_mt_per_h: float   # 0.000706 · sws³
     fuel_mt: float        # FCR · (dst_t - src_t)
+    crosses_v_line: bool = False
 
 
 # ----------------------------------------------------------------------
@@ -137,31 +144,37 @@ def _emit_from_src(
     if next_v is None and next_h is None:
         return []
 
-    v_min = frame.cfg.v_min
-    v_max = frame.cfg.v_max
     L = frame.cfg.length_nm
     eps = 1e-9
 
     edges: List[AtomicEdge] = []
 
     for target_sog in frame.sog_grid():
-        # Time to reach next H-line at target SOG
-        dt_to_h = ((next_h - src_d) / target_sog) if next_h is not None else float("inf")
-        # Time to reach next V-line
-        dt_to_v = (next_v - src_t) if next_v is not None else float("inf")
+        dt_to_h = ((next_h - src_d) / target_sog) if next_h is not None else 1e18
+        dt_to_v = (next_v - src_t) if next_v is not None else 1e18
 
-        if dt_to_h <= dt_to_v + eps:
-            # ── H-line target — snap arrival t to 0.1 h grid ──
-            if next_h is None:
-                continue
+        # Prefer the closer boundary, BUT if H-line snap collapses dst_t back to
+        # src_t (H-line is too close given the τ_h grid), fall back to the
+        # V-line target. Mirrors C++ atomic_edges.cpp lines 57–62.
+        use_h = (dt_to_h <= dt_to_v + eps) and (next_h is not None)
+        h_too_close = False
+        if use_h and next_v is not None:
+            snapped_t = frame.snap_h_dst_t(src_t + dt_to_h)
+            if snapped_t <= src_t + eps:
+                use_h = False
+                h_too_close = True
+
+        # crosses_v_line: V-line arcs always; H-line arcs whose snapped time
+        # overshoots the next V-line are clipped to it and also count.
+        crosses_v_line = not use_h
+
+        if use_h:
             dst_d = next_h
-            dst_t_raw = src_t + dt_to_h
-            dst_t = frame.snap_h_dst_t(dst_t_raw)
-            # Don't overshoot the next V-line (cap on the right)
+            dst_t = frame.snap_h_dst_t(src_t + dt_to_h)
             if next_v is not None and dst_t > next_v - eps:
                 dst_t = next_v
+                crosses_v_line = True
         else:
-            # ── V-line target — snap arrival d to 1 nm grid ──
             if next_v is None:
                 continue
             dst_t = next_v
@@ -169,8 +182,10 @@ def _emit_from_src(
             dst_d = frame.snap_v_dst_d(dst_d_raw)
             if dst_d > L:
                 dst_d = L
-            # Don't overshoot the next H-line (defensive — shouldn't happen)
-            if next_h is not None and dst_d > next_h - eps:
+            # Clip to next_h only when H-line was legitimately chosen as the
+            # first boundary (not when we fell back to V-line because H was
+            # too close — that would create a zero-distance edge).
+            if (not h_too_close) and next_h is not None and dst_d > next_h - eps:
                 dst_d = next_h
 
         dt = dst_t - src_t
@@ -178,14 +193,11 @@ def _emit_from_src(
         if dt <= eps or dd <= eps:
             continue
 
+        # Realized SOG from snap geometry. We deliberately do NOT clamp to
+        # [v_min, v_max] — that's a *decision-grid* range, not an engine
+        # bound. The engine bound is SWS ≤ SWS_MAX_FEASIBLE below.
+        # Mirrors C++ atomic_edges.cpp lines 97–104.
         realized_sog = dd / dt
-        if realized_sog < v_min - eps or realized_sog > v_max + eps:
-            continue
-
-        # NOTE: do NOT dedupe by dst here — multiple target_sog values may
-        # snap to the same (dst_t, dst_d) but each carries a distinct lock
-        # label that Luo Bellman needs. Free DP also handles redundant edges
-        # to the same dst correctly (just picks the cheapest).
 
         sws = calculate_sws_from_sog(
             target_sog=realized_sog,
@@ -210,6 +222,7 @@ def _emit_from_src(
             sws=sws,
             fcr_mt_per_h=fcr,
             fuel_mt=fuel,
+            crosses_v_line=crosses_v_line,
         ))
 
     return edges
@@ -352,8 +365,8 @@ def summarize(nodes: List[Node], edges: List[AtomicEdge]) -> None:
 if __name__ == "__main__":
     import time
     from frame import from_route as _frame_from_route
-    from h5_weather import VoyageWeather
-    from load_route import load_yaml_route, synthesize_multi_window
+    from weather import VoyageWeather
+    from route import load_yaml_route, synthesize_multi_window
     from route_waypoints import WAYPOINTS
 
     yaml_path = Path(__file__).resolve().parent.parent.parent / \

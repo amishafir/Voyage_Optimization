@@ -15,6 +15,7 @@ Exposes the interface the rebuild graph needs:
 from bisect import bisect_right
 from collections import defaultdict
 from dataclasses import dataclass
+from math import isnan
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -30,6 +31,48 @@ WEATHER_FIELDS = (
     "ocean_current_velocity_kmh",
     "ocean_current_direction_deg",
 )
+
+
+# ----------------------------------------------------------------------
+# Weather dataclass — mirrors ``pipeline/dp_cpp/src/weather.hpp``
+# ----------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Weather:
+    """Per-cell canonical weather snapshot.
+
+    Direction fields are absolute degrees (0 = N, 90 = E). ``has_nan()`` true
+    if any scalar field is NaN (e.g. Port B coastal marine-API gap).
+    """
+    wind_speed_10m_kmh: float
+    wind_direction_10m_deg: float
+    beaufort_number: int
+    wave_height_m: float
+    ocean_current_velocity_kmh: float
+    ocean_current_direction_deg: float
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, float]) -> "Weather":
+        return cls(
+            wind_speed_10m_kmh=float(d["wind_speed_10m_kmh"]),
+            wind_direction_10m_deg=float(d["wind_direction_10m_deg"]),
+            beaufort_number=int(d["beaufort_number"]),
+            wave_height_m=float(d["wave_height_m"]),
+            ocean_current_velocity_kmh=float(d["ocean_current_velocity_kmh"]),
+            ocean_current_direction_deg=float(d["ocean_current_direction_deg"]),
+        )
+
+    def has_nan(self) -> bool:
+        for f in (
+            self.wind_speed_10m_kmh,
+            self.wind_direction_10m_deg,
+            self.wave_height_m,
+            self.ocean_current_velocity_kmh,
+            self.ocean_current_direction_deg,
+        ):
+            if isinstance(f, float) and isnan(f):
+                return True
+        return False
 
 
 def _circular_mean_deg(angles_deg: List[float]) -> float:

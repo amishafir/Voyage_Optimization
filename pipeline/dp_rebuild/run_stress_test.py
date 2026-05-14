@@ -53,10 +53,10 @@ from shared.physics import (  # noqa: E402
 
 from bellman import BellmanSolver  # noqa: E402
 from bellman_locked import BellmanSolverLocked  # noqa: E402
-from build_atomic_edges import build_atomic_edges  # noqa: E402
+from atomic_edges import build_atomic_edges  # noqa: E402
 from frame import from_route as frame_from_route  # noqa: E402
-from h5_weather import VoyageWeather  # noqa: E402
-from load_route import build_route_from_waypoints_yaml, synthesize_multi_window  # noqa: E402
+from weather import VoyageWeather  # noqa: E402
+from route import build_route_from_waypoints_yaml, synthesize_multi_window  # noqa: E402
 from weather_perturb import WeatherPerturber  # noqa: E402
 
 
@@ -198,7 +198,7 @@ def _load_frame(route_id: int):
     elif route_id == 1:
         yaml_path = _PIPELINE_ROOT.parent / "Dynamic speed optimization" / "weather_forecasts.yaml"
         h5_path = _PIPELINE_ROOT / "data" / "voyage_weather.h5"
-        from load_route import load_yaml_route
+        from route import load_yaml_route
         from route_waypoints import WAYPOINTS
         route = load_yaml_route(yaml_path)
         waypoints = WAYPOINTS

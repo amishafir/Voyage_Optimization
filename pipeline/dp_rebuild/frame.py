@@ -27,15 +27,15 @@ _PIPELINE_ROOT = Path(__file__).resolve().parent.parent
 if str(_PIPELINE_ROOT) not in sys.path:
     sys.path.insert(0, str(_PIPELINE_ROOT))
 
-from build_edges import Weather  # noqa: E402
-from build_nodes import (  # noqa: E402
+from weather import Weather  # noqa: E402
+from nodes import (  # noqa: E402
     GraphConfig,
     h_line_distances_from_geo,
     v_line_times_from_route,
 )
 from geo_grid import position_at_d  # noqa: E402
-from h5_weather import VoyageWeather  # noqa: E402
-from load_route import Route  # noqa: E402
+from weather import VoyageWeather  # noqa: E402
+from route import Route  # noqa: E402
 
 
 SOG_STEP_DEFAULT = 0.1  # kn — discrete SOG grid step (41 SOGs in [9, 13])
@@ -201,7 +201,7 @@ def summarize(frame: Frame) -> None:
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from load_route import load_yaml_route, synthesize_multi_window
+    from route import load_yaml_route, synthesize_multi_window
     from route_waypoints import WAYPOINTS
 
     yaml_path = Path(__file__).resolve().parent.parent.parent / \

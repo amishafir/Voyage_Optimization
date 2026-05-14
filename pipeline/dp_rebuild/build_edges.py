@@ -36,42 +36,15 @@ from shared.physics import (  # noqa: E402
     calculate_sws_from_sog,
 )
 
-from build_nodes import GraphConfig, Node, build_nodes
-from h5_weather import WEATHER_FIELDS, VoyageWeather
-from load_route import Route
+from nodes import GraphConfig, Node, build_nodes
+from weather import WEATHER_FIELDS, VoyageWeather
+from route import Route
 
 
-@dataclass(frozen=True)
-class Weather:
-    wind_speed_10m_kmh: float
-    wind_direction_10m_deg: float
-    beaufort_number: int
-    wave_height_m: float
-    ocean_current_velocity_kmh: float
-    ocean_current_direction_deg: float
-
-    @classmethod
-    def from_dict(cls, d: Dict[str, float]) -> "Weather":
-        return cls(
-            wind_speed_10m_kmh=float(d["wind_speed_10m_kmh"]),
-            wind_direction_10m_deg=float(d["wind_direction_10m_deg"]),
-            beaufort_number=int(d["beaufort_number"]),
-            wave_height_m=float(d["wave_height_m"]),
-            ocean_current_velocity_kmh=float(d["ocean_current_velocity_kmh"]),
-            ocean_current_direction_deg=float(d["ocean_current_direction_deg"]),
-        )
-
-    def has_nan(self) -> bool:
-        for f in (
-            self.wind_speed_10m_kmh,
-            self.wind_direction_10m_deg,
-            self.wave_height_m,
-            self.ocean_current_velocity_kmh,
-            self.ocean_current_direction_deg,
-        ):
-            if isinstance(f, float) and isnan(f):
-                return True
-        return False
+# Weather dataclass moved to weather.py (mirrors C++ structure where Weather
+# lives in weather.hpp). Re-exported here for backwards compatibility with
+# orchestration scripts that haven't been refactored yet.
+from weather import Weather  # noqa: F401
 
 
 @dataclass(frozen=True)
@@ -411,8 +384,8 @@ def summarize_edges(edges: List[Edge], nodes: List[Node], cfg: GraphConfig) -> N
 
 if __name__ == "__main__":
     from pathlib import Path
-    from load_route import load_yaml_route, synthesize_multi_window
-    from build_nodes import h_line_distances_from_geo
+    from route import load_yaml_route, synthesize_multi_window
+    from nodes import h_line_distances_from_geo
     from geo_grid import rhumb_total_nm
     from route_waypoints import WAYPOINTS
 

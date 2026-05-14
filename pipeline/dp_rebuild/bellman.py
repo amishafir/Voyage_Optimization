@@ -25,7 +25,7 @@ from math import inf, isnan
 from typing import Dict, List, Optional, Tuple
 
 from build_edges import Edge
-from build_nodes import Node
+from nodes import Node
 
 
 # ----------------------------------------------------------------------

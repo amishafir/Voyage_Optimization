@@ -24,8 +24,8 @@ from dataclasses import dataclass
 from math import inf, isnan
 from typing import Dict, List, Optional, Set, Tuple
 
-from build_atomic_edges import AtomicEdge
-from build_nodes import Node
+from atomic_edges import AtomicEdge
+from nodes import Node
 
 
 _KEY_PRECISION = 9

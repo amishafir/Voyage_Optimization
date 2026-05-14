@@ -43,8 +43,8 @@ from geo_grid import (  # noqa: E402
     _mercator_y,
     _inverse_mercator_lat_deg,
 )
-from h5_weather import VoyageWeather  # noqa: E402
-from load_route import load_yaml_route, synthesize_multi_window  # noqa: E402
+from weather import VoyageWeather  # noqa: E402
+from route import load_yaml_route, synthesize_multi_window  # noqa: E402
 from route_waypoints import WAYPOINTS  # noqa: E402
 
 

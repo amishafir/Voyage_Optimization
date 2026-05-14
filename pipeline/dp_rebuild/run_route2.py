@@ -34,12 +34,12 @@ from matplotlib.colors import Normalize
 
 from bellman import BellmanSolver
 from bellman_locked import BellmanSolverLocked
-from build_atomic_edges import build_atomic_edges
+from atomic_edges import build_atomic_edges
 from build_edges_locked import simulate_steady_voyage
 from frame import from_route as frame_from_route
 from geo_grid import rhumb_distance_nm, rhumb_grid_crossings
-from h5_weather import VoyageWeather
-from load_route import build_route_from_waypoints_yaml, synthesize_multi_window
+from weather import VoyageWeather
+from route import build_route_from_waypoints_yaml, synthesize_multi_window
 from visualize_schedules import (
     _draw_mercator,
     _draw_td_frame,

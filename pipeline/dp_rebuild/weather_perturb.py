@@ -51,7 +51,7 @@ if str(_PIPELINE_ROOT) not in sys.path:
 
 from shared.beaufort import wind_speed_to_beaufort  # noqa: E402
 
-from build_edges import Weather  # noqa: E402
+from weather import Weather  # noqa: E402
 from geo_grid import position_at_d  # noqa: E402
 
 
