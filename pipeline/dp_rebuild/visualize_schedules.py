@@ -1,12 +1,12 @@
 """
-Visualize the rebuilt graph + Free DP and Luo DP optimal schedules,
+Visualize the rebuilt graph + SR DP and Luo DP optimal schedules,
 side by side.
 
 Layout (3 panels):
   1. Mercator chart of the chosen waypoint subset (default WP1 → WP2 → WP3),
      with rhumb-line segments + 0.5° NWP grid + lat/lon crossings.
   2. (t, d) view with H-lines + V-lines from the new frame, with the
-     Free DP optimal schedule's atomic edges overlaid (polyline).
+     SR DP optimal schedule's atomic edges overlaid (polyline).
   3. Same (t, d) frame, with the Luo DP optimal schedule's atomic edges
      overlaid.
 
@@ -120,7 +120,7 @@ def _draw_mercator(ax, waypoints, extent):
 
 def _draw_td_frame(ax, frame, d_start, d_end, t_lo, t_hi,
                    waypoints, cumulative, cell_d_lat, cell_d_lon):
-    """Draw V-lines + H-lines on a (t, d) panel — shared between Free and Luo."""
+    """Draw V-lines + H-lines on a (t, d) panel — shared between SR and Luo."""
     L_subset = d_end - d_start
     eta_span = t_hi - t_lo
     ax.invert_yaxis()
@@ -233,7 +233,7 @@ def main() -> None:
               if start_idx > 1 else f"wp{n_wp}")
     out_path = _HERE / f"visualize_schedules_{suffix}.png"
 
-    # ---- Load full route + frame, build atomic graph, solve Free + Luo ----
+    # ---- Load full route + frame, build atomic graph, solve SR + Luo ----
     yaml_path = _HERE.parent / "config" / "routes" / "persian_gulf_malacca_paper.yaml"
     h5_path = _HERE.parent / "data" / "voyage_weather.h5"
     route = load_yaml_route(yaml_path)
@@ -246,12 +246,12 @@ def main() -> None:
     nodes, edges = build_atomic_edges(full_frame, override_sample_hour=0)
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges  (build {time.time()-t0:.1f} s)")
 
-    print("Solving Free DP …")
+    print("Solving SR DP …")
     t0 = time.time()
-    free = BellmanSolver(nodes, edges)
-    free.solve()
-    free_res = free.result(eta_mode="hard", eta=full_frame.cfg.eta_h)
-    print(f"  fuel = {free_res.total_fuel_mt:.3f} mt  (solve {time.time()-t0:.2f} s)")
+    sr = BellmanSolver(nodes, edges)
+    sr.solve()
+    sr_res = sr.result(eta_mode="hard", eta=full_frame.cfg.eta_h)
+    print(f"  fuel = {sr_res.total_fuel_mt:.3f} mt  (solve {time.time()-t0:.2f} s)")
 
     print("Solving Luo DP …")
     t0 = time.time()
@@ -279,7 +279,7 @@ def main() -> None:
         seg_distances.append(cumulative[i + 1] - cumulative[i])
 
     # Time range covered by edges that touch [d_start, d_end] in either schedule
-    edges_in_subset = [e for e in (free_res.schedule + luo_res.schedule)
+    edges_in_subset = [e for e in (sr_res.schedule + luo_res.schedule)
                        if d_start - 1e-6 <= e.src_d <= d_end + 1e-6
                        or d_start - 1e-6 <= e.dst_d <= d_end + 1e-6]
     if edges_in_subset:
@@ -313,7 +313,7 @@ def main() -> None:
                 cell_d_lon.add(d_voy)
         cum += seg_distances[i]
 
-    # ---- Figure: 4 panels (Mercator | Free | Luo | Overlay) ----
+    # ---- Figure: 4 panels (Mercator | SR | Luo | Overlay) ----
     fig = plt.figure(figsize=(26, 8))
 
     # Panel 1: Mercator
@@ -328,12 +328,12 @@ def main() -> None:
     norm = Normalize(vmin=SOG_MIN, vmax=SOG_MAX)
     cmap = plt.get_cmap(SOG_COLORMAP)
 
-    # Panel 2: Free DP
+    # Panel 2: SR DP
     ax_free = fig.add_subplot(1, 4, 2)
     _draw_td_frame(ax_free, full_frame, d_start, d_end, t_axis_lo, t_axis_hi,
                    waypoints, cumulative, cell_d_lat, cell_d_lon)
-    _overlay_schedule(ax_free, free_res.schedule, d_start, d_end, cmap, norm,
-                      "Free DP", free_res.total_fuel_mt,
+    _overlay_schedule(ax_free, sr_res.schedule, d_start, d_end, cmap, norm,
+                      "SR DP", sr_res.total_fuel_mt,
                       total_blocks_shown=None)
 
     # Panel 3: Luo DP
@@ -348,34 +348,34 @@ def main() -> None:
     ax_ovr = fig.add_subplot(1, 4, 4)
     _draw_td_frame(ax_ovr, full_frame, d_start, d_end, t_axis_lo, t_axis_hi,
                    waypoints, cumulative, cell_d_lat, cell_d_lon)
-    free_in = [e for e in free_res.schedule
+    sr_in = [e for e in sr_res.schedule
                if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
     luo_in = [e for e in luo_res.schedule
               if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
-    free_xy = [(e.src_t, e.src_d) for e in free_in] + [(free_in[-1].dst_t, free_in[-1].dst_d)]
+    sr_xy = [(e.src_t, e.src_d) for e in sr_in] + [(sr_in[-1].dst_t, sr_in[-1].dst_d)]
     luo_xy = [(e.src_t, e.src_d) for e in luo_in] + [(luo_in[-1].dst_t, luo_in[-1].dst_d)]
-    free_xs, free_ys = zip(*free_xy)
+    sr_xs, sr_ys = zip(*sr_xy)
     luo_xs, luo_ys = zip(*luo_xy)
     # Resample both onto a common time grid for fill_between
-    common_t = np.linspace(max(free_xs[0], luo_xs[0]),
-                           min(free_xs[-1], luo_xs[-1]), 400)
-    free_d = np.interp(common_t, free_xs, free_ys)
+    common_t = np.linspace(max(sr_xs[0], luo_xs[0]),
+                           min(sr_xs[-1], luo_xs[-1]), 400)
+    sr_d = np.interp(common_t, sr_xs, sr_ys)
     luo_d = np.interp(common_t, luo_xs, luo_ys)
-    ax_ovr.fill_between(common_t, free_d, luo_d,
+    ax_ovr.fill_between(common_t, sr_d, luo_d,
                         color="#ffd166", alpha=0.55, zorder=8,
                         label=f"divergence area = "
-                              f"{float(np.trapezoid(np.abs(free_d - luo_d), common_t)):.1f} nm·h")
-    ax_ovr.plot(free_xs, free_ys, color="#1a73e8", linewidth=2.0, zorder=10,
-                label=f"Free DP ({sum(e.fuel_mt for e in free_in):.3f} mt)")
+                              f"{float(np.trapezoid(np.abs(sr_d - luo_d), common_t)):.1f} nm·h")
+    ax_ovr.plot(sr_xs, sr_ys, color="#1a73e8", linewidth=2.0, zorder=10,
+                label=f"SR DP ({sum(e.fuel_mt for e in sr_in):.3f} mt)")
     ax_ovr.plot(luo_xs, luo_ys, color="#d62728", linewidth=2.0, zorder=10,
                 linestyle="--",
                 label=f"Luo DP ({sum(e.fuel_mt for e in luo_in):.3f} mt)")
     ax_ovr.legend(loc="upper right", fontsize=7, framealpha=0.92)
-    max_dd = float(np.max(np.abs(free_d - luo_d)))
+    max_dd = float(np.max(np.abs(sr_d - luo_d)))
     ax_ovr.set_title(f"Overlay — max |Δd| = {max_dd:.2f} nm",
                      fontsize=10, pad=8)
 
-    # Shared colorbar across the two (t, d) panels (Free + Luo)
+    # Shared colorbar across the two (t, d) panels (SR + Luo)
     sm = ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=[ax_free, ax_luo], orientation="horizontal",
@@ -383,7 +383,7 @@ def main() -> None:
                         label="target SOG (kn)")
     cbar.set_ticks([9, 10, 11, 12, 13])
 
-    # Frame-line legend (compact, top-right of Free panel)
+    # Frame-line legend (compact, top-right of SR panel)
     legend_handles = [
         plt.Line2D([], [], color="red", linewidth=1.4,
                    label="segment-boundary H-line"),

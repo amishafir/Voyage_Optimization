@@ -1,10 +1,10 @@
 # Stress Test — Within-Block Weather Variability (2026-05-07)
 
-> **Headline.** Under controlled within-block weather variability, Free DP's
+> **Headline.** Under controlled within-block weather variability, SR DP's
 > advantage over Luo DP grows monotonically with the perturbation magnitude
 > — from 0.15% of baseline (calm) to **1.29% (σ=30 km/h wind)**, an ≈ 9×
 > expansion. The stress-test regime also flips both DPs from *losing* to
-> *beating* the steady-SOG baseline by 7–14%, confirming that Free's
+> *beating* the steady-SOG baseline by 7–14%, confirming that SR's
 > mid-block flexibility delivers real fuel savings exactly where the
 > theory predicts.
 
@@ -18,20 +18,20 @@ Companion files:
 
 ## 1. Why we needed this
 
-The rebuild (May 6) confirmed the **structural** difference between Free DP
-and Luo DP: Free can change SOG at every H-line crossing, Luo can't. But on
+The rebuild (May 6) confirmed the **structural** difference between SR DP
+and Luo DP: SR can change SOG at every H-line crossing, Luo can't. But on
 both the Persian Gulf and St. John's voyages — at `sample_hour = 0` — the
 **fuel** difference was tiny (0.32 mt on Route 1, 0.28 mt on Route 2,
 ≤ 0.15% of baseline either way).
 
 The reason: with Luo's "block-start sample_hour" rule, every sub-arc inside
 a 6 h block reads the *same* weather row. Within-block temporal variation
-is invisible to both DPs. So Free's mid-block flexibility has nothing
+is invisible to both DPs. So SR's mid-block flexibility has nothing
 temporal to exploit — only spatial cell variation, which the snap grid
 collapses to zero per-block effect (see §2.6 of last week's prep).
 
 The hypothesis: if the captain's actual weather *varies hour-to-hour
-within a block*, Free should win meaningfully. To test it, we inject
+within a block*, SR should win meaningfully. To test it, we inject
 controlled within-block variability via a synthetic perturber.
 
 ---
@@ -53,14 +53,14 @@ correlation time so adjacent hours stay correlated. Beaufort number is
 recomputed from the perturbed wind speed via `wind_speed_to_beaufort`.
 
 Reproducible across runs — same seed → same perturbation realization,
-so Free / Luo / baseline all see identical weather and the comparison is
+so SR / Luo / baseline all see identical weather and the comparison is
 fair.
 
 ---
 
 ## 3. Sweep results (Route 2, sample_hour = 0, τ = 4 h, seed = 42)
 
-| σ_wind (km/h) | σ_wave (m) | Baseline | Free DP | Luo DP | Δ Free−base | Δ Luo−base | **Δ Luo−Free** | **Δ%** |
+| σ_wind (km/h) | σ_wave (m) | Baseline | SR DP | Luo DP | Δ SR−base | Δ Luo−base | **Δ Luo−SR** | **Δ%** |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 0.0 | 0.00 | 189.286 | 189.448 | 189.731 | +0.163 | +0.446 | **+0.283** | **+0.15%** |
 | 5.0 | 0.33 | 191.082 | 189.479 | 189.866 | −1.603 | −1.216 | **+0.387** | **+0.20%** |
@@ -69,7 +69,7 @@ fair.
 | 20.0 | 1.33 | 198.930 | 190.515 | 192.239 | −8.415 | −6.691 | **+1.724** | **+0.87%** |
 | 30.0 | 2.00 | 206.650 | 192.312 | 194.969 | −14.338 | −11.682 | **+2.656** | **+1.29%** |
 
-(Δ% = Δ(Luo − Free) / baseline.)
+(Δ% = Δ(Luo − SR) / baseline.)
 
 Plot: `pipeline/dp_rebuild/results/stress_test_sweep_route2.png`
 
@@ -78,12 +78,12 @@ Plot: `pipeline/dp_rebuild/results/stress_test_sweep_route2.png`
 ### Reading the curves
 
 **Left panel — DP fuel vs steady-SOG baseline (% of baseline)**
-Both Free and Luo go from *losing* by ~0.1% at σ = 0 to *winning* by 7%
-(Free) and 5.7% (Luo) at σ = 30. The optimization gain is real and grows
+Both SR and Luo go from *losing* by ~0.1% at σ = 0 to *winning* by 7%
+(SR) and 5.7% (Luo) at σ = 30. The optimization gain is real and grows
 nearly linearly with σ. This is the "without stress, optimization ≈ no
 help; with stress, it pays back massively" story.
 
-**Right panel — Δ(Luo − Free) / baseline (% of baseline)**
+**Right panel — Δ(Luo − SR) / baseline (% of baseline)**
 The headline curve. From 0.15% at σ = 0 it stays roughly flat through
 σ = 10 (~0.2%), then accelerates: 0.37% at σ = 15, 0.87% at σ = 20,
 1.29% at σ = 30. Clear monotone trend with a **regime change near
@@ -105,9 +105,9 @@ Reading the panels:
 | Panel | What it shows |
 |---|---|
 | **Mercator** | The mid-Atlantic crossing WP5 → WP6 → WP7. Same geometry; only the weather is perturbed. |
-| **Free DP @ σ=20** | 39 atomic edges in the window. Heavy color shifts (different target SOGs from edge to edge) — Free is reacting to perturbed wind/wave at every H-line. |
+| **SR DP @ σ=20** | 39 atomic edges in the window. Heavy color shifts (different target SOGs from edge to edge) — SR is reacting to perturbed wind/wave at every H-line. |
 | **Luo DP @ σ=20** | 43 atomic edges. Each 6 h block is a single uniform color (lock invariant) — Luo commits to one SOG and rides through the in-block storm regardless. |
-| **Overlay** | Free (blue solid) vs Luo (red dashed). They diverge by up to 24 nm in d, occupy different bands, and rejoin at WP5/WP7. **Free is locally 3.4 mt MORE expensive in this window** (63.37 vs 59.99 mt) — Free strategically "loses" here to save 5+ mt elsewhere. Same global-vs-local trade-off pattern we saw on Route 1's calm WP8–WP10 window. |
+| **Overlay** | SR (blue solid) vs Luo (red dashed). They diverge by up to 24 nm in d, occupy different bands, and rejoin at WP5/WP7. **SR is locally 3.4 mt MORE expensive in this window** (63.37 vs 59.99 mt) — SR strategically "loses" here to save 5+ mt elsewhere. Same global-vs-local trade-off pattern we saw on Route 1's calm WP8–WP10 window. |
 
 ---
 
@@ -115,22 +115,22 @@ Reading the panels:
 
 Three findings, in order of paper-relevance:
 
-1. **The Free/Luo gap is a function of within-block weather variability.**
+1. **The SR/Luo gap is a function of within-block weather variability.**
    At σ = 0 the gap is ~0.15% (negligible). At σ = 30 km/h it's 1.29%
    (significant). Monotone trend with a clear regime transition near
    σ = 15 km/h. **This is the headline finding.**
 
 2. **Stress-test conditions also flip the optimization-vs-baseline sign.**
    In calm conditions (σ = 0) the snap grid imposes a small penalty that
-   the continuous baseline doesn't pay, so Free DP is worse than baseline.
+   the continuous baseline doesn't pay, so SR DP is worse than baseline.
    Under stress, the optimization actually *wins* by 7–14% — large enough
    to dominate any snap-grid noise. **The "DP doesn't help unless there's
    weather" framing is empirical, not just theoretical.**
 
-3. **Free DP often loses *locally* to Luo even when it wins globally.**
-   In the headline σ = 20 visualization, Free is **3.4 mt more expensive**
+3. **SR DP often loses *locally* to Luo even when it wins globally.**
+   In the headline σ = 20 visualization, SR is **3.4 mt more expensive**
    in the WP5–WP7 window. This is the same cross-window trade-off
-   pattern documented on Route 1's WP8–WP10 (May 6 summary §5). Free
+   pattern documented on Route 1's WP8–WP10 (May 6 summary §5). SR
    spends in one window to save more in another — Bellman is acting
    globally. Luo can't.
 
@@ -141,7 +141,7 @@ Three findings, in order of paper-relevance:
 The same sweep on Route 1 produces the same monotone trend at smaller
 absolute magnitude:
 
-| σ_wind | **Route 1 Δ(Luo−Free) %** | **Route 2 Δ(Luo−Free) %** | Ratio |
+| σ_wind | **Route 1 Δ(Luo−SR) %** | **Route 2 Δ(Luo−SR) %** | Ratio |
 |---:|---:|---:|---:|
 | 0 | 0.088 | 0.150 | 1.7× |
 | 5 | 0.109 | 0.203 | 1.9× |
@@ -150,11 +150,11 @@ absolute magnitude:
 | 20 | 0.296 | 0.867 | 2.9× |
 | 30 | 0.371 | 1.285 | **3.5×** |
 
-Both routes show monotone increase in Free's advantage with σ, validating
+Both routes show monotone increase in SR's advantage with σ, validating
 the thesis on two independent voyages. Route 2's faster growth at high σ
 likely reflects its denser segment boundaries (segments 7–10 are 70–290
 nm, packing more H-line crossings into each 6 h block — more decision
-points where Free DP can react).
+points where SR DP can react).
 
 Plot: `pipeline/dp_rebuild/results/stress_test_sweep_route1.png`
 
@@ -176,8 +176,8 @@ real surface wind at hourly scale. Faster τ would make the perturbation
 look like white noise; slower would make it persistent.
 
 **What if τ were much larger (smooth)?** Smaller mid-block variability,
-smaller Free advantage. Worth a sweep on τ in a follow-up — likely
-shows Free's advantage is bounded above by τ → ∞ (constant within block,
+smaller SR advantage. Worth a sweep on τ in a follow-up — likely
+shows SR's advantage is bounded above by τ → ∞ (constant within block,
 matches σ=0 behavior).
 
 **What about real NWP forecast variability?** GFS/ECMWF hourly forecasts
@@ -202,4 +202,4 @@ useful endpoints for the paper.
    cleaner causal demonstration than random walk.
 
 ⏳ Sweep over τ_h to characterize how perturbation persistence changes
-   the Free/Luo gap.
+   the SR/Luo gap.

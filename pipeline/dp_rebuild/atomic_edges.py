@@ -3,7 +3,7 @@ DP graph rebuild — atomic-edge builder.
 
 One graph, one edge type. Each emitted edge is a single sub-arc that
 traverses one cell at one *target* SOG (the captain's decision). Speed
-change happens only at H-line crossings (in Free DP) or V-lines (Luo).
+change happens only at H-line crossings (in SR DP) or V-lines (Luo).
 The atomic-edge graph is shared by both DP modes; Luo is implemented as
 a Bellman-side state augmentation, not a separate edge set.
 
@@ -110,7 +110,7 @@ def _emit_from_src(
     `perturber`: optional `WeatherPerturber`. If supplied, the cell-canonical
     weather is post-processed by `perturber.perturb(base, src_t, src_d, waypoints)`
     BEFORE the SWS inverse-solve — injects within-block temporal variation
-    that Free DP can exploit at H-line crossings (and Luo cannot).
+    that SR DP can exploit at H-line crossings (and Luo cannot).
     """
     if abs(src_d - frame.cfg.length_nm) < 1e-9:
         return []

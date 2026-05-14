@@ -5,17 +5,17 @@ weather variability via WeatherPerturber.
 For each (σ_wind, σ_wave) magnitude pair in the sweep:
   1. Build atomic-edge graph for Route 2 (St. John's → Liverpool) with the
      perturber active.
-  2. Solve Free DP and Luo DP on that graph.
+  2. Solve SR DP and Luo DP on that graph.
   3. Simulate the perturbed steady-SOG baseline (same perturbation, no
      speed adjustment) for fair comparison.
-  4. Record (fuel_baseline, fuel_free, fuel_luo, ΔLuo-Free, ΔFree-baseline).
+  4. Record (fuel_baseline, fuel_sr, fuel_luo, ΔLuo-SR, ΔFree-baseline).
 
 All three solvers see IDENTICAL perturbation realizations (same seed) so
 the comparison is fair: differences are purely from the optimizer's
 ability or inability to react to the temporal variation.
 
-Hypothesis (H1): as σ grows, Free DP's advantage over Luo grows
-monotonically. Free can change SOG at every H-line crossing in response
+Hypothesis (H1): as σ grows, SR DP's advantage over Luo grows
+monotonically. SR can change SOG at every H-line crossing in response
 to the perturbation; Luo is locked to one SOG per 6 h block.
 
 Output:
@@ -75,7 +75,7 @@ SAMPLE_HOUR = 0
 
 # ----------------------------------------------------------------------
 # Perturbed steady-SOG baseline (mirrors simulate_steady_voyage but with
-# the same perturber as Free + Luo see)
+# the same perturber as SR + Luo see)
 # ----------------------------------------------------------------------
 
 def perturbed_steady_baseline(
@@ -156,9 +156,9 @@ def run_one_sigma(
     )
     build_t = time.time() - t0
 
-    free = BellmanSolver(nodes, edges)
-    free.solve()
-    free_res = free.result(eta_mode="hard", eta=frame.cfg.eta_h)
+    sr = BellmanSolver(nodes, edges)
+    sr.solve()
+    sr_res = sr.result(eta_mode="hard", eta=frame.cfg.eta_h)
 
     luo = BellmanSolverLocked(nodes, edges, set(frame.v_line_times))
     luo.solve()
@@ -175,16 +175,16 @@ def run_one_sigma(
         "n_edges": len(edges),
         "build_t": build_t,
         "fuel_baseline": base_fuel,
-        "fuel_free": free_res.total_fuel_mt,
+        "fuel_sr": sr_res.total_fuel_mt,
         "fuel_luo": luo_res.total_fuel_mt,
-        "delta_luo_free": luo_res.total_fuel_mt - free_res.total_fuel_mt,
-        "delta_free_base": free_res.total_fuel_mt - base_fuel,
+        "delta_luo_sr": luo_res.total_fuel_mt - sr_res.total_fuel_mt,
+        "delta_sr_base": sr_res.total_fuel_mt - base_fuel,
         "delta_luo_base": luo_res.total_fuel_mt - base_fuel,
-        "free_pct": (free_res.total_fuel_mt - base_fuel) / base_fuel * 100.0
+        "sr_pct": (sr_res.total_fuel_mt - base_fuel) / base_fuel * 100.0
                     if base_fuel == base_fuel else float("nan"),
         "luo_pct":  (luo_res.total_fuel_mt - base_fuel) / base_fuel * 100.0
                     if base_fuel == base_fuel else float("nan"),
-        "luo_free_pct": (luo_res.total_fuel_mt - free_res.total_fuel_mt) / base_fuel * 100.0
+        "luo_sr_pct": (luo_res.total_fuel_mt - sr_res.total_fuel_mt) / base_fuel * 100.0
                         if base_fuel == base_fuel else float("nan"),
     }
 
@@ -232,23 +232,23 @@ def main():
                           sample_hour=args.sample_hour, seed=args.seed)
         rows.append(r)
         print(f"  baseline = {r['fuel_baseline']:.3f} mt   "
-              f"free = {r['fuel_free']:.3f} mt ({r['free_pct']:+.3f}%)   "
+              f"free = {r['fuel_sr']:.3f} mt ({r['sr_pct']:+.3f}%)   "
               f"luo = {r['fuel_luo']:.3f} mt ({r['luo_pct']:+.3f}%)")
-        print(f"  Δ(Luo - Free) = {r['delta_luo_free']:+.3f} mt "
-              f"({r['luo_free_pct']:+.4f}% of baseline)")
+        print(f"  Δ(Luo - SR) = {r['delta_luo_sr']:+.3f} mt "
+              f"({r['luo_sr_pct']:+.4f}% of baseline)")
 
     # ---- Table ----
     print("\n" + "=" * 102)
     print("STRESS-SWEEP RESULTS")
     print("=" * 102)
-    print(f"  {'σ_wind':>8} {'σ_wave':>7} {'baseline':>9} {'free':>9} {'luo':>9} "
-          f"{'Δ Free-base':>13} {'Δ Luo-base':>12} {'Δ Luo-Free':>12} {'Δ%':>7}")
+    print(f"  {'σ_wind':>8} {'σ_wave':>7} {'baseline':>9} {'sr':>9} {'luo':>9} "
+          f"{'Δ SR-base':>13} {'Δ Luo-base':>12} {'Δ Luo-SR':>12} {'Δ%':>7}")
     print("-" * 102)
     for r in rows:
         print(f"  {r['sigma_wind']:>8.1f} {r['sigma_wave']:>7.2f} "
-              f"{r['fuel_baseline']:>9.3f} {r['fuel_free']:>9.3f} {r['fuel_luo']:>9.3f} "
-              f"{r['delta_free_base']:>+13.3f} {r['delta_luo_base']:>+12.3f} "
-              f"{r['delta_luo_free']:>+12.3f} {r['luo_free_pct']:>+7.4f}")
+              f"{r['fuel_baseline']:>9.3f} {r['fuel_sr']:>9.3f} {r['fuel_luo']:>9.3f} "
+              f"{r['delta_sr_base']:>+13.3f} {r['delta_luo_base']:>+12.3f} "
+              f"{r['delta_luo_sr']:>+12.3f} {r['luo_sr_pct']:>+7.4f}")
     print("=" * 102)
 
     # ---- Save table to file ----
@@ -258,24 +258,24 @@ def main():
     with open(out_txt, "w") as f:
         f.write(f"Route {args.route} stress sweep (sample_hour={args.sample_hour}, seed={args.seed})\n")
         f.write(f"L = {frame.cfg.length_nm:.2f} nm, ETA = {frame.cfg.eta_h:.0f} h\n\n")
-        f.write(f"{'σ_wind':>8} {'σ_wave':>7} {'baseline':>9} {'free':>9} {'luo':>9} "
-                f"{'Δ Free-base':>13} {'Δ Luo-base':>12} {'Δ Luo-Free':>12} {'Δ% baseline':>13}\n")
+        f.write(f"{'σ_wind':>8} {'σ_wave':>7} {'baseline':>9} {'sr':>9} {'luo':>9} "
+                f"{'Δ SR-base':>13} {'Δ Luo-base':>12} {'Δ Luo-SR':>12} {'Δ% baseline':>13}\n")
         for r in rows:
             f.write(f"{r['sigma_wind']:>8.1f} {r['sigma_wave']:>7.2f} "
-                    f"{r['fuel_baseline']:>9.3f} {r['fuel_free']:>9.3f} {r['fuel_luo']:>9.3f} "
-                    f"{r['delta_free_base']:>+13.3f} {r['delta_luo_base']:>+12.3f} "
-                    f"{r['delta_luo_free']:>+12.3f} {r['luo_free_pct']:>+12.4f}\n")
+                    f"{r['fuel_baseline']:>9.3f} {r['fuel_sr']:>9.3f} {r['fuel_luo']:>9.3f} "
+                    f"{r['delta_sr_base']:>+13.3f} {r['delta_luo_base']:>+12.3f} "
+                    f"{r['delta_luo_sr']:>+12.3f} {r['luo_sr_pct']:>+12.4f}\n")
     print(f"\nTable saved: {out_txt}")
 
     # ---- Plot ----
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     sigmas = [r["sigma_wind"] for r in rows]
-    free_pcts = [r["free_pct"] for r in rows]
+    sr_pcts = [r["sr_pct"] for r in rows]
     luo_pcts = [r["luo_pct"] for r in rows]
-    gap_pcts = [r["luo_free_pct"] for r in rows]
+    gap_pcts = [r["luo_sr_pct"] for r in rows]
 
     ax = axes[0]
-    ax.plot(sigmas, free_pcts, "o-", color="#1a73e8", label="Free DP vs baseline")
+    ax.plot(sigmas, sr_pcts, "o-", color="#1a73e8", label="SR DP vs baseline")
     ax.plot(sigmas, luo_pcts, "s--", color="#d62728", label="Luo DP vs baseline")
     ax.axhline(0.0, color="black", linewidth=0.6, alpha=0.5)
     ax.set_xlabel("σ_wind (km/h)")
@@ -285,11 +285,11 @@ def main():
     ax.grid(alpha=0.3)
 
     ax = axes[1]
-    ax.plot(sigmas, gap_pcts, "o-", color="#5e35b1", label="Δ(Luo - Free) / baseline")
+    ax.plot(sigmas, gap_pcts, "o-", color="#5e35b1", label="Δ(Luo - SR) / baseline")
     ax.axhline(0.0, color="black", linewidth=0.6, alpha=0.5)
     ax.set_xlabel("σ_wind (km/h)")
-    ax.set_ylabel("Δ(Luo - Free) (% of baseline)")
-    ax.set_title("Free's advantage over Luo grows with stress")
+    ax.set_ylabel("Δ(Luo - SR) (% of baseline)")
+    ax.set_title("SR's advantage over Luo grows with stress")
     ax.legend()
     ax.grid(alpha=0.3)
 

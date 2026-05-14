@@ -114,18 +114,18 @@ In code: each sub-leg looks up cell-canonical weather + paper-segment heading, *
 
 ### 6.2 Combined Bellman — free ⊕ locked on the same nodes
 
-Both edge sets share the free-DP node table by construction (verified by closing assertion). The union of edges is a valid Bellman input — Bellman picks the lowest-fuel outgoing edge at every node, regardless of type. The combined optimum is bounded above by both alone:
+Both edge sets share the SR-DP node table by construction (verified by closing assertion). The union of edges is a valid Bellman input — Bellman picks the lowest-fuel outgoing edge at every node, regardless of type. The combined optimum is bounded above by both alone:
 
 | Graph | Edges | Total fuel | Schedule | Δ vs baseline | Δ vs free |
 |---|---:|---:|---:|---:|---:|
 | **Baseline (steady SOG = 12.120 kn)** | — | **366.519 mt** | 1 (continuous) | — | −0.25 mt |
-| Free DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | **+0.25 mt** | — |
+| SR DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | **+0.25 mt** | — |
 | Locked DP (SOG-locking) | 631,537 | 365.161 mt | 47 blocks | −1.36 mt | −1.61 mt |
 | **Combined (union)** | **3,940,477** | **362.965 mt** | **105 (74 free + 31 locked)** | **−3.55 mt (−0.97 %)** | **−3.80 mt** |
 
 The steady-SOG baseline holds `SOG = L/ETA` constant over the whole voyage,
 inverse-solving SWS per H-line sub-leg under the same cell-canonical weather
-the DP graphs see. Free DP is **+0.25 mt worse than the baseline** — its
+the DP graphs see. SR DP is **+0.25 mt worse than the baseline** — its
 1 nm × 0.1 h snap grid can't match the continuous SOG the baseline runs at
 when the optimum is near-uniform. Locked DP wins by 1.36 mt (continuous
 target SOG, no snap penalty) and combined wins by 3.55 mt (locked
@@ -157,7 +157,7 @@ Luo et al. 2024 report 146 min (voyage I, 2701 nm, 39 RH runs) and 220 min (voya
 | Per-edge weight | ANN forward pass (10 inputs, hidden up to 32 neurons) | Closed-form `0.000706·SWS³` + analytic SWS inverse — **~5–10× cheaper per edge** |
 | Speed range / discretisation | [8, 18] kn × 0.1 step → 101 speeds per node | [9, 13] kn × 0.1 step → 41 speeds — **~2.5× smaller per-source fan-out** |
 | Locked-edge dst enumeration | n/a (single-policy) | **Geometric** `d_src + target_SOG·6h`, one edge per (V-src, V-dst), no inverse search |
-| Edge sets per build | One graph per RH run | **Free ⊕ locked share the same node table** — one canonicalisation, one Bellman pass |
+| Edge sets per build | One graph per RH run | **SR ⊕ locked share the same node table** — one canonicalisation, one Bellman pass |
 | Solver | Dijkstra (NetworkX, Python) — `O((V+E) log V)`, priority queue | Forward Bellman in lex topological order — **`O(V+E)`, no PQ** — solve **~10–15× faster** at our V, E |
 | Decision per stage | One scalar speed (101 discrete options) | Per-square (1 nm × 0.1 h) free **+** continuous-SOG 6 h locked, mixed by Bellman |
 | Within-stage weather | Single snapshot at segment start | **Sub-leg `Σ FCR(SWS_i)·Δt_i`** through every cell + segment crossing |

@@ -1,5 +1,5 @@
 """
-dp_SR — Shafir-Raviv Free DP.
+dp_SR — Shafir-Raviv SR DP.
 
 Python mirror of ``pipeline/dp_cpp/src/SR_main.cpp``. Builds a (t, d) graph
 of atomic edges (one arc per discrete target SOG per source) and runs a
@@ -19,7 +19,7 @@ Usage::
         --max_speed KNOTS Maximum SOG in knots  (default: mean_sog + 3)
         --zeta_nm  NM     Distance snap for H-line arc destinations
         --tau_h    HOURS  Time snap for V-line arc destinations
-        --csv             Write per-arc schedule to free_dp.csv
+        --csv             Write per-arc schedule to sr_dp.csv
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ def _print_header(title: str) -> None:
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         prog="SR_main",
-        description="Shafir-Raviv Free DP — Python port of dp_SR",
+        description="Shafir-Raviv SR DP — Python port of dp_SR",
     )
     ap.add_argument("--yaml", default="route.yaml", help="Route YAML (default: route.yaml)")
     ap.add_argument("--h5", default="voyage_weather.h5",
@@ -94,7 +94,7 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--tau_h", type=float, default=None,
                     help="Time snap for V-line arc destinations (default: 0.1)")
     ap.add_argument("--csv", action="store_true",
-                    help="Write per-arc solution CSV (free_dp.csv)")
+                    help="Write per-arc solution CSV (sr_dp.csv)")
     return ap.parse_args()
 
 
@@ -160,7 +160,7 @@ def main() -> int:
     print(f"\nBuild time: {build_t:.2f} s\n")
     summarize_atomic_edges(nodes, edges)
 
-    # ---- dp_SR (Free DP, no SOG lock) ----
+    # ---- dp_SR (SR DP, no SOG lock) ----
     t0 = time.time()
     solver = BellmanSolver(nodes, edges)
     solver.solve()
@@ -168,7 +168,7 @@ def main() -> int:
     solve_t = time.time() - t0
 
     if args.csv:
-        write_arc_csv(Path("free_dp.csv"), res.schedule, WAYPOINTS)
+        write_arc_csv(Path("sr_dp.csv"), res.schedule, WAYPOINTS)
 
     # ---- Summary ----
     _print_header("dp_SR — SUMMARY")

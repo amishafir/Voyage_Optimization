@@ -2,15 +2,15 @@
 Building atomic-edge graph …
   91,663 nodes, 3,317,895 edges in 67.2 s
 
-Solving Free DP …
+Solving SR DP …
   fuel = 365.809 mt, edges = 201
 
 Solving Luo DP …
   fuel = 366.132 mt, edges = 205
 
 ==================================================================================================================================
-Per-block comparison: Free DP vs Luo DP
-  ✓ = block (src_d, dst_d) coincide between Free and Luo (apples-to-apples)
+Per-block comparison: SR DP vs Luo DP
+  ✓ = block (src_d, dst_d) coincide between SR and Luo (apples-to-apples)
   ≠ = block boundaries diverge in space (different mini-problems per block)
 ==================================================================================================================================
 blk     t_range       free src→dst (nm)       luo src→dst (nm) aligned               free_SOGs luo_SOG     Δfuel  type
@@ -65,21 +65,21 @@ blk     t_range       free src→dst (nm)       luo src→dst (nm) aligned      
 ==================================================================================================================================
 Aggregate summary
 ==================================================================================================================================
-type                                                    count   free_fuel    luo_fuel   Δ (luo-free)
+type                                                    count   sr_fuel    luo_fuel   Δ (luo-free)
 ----------------------------------------------------------------------------------------------------------------------------------
-A. identical decision (Free 1 SOG, matches Luo)             0       0.000       0.000         +0.000
-B. same structure, different SOG (Free 1 SOG ≠ Luo)         1       7.931       7.042         -0.889
-C. Free deviated (≥ 2 SOGs in block, Luo can't)            46     357.878     359.090         +1.212
+A. identical decision (SR 1 SOG, matches Luo)             0       0.000       0.000         +0.000
+B. same structure, different SOG (SR 1 SOG ≠ Luo)         1       7.931       7.042         -0.889
+C. SR deviated (≥ 2 SOGs in block, Luo can't)            46     357.878     359.090         +1.212
 ----------------------------------------------------------------------------------------------------------------------------------
 TOTAL                                                      47     365.809     366.132         +0.323
 
-Free DP total fuel:  365.809 mt
+SR DP total fuel:  365.809 mt
 Luo DP total fuel:   366.132 mt
-Δ (Luo - Free):      +0.323 mt
+Δ (Luo - SR):      +0.323 mt
 Aligned blocks (✓):  7/47  (both schedules agree on the V-line node positions for that block)
 
-Apples-to-apples per-block view (only blocks where Free's and Luo's
+Apples-to-apples per-block view (only blocks where SR's and Luo's
 V-line dst d coincide — same mini-problem, fuel comparison is meaningful):
 ----------------------------------------------------------------------------------------------------------------------------------
-  Aligned-block totals:  Free = 54.042 mt,  Luo = 54.042 mt,  Δ = +0.000 mt
-  Aligned type-C blocks: 7  →  Free saves +0.000 mt by using mid-block SOG flexibility
+  Aligned-block totals:  SR = 54.042 mt,  Luo = 54.042 mt,  Δ = +0.000 mt
+  Aligned type-C blocks: 7  →  SR saves +0.000 mt by using mid-block SOG flexibility

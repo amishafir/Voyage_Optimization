@@ -4,9 +4,9 @@ End-to-end runner for Route 2 (St. John's → Liverpool).
 Single script that:
   1. Loads Route 2 (yaml + HDF5 + computed-bearing waypoints).
   2. Builds the atomic-edge graph.
-  3. Solves Free DP, Luo DP, and Baseline (steady SOG = L/ETA).
+  3. Solves SR DP, Luo DP, and Baseline (steady SOG = L/ETA).
   4. Classifies every block A/B/C and reports aligned-vs-unaligned breakdown.
-  5. Ranks 3-WP windows by Free–Luo divergence and reports the top.
+  5. Ranks 3-WP windows by SR–Luo divergence and reports the top.
   6. Renders the 4-panel visualization of the most divergent window.
 
 Default sample_hour = 0. Pass `--sample-hour N` to use a different snapshot.
@@ -105,14 +105,14 @@ def main():
     build_t = time.time() - t0
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges  (build {build_t:.1f} s)")
 
-    # ---- Solve Free + Luo + Baseline --------------------------------------
+    # ---- Solve SR + Luo + Baseline --------------------------------------
     print("\nFree DP …")
     t0 = time.time()
-    free = BellmanSolver(nodes, edges)
-    free.solve()
-    free_res = free.result(eta_mode="hard", eta=frame.cfg.eta_h)
-    print(f"  fuel = {free_res.total_fuel_mt:.3f} mt, time = {free_res.voyage_time_h:.3f} h, "
-          f"sched = {len(free_res.schedule)} edges  ({time.time()-t0:.2f} s)")
+    sr = BellmanSolver(nodes, edges)
+    sr.solve()
+    sr_res = sr.result(eta_mode="hard", eta=frame.cfg.eta_h)
+    print(f"  fuel = {sr_res.total_fuel_mt:.3f} mt, time = {sr_res.voyage_time_h:.3f} h, "
+          f"sched = {len(sr_res.schedule)} edges  ({time.time()-t0:.2f} s)")
 
     print("\nLuo DP (SOG-lock per 6 h) …")
     t0 = time.time()
@@ -137,18 +137,18 @@ def main():
     print("Route 2 SUMMARY")
     print("=" * 78)
     print(f"  Baseline:  {base_fuel:.3f} mt")
-    print(f"  Free DP:   {free_res.total_fuel_mt:.3f} mt   "
-          f"(Δ {free_res.total_fuel_mt - base_fuel:+.3f} mt, "
-          f"{(free_res.total_fuel_mt - base_fuel)/base_fuel*100:+.3f}%)")
+    print(f"  SR DP:   {sr_res.total_fuel_mt:.3f} mt   "
+          f"(Δ {sr_res.total_fuel_mt - base_fuel:+.3f} mt, "
+          f"{(sr_res.total_fuel_mt - base_fuel)/base_fuel*100:+.3f}%)")
     print(f"  Luo DP:    {luo_res.total_fuel_mt:.3f} mt   "
           f"(Δ {luo_res.total_fuel_mt - base_fuel:+.3f} mt, "
           f"{(luo_res.total_fuel_mt - base_fuel)/base_fuel*100:+.3f}%)")
-    print(f"  Δ Luo-Free: {luo_res.total_fuel_mt - free_res.total_fuel_mt:+.3f} mt")
+    print(f"  Δ Luo-SR: {luo_res.total_fuel_mt - sr_res.total_fuel_mt:+.3f} mt")
 
     # ---- A/B/C overlap analysis ------------------------------------------
-    free_blk: Dict[int, list] = defaultdict(list)
-    for e in free_res.schedule:
-        free_blk[int(e.src_t // 6.0)].append(e)
+    sr_blk: Dict[int, list] = defaultdict(list)
+    for e in sr_res.schedule:
+        sr_blk[int(e.src_t // 6.0)].append(e)
     luo_blk: Dict[int, list] = defaultdict(list)
     for e in luo_res.schedule:
         luo_blk[int(e.src_t // 6.0)].append(e)
@@ -156,10 +156,10 @@ def main():
     counts = {"A": 0, "B": 0, "C": 0}
     aligned = 0
     fuel_by_type = {"A": (0.0, 0.0), "B": (0.0, 0.0), "C": (0.0, 0.0)}
-    aligned_free = aligned_luo = 0.0
+    aligned_sr = aligned_luo = 0.0
 
-    for blk in sorted(set(free_blk) | set(luo_blk)):
-        f_eds = free_blk.get(blk, [])
+    for blk in sorted(set(sr_blk) | set(luo_blk)):
+        f_eds = sr_blk.get(blk, [])
         l_eds = luo_blk.get(blk, [])
         if not f_eds or not l_eds:
             continue
@@ -179,19 +179,19 @@ def main():
         if (abs(f_eds[0].src_d - l_eds[0].src_d) < 1e-3
                 and abs(f_eds[-1].dst_d - l_eds[-1].dst_d) < 1e-3):
             aligned += 1
-            aligned_free += ff
+            aligned_sr += ff
             aligned_luo += lf
 
     print("\nBlock classification (Route 2):")
-    print(f"  Type A (Free 1 SOG = Luo's): {counts['A']}")
-    print(f"  Type B (Free 1 SOG ≠ Luo's): {counts['B']}")
-    print(f"  Type C (Free ≥ 2 SOGs):      {counts['C']}")
+    print(f"  Type A (SR 1 SOG = Luo's): {counts['A']}")
+    print(f"  Type B (SR 1 SOG ≠ Luo's): {counts['B']}")
+    print(f"  Type C (SR ≥ 2 SOGs):      {counts['C']}")
     print(f"  TOTAL blocks:                {sum(counts.values())}")
     print(f"  Aligned (✓): {aligned}/{sum(counts.values())}  "
-          f"Δfuel on aligned = {aligned_luo - aligned_free:+.3f} mt")
+          f"Δfuel on aligned = {aligned_luo - aligned_sr:+.3f} mt")
 
     # ---- Divergence ranking ----------------------------------------------
-    free_pts = _schedule_to_polyline(free_res.schedule)
+    sr_pts = _schedule_to_polyline(sr_res.schedule)
     luo_pts = _schedule_to_polyline(luo_res.schedule)
     full_cum = [0.0]
     for i in range(len(waypoints) - 1):
@@ -202,11 +202,11 @@ def main():
 
     print("\nDivergence ranking — 3-waypoint windows:")
     print(f"  {'window':>10} {'d-range (nm)':>22} "
-          f"{'free':>9} {'luo':>9} {'Δfuel':>9} {'area':>9} {'max|Δd|':>9}")
+          f"{'sr':>9} {'luo':>9} {'Δfuel':>9} {'area':>9} {'max|Δd|':>9}")
     rows = []
     for s in range(1, len(waypoints) - 1):
         d0, d1 = full_cum[s - 1], full_cum[s + 1]
-        f_in = [e for e in free_res.schedule
+        f_in = [e for e in sr_res.schedule
                 if e.src_d >= d0 - 1e-6 and e.dst_d <= d1 + 1e-6]
         l_in = [e for e in luo_res.schedule
                 if e.src_d >= d0 - 1e-6 and e.dst_d <= d1 + 1e-6]
@@ -219,7 +219,7 @@ def main():
         if t_hi <= t_lo:
             continue
         sample_t = np.linspace(t_lo, t_hi, 200)
-        diff = [abs(_interp_d_at_t(free_pts, t) - _interp_d_at_t(luo_pts, t))
+        diff = [abs(_interp_d_at_t(sr_pts, t) - _interp_d_at_t(luo_pts, t))
                 for t in sample_t]
         area = float(np.trapezoid(diff, sample_t))
         max_dd = max(diff)
@@ -245,7 +245,7 @@ def main():
     sub_wp = waypoints[top_s - 1: top_s - 1 + 3]
     cumulative = full_cum[top_s - 1: top_s - 1 + 3]
     L_subset = d_end - d_start
-    edges_in = [e for e in (free_res.schedule + luo_res.schedule)
+    edges_in = [e for e in (sr_res.schedule + luo_res.schedule)
                 if d_start - 1e-6 <= e.src_d and e.dst_d <= d_end + 1e-6]
     t_lo = min(e.src_t for e in edges_in)
     t_hi = max(e.dst_t for e in edges_in)
@@ -274,12 +274,12 @@ def main():
     ax_map = fig.add_subplot(1, 4, 1, projection=ccrs.Mercator())
     _draw_mercator(ax_map, sub_wp, extent)
 
-    # Panel 2: Free
+    # Panel 2: SR
     ax_free = fig.add_subplot(1, 4, 2)
     _draw_td_frame(ax_free, frame, d_start, d_end, t_lo, t_hi,
                    sub_wp, cumulative, cell_d_lat, cell_d_lon)
-    _overlay_schedule(ax_free, free_res.schedule, d_start, d_end, cmap, norm,
-                      "Free DP", free_res.total_fuel_mt, total_blocks_shown=None)
+    _overlay_schedule(ax_free, sr_res.schedule, d_start, d_end, cmap, norm,
+                      "SR DP", sr_res.total_fuel_mt, total_blocks_shown=None)
 
     # Panel 3: Luo
     ax_luo = fig.add_subplot(1, 4, 3)
@@ -293,7 +293,7 @@ def main():
     ax_ovr = fig.add_subplot(1, 4, 4)
     _draw_td_frame(ax_ovr, frame, d_start, d_end, t_lo, t_hi,
                    sub_wp, cumulative, cell_d_lat, cell_d_lon)
-    f_in = [e for e in free_res.schedule
+    f_in = [e for e in sr_res.schedule
             if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
     l_in = [e for e in luo_res.schedule
             if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
@@ -307,7 +307,7 @@ def main():
     ax_ovr.fill_between(common_t, f_d, l_d, color="#ffd166", alpha=0.55, zorder=8,
                         label=f"div area {float(np.trapezoid(np.abs(f_d - l_d), common_t)):.1f} nm·h")
     ax_ovr.plot(f_xs, f_ys, color="#1a73e8", linewidth=2.0, zorder=10,
-                label=f"Free ({sum(e.fuel_mt for e in f_in):.3f} mt)")
+                label=f"SR ({sum(e.fuel_mt for e in f_in):.3f} mt)")
     ax_ovr.plot(l_xs, l_ys, color="#d62728", linewidth=2.0, linestyle="--", zorder=10,
                 label=f"Luo  ({sum(e.fuel_mt for e in l_in):.3f} mt)")
     ax_ovr.legend(loc="upper right", fontsize=7, framealpha=0.92)

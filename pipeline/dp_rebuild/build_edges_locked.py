@@ -14,8 +14,8 @@ realistic and structurally simpler:
   * destination = d_src + target_SOG × 6h  (geometric — no inverse search)
   * SWS varies per sub-leg, fuel is the sum FCR(SWS_i) × Δt_i
 
-Reuses the free-DP node set unchanged. Same-node invariant (every edge
-endpoint coincides with a free-DP node) is enforced by a closing
+Reuses the SR-DP node set unchanged. Same-node invariant (every edge
+endpoint coincides with a SR-DP node) is enforced by a closing
 assertion. `LockedEdge` field names match `build_edges.Edge` so that
 `BellmanSolver` works on locked edges without modification.
 """
@@ -203,10 +203,10 @@ def build_locked_edges(
         `t_next`. Enumerate target SOGs on a `early_terminal_sog_step`
         grid in `(max(v_min, (L-d_src)/dt), v_max]`. For each, snap the
         landing time to the nearest H-line@L node time (already on the
-        τ-h grid in the free-DP node set) and emit one edge.
+        τ-h grid in the SR-DP node set) and emit one edge.
 
     Same-node invariant: every produced edge endpoint coincides with a
-    free-DP node. Enforced by a closing assertion.
+    SR-DP node. Enforced by a closing assertion.
 
     Edges where some sub-leg's required SWS exceeds `sws_max_feasible`
     (or is NaN) are silently dropped — the SOG is infeasible across that

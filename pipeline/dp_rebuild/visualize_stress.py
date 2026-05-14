@@ -1,5 +1,5 @@
 """
-Visualize stress-test schedules — Mercator + Free DP + Luo DP + overlay,
+Visualize stress-test schedules — Mercator + SR DP + Luo DP + overlay,
 on Route 2's most divergent 3-WP window under a chosen σ.
 
 Defaults to σ_wind = 20 km/h, σ_wave = 1.33 m, seed = 42 (matches the
@@ -95,21 +95,21 @@ def main():
     )
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges ({time.time()-t0:.1f} s)")
 
-    print("Solving Free DP …")
-    free = BellmanSolver(nodes, edges)
-    free.solve()
-    free_res = free.result(eta_mode="hard", eta=frame.cfg.eta_h)
-    print(f"  fuel = {free_res.total_fuel_mt:.3f} mt, sched = {len(free_res.schedule)}")
+    print("Solving SR DP …")
+    sr = BellmanSolver(nodes, edges)
+    sr.solve()
+    sr_res = sr.result(eta_mode="hard", eta=frame.cfg.eta_h)
+    print(f"  fuel = {sr_res.total_fuel_mt:.3f} mt, sched = {len(sr_res.schedule)}")
 
     print("Solving Luo DP …")
     luo = BellmanSolverLocked(nodes, edges, set(frame.v_line_times))
     luo.solve()
     luo_res = luo.result(eta_h=frame.cfg.eta_h)
     print(f"  fuel = {luo_res.total_fuel_mt:.3f} mt, sched = {len(luo_res.schedule)}")
-    print(f"  Δ(Luo - Free) = {luo_res.total_fuel_mt - free_res.total_fuel_mt:+.3f} mt")
+    print(f"  Δ(Luo - SR) = {luo_res.total_fuel_mt - sr_res.total_fuel_mt:+.3f} mt")
 
     # ---- Find the most divergent 3-WP window under stress ----
-    free_pts = _polyline(free_res.schedule)
+    sr_pts = _polyline(sr_res.schedule)
     luo_pts = _polyline(luo_res.schedule)
     full_cum = [0.0]
     for i in range(len(waypoints) - 1):
@@ -121,7 +121,7 @@ def main():
     rows = []
     for s in range(1, len(waypoints) - 1):
         d0, d1 = full_cum[s - 1], full_cum[s + 1]
-        f_in = [e for e in free_res.schedule
+        f_in = [e for e in sr_res.schedule
                 if e.src_d >= d0 - 1e-6 and e.dst_d <= d1 + 1e-6]
         l_in = [e for e in luo_res.schedule
                 if e.src_d >= d0 - 1e-6 and e.dst_d <= d1 + 1e-6]
@@ -130,7 +130,7 @@ def main():
         t_hi = min(f_in[-1].dst_t, l_in[-1].dst_t)
         if t_hi <= t_lo: continue
         sample_t = np.linspace(t_lo, t_hi, 200)
-        diff = [abs(_interp_d_at_t(free_pts, t) - _interp_d_at_t(luo_pts, t))
+        diff = [abs(_interp_d_at_t(sr_pts, t) - _interp_d_at_t(luo_pts, t))
                 for t in sample_t]
         area = float(np.trapezoid(diff, sample_t))
         max_dd = max(diff)
@@ -144,7 +144,7 @@ def main():
     # ---- Render 4-panel ----
     sub_wp = waypoints[top_s - 1: top_s - 1 + 3]
     cumulative = full_cum[top_s - 1: top_s - 1 + 3]
-    edges_in = [e for e in (free_res.schedule + luo_res.schedule)
+    edges_in = [e for e in (sr_res.schedule + luo_res.schedule)
                 if d_start - 1e-6 <= e.src_d and e.dst_d <= d_end + 1e-6]
     t_lo = min(e.src_t for e in edges_in)
     t_hi = max(e.dst_t for e in edges_in)
@@ -175,8 +175,8 @@ def main():
     ax_free = fig.add_subplot(1, 4, 2)
     _draw_td_frame(ax_free, frame, d_start, d_end, t_lo, t_hi,
                    sub_wp, cumulative, cell_d_lat, cell_d_lon)
-    _overlay_schedule(ax_free, free_res.schedule, d_start, d_end, cmap, norm,
-                      f"Free DP @ σ={args.sigma_wind:.0f}", free_res.total_fuel_mt,
+    _overlay_schedule(ax_free, sr_res.schedule, d_start, d_end, cmap, norm,
+                      f"SR DP @ σ={args.sigma_wind:.0f}", sr_res.total_fuel_mt,
                       total_blocks_shown=None)
 
     ax_luo = fig.add_subplot(1, 4, 3)
@@ -189,7 +189,7 @@ def main():
     ax_ovr = fig.add_subplot(1, 4, 4)
     _draw_td_frame(ax_ovr, frame, d_start, d_end, t_lo, t_hi,
                    sub_wp, cumulative, cell_d_lat, cell_d_lon)
-    f_in = [e for e in free_res.schedule
+    f_in = [e for e in sr_res.schedule
             if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
     l_in = [e for e in luo_res.schedule
             if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
@@ -203,7 +203,7 @@ def main():
     ax_ovr.fill_between(common_t, f_d, l_d, color="#ffd166", alpha=0.55, zorder=8,
                         label=f"div area {float(np.trapezoid(np.abs(f_d - l_d), common_t)):.1f} nm·h")
     ax_ovr.plot(f_xs, f_ys, color="#1a73e8", linewidth=2.0, zorder=10,
-                label=f"Free ({sum(e.fuel_mt for e in f_in):.3f} mt)")
+                label=f"SR ({sum(e.fuel_mt for e in f_in):.3f} mt)")
     ax_ovr.plot(l_xs, l_ys, color="#d62728", linewidth=2.0, linestyle="--", zorder=10,
                 label=f"Luo  ({sum(e.fuel_mt for e in l_in):.3f} mt)")
     ax_ovr.legend(loc="upper right", fontsize=7, framealpha=0.92)

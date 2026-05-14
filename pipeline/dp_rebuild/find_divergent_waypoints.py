@@ -1,11 +1,11 @@
 """
-Scan all 3-waypoint windows (WPi, WPi+1, WPi+2) and rank by Free vs Luo
+Scan all 3-waypoint windows (WPi, WPi+1, WPi+2) and rank by SR vs Luo
 divergence inside that window.
 
 Two divergence metrics per window:
   * area_nm_h : area between the two schedules in (t, d) space, by integrating
                 |d_free(t) − d_luo(t)| over the window's time range.
-  * fuel_diff : Σ(luo_fuel) − Σ(free_fuel) for edges contained in the d-range.
+  * fuel_diff : Σ(luo_fuel) − Σ(sr_fuel) for edges contained in the d-range.
 
 Prints a ranked table; the top window is the best candidate to visualize.
 """
@@ -62,16 +62,16 @@ def main() -> None:
     voyage = VoyageWeather(h5_path)
     full_frame = frame_from_route(route, voyage, WAYPOINTS)
 
-    print("Building graph + solving Free + Luo …")
+    print("Building graph + solving SR + Luo …")
     nodes, edges = build_atomic_edges(full_frame, override_sample_hour=0)
-    free = BellmanSolver(nodes, edges)
-    free.solve()
-    free_res = free.result(eta_mode="hard", eta=full_frame.cfg.eta_h)
+    sr = BellmanSolver(nodes, edges)
+    sr.solve()
+    sr_res = sr.result(eta_mode="hard", eta=full_frame.cfg.eta_h)
     luo = BellmanSolverLocked(nodes, edges, set(full_frame.v_line_times))
     luo.solve()
     luo_res = luo.result(eta_h=full_frame.cfg.eta_h)
 
-    free_pts = _schedule_to_polyline(free_res.schedule)
+    sr_pts = _schedule_to_polyline(sr_res.schedule)
     luo_pts = _schedule_to_polyline(luo_res.schedule)
 
     # Cumulative distances
@@ -86,7 +86,7 @@ def main() -> None:
     print("3-waypoint window divergence — ranked")
     print("=" * 100)
     print(f"  {'window':>14} {'d-range (nm)':>22} "
-          f"{'free_fuel':>10} {'luo_fuel':>10} {'Δfuel':>9} "
+          f"{'sr_fuel':>10} {'luo_fuel':>10} {'Δfuel':>9} "
           f"{'area_nm·h':>10} {'max|Δd|':>9}")
     print("-" * 100)
 
@@ -97,30 +97,30 @@ def main() -> None:
         d_end = full_cum[s + 1]
 
         # Edges of each schedule that sit inside [d_start, d_end]
-        free_in = [e for e in free_res.schedule
+        sr_in = [e for e in sr_res.schedule
                    if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
         luo_in = [e for e in luo_res.schedule
                   if e.src_d >= d_start - 1e-6 and e.dst_d <= d_end + 1e-6]
-        if not free_in or not luo_in:
+        if not sr_in or not luo_in:
             continue
-        free_fuel = sum(e.fuel_mt for e in free_in)
+        sr_fuel = sum(e.fuel_mt for e in sr_in)
         luo_fuel = sum(e.fuel_mt for e in luo_in)
 
         # Time range over which both polylines are defined
-        t_lo = max(free_in[0].src_t, luo_in[0].src_t)
-        t_hi = min(free_in[-1].dst_t, luo_in[-1].dst_t)
+        t_lo = max(sr_in[0].src_t, luo_in[0].src_t)
+        t_hi = min(sr_in[-1].dst_t, luo_in[-1].dst_t)
         if t_hi <= t_lo:
             continue
 
         # Sample area = ∫ |d_free(t) − d_luo(t)| dt
         sample_t = np.linspace(t_lo, t_hi, 200)
-        diff = [abs(_interp_d_at_t(free_pts, t) - _interp_d_at_t(luo_pts, t))
+        diff = [abs(_interp_d_at_t(sr_pts, t) - _interp_d_at_t(luo_pts, t))
                 for t in sample_t]
         area = float(np.trapezoid(diff, sample_t))
         max_dd = max(diff)
 
-        rows.append((s, d_start, d_end, free_fuel, luo_fuel,
-                     luo_fuel - free_fuel, area, max_dd))
+        rows.append((s, d_start, d_end, sr_fuel, luo_fuel,
+                     luo_fuel - sr_fuel, area, max_dd))
 
     # Sort by area (most divergent first)
     rows.sort(key=lambda r: r[6], reverse=True)

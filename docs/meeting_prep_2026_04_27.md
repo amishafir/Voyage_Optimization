@@ -255,8 +255,8 @@ Still relevant if the rebuild discussion leaves time:
 
 - Exp 1 Track A full matrix (SH=60, soft ETA) is ready to run but deprioritized in favor of
   the rebuild.
-- Track B anomaly (Luo lattice beats free DP by 8 mt) remains unexplained — the rebuild may
-  resolve it naturally by eliminating the free DP's ceiling-accumulation drift.
+- Track B anomaly (Luo lattice beats SR DP by 8 mt) remains unexplained — the rebuild may
+  resolve it naturally by eliminating the SR DP's ceiling-accumulation drift.
 - Exp 2 rolling horizon is on hold until the new graph is in place.
 
 ---

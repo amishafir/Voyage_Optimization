@@ -2,7 +2,7 @@
 Building atomic-edge graph …
   91,663 nodes, 3,317,895 edges
 
-Solving Free DP …
+Solving SR DP …
   optimal fuel = 365.8092 mt, voyage time = 280.000 h, schedule = 201 edges
 
 ==============================================================================
@@ -30,7 +30,7 @@ Edge creation walkthrough — src=(0.000 h, 0.000 nm), target_sog=11.10 kn
      → emit AtomicEdge(src=0.00,0.00 → dst=0.90,10.50; target=11.10; fuel=1.1046 mt)
 
 ==========================================================================================================================
-Optimal Free DP schedule — 201 atomic edges, Bellman total 365.8092 mt
+Optimal SR DP schedule — 201 atomic edges, Bellman total 365.8092 mt
 ==========================================================================================================================
   #              src(t,d)              dst(t,d)   tSOG    rSOG   BN       β      SWS       FCR      Δt    fuel_i   cum_fuel
 --------------------------------------------------------------------------------------------------------------------------

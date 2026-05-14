@@ -66,7 +66,7 @@ static void usage(const char* prog) {
         "  --max_speed KNOTS Maximum SOG in knots (default: mean_sog + 3)\n"
         "  --zeta_nm  NM     Distance snap resolution for H-line arcs (default: 1.0)\n"
         "  --tau_h    HOURS  Time snap resolution for V-line arcs (default: 0.1)\n"
-        "  --csv             Write per-arc solution CSV (free_dp.csv)\n",
+        "  --csv             Write per-arc solution CSV (sr_dp.csv)\n",
         prog);
 }
 
@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
     printf("\nBuild time: %.2f s\n", build_t);
     summarize_atomic_edges(nodes, edges);
 
-    // ---- dp_SR (free DP, no SOG lock) ----
+    // ---- dp_SR (SR DP, no SOG lock) ----
     t0 = std::chrono::steady_clock::now();
     BellmanSolver solver(nodes, edges);
     solver.solve();
@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
     double solve_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
     if (write_csv)
-        write_arc_csv("free_dp.csv", res.schedule, edges, WAYPOINTS);
+        write_arc_csv("sr_dp.csv", res.schedule, edges, WAYPOINTS);
 
     // ---- Summary ----
     print_header("dp_SR — SUMMARY");

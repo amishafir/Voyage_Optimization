@@ -1,7 +1,7 @@
 Route 2 stress sweep (sample_hour=0, seed=42)
 L = 1954.70 nm, ETA = 168 h
 
-  σ_wind  σ_wave  baseline      free       luo   Δ Free-base   Δ Luo-base   Δ Luo-Free   Δ% baseline
+  σ_wind  σ_wave  baseline      free       luo   Δ SR-base   Δ Luo-base   Δ Luo-SR   Δ% baseline
      0.0    0.00   189.286   189.448   189.731        +0.163       +0.446       +0.283      +0.1495
      5.0    0.33   191.082   189.479   189.866        -1.603       -1.216       +0.387      +0.2026
     10.0    0.67   192.585   188.503   188.943        -4.082       -3.642       +0.440      +0.2283

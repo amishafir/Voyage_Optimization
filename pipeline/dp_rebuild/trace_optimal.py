@@ -3,7 +3,7 @@ Step-by-step trace of edge creation and fuel calculation for the optimal route.
 
 Walks through:
   1. The edge-creation algorithm (one concrete edge, all 9 sub-steps).
-  2. Every atomic edge of the Free DP optimal schedule, showing target SOG,
+  2. Every atomic edge of the SR DP optimal schedule, showing target SOG,
      realized SOG, weather, heading, SWS, FCR, Δt, fuel, and cumulative fuel.
   3. A reconciliation against the Bellman total.
 """
@@ -179,7 +179,7 @@ def trace_block(schedule, frame, block_idx):
 def trace_optimal_schedule(schedule, frame, total_bellman):
     """Print every atomic edge in the optimal schedule with its derivation."""
     print("=" * 122)
-    print(f"Optimal Free DP schedule — {len(schedule)} atomic edges, "
+    print(f"Optimal SR DP schedule — {len(schedule)} atomic edges, "
           f"Bellman total {total_bellman:.4f} mt")
     print("=" * 122)
     print(f"{'#':>3}  {'src(t,d)':>20}  {'dst(t,d)':>20}  {'tSOG':>5}  "
@@ -232,7 +232,7 @@ def main():
     nodes, edges = build_atomic_edges(frame, override_sample_hour=0)
     print(f"  {len(nodes):,} nodes, {len(edges):,} edges")
 
-    print("\nSolving Free DP …")
+    print("\nSolving SR DP …")
     solver = BellmanSolver(nodes, edges)
     solver.solve()
     res = solver.result(eta_mode="hard", eta=frame.cfg.eta_h)

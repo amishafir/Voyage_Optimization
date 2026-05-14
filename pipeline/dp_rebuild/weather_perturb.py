@@ -2,10 +2,10 @@
 Synthetic weather perturbation for stress-testing the rebuilt DP graph.
 
 The rebuild's `sample_hour = block-start` rule means every sub-arc inside a
-6 h block reads the SAME cell-canonical weather row — Free DP and Luo DP
+6 h block reads the SAME cell-canonical weather row — SR DP and Luo DP
 end up exploiting only spatial cell variation. That makes the snap-grid
 penalty dominate when the optimum trajectory is near-uniform speed, and
-hides the regime where Free's mid-block flexibility actually matters.
+hides the regime where SR's mid-block flexibility actually matters.
 
 This module injects controlled WITHIN-BLOCK temporal weather variation on
 top of the cell-canonical base. Three modes, all reproducible (seeded):
@@ -32,7 +32,7 @@ Usage:
                                        perturber=perturber)
 
 Deterministic with seed: same seed → same perturbation realization, so
-Free / Luo / baseline all see identical weather and the comparison is fair.
+SR / Luo / baseline all see identical weather and the comparison is fair.
 """
 
 from __future__ import annotations

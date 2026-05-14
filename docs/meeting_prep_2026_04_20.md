@@ -71,8 +71,8 @@ Brainstorm worked into Q&A; decisions locked in below.
    - `speed_lock_hours=6` → coarse outer DP. State = `(cum_distance, cum_time)` at 6h boundaries. Edge = "hold SWS k for 6h, integrate sub-legs at locked SWS under per-waypoint actual weather, land at new `(cum_dist, cum_time)` node." Final block uses remaining time.
 4. **Run matrix**: Route D × {SH=0, SH=60} × {free, locked=6h}. Four runs.
 5. **Sanity checks**:
-   - Force free-DP to single speed → must match grid-search over constants.
-   - Degenerate lock (lock = dt) → must converge to free-DP.
+   - Force SR-DP to single speed → must match grid-search over constants.
+   - Degenerate lock (lock = dt) → must converge to SR-DP.
    - Lock monotonicity: fuel(6h) ≥ fuel(3h) ≥ fuel(1h) ≥ fuel(free).
    - Zero-weather → both variants pick `v = L/T_max`, same fuel.
 6. **Output**: side-by-side speed profiles, total fuel, time, delay, gap percentage. Log to results section below.
@@ -175,7 +175,7 @@ Built Exp 1 infrastructure — three code changes, one new script:
 
 | Variant | Fuel (mt) | Time (h) | Delay | Speed changes | Compute |
 |---|---|---|---|---|---|
-| Free (ours) | 216.50 | 162.61 | 0 | 250 | 18s |
+| SR (ours) | 216.50 | 162.61 | 0 | 250 | 18s |
 | Locked 6h (Luo) | 215.74 | 162.92 | 0 | 20 | 2.3h |
 | **Gap** | **-0.76 mt (-0.35%)** | | | | |
 
@@ -185,7 +185,7 @@ Built Exp 1 infrastructure — three code changes, one new script:
 
 | Variant | Fuel (mt) | Time (h) | Delay | Speed changes | Compute | dt |
 |---|---|---|---|---|---|---|
-| Free (ours) | 215.38 | 163.0 | 0 | — | 161s | 0.01h |
+| SR (ours) | 215.38 | 163.0 | 0 | — | 161s | 0.01h |
 | Locked 6h (Luo) | 215.88 | 162.7 | 0 | 20 (22 blocks) | 82 min | 0.1h |
 | **Gap** | **0.50 mt (0.23%)** | | | | | |
 
@@ -229,12 +229,12 @@ The locked DP is too slow for practical use:
 
 Confirmed the gotcha from Apr 13 Section 3.5.10 in practice:
 
-| dt | Free DP behavior | Issue |
+| dt | SR DP behavior | Issue |
 |---|---|---|
 | 0.1h | **Cannot meet ETA** (relaxed to 198h) | Each ~0.42h leg ceiled to 0.5h → 388 × 0.08 = 31h phantom time |
 | 0.01h | Meets ETA (163.0h, 216.50 mt) | Rounding per leg ~0.003h → 388 × 0.003 ≈ 1.2h accumulated |
 
-Route D's 5 nm waypoint spacing requires dt ≤ 0.01h for the free DP. The locked DP is less sensitive because it rounds per block, not per leg.
+Route D's 5 nm waypoint spacing requires dt ≤ 0.01h for the SR DP. The locked DP is less sensitive because it rounds per block, not per leg.
 
 ### 4.6 Two New Solvers Built (Apr 18)
 
@@ -254,12 +254,12 @@ Route D, SH=0, [9,15] kn:
 |---|---|---|---|---|
 | Legacy locked (§4.2) | 215.88 | 162.7 | 82 min | reference |
 | **Track A (locked_fast)** | **215.88** | 162.7 | **10.6 min** | **Sanity PASS** — identical fuel, 8× faster |
-| **Track B (luo_lattice)** | **207.29** | 163.0 | **0.6 s** | beats free DP by 8 mt — anomaly |
-| Free DP (§4.2) | 215.38 | 162.7 | 2.6 min | reference |
+| **Track B (luo_lattice)** | **207.29** | 163.0 | **0.6 s** | beats SR DP by 8 mt — anomaly |
+| SR DP (§4.2) | 215.38 | 162.7 | 2.6 min | reference |
 
 **Track A works as designed.** Fuel-identical to the legacy solver at ~8× speed. Ready to use for the full Exp 1 matrix (SH=60, soft ETA). Runtime at `dt_locked=0.5h` drops to ~2 min but drifts +6 mt from ceiling accumulation — so 0.1h is the right default.
 
-**Track B's 207.29 mt is lower than free DP's 215.38 mt.** That's theoretically impossible — Luo's lattice is strictly more constrained than our free DP. Prime suspect: the free DP's rounding tax (§4.5) inflates its fuel by ~1–2 mt, while Luo's lattice ceils only 28 times (once per stage) and escapes the drift. Track B validation is blocked on: (a) rerunning free DP without the rounding bias, or (b) comparing Track A ↔ Track B at an identical 6h lock to see if the gap is lock-policy or architecture.
+**Track B's 207.29 mt is lower than SR DP's 215.38 mt.** That's theoretically impossible — Luo's lattice is strictly more constrained than our SR DP. Prime suspect: the SR DP's rounding tax (§4.5) inflates its fuel by ~1–2 mt, while Luo's lattice ceils only 28 times (once per stage) and escapes the drift. Track B validation is blocked on: (a) rerunning SR DP without the rounding bias, or (b) comparing Track A ↔ Track B at an identical 6h lock to see if the gap is lock-policy or architecture.
 
 ### 4.8 Complexity Is the Real Differentiator
 
@@ -312,7 +312,7 @@ Honest framing. Defends both the tie result and the added complexity of our fram
 | Exp 1: soft ETA (λ penalty) | Not yet run | Remove the hard-ETA pinch — does granularity matter more? |
 | Exp 1: locked at dt=0.01h, [9,15] | Superseded by Track A | Track A at dt_locked=0.1h reproduces legacy 215.88 mt in 10 min |
 | Exp 1: Track A full matrix (SH=0/60 × ETA variants) | Ready to run | Unblocked now that locked_fast takes 10 min not 82 |
-| Exp 1: Track B validation (rounding-corrected free DP) | Not yet run | Confirm free < Luo (the theoretical ordering) once rounding is neutralized |
+| Exp 1: Track B validation (rounding-corrected SR DP) | Not yet run | Confirm free < Luo (the theoretical ordering) once rounding is neutralized |
 | Exp 1: Track A vs Track B at identical 6h lock | Not yet run | Isolate whether the Track B fuel drop is lock-policy or architecture |
 | Exp 2: rolling horizon | Not yet started | Does re-planning interact with granularity? |
 
@@ -322,7 +322,7 @@ Honest framing. Defends both the tie result and the added complexity of our fram
 
 - **Hard ETA kills the experiment**: the 163h constraint forces ~12 kn average and the cubic FCR punishes any deviation. Fine vs coarse granularity both land at ~216 mt. Should we switch to soft ETA or relaxed ETA to give the optimizer room?
 - **Stormy departure**: SH=60 might show a larger gap if weather forces more speed variation.
-- **Node-collapsing brainstorm**: still relevant — if the free DP's 250 speed changes produce only 0.23% savings vs 20 changes, most of those changes are noise.
+- **Node-collapsing brainstorm**: still relevant — if the SR DP's 250 speed changes produce only 0.23% savings vs 20 changes, most of those changes are noise.
 - **Locked DP compute time**: needs optimization before running the full experiment matrix.
 - **Rounding accumulation**: fundamental limitation of the forward Bellman with fine waypoints. Worth documenting in the paper as a practical finding.
 

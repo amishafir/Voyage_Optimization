@@ -1,7 +1,7 @@
 # Graph Rebuild — Summary (2026-05-06)
 
 End-to-end summary of the rebuilt DP graph: frame, atomic-edge construction,
-graph statistics, Free DP vs Luo DP results, and a per-window visualization
+graph statistics, SR DP vs Luo DP results, and a per-window visualization
 of the most divergent 3-waypoint slice.
 
 Companion files:
@@ -146,8 +146,8 @@ remains, so the chain cuts at the V-line and snaps `dst_d` to 1 nm.
 | | May 4 build | Rebuild |
 |---|---:|---:|
 | Frame (V/H positions) | same | same |
-| Free-DP nodes | 613,328 | **91,663** (lazy interning — only nodes reachable by some atomic edge) |
-| Free-DP edges | 3,308,940 | (subsumed by atomic graph) |
+| SR-DP nodes | 613,328 | **91,663** (lazy interning — only nodes reachable by some atomic edge) |
+| SR-DP edges | 3,308,940 | (subsumed by atomic graph) |
 | Locked-DP edges | 631,537 | (subsumed) |
 | Combined edges | 3,940,477 | (no longer needed) |
 | **Single atomic-edge graph** | n/a | **3,317,895** |
@@ -159,9 +159,9 @@ correspondingly.
 
 ---
 
-## 4. DP results — Free vs Luo
+## 4. DP results — SR vs Luo
 
-Both DPs run on the *same* atomic-edge graph. Free DP is plain forward
+Both DPs run on the *same* atomic-edge graph. SR DP is plain forward
 Bellman. Luo DP augments state with `(node, locked_sog)`: the SOG locked at
 the V-line entering a block must match the `target_sog` of every atomic edge
 inside that block; the lock resets at the next V-line.
@@ -171,52 +171,52 @@ inside that block; the lock resets at the next V-line.
 | Mode | Total fuel | Δ vs baseline | Δ vs May 4 |
 |---|---:|---:|---:|
 | Baseline (steady SOG = 12.119 kn) | 366.416 mt | — | −0.103 |
-| **Free DP** | **365.809 mt** | **−0.606 mt** | **−0.960** vs May 4 free (366.769) |
+| **SR DP** | **365.809 mt** | **−0.606 mt** | **−0.960** vs May 4 free (366.769) |
 | **Luo DP** (SOG-lock per 6 h) | **366.132 mt** | **−0.284 mt** | +0.971 vs May 4 locked (365.161) |
-| Δ Luo − Free | +0.323 mt | — | Luo ≥ Free by construction ✓ |
+| Δ Luo − SR | +0.323 mt | — | Luo ≥ SR by construction ✓ |
 
 | | |
 |---|---:|
-| Bellman states (Free) | 91,663 (one per canonical node) |
+| Bellman states (SR) | 91,663 (one per canonical node) |
 | Bellman states (Luo) | 1,862,370 ≈ node × lock |
 | Distinct lock values | **41 / 41** (every SOG in the grid is reached as a lock somewhere) |
 | Lock invariant in Luo schedule | **47/47** blocks have exactly one distinct `target_sog` ✓ |
-| Solve times | Free 3.3 s · Luo 6.3 s |
+| Solve times | SR 3.3 s · Luo 6.3 s |
 
 ### 4.2 Per-block overlap analysis
 
 Each 6 h block in the optimal schedules is classified by how many distinct
-`target_sog` values **Free DP** chose inside it (the analyzer is in
+`target_sog` values **SR DP** chose inside it (the analyzer is in
 `analyze_overlap.py`):
 
 | Type | Definition | Count |
 |---|---|---:|
-| **A** | Free voluntarily uses **1 SOG**, *same value* as Luo | **0** |
-| **B** | Free voluntarily uses **1 SOG**, *different value* than Luo | **1** *(block 25)* |
-| **C** | Free uses **≥ 2 SOGs** in the block | **46** |
+| **A** | SR voluntarily uses **1 SOG**, *same value* as Luo | **0** |
+| **B** | SR voluntarily uses **1 SOG**, *different value* than Luo | **1** *(block 25)* |
+| **C** | SR uses **≥ 2 SOGs** in the block | **46** |
 
-So Free DP never converges on Luo's exact decision. 46/47 blocks Free wants
+So SR DP never converges on Luo's exact decision. 46/47 blocks SR wants
 to vary SOG mid-block.
 
 ### 4.3 Aligned vs unaligned blocks (the surprising part)
 
-A block is *aligned* when Free's and Luo's V-line `src_d` and `dst_d` coincide.
+A block is *aligned* when SR's and Luo's V-line `src_d` and `dst_d` coincide.
 
 | | Aligned (✓) | Unaligned (≠) |
 |---|---:|---:|
 | Block count | 7 / 47 | 40 / 47 |
-| Σ Free fuel | 54.042 mt | 311.767 mt |
+| Σ SR fuel | 54.042 mt | 311.767 mt |
 | Σ Luo fuel | 54.042 mt | 312.090 mt |
-| **Δfuel (Luo − Free)** | **+0.000 mt** | **+0.323 mt** |
+| **Δfuel (Luo − SR)** | **+0.000 mt** | **+0.323 mt** |
 
-In every aligned block — even the 7 type-C ones where Free uses up to 5
+In every aligned block — even the 7 type-C ones where SR uses up to 5
 distinct target SOGs — the per-block fuel is **identical to the millimetre**.
 Different target SOGs collapse to the same realized snap-grid trajectory once
 `(src_d, dst_d)` are pinned.
 
 ### 4.4 Reframed conclusion
 
-The +0.323 mt Luo penalty does **not** come from "Free changes SOG
+The +0.323 mt Luo penalty does **not** come from "SR changes SOG
 mid-block, Luo can't". Aligned-block evidence shows mid-block flexibility
 produces **zero** fuel saving when V-line node positions match.
 
@@ -225,7 +225,7 @@ forces the schedule onto a less-flexible *trajectory* — different `dst_d` at
 each 6 h V-line — and 40 of 47 blocks have unaligned boundaries. That's
 where the gap accumulates.
 
-Full block table: `pipeline/dp_rebuild/results/free_vs_luo_overlap_2026_05_06.txt`.
+Full block table: `pipeline/dp_rebuild/results/sr_vs_luo_overlap_2026_05_06.txt`.
 
 ---
 
@@ -243,16 +243,16 @@ were ranked by area-between-trajectories (`find_divergent_waypoints.py`):
 
 **WP8 → WP10** (d ∈ [1961, 2496] nm, t ∈ [156.5, 208.0] h) is the most
 divergent slice. Notably, **Luo is locally cheaper by 1 mt** here even
-though globally it loses 0.323 mt to Free — Free "spends" the local
+though globally it loses 0.323 mt to SR — SR "spends" the local
 inefficiency to gain more elsewhere.
 
 ![visualize_schedules_wp8-10](../pipeline/dp_rebuild/visualize_schedules_wp8-10.png)
 
 The four panels show:
 1. **Mercator chart** — rhumb-line segments WP8 → WP9 → WP10 with 0.5° NWP grid + lat/lon crossings.
-2. **Free DP edges** in the (t, d) plane, colored by target SOG (viridis 9→13 kn). Each atomic edge is annotated with its target SOG. Free changes speed at almost every H-line crossing.
+2. **SR DP edges** in the (t, d) plane, colored by target SOG (viridis 9→13 kn). Each atomic edge is annotated with its target SOG. SR changes speed at almost every H-line crossing.
 3. **Luo DP edges** in the (t, d) plane. Within each 6 h block all atomic edges share one target SOG (the lock value). Adjacent blocks may pick different locks, so colors change at V-line boundaries.
-4. **Overlay** — Free (blue solid) and Luo (red dashed) trajectories on the same axes, with `fill_between` shading the divergence area (865 nm·h). Max \|Δd\| = 24.49 nm at peak.
+4. **Overlay** — SR (blue solid) and Luo (red dashed) trajectories on the same axes, with `fill_between` shading the divergence area (865 nm·h). Max \|Δd\| = 24.49 nm at peak.
 
 ### 5.1 What you can read off the plot
 
@@ -260,9 +260,9 @@ The four panels show:
 |---|---|
 | Color of an atomic edge | the target SOG it was emitted with (the captain's decision; Luo's lock label) |
 | White-bordered tag near edge midpoint | the same target SOG as a numeric value |
-| Free panel — many color shifts in one block | Type-C block: Free DP changed speed at H-line crossings |
+| SR panel — many color shifts in one block | Type-C block: SR DP changed speed at H-line crossings |
 | Luo panel — uniform color in one block | lock invariant: one target SOG holds across the block |
-| Overlay — yellow fill | divergence area between Free and Luo trajectories |
+| Overlay — yellow fill | divergence area between SR and Luo trajectories |
 | Overlay — convergence at WP8/WP10 | both schedules pass through the same V-line node at segment endpoints |
 
 To regenerate any window:
@@ -277,11 +277,11 @@ python3 pipeline/dp_rebuild/visualize_schedules.py 4 1     # WP1 → WP4 (matche
 
 ## 6. Status & next steps
 
-- ✅ Frame, atomic-edge builder, dual-mode Bellman (Free + Luo) all in place
+- ✅ Frame, atomic-edge builder, dual-mode Bellman (SR + Luo) all in place
   and producing apples-to-apples results on a single graph.
 - ✅ Validated against May 4 numbers (small expected drift from V-line snap
-  on Luo, +0.96 mt improvement on Free from cell-level branching).
-- ✅ Visual + analytical evidence that the Free–Luo gap is about *V-line
+  on Luo, +0.96 mt improvement on SR from cell-level branching).
+- ✅ Visual + analytical evidence that the SR–Luo gap is about *V-line
   position selection*, not *mid-block speed flexibility* — paper-relevant
   finding.
 - ⏳ Validators (`validate_graph.py`) not yet adapted to the rebuild graph.

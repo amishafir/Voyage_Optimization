@@ -1172,7 +1172,7 @@ for plan in [NaivePlan(), LPPlan(), DPPlan()]:
 
 ## 14. New DP Graph Structure — Brainstorm (2026-04-20)
 
-**Motivation.** Exp 1 (Apr 20 prep) landed on a tie: free DP and 6h-locked DP within 0.25% fuel
+**Motivation.** Exp 1 (Apr 20 prep) landed on a tie: SR DP and 6h-locked DP within 0.25% fuel
 under hard ETA. Both Track A and Track B exposed accumulated ceiling-rounding drift and a Track B
 anomaly where Luo's lattice beat the "free" solver (theoretically impossible). Before running more
 experiments on top of a graph that is already leaking ~1–2 mt of phantom fuel from rounding, the
@@ -1363,7 +1363,7 @@ removes the optimizer's ability to fit noise.
 ### 14.11 Sanity checks the rebuild must pass
 
 Before trusting any Exp 1 / Exp 2 result:
-1. **Degenerate lock check**: with `lock = dt` (no locking), locked-mode must equal free-mode
+1. **Degenerate lock check**: with `lock = dt` (no locking), locked-mode must equal SR-mode
    fuel to within <0.01 mt. (Fails today — Exp 1 had +0.76 mt drift.)
 2. **Single-speed check**: force SWS constant → must match hand-computed grid search over
    constants.
@@ -1371,7 +1371,7 @@ Before trusting any Exp 1 / Exp 2 result:
    closed-form answer.
 4. **Lock-monotonicity**: `fuel(6h lock) ≥ fuel(3h lock) ≥ fuel(1h lock) ≥ fuel(free)`. Today
    this fails by 0.76 mt on [11,13] dt=0.01h.
-5. **Cross-solver agreement at Luo's published resolution**: Track A, rebuilt free DP, and
+5. **Cross-solver agreement at Luo's published resolution**: Track A, rebuilt SR DP, and
    Luo-lattice mode must agree within <0.1% at `dt=1h, Δv=0.167 kn, lock=6h`.
 6. **Backtrack reconstruction**: total fuel from backtrack path must equal `minimal_fuel_consumption`
    at the chosen destination node. No discrepancy.
@@ -1933,7 +1933,7 @@ weather the SWS inverse + FCR calculation will consume in the next stage.
 
 Added `pipeline/dp_rebuild/build_edges_locked.py` and
 `run_demo_locked.py` to compare a Luo-style "one constant SWS per 6 h
-block" decision policy against the per-square free DP, on the same node
+block" decision policy against the per-square SR DP, on the same node
 set.
 
 **Two real bugs caught by the sanity check (`verify_locked_schedule`)**
@@ -1958,7 +1958,7 @@ set.
 
 | Mode | Total fuel | End time | End d |
 |---|---|---|---|
-| Free DP | 367.561 mt | 280.000 h | 3393.240 nm |
+| SR DP | 367.561 mt | 280.000 h | 3393.240 nm |
 | Locked DP (Bellman) | 366.480 mt | 280.000 h | 3393.240 nm |
 | Locked DP (continuous resim) | 366.491 mt | 279.991 h | 3393.240 nm |
 | **Δ (locked vs free)** | **−1.081 mt (−0.29 %)** | | |
@@ -1968,9 +1968,9 @@ all 47 blocks ≤ 0.12 nm. Trajectory genuinely reaches Port B in 280 h.
 
 **Why locked is *still* slightly under free** (0.29 %): both grids are
 discrete, but the locked mode's inverse-search SWS lands each integer-nm
-dst exactly, while free-DP's per-edge SOG must round to the (1 nm × 0.1 h)
+dst exactly, while SR-DP's per-edge SOG must round to the (1 nm × 0.1 h)
 grid. The residual ~0.3 % gap is grid-resolution noise, not a correctness
-bug. Refining the free-DP grid (smaller τ on H lines) should close it.
+bug. Refining the SR-DP grid (smaller τ on H lines) should close it.
 
 ### 15.18 Geographic H-line reconstruction — exploration (2026-04-28)
 

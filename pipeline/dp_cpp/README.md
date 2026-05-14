@@ -6,7 +6,7 @@ Two standalone programs that compute minimum-fuel ship speed schedules for a fix
 
 | Executable | Model | Source |
 |------------|-------|--------|
-| `dp_SR` | **Shafir-Raviv free DP** — unconstrained speed per arc | `SR_main.cpp` |
+| `dp_SR` | **Shafir-Raviv SR DP** — unconstrained speed per arc | `SR_main.cpp` |
 | `dp_luo` | **Luo block DP + baseline** — SOG may be changed every 6 hours. | `luo_main.cpp` |
 
 ---
@@ -28,7 +28,7 @@ Both executables land in `build/`.
 
 ---
 
-## dp_SR — Shafir-Raviv Free DP
+## dp_SR — Shafir-Raviv SR DP
 
 Builds a time-distance graph where each node is a `(t, d)` point on either a V-line (time boundary, every `dt_h = 6 h`) or an H-line (distance boundary at weather-zone and course-change crossings). Every arc carries the fuel cost of one atomic edge: the realized SOG, SWS, FCR, and weather are computed on the arc itself.
 
@@ -43,7 +43,7 @@ The optimal schedule is the shortest path (minimum fuel) from `(0, 0)` to any si
   --max_speed KNOTS Maximum SOG in knots  (default: mean_sog + 3)
   --zeta_nm  NM     Distance snap for H-line arc destinations (default: 1.0)
   --tau_h    HOURS  Time snap for V-line arc destinations     (default: 0.1)
-  --csv             Write per-arc schedule to free_dp.csv
+  --csv             Write per-arc schedule to sr_dp.csv
 ```
 
 `--zeta_nm` controls how finely H-line arc endpoints are quantized along the distance axis; `--tau_h` does the same for the time axis on V-line arcs. Halving both roughly doubles the number of distinct nodes and increases graph build time and memory accordingly.
@@ -60,7 +60,7 @@ dp_SR — SUMMARY
   Build: 14.1 s  Solve: 0.27 s
 ```
 
-With `--csv`, writes **free_dp.csv** — one row per atomic edge in the optimal schedule:
+With `--csv`, writes **sr_dp.csv** — one row per atomic edge in the optimal schedule:
 
 | Column | Description |
 |--------|-------------|

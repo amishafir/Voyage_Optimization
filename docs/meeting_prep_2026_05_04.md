@@ -29,7 +29,7 @@ Carried over from Apr 27 §3.9:
 | File | Purpose |
 |---|---|
 | `pipeline/dp_rebuild/build_edges_locked.py` | Locked-mode edge builder: one constant SWS per 6 h V-band, simulated forward through every H-line crossing. |
-| `pipeline/dp_rebuild/run_demo_locked.py` | End-to-end runner — same node set as free DP, swaps in locked edges. |
+| `pipeline/dp_rebuild/run_demo_locked.py` | End-to-end runner — same node set as SR DP, swaps in locked edges. |
 | `pipeline/dp_rebuild/build_edges_locked.verify_locked_schedule()` | Continuous resimulation of the chosen locked schedule, used as a sanity check. |
 
 ### 2.2 Two real bugs caught and fixed by the sanity check
@@ -50,7 +50,7 @@ same physics / weather / hard ETA.
 | Mode | Total fuel | End time | End d | Δ vs baseline |
 |---|---:|---:|---:|---:|
 | **Baseline (steady SOG = 12.120 kn)** | **366.519 mt** | 280.000 h | 3393.595 nm | — |
-| Free DP (per-square decisions) | 366.769 mt | 280.000 h | 3393.595 nm | **+0.250 mt** |
+| SR DP (per-square decisions) | 366.769 mt | 280.000 h | 3393.595 nm | **+0.250 mt** |
 | Locked DP (SOG-locking, 6 h block) | 365.161 mt | 280.000 h | 3393.595 nm | −1.358 mt (−0.37 %) |
 | **Combined (free ⊕ locked)** | **362.965 mt** | 280.000 h | 3393.595 nm | **−3.554 mt (−0.97 %)** |
 
@@ -58,15 +58,15 @@ All four totals are within ~1.5–2.4 % of the LP validation target (~372 mt).
 Continuous resim of the locked schedule lands at L exactly (Δd = +0.000 nm
 on every block); see §2.6.3.
 
-### 2.4 Why free DP loses to the steady-SOG baseline
+### 2.4 Why SR DP loses to the steady-SOG baseline
 
-Free DP comes in **+0.250 mt above the baseline** — a small but real
+SR DP comes in **+0.250 mt above the baseline** — a small but real
 inversion of what you'd expect from "more decisions = more fuel saved".
 Mechanism:
 
 - The baseline holds **continuous** SOG = L/ETA = 12.120 kn over the whole
   voyage and inverse-solves SWS per H-line sub-leg. No grid snap anywhere.
-- Free DP is locked to the (1 nm × 0.1 h) snap grid. The optimum on this
+- SR DP is locked to the (1 nm × 0.1 h) snap grid. The optimum on this
   voyage is near-uniform (mean SOG 12.019 kn, range [9.68, 12.93]) — so
   there's almost nothing for the per-square decisions to exploit, while
   the snap grid imposes a small but unavoidable rounding penalty.
@@ -79,7 +79,7 @@ edges around the source corner and final-mile alignment at L.
 
 The headline: optimization meaningfully beats steady speed (combined
 −0.97 %), but only when the policy has continuous SOG choice — pure
-per-square free DP is grid-noise-limited at near-uniform optima.
+per-square SR DP is grid-noise-limited at near-uniform optima.
 
 ---
 
@@ -180,11 +180,11 @@ Supervisor flagged the previous locked builder was the wrong direction: it held 
 
 ### 2.6.4 Three-graph Bellman experiment
 
-The free-DP and locked-DP graphs share the same node table by construction (verified by closing assertion in `build_locked_edges`). So the union of edge sets is a valid Bellman input — the combined optimum bounds both alone:
+The SR-DP and locked-DP graphs share the same node table by construction (verified by closing assertion in `build_locked_edges`). So the union of edge sets is a valid Bellman input — the combined optimum bounds both alone:
 
 | Graph | Edges | Total fuel | Schedule | Solve |
 |---|---:|---:|---:|---:|
-| Free DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | 2.91 s |
+| SR DP (per-square) | 3,308,940 | 366.769 mt | 206 edges | 2.91 s |
 | Locked DP (SOG-locking, 6 h block) | 631,537 | 365.161 mt | 47 blocks | 1.89 s |
 | **Combined (union)** | **3,940,477** | **362.965 mt** | **105 (74 free + 31 locked)** | **3.90 s** |
 
@@ -196,18 +196,18 @@ Schedule shape Bellman picked on the combined graph:
 - 264 h: 2 free edges (small re-alignment around an H-line)
 - 264–280 h: 3 locked edges (including the new early-terminal edge that lands exactly at the sink)
 
-The combined graph is the cleanest expression of the framework: a single Bellman gets you free-DP for fine-grained adjustments at boundaries and locked-DP for steady cruising — Bellman picks both where each helps.
+The combined graph is the cleanest expression of the framework: a single Bellman gets you SR-DP for fine-grained adjustments at boundaries and locked-DP for steady cruising — Bellman picks both where each helps.
 
 ### 2.6.5 Updated YAML voyage results
 
-| Mode | Fuel | vs LP target (~372 mt) | vs baseline | vs free DP |
+| Mode | Fuel | vs LP target (~372 mt) | vs baseline | vs SR DP |
 |---|---:|---:|---:|---:|
 | **Baseline (steady SOG = 12.120 kn)** | **366.519 mt** | −1.5 % | — | −0.25 mt |
-| Free DP (per-square) | 366.769 mt | −1.4 % | **+0.25 mt** | — |
+| SR DP (per-square) | 366.769 mt | −1.4 % | **+0.25 mt** | — |
 | Locked DP (SOG-locking) | **365.161 mt** | −1.8 % | −1.36 mt | −1.61 mt |
 | **Combined** | **362.965 mt** | **−2.4 %** | **−3.55 mt (−0.97 %)** | **−3.80 mt** |
 
-All three optimized totals are below the LP validation target. **Free DP
+All three optimized totals are below the LP validation target. **SR DP
 is actually +0.25 mt above the steady-SOG baseline** — its 1 nm × 0.1 h
 snap grid penalises near-uniform SOG profiles. Locked-DP and combined
 both beat the baseline because they actually exploit weather variation.
@@ -231,7 +231,7 @@ get for that cost**:
 | Per-edge weight | ANN forward pass (10 inputs, hidden up to 32 neurons) | Closed-form `0.000706·SWS³` + analytic SWS inverse — **~5–10× cheaper per edge** |
 | Speed range / discretization | [8, 18] kn × 0.1 step → 101 speeds per node | [9, 13] kn × 0.1 step → 41 speeds — **~2.5× smaller per-source fan-out** |
 | Locked-edge dst enumeration | n/a (single-policy) | **Geometric** `d_src + target_SOG·6h`, one edge per (V-src, V-dst), **no inverse search** |
-| Edge sets | One graph per RH run | **Free ⊕ locked share the same node table** — one canonicalisation, one Bellman pass |
+| Edge sets | One graph per RH run | **SR ⊕ locked share the same node table** — one canonicalisation, one Bellman pass |
 | Solver | Dijkstra (NetworkX, Python) — `O((V+E) log V)`, priority queue | Forward Bellman in lex topological order — `O(V+E)`, no PQ — **~10–15× faster solve** at our V, E |
 | Decision per stage | One scalar speed (101 discrete options) | Per-square (1 nm × 0.1 h) free **+** continuous-SOG 6 h locked, mixed by Bellman |
 | Within-stage weather | Single snapshot at segment start | **Sub-leg `Σ FCR(SWS_i)·Δt_i`** through every cell + segment crossing |
@@ -252,7 +252,7 @@ This is the core paper-relevant complexity story for the May 4 meeting.
 ## 3. Open Items / Next Steps
 
 - **Sampling strategy for new voyages** — current Open-Meteo collector samples every 12 nm interpolated waypoint; with cell-canonical weather we can switch to "2–3 samples per 0.5° cell + segment endpoints" without losing fidelity (see one-pager §5).
-- **Rolling horizon** — replan every 6 h with fresh forecast. Free, locked, and combined graphs all structured around 6 h V-bands, so replumbing is small.
+- **Rolling horizon** — replan every 6 h with fresh forecast. SR, locked, and combined graphs all structured around 6 h V-bands, so replumbing is small.
 - **Behavioural sanity checks** — zero-weather (closed-form fuel), constant-weather (constant SWS expected when SOG is locked), lock-monotonicity (fuel ↑ as lock_h ↑).
 - **Soft ETA** — `BellmanSolver.best_sink(eta_mode="soft", lam=…)` is implemented; not yet exercised.
 - **Combined-graph as default** — given the experiment above, the combined graph is strictly better. Worth promoting to the default `run_demo` and treating free/locked as ablations.
@@ -275,7 +275,7 @@ This is the core paper-relevant complexity story for the May 4 meeting.
 
 ### 5.1 Four-mode comparison, YAML voyage (Persian Gulf → Strait of Malacca, ETA = 280 h)
 
-| Metric | **Baseline (steady SOG)** | Free DP | Locked DP (SOG) | **Combined** |
+| Metric | **Baseline (steady SOG)** | SR DP | Locked DP (SOG) | **Combined** |
 |---|---|---|---|---|
 | Total fuel | **366.519 mt** | 366.769 mt | 365.161 mt | **362.965 mt** |
 | Δ vs baseline | — | **+0.250 mt** | −1.358 mt | **−3.554 mt (−0.97 %)** |
@@ -292,7 +292,7 @@ This is the core paper-relevant complexity story for the May 4 meeting.
 The baseline holds `SOG = L/ETA = 12.120 kn` constant over the whole
 voyage and inverse-solves SWS per sub-leg under the same cell-canonical
 weather the DP graphs see — so it is the apples-to-apples reference for
-"what if we just sailed at the average speed". Free DP comes in **+0.250 mt
+"what if we just sailed at the average speed". SR DP comes in **+0.250 mt
 above the baseline** (its 1 nm × 0.1 h snap grid can't match the continuous
 12.120 kn when the optimum is near-uniform). Locked and combined beat
 the baseline because they actually vary SOG to dodge headwind / current

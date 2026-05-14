@@ -12,7 +12,7 @@ Transitions:
   * Outgoing from (H-line src, S):    only edges with edge.target_sog == S
                                        admissible; lock stays S until next V-line
 
-Free DP and Luo DP run on the SAME atomic-edge graph. Difference is purely
+SR DP and Luo DP run on the SAME atomic-edge graph. Difference is purely
 in this Bellman state augmentation.
 
 Spec reference: docs/meeting_prep_2026_05_11.md §2.1.3 (Bellman mode summary).
