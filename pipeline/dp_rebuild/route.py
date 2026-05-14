@@ -239,8 +239,8 @@ def summarize_route(route: Route) -> None:
 
 
 if __name__ == "__main__":
-    yaml_path = Path(__file__).resolve().parent.parent.parent / \
-        "Dynamic speed optimization" / "weather_forecasts.yaml"
+    yaml_path = Path(__file__).resolve().parent.parent / \
+        "config" / "routes" / "persian_gulf_malacca_paper.yaml"
     route = load_yaml_route(yaml_path)
     summarize_route(route)
 

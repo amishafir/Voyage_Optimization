@@ -369,8 +369,8 @@ if __name__ == "__main__":
     from route import load_yaml_route, synthesize_multi_window
     from route_waypoints import WAYPOINTS
 
-    yaml_path = Path(__file__).resolve().parent.parent.parent / \
-        "Dynamic speed optimization" / "weather_forecasts.yaml"
+    yaml_path = Path(__file__).resolve().parent.parent / \
+        "config" / "routes" / "persian_gulf_malacca_paper.yaml"
     h5_path = Path(__file__).resolve().parent.parent / "data" / "voyage_weather.h5"
 
     route = load_yaml_route(yaml_path)

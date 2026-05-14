@@ -196,7 +196,7 @@ def _load_frame(route_id: int):
         eta_h = 168.0
         route, waypoints = build_route_from_waypoints_yaml(yaml_path, eta_h=eta_h)
     elif route_id == 1:
-        yaml_path = _PIPELINE_ROOT.parent / "Dynamic speed optimization" / "weather_forecasts.yaml"
+        yaml_path = _PIPELINE_ROOT / "config" / "routes" / "persian_gulf_malacca_paper.yaml"
         h5_path = _PIPELINE_ROOT / "data" / "voyage_weather.h5"
         from route import load_yaml_route
         from route_waypoints import WAYPOINTS

@@ -55,7 +55,7 @@ def _interp_d_at_t(pts, t):
 
 
 def main() -> None:
-    yaml_path = _HERE.parent.parent / "Dynamic speed optimization" / "weather_forecasts.yaml"
+    yaml_path = _HERE.parent / "config" / "routes" / "persian_gulf_malacca_paper.yaml"
     h5_path = _HERE.parent / "data" / "voyage_weather.h5"
     route = load_yaml_route(yaml_path)
     route = synthesize_multi_window(route, window_h=6.0)
