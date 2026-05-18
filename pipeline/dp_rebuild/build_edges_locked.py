@@ -80,6 +80,7 @@ def simulate_block_sog(
     forecast_hour: Optional[int] = None,
     grid_deg: float = 0.5,
     sws_max_feasible: float = 25.0,
+    base_sample_hour: Optional[int] = None,
 ) -> Optional[Tuple[float, float, float, int, float, float, float]]:
     """Walk a constant-SOG trajectory from (t0, d0) to (?, target_dst_d).
 
@@ -125,9 +126,15 @@ def simulate_block_sog(
         _lat, _lon, seg_idx = position_at_d(d, waypoints)
         seg_clamped = max(0, min(seg_idx, n_yaml - 1))
         heading_deg = yaml_segments[seg_clamped].ship_heading
+        # Mode C: per-block actual_weather at sample_hour = base + 6·floor(t/6)
+        sh = (
+            base_sample_hour + 6 * int(t // 6)
+            if base_sample_hour is not None
+            else sample_hour
+        )
         wx = voyage.cell_weather_at_d(
             d, waypoints=waypoints,
-            sample_hour=sample_hour, forecast_hour=forecast_hour,
+            sample_hour=sh, forecast_hour=forecast_hour,
             grid_deg=grid_deg,
         )
 
@@ -362,6 +369,7 @@ def simulate_steady_voyage(
     forecast_hour: Optional[int] = None,
     grid_deg: float = 0.5,
     sws_max_feasible: float = 25.0,
+    base_sample_hour: Optional[int] = None,
 ) -> Optional[Tuple[float, float, float, int, float, float, float]]:
     """Steady-SOG baseline: hold one constant SOG for the entire voyage.
 
@@ -370,6 +378,9 @@ def simulate_steady_voyage(
     integral of FCR(SWS_i) · Δt_i over every H-line crossing. Returns the
     same tuple as `simulate_block_sog`, or None if any sub-leg's required
     SWS exceeds the engine bound.
+
+    `base_sample_hour`: if set, sub-leg sample_hour = base + 6·floor(t/6)
+    (Mode C per-block actual). If None, uses fixed `sample_hour` (Mode A).
     """
     if target_sog is None:
         target_sog = L / eta_h
@@ -381,6 +392,7 @@ def simulate_steady_voyage(
         waypoints=waypoints,
         sample_hour=sample_hour, forecast_hour=forecast_hour,
         grid_deg=grid_deg, sws_max_feasible=sws_max_feasible,
+        base_sample_hour=base_sample_hour,
     )
 
 

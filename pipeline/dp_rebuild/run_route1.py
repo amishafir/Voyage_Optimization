@@ -1,15 +1,19 @@
 """
-End-to-end runner for Route 2 (St. John's → Liverpool).
+End-to-end runner for Route 1 (Persian Gulf → Strait of Malacca).
 
 Single script that:
-  1. Loads Route 2 (yaml + HDF5 + computed-bearing waypoints).
+  1. Loads Route 1 (yaml + HDF5 + computed-bearing waypoints).
   2. Builds the atomic-edge graph.
   3. Solves SR DP, Luo DP, and Baseline (steady SOG = L/ETA).
   4. Classifies every block A/B/C and reports aligned-vs-unaligned breakdown.
   5. Ranks 3-WP windows by SR–Luo divergence and reports the top.
   6. Renders the 4-panel visualization of the most divergent window.
 
-Default sample_hour = 0. Pass `--sample-hour N` to use a different snapshot.
+Mode C (oracle / per-block actual_weather) — voyage starting at
+``--sample-hour N`` reads actual_weather[sample_hour = N + 6·block] per block.
+
+PG sample_hour range is [6, 1626]; sample_hour=0 is not collected on this
+route. Default 24. Voyage is 280 h (L=3,396 nm at avg 12.13 kn).
 """
 
 from __future__ import annotations
@@ -51,10 +55,10 @@ from visualize_schedules import (
 )
 
 
-YAML_PATH = _HERE.parent / "config" / "routes" / "st_johns_liverpool.yaml"
-H5_PATH = _HERE.parent / "data" / "experiment_d_391wp.h5"
+YAML_PATH = _HERE.parent / "config" / "routes" / "persian_gulf_malacca.yaml"
+H5_PATH = _HERE.parent / "data" / "experiment_b_138wp.h5"
 RESULTS_DIR = _HERE / "results"
-ETA_H = 168.0
+ETA_H = 280.0  # 3,395.8 nm at 12.13 kn avg
 
 
 def _schedule_to_polyline(schedule):
@@ -78,15 +82,16 @@ def _interp_d_at_t(pts, t):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sample-hour", type=int, default=0,
-                    help="HDF5 sample_hour to use (default 0)")
+    ap.add_argument("--sample-hour", type=int, default=222,
+                    help="HDF5 sample_hour to use (default 222 — first clean 280h "
+                         "window; early PG sample_hours have whole-cycle NaN failures)")
     ap.add_argument("--no-viz", action="store_true",
                     help="Skip rendering the visualization")
     args = ap.parse_args()
     sample_hour = args.sample_hour
 
     print("=" * 78)
-    print(f"Route 2 — St. John's → Liverpool   (sample_hour = {sample_hour})")
+    print(f"Route 1 — Persian Gulf → Strait of Malacca   (sample_hour = {sample_hour})")
     print("=" * 78)
 
     # ---- Load route + HDF5 ------------------------------------------------
@@ -139,7 +144,7 @@ def main():
 
     # ---- Headline ---------------------------------------------------------
     print("\n" + "=" * 78)
-    print("Route 2 SUMMARY")
+    print("Route 1 SUMMARY")
     print("=" * 78)
     print(f"  Baseline:  {base_fuel:.3f} mt")
     print(f"  SR DP:   {sr_res.total_fuel_mt:.3f} mt   "
@@ -187,7 +192,7 @@ def main():
             aligned_sr += ff
             aligned_luo += lf
 
-    print("\nBlock classification (Route 2):")
+    print("\nBlock classification (Route 1):")
     print(f"  Type A (SR 1 SOG = Luo's): {counts['A']}")
     print(f"  Type B (SR 1 SOG ≠ Luo's): {counts['B']}")
     print(f"  Type C (SR ≥ 2 SOGs):      {counts['C']}")
@@ -325,7 +330,7 @@ def main():
                         fraction=0.04, pad=0.10, aspect=40, label="target SOG (kn)")
     cbar.set_ticks([9, 10, 11, 12, 13])
 
-    out = RESULTS_DIR / f"route2_schedules_wp{top_s}-{top_s+2}_sh{sample_hour}.png"
+    out = RESULTS_DIR / f"route1_schedules_wp{top_s}-{top_s+2}_sh{sample_hour}.png"
     plt.tight_layout(rect=(0, 0.05, 1, 1))
     plt.savefig(out, dpi=150)
     print(f"Saved: {out}")

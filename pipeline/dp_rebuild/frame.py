@@ -53,6 +53,7 @@ class Frame:
     h_line_distances: List[float]
     grid_deg: float = 0.5
     sog_step: float = SOG_STEP_DEFAULT
+    base_sample_hour: int = 0
     _sog_grid_cache: List[float] = field(default_factory=list, repr=False)
 
     # ---------------------------------------------------------------- SOG grid
@@ -90,8 +91,13 @@ class Frame:
         return self.cfg.dt_h * self.block_index(t)
 
     def sample_hour_for_block(self, t: float) -> int:
-        """Block-start sample_hour — same row for the whole 6 h block (Luo 2024)."""
-        return int(round(self.block_start_time(t)))
+        """Block-start sample_hour (with base offset) — same row for the whole 6 h block.
+
+        Mode C support: voyage starting at base_sample_hour=B uses
+        actual_weather[sample_hour = B + 6·block_index(t)] for each block.
+        Mode A callers pass override_sample_hour and ignore this method.
+        """
+        return self.base_sample_hour + int(round(self.block_start_time(t)))
 
     # ---------------------------------------------------------------- snap helpers
 
@@ -141,10 +147,14 @@ def from_route(
     cfg: Optional[GraphConfig] = None,
     grid_deg: float = 0.5,
     sog_step: float = SOG_STEP_DEFAULT,
+    base_sample_hour: int = 0,
 ) -> Frame:
     """Construct a Frame from a route + waypoints + HDF5 weather.
 
     Default cfg: [9, 13] kn × 0.1 kn step, dt_h=6 h, zeta_nm=1 nm, tau_h=0.1 h.
+
+    `base_sample_hour`: offset for Mode C (per-block actual_weather lookup).
+    Block k will read actual_weather[sample_hour = base_sample_hour + 6k].
     """
     if cfg is None:
         cfg = GraphConfig.from_route(
@@ -167,6 +177,7 @@ def from_route(
         h_line_distances=h_dists,
         grid_deg=grid_deg,
         sog_step=sog_step,
+        base_sample_hour=base_sample_hour,
     )
 
 
