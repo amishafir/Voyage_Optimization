@@ -60,7 +60,7 @@ static void usage(const char* prog) {
     fprintf(stderr,
         "Usage: %s [OPTIONS]\n"
         "  --yaml PATH       Route YAML  (default: route.yaml)\n"
-        "  --h5   PATH       HDF5 file   (default: voyage_weather.h5)\n"
+        "  --h5   PATH       HDF5 file   (default: experiment_b_138wp.h5)\n"
         "  --eta  HOURS      Override ETA in hours (e.g. 240)\n"
         "  --min_speed KNOTS Minimum SOG in knots (default: mean_sog - 3)\n"
         "  --max_speed KNOTS Maximum SOG in knots (default: mean_sog + 3)\n"
@@ -72,7 +72,7 @@ static void usage(const char* prog) {
 
 int main(int argc, char* argv[]) {
     std::string yaml_path = "route.yaml";
-    std::string h5_path   = "voyage_weather.h5";
+    std::string h5_path   = "experiment_b_138wp.h5";
     std::optional<double> eta_override;
     std::optional<double> min_speed_override;
     std::optional<double> max_speed_override;
@@ -129,8 +129,11 @@ int main(int argc, char* argv[]) {
     // ---- Build atomic-edge graph ----
     print_header("dp_SR — build atomic-edge graph");
     auto t0 = std::chrono::steady_clock::now();
+    // override_sample_hour = -1 → time-varying weather using the file's
+    // sample_hour grid (e.g. 6 h cadence in experiment_b_138wp.h5), with
+    // NaN walkback to the most recent valid sample.
     auto [nodes, edges] = build_atomic_edges(frame, /*forecast_hour=*/-1,
-                                              /*override_sample_hour=*/0,
+                                              /*override_sample_hour=*/-1,
                                               /*verbose=*/false);
     double build_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();

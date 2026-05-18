@@ -127,6 +127,20 @@ VoyageWeather::VoyageWeather(const std::string& h5_path) {
     H5Fclose(fid);
 }
 
+// ---- Public helpers ----
+
+int VoyageWeather::active_sample_hour(double t_voyage_h) const {
+    if (sample_hours_.empty()) return 0;
+    const int sh_base = sample_hours_.front();
+    const int sh_top  = sample_hours_.back();
+    int target = sh_base + (int)std::floor(t_voyage_h + 1e-9);
+    if (target <= sh_base) return sh_base;
+    if (target >= sh_top)  return sh_top;
+    auto it = std::upper_bound(sample_hours_.begin(), sample_hours_.end(), target);
+    --it;  // last element <= target
+    return *it;
+}
+
 // ---- Internal helpers ----
 
 const VoyageWeather::WeatherRow* VoyageWeather::row_for(int node_id, int sample_hour,

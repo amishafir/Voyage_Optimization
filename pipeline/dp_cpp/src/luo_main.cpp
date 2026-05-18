@@ -10,7 +10,13 @@
 //   Partial arc:  duration = dt_last,  SOG = (d2-d1)*res_nm / dt_last
 //
 // Arc cost: walk sub-segments between weather-zone / course-change boundaries
-// from d1*res_nm to d2*res_nm, summing fuel at the fixed block SOG.
+// from d1*res_nm to d2*res_nm, summing fuel at the fixed block SOG. Each
+// spatial sub-segment is further split at every sample_hour change so the
+// fuel of each piece is computed from the weather active at that absolute
+// time. The trip is assumed to start at the earliest sample_hour stored in
+// the HDF5 file; absolute voyage time t [h] maps to the largest sample_hour
+// in the file that is ≤ (earliest + ⌊t⌋), so any cadence (1 h, 6 h, …) and
+// non-uniform sample_hour grids are handled correctly.
 //
 // Shortest path from (0, 0) to any (col, L_scaled) with col ≤ last_col.
 
@@ -58,8 +64,11 @@ struct ArcResult {
 
 // Evaluate arc from grid index d1_idx to d2_idx, departing at t_h [h] over
 // block_dur_h hours. Physical distances are d_idx * res_nm.
-// Weather is read at sample_hour=0 (static-deterministic). forecast_hour=-1 →
-// actual_weather table. Returns ok=false on NaN weather or infeasible SWS.
+// Trip start is mapped to the earliest sample_hour in the HDF5 file; within
+// each spatial sub-segment the arc is split at every sample_hour transition
+// (= sh_list[k] - sh_base) so the fuel of each piece is evaluated against the
+// weather active at that absolute time. forecast_hour=-1 → actual_weather.
+// Returns ok=false on NaN weather or infeasible SWS.
 static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h,
                            const std::vector<double>& bounds,
                            const Frame& fr, double res_nm) {
@@ -68,7 +77,11 @@ static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h
     double d2  = d2_idx * res_nm;
     double sog = (d2 - d1) / block_dur_h;
 
-    // Collect sub-segment breakpoints strictly inside [d1, d2]
+    const auto& sh_list = fr.voyage->sample_hours();
+    if (sh_list.empty()) return r;
+    const int sh_base = sh_list.front();
+
+    // Collect spatial sub-segment breakpoints strictly inside [d1, d2]
     std::vector<double> pts;
     pts.push_back(d1);
     for (double b : bounds)
@@ -79,31 +92,74 @@ static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h
     for (size_t i = 0; i + 1 < pts.size(); ++i) {
         double sd = pts[i], ed = pts[i + 1];
         double heading = fr.paper_heading_at(sd);
-        Weather wx = fr.cell_weather_at(sd, /*sample_hour=*/0, /*forecast_hour=*/-1);
-        if (wx.has_nan()) return r;
 
-        WeatherDict wd = wx.to_dict();
-        double sws = calculate_sws_from_sog(sog, wd, heading, SHIP);
-        if (std::isnan(sws) || sws > SWS_MAX) return r;
+        // Absolute (voyage-relative) time at the spatial sub-segment endpoints
+        double t_sd = t_h + (sd - d1) / sog;
+        double t_ed = t_h + (ed - d1) / sog;
 
-        double fcr  = calculate_fuel_consumption_rate(sws);
-        double dur  = (ed - sd) / sog;
-        double fuel = fcr * dur;
-        if (std::isnan(fuel)) return r;
+        // Temporal breakpoints: every sample_hour transition (other than sh_base)
+        // strictly inside the time interval, mapped to voyage time t = sh - sh_base
+        std::vector<double> t_pts;
+        t_pts.push_back(t_sd);
+        for (int sh_v : sh_list) {
+            if (sh_v == sh_base) continue;
+            double t_b = (double)(sh_v - sh_base);
+            if (t_b > t_sd + 1e-9 && t_b < t_ed - 1e-9)
+                t_pts.push_back(t_b);
+            if (t_b >= t_ed) break;
+        }
+        t_pts.push_back(t_ed);
 
-        double src_t = t_h + (sd - d1) / sog;
-        r.segs.push_back({sd, ed, src_t, sog, heading, wx, sws, fcr, fuel, dur});
-        r.fuel += fuel;
+        for (size_t k = 0; k + 1 < t_pts.size(); ++k) {
+            double ta = t_pts[k], tb = t_pts[k + 1];
+            double dur = tb - ta;
+            if (dur <= 1e-12) continue;
+
+            int sample_hour = fr.voyage->active_sample_hour(ta);
+
+            double da = sd + (ta - t_sd) * sog;
+            double db = sd + (tb - t_sd) * sog;
+
+            Weather wx = fr.cell_weather_at(da, sample_hour, /*forecast_hour=*/-1);
+            if (wx.has_nan()) {
+                // Walk back through sh_list to find the most recent valid sample
+                auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
+                while (it != sh_list.begin() && wx.has_nan()) {
+                    --it;
+                    wx = fr.cell_weather_at(da, *it, -1);
+                    if (!wx.has_nan()) { sample_hour = *it; break; }
+                }
+                if (wx.has_nan()) return r;
+            }
+
+            WeatherDict wd = wx.to_dict();
+            double sws = calculate_sws_from_sog(sog, wd, heading, SHIP);
+            if (std::isnan(sws) || sws > SWS_MAX) return r;
+
+            double fcr  = calculate_fuel_consumption_rate(sws);
+            double fuel = fcr * dur;
+            if (std::isnan(fuel)) return r;
+
+            r.segs.push_back({da, db, ta, sog, heading, wx, sws, fcr, fuel, dur});
+            r.fuel += fuel;
+        }
     }
     r.ok = true;
     return r;
 }
 
 // ── Baseline: fixed mean SOG, no graph ───────────────────────────────────
+// Trip starts at the earliest sample_hour in the HDF5 file. Each spatial
+// sub-segment is split at every sample_hour transition so each piece is
+// evaluated against the weather active at that absolute time.
 static std::vector<Seg> eval_baseline(const Frame& fr,
                                        const std::vector<double>& bounds) {
     double sog = fr.cfg.length_nm / fr.cfg.eta_h;
     std::vector<Seg> segs;
+
+    const auto& sh_list = fr.voyage->sample_hours();
+    if (sh_list.empty()) return segs;
+    const int sh_base = sh_list.front();
 
     for (size_t i = 0; i + 1 < bounds.size(); ++i) {
         double sd = bounds[i], ed = bounds[i + 1];
@@ -111,19 +167,56 @@ static std::vector<Seg> eval_baseline(const Frame& fr,
         if (ed <= sd + 1e-9) continue;
 
         double heading = fr.paper_heading_at(sd);
-        Weather wx = fr.cell_weather_at(sd, /*sample_hour=*/0, /*forecast_hour=*/-1);
-        if (wx.has_nan()) {
-            fprintf(stderr, "  NaN weather at d=%.1f nm — sub-segment skipped\n", sd);
-            continue;
-        }
-        WeatherDict wd = wx.to_dict();
-        double sws  = calculate_sws_from_sog(sog, wd, heading, SHIP);
-        double fcr  = calculate_fuel_consumption_rate(sws);
-        double dur  = (ed - sd) / sog;
-        double fuel = fcr * dur;
 
-        double src_t = sd / sog;
-        segs.push_back({sd, ed, src_t, sog, heading, wx, sws, fcr, fuel, dur});
+        // Absolute time at endpoints (trip starts at t=0)
+        double t_sd = sd / sog;
+        double t_ed = ed / sog;
+
+        // Temporal breakpoints: every sample_hour transition (other than sh_base)
+        // strictly inside the time interval, mapped to voyage time t = sh - sh_base
+        std::vector<double> t_pts;
+        t_pts.push_back(t_sd);
+        for (int sh_v : sh_list) {
+            if (sh_v == sh_base) continue;
+            double t_b = (double)(sh_v - sh_base);
+            if (t_b > t_sd + 1e-9 && t_b < t_ed - 1e-9)
+                t_pts.push_back(t_b);
+            if (t_b >= t_ed) break;
+        }
+        t_pts.push_back(t_ed);
+
+        for (size_t k = 0; k + 1 < t_pts.size(); ++k) {
+            double ta = t_pts[k], tb = t_pts[k + 1];
+            double dur = tb - ta;
+            if (dur <= 1e-12) continue;
+
+            int sample_hour = fr.voyage->active_sample_hour(ta);
+
+            double da = sd + (ta - t_sd) * sog;
+            double db = sd + (tb - t_sd) * sog;
+
+            Weather wx = fr.cell_weather_at(da, sample_hour, /*forecast_hour=*/-1);
+            if (wx.has_nan()) {
+                // Walk back through sh_list to find the most recent valid sample
+                auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
+                while (it != sh_list.begin() && wx.has_nan()) {
+                    --it;
+                    wx = fr.cell_weather_at(da, *it, -1);
+                    if (!wx.has_nan()) { sample_hour = *it; break; }
+                }
+                if (wx.has_nan()) {
+                    fprintf(stderr, "  NaN weather at d=%.1f nm, sh=%d — piece skipped\n",
+                            da, sample_hour);
+                    continue;
+                }
+            }
+            WeatherDict wd = wx.to_dict();
+            double sws  = calculate_sws_from_sog(sog, wd, heading, SHIP);
+            double fcr  = calculate_fuel_consumption_rate(sws);
+            double fuel = fcr * dur;
+
+            segs.push_back({da, db, ta, sog, heading, wx, sws, fcr, fuel, dur});
+        }
     }
     return segs;
 }
@@ -202,7 +295,7 @@ static void usage(const char* prog) {
     fprintf(stderr,
         "Usage: %s [OPTIONS]\n"
         "  --yaml PATH       Route YAML  (default: route.yaml)\n"
-        "  --h5   PATH       HDF5 file   (default: voyage_weather.h5)\n"
+        "  --h5   PATH       HDF5 file   (default: experiment_b_138wp.h5)\n"
         "  --eta  HOURS      Override ETA in hours\n"
         "  --min_speed KNOTS Minimum SOG in knots (default: mean_sog - 3)\n"
         "  --max_speed KNOTS Maximum SOG in knots (default: mean_sog + 3)\n"
@@ -217,7 +310,7 @@ static void usage(const char* prog) {
 
 int main(int argc, char* argv[]) {
     std::string yaml_path = "route.yaml";
-    std::string h5_path   = "voyage_weather.h5";
+    std::string h5_path   = "experiment_b_138wp.h5";
     std::optional<double> eta_ov, vmin_ov, vmax_ov;
     double res_nm    = 1.0;
     bool do_csv      = false;

@@ -87,6 +87,11 @@ public:
     const std::vector<int>& forecast_hours() const { return forecast_hours_; }
     std::string route_name() const { return route_name_; }
 
+    // Map voyage time t [h since trip start] → largest sample_hour in the file
+    // that is ≤ (earliest_sample_hour + ⌊t⌋), clamped to the latest available.
+    // Handles non-uniform sample_hour cadence (e.g. 6 h) and missing zero anchor.
+    int active_sample_hour(double t_voyage_h) const;
+
     // Segment-aware weather lookup (nearest valid waypoint in segment)
     WeatherDict weather_at(double d, int sample_hour, int forecast_hour = -1) const;
 

@@ -19,17 +19,38 @@ static LineType line_type_at(double t, double d, const Frame& frame) {
 }
 
 // Emit all atomic edges from one source (t, d).
+// sample_hour is chosen per arc from the file's actual sample_hour grid:
+//   override_sample_hour >= 0 → use that value (legacy static-deterministic mode)
+//   override_sample_hour <  0 → time-varying: active_sample_hour(src_t),
+//     with walkback to the most recent valid sample if the cell is NaN at the
+//     requested sample_hour. This handles 6 h cadence and failed collection
+//     cycles (e.g. sh=12 with 100 % NaN rows).
 static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
                                                const Frame& frame,
                                                int forecast_hour,
                                                int override_sample_hour) {
     if (std::abs(src_d - frame.cfg.length_nm) < 1e-9) return {};
 
-    int sample_hour = (override_sample_hour >= 0)
-                    ? override_sample_hour
-                    : frame.sample_hour_for_block(src_t);
+    const auto& sh_list = frame.voyage->sample_hours();
+    int sample_hour;
+    if (override_sample_hour >= 0) {
+        sample_hour = override_sample_hour;
+    } else if (sh_list.empty()) {
+        return {};
+    } else {
+        sample_hour = frame.voyage->active_sample_hour(src_t);
+    }
 
     Weather wx = frame.cell_weather_at(src_d, sample_hour, forecast_hour);
+    if (wx.has_nan() && override_sample_hour < 0) {
+        // Walk back through sh_list to the most recent valid sample at this cell
+        auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
+        while (it != sh_list.begin() && wx.has_nan()) {
+            --it;
+            wx = frame.cell_weather_at(src_d, *it, forecast_hour);
+            if (!wx.has_nan()) { sample_hour = *it; break; }
+        }
+    }
     if (wx.has_nan()) return {};
 
     WeatherDict wx_dict = wx.to_dict();
