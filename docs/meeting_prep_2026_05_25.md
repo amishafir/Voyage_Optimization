@@ -208,7 +208,109 @@ All four C++ blocks identified as canonical sources in §2.1.5 were translated:
 - **Mode B implementation** can build on the new `active_sample_hour` plumbing — Mode B is the same dispatch but with `forecast_hour ≠ None` and `sample_hour` pinned to the planning-moment cycle rather than the active-at-ta cycle. Targeted as the next porting unit.
 - **Rolling horizon prototype** — the per-arc `active_sample_hour(src_t)` plus NaN-walkback is the exact primitive RH needs. RH adds the outer loop (rebuild every 6 h with the latest forecast cycle); the arc-level weather selection is now identical between C++ and Python.
 
-### 2.4 *(to fill in — other work between May 18 and May 25)*
+### 2.4 May 25 session summary
+
+Everything below was done in a single working session on 2026-05-25, building directly on §2.1 (Tal's commit log) and §2.3 (the Python port).
+
+#### 2.4.1 Pulled Tal's `752ae0b` and rebuilt the C++ binaries
+
+- `git pull --ff-only` → local main fast-forwarded from `ef59dd9` → `752ae0b`.
+- `cmake --build pipeline/dp_cpp/build -j` — incremental rebuild, ~12 s. Both `dp_SR` and `dp_luo` rebuilt cleanly; only pre-existing warnings (unused params, brace style), nothing from Tal's diff.
+- First post-pull C++ run (Route 1 / ETA 280 / `experiment_b_138wp.h5`, all defaults) → dp_SR 354.914 mt, dp_luo 361.671 mt (§2.2).
+
+#### 2.4.2 Python port → C++↔Python parity (§2.3 detail)
+
+Four-file change in `pipeline/dp_rebuild/`:
+
+| File | Change |
+|---|---|
+| `weather.py` | + `active_sample_hour(t)`; +`from math import floor` |
+| `atomic_edges.py` | `None` branch → `active_sample_hour` + NaN walkback; +`from bisect import bisect_right` |
+| `SR_main.py` | `override_sample_hour=0` → `None` |
+| `luo_main.py` | `eval_arc` + `eval_baseline` rewritten for temporal-split per piece; per-piece NaN walkback |
+
+Parity confirmed (§2.3.1):
+
+- dp_SR: Py 354.821 vs C++ 354.914 → −0.026 % (within ≤0.08 % FP-noise)
+- dp_luo: Py 361.561 vs C++ 361.671 → −0.030 % (within ≤0.08 %)
+- Graph structure (nodes, edges, schedule length) bit-identical between Python and C++.
+
+CSV invariants verified via pandas: `sum(fuel_mt)` matches summary, `sum(duration_h) = ETA`, Luo's one-SOG-per-block lock intact across the new temporal splits (§2.3.4).
+
+#### 2.4.3 HDF5 cleanup — `pipeline/data/`
+
+Deleted **5 stale files**, total ~110 MB:
+
+| File | Size | Why removed |
+|---|---:|---|
+| `voyage_weather.h5` | 6.5 M | Pre-experiment Feb 15 file, only 12 sample_hours, superseded |
+| `experiment_b_138wp_historical.h5` | 29 M | Truncated route ("Persian Gulf to Indian Ocean 1") |
+| `experiment_b_138wp_shlomo1_old.h5` | 51 M | Same truncated route, older |
+| `test_170wp.h5` | 2.1 M | Old test fixture, predates experiment_* naming |
+| `experiment_d_391wp_edison.h5` | 22 M | Older Atlantic snapshot |
+
+Pre-deletion `grep` confirmed no active code references any of them (only argparse defaults still mention `voyage_weather.h5`; deletion just means default-flag invocations need `--h5`).
+
+Retained in `pipeline/data/`:
+
+| File | Size | Purpose |
+|---|---:|---|
+| `experiment_b_138wp.h5` | 88 M | **Malacca live (canonical)** — 131 wp, 271 sample_hours |
+| `experiment_d_391wp.h5` | 227 M | **Atlantic live (canonical)** — 391 wp |
+| `experiment_a_7wp.h5` | 11 M | Experiment A fixture |
+| `paper_table8.h5` | 12 K | Paper validation |
+
+> **Filename note**: `experiment_b_138wp.h5` actually has **131 waypoints** inside (13 originals + 118 interpolated at 25 nm). The "138" in the filename is a misnomer from an earlier collection run with different interval; not worth renaming since the route_name attribute is canonical.
+
+#### 2.4.4 Plan-vs-Simulate workflow — gap analysis
+
+Discussed the pattern needed for realistic operational comparison: **plan against `predicted_weather`, simulate against `actual_weather`, measure the gap.** Output contract (`pipeline-standards.md` §7) already specifies the schema (`planned.total_fuel_mt`, `simulated.total_fuel_mt`, `metrics.fuel_gap_percent`).
+
+Current status:
+
+| Step | Status | Blocker |
+|---|---|---|
+| 1. Plan against forecast (Mode B) | ⚠️ partial | needs `active_forecast_hour(t)` helper in `weather.py` — mirror of `active_sample_hour`, applied to the forecast_hour axis. ~30 lines. |
+| 2. Simulate against actual | ✅ exists | `pipeline/shared/simulation.py:simulate_voyage` already implemented (per-waypoint actual lookup, SWS clamping, violation logging) |
+| 3. Compute metrics | ✅ exists | `pipeline/shared/metrics.py:compute_result_metrics` |
+| 4. End-to-end wiring in SR_main / luo_main | ❌ not done | needs a `--mode {actual,forecast,forecast_lead=N}` flag + post-solve simulate call |
+
+**Estimate to land plan-then-simulate**: ~80–100 lines of Python across 3 files, ~1 focused hour. Unlocks the rolling-horizon prototype (which is just an outer loop calling Mode B at each 6 h decision step).
+
+#### 2.4.5 Codebase walkthrough — documentation for future work
+
+Walked through the Python SR pipeline top-to-bottom for understanding (no code changes from this part):
+
+- `SR_main.py` as thin orchestrator (186 LOC, ~30 of which do real work)
+- Route building: `route_waypoints.py` (13 lat/lon anchors, paper Table 1) + `persian_gulf_malacca_paper.yaml` (12 segments with distance/heading/default-weather), how `load_yaml_route` + `synthesize_multi_window(6 h)` turn one window into 47
+- Waypoint interpolation: `pipeline/collect/waypoints.py:generate_waypoints` + `interpolate_geodesic` (slerp) — 13 originals → 131 waypoints at 25 nm
+- HDF5 schema: 3 datasets (`/metadata`, `/actual_weather`, `/predicted_weather`) + root attrs
+- Frame → atomic-edge graph → Bellman flow; nodes and edges created together via BFS interning
+- `AtomicEdge` 12-field schema (geometry × 4 + decision/realized SOG + weather/heading/sws/fcr/fuel + `crosses_v_line`)
+- Per-arc weather decision: source-only, 5-layer lookup (`active_sample_hour` → `position_at_d` → cell index → waypoint set in cell → linear/circular mean)
+- Decision point for actual vs predicted: one argument (`forecast_hour=` to `build_atomic_edges`), one branch in `weather.py:_row_for`
+
+This is the source-of-truth mental model for the supervisor walkthrough.
+
+#### 2.4.6 Commit + push
+
+Single tight commit:
+
+- **`acad96b`** — *Port time-varying weather to Python (mirror of C++ 752ae0b)* — 5 files, 462 ins / 70 del. Pushed to `origin/main` on 2026-05-25.
+- Pre-existing M/D files (`.claude/commit_log.md`, `model_report_geisinger_*.pdf`), legacy outputs in `old/pipeline_legacy/output/`, literature PDFs, and stray run-output CSVs were intentionally left untracked / unstaged — they belong to other commits.
+
+#### 2.4.7 Open list after this session
+
+Carried into §3 / §6:
+
+- [ ] **Mode B — port `active_forecast_hour(t)`** (highest priority — unblocks plan-vs-sim and RH)
+- [ ] Wire `simulate_voyage` into `SR_main.py` / `luo_main.py` as a post-solve step
+- [ ] Add `--mode {actual,forecast,forecast_lead=N}` CLI flag
+- [ ] Route 2 (Atlantic) parity rerun — needs the same Python on `experiment_d_391wp.h5` + `st_johns_liverpool.yaml`
+- [ ] Rolling-horizon prototype (depends on Mode B landing first)
+- [ ] Phase 4 refactor (stress-test / Route 2 / visualization scripts to call `SR_main.solve()` / `luo_main.solve()` instead of legacy locked modules)
+
+### 2.5 *(to fill in — anything else between May 18 and May 25 not covered above)*
 
 ---
 
