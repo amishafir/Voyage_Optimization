@@ -31,6 +31,7 @@ Spec reference: docs/meeting_prep_2026_05_11.md §2.1.4.
 from __future__ import annotations
 
 import sys
+from bisect import bisect_right
 from collections import deque
 from dataclasses import dataclass
 from math import isnan
@@ -115,12 +116,28 @@ def _emit_from_src(
     if abs(src_d - frame.cfg.length_nm) < 1e-9:
         return []
 
-    sample_hour = (
-        override_sample_hour
-        if override_sample_hour is not None
-        else frame.sample_hour_for_block(src_t)
-    )
+    # Time-varying sample_hour pick (mirror of pipeline/dp_cpp/src/atomic_edges.cpp,
+    # commit 752ae0b). override_sample_hour is not None  → legacy static mode.
+    # override_sample_hour is None  → active_sample_hour(src_t), with NaN walkback
+    # through sh_list to the most recent valid sample at the same cell.
+    sh_list = frame.voyage.sample_hours
+    if override_sample_hour is not None:
+        sample_hour = override_sample_hour
+    elif not sh_list:
+        return []
+    else:
+        sample_hour = frame.voyage.active_sample_hour(src_t)
+
     weather = frame.cell_weather_at(src_d, sample_hour, forecast_hour)
+    if weather.has_nan() and override_sample_hour is None:
+        # Walk back through sh_list to most recent valid sample at this cell.
+        idx = bisect_right(sh_list, sample_hour) - 1
+        while idx > 0 and weather.has_nan():
+            idx -= 1
+            weather = frame.cell_weather_at(src_d, sh_list[idx], forecast_hour)
+            if not weather.has_nan():
+                sample_hour = sh_list[idx]
+                break
     if weather.has_nan():
         return []
 

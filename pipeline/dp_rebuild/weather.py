@@ -15,7 +15,7 @@ Exposes the interface the rebuild graph needs:
 from bisect import bisect_right
 from collections import defaultdict
 from dataclasses import dataclass
-from math import isnan
+from math import floor, isnan
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -172,6 +172,22 @@ class VoyageWeather:
     @property
     def forecast_hours(self) -> List[int]:
         return self._forecast_hours
+
+    def active_sample_hour(self, t_voyage_h: float) -> int:
+        # Mirror of VoyageWeather::active_sample_hour in pipeline/dp_cpp/src/weather.cpp
+        # (commit 752ae0b). Maps voyage time t [h] to the largest sample_hour in
+        # the file that is <= (earliest + floor(t)), clamped to the latest available.
+        sh = self._sample_hours
+        if not sh:
+            return 0
+        sh_base, sh_top = sh[0], sh[-1]
+        target = sh_base + int(floor(t_voyage_h + 1e-9))
+        if target <= sh_base:
+            return sh_base
+        if target >= sh_top:
+            return sh_top
+        idx = bisect_right(sh, target) - 1
+        return sh[idx]
 
     @property
     def route_name(self) -> str:

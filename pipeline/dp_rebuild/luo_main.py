@@ -45,6 +45,7 @@ import csv
 import math
 import sys
 import time
+from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -125,24 +126,36 @@ def eval_arc(
     bounds: List[float],
     frame: Frame,
     res_nm: float,
-    sample_hour: int = 0,
+    sample_hour: Optional[int] = None,
     forecast_hour: Optional[int] = None,
 ) -> ArcResult:
     """Evaluate one block arc (d1_idx → d2_idx) departing at t_h.
 
     SOG is constant within the block at ``(d2-d1)*res_nm / block_dur_h``.
-    Walks every sub-segment break point (H-line boundary) strictly between
-    ``d1*res_nm`` and ``d2*res_nm``, summing fuel at the block SOG.
+    Each spatial sub-segment (delimited by H-line bounds) is further split at
+    every ``sample_hour`` transition so each temporal piece is priced against
+    the weather active at that absolute voyage time. Trip start is anchored to
+    ``sh_base = voyage.sample_hours[0]``; absolute voyage time t maps to the
+    largest ``sample_hour ≤ (sh_base + ⌊t⌋)`` via ``active_sample_hour``.
 
-    Returns ``ArcResult(ok=False)`` on NaN weather or infeasible SWS
-    (``> SWS_MAX = 25 kn``). Mirrors C++ luo_main.cpp `eval_arc` line-for-line.
+    ``sample_hour=None`` (default) → time-varying. Pass an ``int`` to force
+    legacy static-deterministic mode (all pieces read the same sample_hour).
+    On a NaN read in time-varying mode, walks back through ``sh_list`` to the
+    most recent valid sample at the same cell; drops the arc if walkback fails.
+
+    Mirrors C++ luo_main.cpp eval_arc (commit 752ae0b).
     """
     r = ArcResult()
     d1 = d1_idx * res_nm
     d2 = d2_idx * res_nm
     sog = (d2 - d1) / block_dur_h
 
-    # Collect sub-segment breakpoints strictly inside (d1, d2).
+    sh_list = frame.voyage.sample_hours
+    if not sh_list:
+        return r
+    sh_base = sh_list[0]
+
+    # Spatial sub-segment breakpoints (H-line bounds strictly inside (d1, d2)).
     pts: List[float] = [d1]
     for b in bounds:
         if b > d1 + 1e-9 and b < d2 - 1e-9:
@@ -153,34 +166,74 @@ def eval_arc(
         sd = pts[i]
         ed = pts[i + 1]
         heading = frame.paper_heading_at(sd)
-        wx = frame.cell_weather_at(sd, sample_hour=sample_hour,
-                                   forecast_hour=forecast_hour)
-        if wx.has_nan():
-            return r  # ok=False
 
-        wd = _weather_to_dict(wx)
-        sws = calculate_sws_from_sog(
-            target_sog=sog,
-            weather=wd,
-            ship_heading_deg=heading,
-            ship_parameters=None,
-        )
-        if math.isnan(sws) or sws > SWS_MAX:
-            return r
+        # Voyage time at the spatial sub-segment endpoints
+        t_sd = t_h + (sd - d1) / sog
+        t_ed = t_h + (ed - d1) / sog
 
-        fcr = calculate_fuel_consumption_rate(sws)
-        dur = (ed - sd) / sog
-        fuel = fcr * dur
-        if math.isnan(fuel):
-            return r
+        # Temporal breakpoints: each sample_hour transition (other than sh_base)
+        # strictly inside (t_sd, t_ed), mapped to voyage time t = sh_v - sh_base
+        t_pts: List[float] = [t_sd]
+        for sh_v in sh_list:
+            if sh_v == sh_base:
+                continue
+            t_b = float(sh_v - sh_base)
+            if t_b > t_sd + 1e-9 and t_b < t_ed - 1e-9:
+                t_pts.append(t_b)
+            if t_b >= t_ed:
+                break
+        t_pts.append(t_ed)
 
-        src_t = t_h + (sd - d1) / sog
-        r.segs.append(Seg(
-            src_d=sd, dst_d=ed, src_t=src_t, sog=sog,
-            heading_deg=heading, weather=wx,
-            sws=sws, fcr=fcr, fuel_mt=fuel, dur_h=dur,
-        ))
-        r.fuel += fuel
+        for k in range(len(t_pts) - 1):
+            ta = t_pts[k]
+            tb = t_pts[k + 1]
+            dur = tb - ta
+            if dur <= 1e-12:
+                continue
+
+            if sample_hour is None:
+                cur_sh = frame.voyage.active_sample_hour(ta)
+            else:
+                cur_sh = sample_hour
+
+            da = sd + (ta - t_sd) * sog
+            db = sd + (tb - t_sd) * sog
+
+            wx = frame.cell_weather_at(da, sample_hour=cur_sh,
+                                       forecast_hour=forecast_hour)
+            if wx.has_nan() and sample_hour is None:
+                idx = bisect_right(sh_list, cur_sh) - 1
+                while idx > 0 and wx.has_nan():
+                    idx -= 1
+                    wx = frame.cell_weather_at(da, sample_hour=sh_list[idx],
+                                               forecast_hour=forecast_hour)
+                    if not wx.has_nan():
+                        cur_sh = sh_list[idx]
+                        break
+            if wx.has_nan():
+                return r  # ok=False
+
+            wd = _weather_to_dict(wx)
+            sws = calculate_sws_from_sog(
+                target_sog=sog,
+                weather=wd,
+                ship_heading_deg=heading,
+                ship_parameters=None,
+            )
+            if math.isnan(sws) or sws > SWS_MAX:
+                return r
+
+            fcr = calculate_fuel_consumption_rate(sws)
+            fuel = fcr * dur
+            if math.isnan(fuel):
+                return r
+
+            r.segs.append(Seg(
+                src_d=da, dst_d=db, src_t=ta, sog=sog,
+                heading_deg=heading, weather=wx,
+                sws=sws, fcr=fcr, fuel_mt=fuel, dur_h=dur,
+            ))
+            r.fuel += fuel
     r.ok = True
     return r
 
@@ -192,19 +245,28 @@ def eval_arc(
 def eval_baseline(
     frame: Frame,
     bounds: List[float],
-    sample_hour: int = 0,
+    sample_hour: Optional[int] = None,
     forecast_hour: Optional[int] = None,
 ) -> List[Seg]:
-    """Fixed mean-SOG baseline.
+    """Fixed mean-SOG baseline with time-varying weather.
 
-    SOG = L / ETA constant for the entire voyage. Walks every sub-segment
-    boundary in ``bounds``, splitting the route at H-line crossings and
-    computing SWS / FCR / fuel for each. NaN-weather sub-segments are
-    skipped (warned to stderr).
+    SOG = L / ETA constant for the entire voyage. Trip starts at t=0 anchored
+    to ``sh_base = voyage.sample_hours[0]``; each spatial sub-segment is split
+    at every ``sample_hour`` transition so each temporal piece is evaluated
+    against the weather active at that absolute time. NaN-weather pieces are
+    skipped after walkback fails (warned to stderr).
+
+    ``sample_hour=None`` (default) → time-varying. Pass an ``int`` for legacy
+    static-deterministic mode. Mirrors C++ luo_main.cpp eval_baseline (752ae0b).
     """
     sog = frame.cfg.length_nm / frame.cfg.eta_h
     segs: List[Seg] = []
     L = frame.cfg.length_nm
+
+    sh_list = frame.voyage.sample_hours
+    if not sh_list:
+        return segs
+    sh_base = sh_list[0]
 
     for i in range(len(bounds) - 1):
         sd = bounds[i]
@@ -215,28 +277,68 @@ def eval_baseline(
             continue
 
         heading = frame.paper_heading_at(sd)
-        wx = frame.cell_weather_at(sd, sample_hour=sample_hour,
-                                   forecast_hour=forecast_hour)
-        if wx.has_nan():
-            print(f"  NaN weather at d={sd:.1f} nm — sub-segment skipped",
-                  file=sys.stderr)
-            continue
-        wd = _weather_to_dict(wx)
-        sws = calculate_sws_from_sog(
-            target_sog=sog,
-            weather=wd,
-            ship_heading_deg=heading,
-            ship_parameters=None,
-        )
-        fcr = calculate_fuel_consumption_rate(sws)
-        dur = (ed - sd) / sog
-        fuel = fcr * dur
-        src_t = sd / sog
-        segs.append(Seg(
-            src_d=sd, dst_d=ed, src_t=src_t, sog=sog,
-            heading_deg=heading, weather=wx,
-            sws=sws, fcr=fcr, fuel_mt=fuel, dur_h=dur,
-        ))
+
+        # Voyage time at endpoints (trip starts at t=0)
+        t_sd = sd / sog
+        t_ed = ed / sog
+
+        # Temporal breakpoints
+        t_pts: List[float] = [t_sd]
+        for sh_v in sh_list:
+            if sh_v == sh_base:
+                continue
+            t_b = float(sh_v - sh_base)
+            if t_b > t_sd + 1e-9 and t_b < t_ed - 1e-9:
+                t_pts.append(t_b)
+            if t_b >= t_ed:
+                break
+        t_pts.append(t_ed)
+
+        for k in range(len(t_pts) - 1):
+            ta = t_pts[k]
+            tb = t_pts[k + 1]
+            dur = tb - ta
+            if dur <= 1e-12:
+                continue
+
+            if sample_hour is None:
+                cur_sh = frame.voyage.active_sample_hour(ta)
+            else:
+                cur_sh = sample_hour
+
+            da = sd + (ta - t_sd) * sog
+            db = sd + (tb - t_sd) * sog
+
+            wx = frame.cell_weather_at(da, sample_hour=cur_sh,
+                                       forecast_hour=forecast_hour)
+            if wx.has_nan() and sample_hour is None:
+                idx = bisect_right(sh_list, cur_sh) - 1
+                while idx > 0 and wx.has_nan():
+                    idx -= 1
+                    wx = frame.cell_weather_at(da, sample_hour=sh_list[idx],
+                                               forecast_hour=forecast_hour)
+                    if not wx.has_nan():
+                        cur_sh = sh_list[idx]
+                        break
+            if wx.has_nan():
+                print(f"  NaN weather at d={da:.1f} nm, sh={cur_sh} — piece skipped",
+                      file=sys.stderr)
+                continue
+
+            wd = _weather_to_dict(wx)
+            sws = calculate_sws_from_sog(
+                target_sog=sog,
+                weather=wd,
+                ship_heading_deg=heading,
+                ship_parameters=None,
+            )
+            fcr = calculate_fuel_consumption_rate(sws)
+            fuel = fcr * dur
+            segs.append(Seg(
+                src_d=da, dst_d=db, src_t=ta, sog=sog,
+                heading_deg=heading, weather=wx,
+                sws=sws, fcr=fcr, fuel_mt=fuel, dur_h=dur,
+            ))
     return segs
 
 

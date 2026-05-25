@@ -152,9 +152,12 @@ def main() -> int:
     # ---- Build atomic-edge graph ----
     _print_header("dp_SR — build atomic-edge graph")
     t0 = time.time()
+    # override_sample_hour=None → time-varying: per-arc active_sample_hour(src_t)
+    # with NaN walkback (mirror of dp_SR with override_sample_hour=-1 in C++,
+    # commit 752ae0b). Pass an int here to force static-mode legacy behaviour.
     nodes, edges = build_atomic_edges(frame,
                                       forecast_hour=None,
-                                      override_sample_hour=0,
+                                      override_sample_hour=None,
                                       verbose=False)
     build_t = time.time() - t0
     print(f"\nBuild time: {build_t:.2f} s\n")
