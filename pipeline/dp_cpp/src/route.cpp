@@ -136,6 +136,24 @@ build_route_from_waypoints_yaml(const std::string& yaml_path,
     return {route, wps};
 }
 
+// ---- Schema-dispatching loader ----
+
+std::pair<Route, std::vector<Waypoint>>
+load_route_auto(const std::string& yaml_path,
+                std::optional<double> eta_h_opt,
+                double cruise_sog_kn) {
+    YAML::Node data = YAML::LoadFile(yaml_path);
+    if (data["forecasts"]) {
+        Route r = synthesize_multi_window(load_yaml_route(yaml_path), 6.0);
+        return {r, WAYPOINTS};
+    }
+    if (data["waypoints"]) {
+        auto [r, wps] = build_route_from_waypoints_yaml(yaml_path, eta_h_opt, cruise_sog_kn);
+        return {synthesize_multi_window(r, 6.0), wps};
+    }
+    throw std::runtime_error("Route YAML must have either 'forecasts:' or 'waypoints:' top-level key");
+}
+
 // ---- Hard-coded paper waypoints (route_waypoints.py) ----
 
 const std::vector<Waypoint> WAYPOINTS = {

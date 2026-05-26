@@ -186,6 +186,32 @@ def build_route_from_waypoints_yaml(
     return Route(windows=[window]), waypoints
 
 
+def load_route_auto(
+    yaml_path: "Path | str",
+    eta_h: Optional[float] = None,
+    cruise_sog_kn: float = 12.0,
+):
+    """Dispatcher: pick the right loader from the YAML schema.
+
+    `forecasts:`  → legacy segments-table (paper Persian Gulf) + hardcoded WAYPOINTS.
+    `waypoints:`  → lat/lon list (e.g. Atlantic); distances + headings computed.
+
+    Returns `(route, waypoints)` always — for the legacy path the hardcoded
+    paper waypoints are returned so callers can stop depending on a global.
+    """
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f)
+    if data.get("forecasts"):
+        from route_waypoints import WAYPOINTS
+        return load_yaml_route(yaml_path), list(WAYPOINTS)
+    if data.get("waypoints"):
+        return build_route_from_waypoints_yaml(yaml_path, eta_h=eta_h,
+                                                cruise_sog_kn=cruise_sog_kn)
+    raise ValueError(
+        f"Route YAML {yaml_path} must have either 'forecasts:' or 'waypoints:' "
+        "top-level key")
+
+
 def synthesize_multi_window(
     route: Route,
     window_h: float = 6.0,

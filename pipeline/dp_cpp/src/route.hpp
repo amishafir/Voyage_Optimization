@@ -56,3 +56,11 @@ std::pair<Route, std::vector<Waypoint>>
 build_route_from_waypoints_yaml(const std::string& yaml_path,
                                  std::optional<double> eta_h = std::nullopt,
                                  double cruise_sog_kn = 12.0);
+
+// Dispatcher: picks the right loader based on YAML schema.
+//   yaml has "forecasts:"  → load_yaml_route (legacy segments-table)  +  hardcoded WAYPOINTS
+//   yaml has "waypoints:"  → build_route_from_waypoints_yaml (computed from lat/lon)
+std::pair<Route, std::vector<Waypoint>>
+load_route_auto(const std::string& yaml_path,
+                std::optional<double> eta_h_opt = std::nullopt,
+                double cruise_sog_kn = 12.0);

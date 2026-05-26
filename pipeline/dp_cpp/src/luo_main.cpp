@@ -344,7 +344,7 @@ int main(int argc, char* argv[]) {
     if (!fs::exists(yaml_path)) { fprintf(stderr,"YAML not found: %s\n",yaml_path.c_str()); return 1; }
     if (!fs::exists(h5_path))   { fprintf(stderr,"HDF5 not found: %s\n",h5_path.c_str());   return 1; }
 
-    Route route = synthesize_multi_window(load_yaml_route(yaml_path), 6.0);
+    auto [route, wps] = load_route_auto(yaml_path, eta_ov);
     VoyageWeather voyage(h5_path);
 
     GraphConfig cfg = GraphConfig::from_route(route);
@@ -353,7 +353,7 @@ int main(int argc, char* argv[]) {
     cfg.v_min = vmin_ov.value_or(mean_sog - 3.0);
     cfg.v_max = vmax_ov.value_or(mean_sog + 3.0);
 
-    Frame frame = make_frame(route, voyage, WAYPOINTS, &cfg);
+    Frame frame = make_frame(route, voyage, wps, &cfg);
 
     // ── Grid parameters ──────────────────────────────────────────────────
     const int    L_scaled = (int)std::round(cfg.length_nm / res_nm); // destination index
@@ -411,7 +411,7 @@ int main(int argc, char* argv[]) {
 
         printf("Total fuel: %.3f mt\n", total_fuel);
         if (do_csv)
-            write_baseline_csv("baseline.csv", segs, WAYPOINTS);
+            write_baseline_csv("baseline.csv", segs, wps);
         return 0;
     }
 
@@ -528,7 +528,7 @@ int main(int argc, char* argv[]) {
             auto arc = eval_arc(path_d[k], path_d[k+1], col_t[k], dur, bounds, frame, res_nm);
             path_arcs.push_back({std::move(arc), k});
         }
-        write_csv("luo_dp.csv", path_arcs, WAYPOINTS);
+        write_csv("luo_dp.csv", path_arcs, wps);
     }
 
     return 0;

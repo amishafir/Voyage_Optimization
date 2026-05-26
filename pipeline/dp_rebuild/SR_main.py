@@ -39,8 +39,7 @@ from bellman import BellmanSolver
 from frame import from_route as make_frame
 from geo_grid import position_at_d
 from nodes import GraphConfig
-from route import load_yaml_route, synthesize_multi_window
-from route_waypoints import WAYPOINTS
+from route import load_route_auto, synthesize_multi_window
 from weather import VoyageWeather
 
 
@@ -111,7 +110,10 @@ def main() -> int:
         return 1
 
     # ---- Load route & weather ----
-    route = synthesize_multi_window(load_yaml_route(yaml_path), window_h=6.0)
+    # load_route_auto dispatches on schema: "forecasts:" → segments-table +
+    # hardcoded paper WAYPOINTS; "waypoints:" → computed from lat/lon.
+    route, waypoints = load_route_auto(yaml_path, eta_h=args.eta)
+    route = synthesize_multi_window(route, window_h=6.0)
     voyage = VoyageWeather(h5_path)
 
     # ---- Build frame ----
@@ -132,7 +134,7 @@ def main() -> int:
     cfg.v_min = args.min_speed if args.min_speed is not None else (mean_sog - 3.0)
     cfg.v_max = args.max_speed if args.max_speed is not None else (mean_sog + 3.0)
 
-    frame = make_frame(route, voyage, WAYPOINTS, cfg=cfg)
+    frame = make_frame(route, voyage, waypoints, cfg=cfg)
     n_blocks = int(cfg.eta_h / cfg.dt_h)
     print("=" * 60)
     print("DP rebuild — Frame summary")
@@ -171,7 +173,7 @@ def main() -> int:
     solve_t = time.time() - t0
 
     if args.csv:
-        write_arc_csv(Path("sr_dp.csv"), res.schedule, WAYPOINTS)
+        write_arc_csv(Path("sr_dp.csv"), res.schedule, waypoints)
 
     # ---- Summary ----
     _print_header("dp_SR — SUMMARY")

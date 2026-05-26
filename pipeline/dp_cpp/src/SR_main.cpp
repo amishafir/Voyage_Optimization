@@ -111,7 +111,10 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- Load route & weather ----
-    Route route = synthesize_multi_window(load_yaml_route(yaml_path), 6.0);
+    // Dispatches on YAML schema:
+    //   "forecasts:"  → legacy segments-table (paper Persian Gulf) + hardcoded WAYPOINTS
+    //   "waypoints:"  → lat/lon list (e.g. Atlantic), distances + headings computed
+    auto [route, wps] = load_route_auto(yaml_path, eta_override);
     VoyageWeather voyage(h5_path);
 
     // ---- Build frame ----
@@ -123,7 +126,7 @@ int main(int argc, char* argv[]) {
     double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
     base_cfg.v_min = min_speed_override.value_or(mean_sog - 3.0);
     base_cfg.v_max = max_speed_override.value_or(mean_sog + 3.0);
-    Frame frame = make_frame(route, voyage, WAYPOINTS, &base_cfg);
+    Frame frame = make_frame(route, voyage, wps, &base_cfg);
     summarize_frame(frame);
 
     // ---- Build atomic-edge graph ----
@@ -148,7 +151,7 @@ int main(int argc, char* argv[]) {
     double solve_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
     if (write_csv)
-        write_arc_csv("sr_dp.csv", res.schedule, edges, WAYPOINTS);
+        write_arc_csv("sr_dp.csv", res.schedule, edges, wps);
 
     // ---- Summary ----
     print_header("dp_SR — SUMMARY");

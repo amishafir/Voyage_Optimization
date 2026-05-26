@@ -62,8 +62,7 @@ from physics import (
     calculate_fuel_consumption_rate,
     calculate_sws_from_sog,
 )
-from route import load_yaml_route, synthesize_multi_window
-from route_waypoints import WAYPOINTS
+from route import load_route_auto, synthesize_multi_window
 from weather import VoyageWeather
 from weather import Weather   # AtomicEdge's weather struct — Luo uses the same
 
@@ -355,8 +354,8 @@ _LUO_COLUMNS = [
 _BASELINE_COLUMNS = _LUO_COLUMNS[1:]  # same minus "block"
 
 
-def _row_for_seg(s: Seg, block: Optional[int] = None) -> list:
-    lat, lon, _seg = position_at_d(s.src_d, WAYPOINTS)
+def _row_for_seg(s: Seg, waypoints, block: Optional[int] = None) -> list:
+    lat, lon, _seg = position_at_d(s.src_d, waypoints)
     w = s.weather
     base = [
         s.src_t, s.src_d, lat, lon, s.heading_deg,
@@ -370,24 +369,25 @@ def _row_for_seg(s: Seg, block: Optional[int] = None) -> list:
     return [block, *base]
 
 
-def write_luo_csv(path: Path, path_arcs: List[Tuple[ArcResult, int]]) -> None:
+def write_luo_csv(path: Path, path_arcs: List[Tuple[ArcResult, int]],
+                  waypoints) -> None:
     n_segs = 0
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(_LUO_COLUMNS)
         for arc, blk in path_arcs:
             for s in arc.segs:
-                writer.writerow(_row_for_seg(s, block=blk))
+                writer.writerow(_row_for_seg(s, waypoints, block=blk))
                 n_segs += 1
     print(f"  CSV written: {path}  ({n_segs} sub-segments, {len(path_arcs)} blocks)")
 
 
-def write_baseline_csv(path: Path, segs: List[Seg]) -> None:
+def write_baseline_csv(path: Path, segs: List[Seg], waypoints) -> None:
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(_BASELINE_COLUMNS)
         for s in segs:
-            writer.writerow(_row_for_seg(s, block=None))
+            writer.writerow(_row_for_seg(s, waypoints, block=None))
     print(f"  CSV written: {path}  ({len(segs)} sub-segments)")
 
 
@@ -431,7 +431,8 @@ def main() -> int:
         print(f"HDF5 not found: {h5_path}", file=sys.stderr)
         return 1
 
-    route = synthesize_multi_window(load_yaml_route(yaml_path), window_h=6.0)
+    route, waypoints = load_route_auto(yaml_path, eta_h=args.eta)
+    route = synthesize_multi_window(route, window_h=6.0)
     voyage = VoyageWeather(h5_path)
 
     cfg = GraphConfig.from_route(route)
@@ -444,7 +445,7 @@ def main() -> int:
     cfg.v_min = args.min_speed if args.min_speed is not None else (mean_sog - 3.0)
     cfg.v_max = args.max_speed if args.max_speed is not None else (mean_sog + 3.0)
 
-    frame = make_frame(route, voyage, WAYPOINTS, cfg=cfg)
+    frame = make_frame(route, voyage, waypoints, cfg=cfg)
     res_nm = args.res_nm
 
     # ---- Grid parameters --------------------------------------------------
@@ -502,7 +503,7 @@ def main() -> int:
         print(f"Total fuel: {total_fuel:.3f} mt")
 
         if args.csv:
-            write_baseline_csv(Path("baseline.csv"), segs)
+            write_baseline_csv(Path("baseline.csv"), segs, waypoints)
         return 0
 
     # ---- For Luo DP, replace the L endpoint with L_snapped if they differ -
@@ -599,7 +600,7 @@ def main() -> int:
             arc = eval_arc(path_d[k], path_d[k + 1], col_t[k], dur,
                            bounds, frame, res_nm)
             path_arcs.append((arc, k))
-        write_luo_csv(Path("luo_dp.csv"), path_arcs)
+        write_luo_csv(Path("luo_dp.csv"), path_arcs, waypoints)
 
     return 0
 
