@@ -29,6 +29,7 @@ import csv
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
@@ -92,36 +93,42 @@ def parse_args() -> argparse.Namespace:
                     help="Distance snap for H-line arc destinations (default: 1.0)")
     ap.add_argument("--tau_h", type=float, default=None,
                     help="Time snap for V-line arc destinations (default: 0.1)")
+    ap.add_argument("--sample_hour", type=int, default=0,
+                    help="Voyage-start sample_hour anchor for the departure-time "
+                         "sweep. 0 (default) = use sh_list[0] (legacy). >0 = anchor "
+                         "the time-varying weather lookup at this sample_hour.")
     ap.add_argument("--csv", action="store_true",
                     help="Write per-arc solution CSV (sr_dp.csv)")
     return ap.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
+def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
+          verbose: bool = True) -> dict:
+    """Run dp_SR with the given args and return a result dict.
 
+    The ``voyage`` arg lets callers (e.g. the chain-sweep orchestrator) load
+    ``VoyageWeather`` once and reuse it across many solve() calls on the same
+    HDF5 file. Pass ``None`` to load on demand.
+
+    Returns:
+        dict with keys total_fuel_mt, voyage_time_h, n_nodes, n_edges,
+        build_s, solve_s, schedule, waypoints, eta_h, sample_hour.
+    """
     yaml_path = Path(args.yaml)
     h5_path = Path(args.h5)
     if not yaml_path.exists():
-        print(f"YAML not found: {yaml_path}", file=sys.stderr)
-        return 1
+        raise FileNotFoundError(f"YAML not found: {yaml_path}")
     if not h5_path.exists():
-        print(f"HDF5 not found: {h5_path}", file=sys.stderr)
-        return 1
+        raise FileNotFoundError(f"HDF5 not found: {h5_path}")
 
-    # ---- Load route & weather ----
-    # load_route_auto dispatches on schema: "forecasts:" → segments-table +
-    # hardcoded paper WAYPOINTS; "waypoints:" → computed from lat/lon.
     route, waypoints = load_route_auto(yaml_path, eta_h=args.eta)
     route = synthesize_multi_window(route, window_h=6.0)
-    voyage = VoyageWeather(h5_path)
+    if voyage is None:
+        voyage = VoyageWeather(h5_path)
 
-    # ---- Build frame ----
-    _print_header("dp_SR — frame")
     cfg = GraphConfig.from_route(route)
     if args.eta is not None:
         cfg.eta_h = args.eta
-        # Patch the last forecast-window end so route.eta_h agrees with cfg.
         if route.windows:
             route.windows[-1].end = float(args.eta)
             route = synthesize_multi_window(route, window_h=6.0)
@@ -134,53 +141,69 @@ def main() -> int:
     cfg.v_min = args.min_speed if args.min_speed is not None else (mean_sog - 3.0)
     cfg.v_max = args.max_speed if args.max_speed is not None else (mean_sog + 3.0)
 
-    frame = make_frame(route, voyage, waypoints, cfg=cfg)
+    sample_hour = int(getattr(args, "sample_hour", 0) or 0)
+    frame = make_frame(route, voyage, waypoints, cfg=cfg,
+                       base_sample_hour=sample_hour)
     n_blocks = int(cfg.eta_h / cfg.dt_h)
-    print("=" * 60)
-    print("DP rebuild — Frame summary")
-    print("=" * 60)
-    print(f"Route:         L = {cfg.length_nm:.3f} nm, ETA = {cfg.eta_h:.1f} h")
-    print(f"V-lines:       {len(frame.v_line_times)} times, "
-          f"first = {frame.v_line_times[0]:.2f} h, last = {frame.v_line_times[-1]:.2f} h")
-    print(f"               dt_h = {cfg.dt_h} h, zeta_nm = {cfg.zeta_nm} nm")
-    print(f"H-lines:       {len(frame.h_line_distances)} distances")
-    print(f"               tau_h = {cfg.tau_h:.2f} h")
-    sog_grid = frame.sog_grid()
-    print(f"SOG grid:      {len(sog_grid)} target SOGs in "
-          f"[{sog_grid[0]:.1f}, {sog_grid[-1]:.1f}] kn at {frame.sog_step} kn step")
-    print(f"Blocks:        {n_blocks} blocks of {cfg.dt_h:.1f} h")
-    print("=" * 60)
+    if verbose:
+        _print_header("dp_SR — frame")
+        print(f"Route:         L = {cfg.length_nm:.3f} nm, ETA = {cfg.eta_h:.1f} h")
+        print(f"V-lines:       {len(frame.v_line_times)} times")
+        print(f"H-lines:       {len(frame.h_line_distances)} distances")
+        sog_grid = frame.sog_grid()
+        print(f"SOG grid:      {len(sog_grid)} target SOGs in "
+              f"[{sog_grid[0]:.3f}, {sog_grid[-1]:.3f}] kn")
+        print(f"Blocks:        {n_blocks} blocks of {cfg.dt_h:.1f} h")
+        print(f"sh_base:       {sample_hour}  "
+              f"(0 = sh_list[0]={voyage.sample_hours[0] if voyage.sample_hours else 'n/a'})")
+        _print_header("dp_SR — build atomic-edge graph")
 
-    # ---- Build atomic-edge graph ----
-    _print_header("dp_SR — build atomic-edge graph")
     t0 = time.time()
-    # override_sample_hour=None → time-varying: per-arc active_sample_hour(src_t)
-    # with NaN walkback (mirror of dp_SR with override_sample_hour=-1 in C++,
-    # commit 752ae0b). Pass an int here to force static-mode legacy behaviour.
     nodes, edges = build_atomic_edges(frame,
                                       forecast_hour=None,
                                       override_sample_hour=None,
                                       verbose=False)
     build_t = time.time() - t0
-    print(f"\nBuild time: {build_t:.2f} s\n")
-    summarize_atomic_edges(nodes, edges)
+    if verbose:
+        print(f"Build time: {build_t:.2f} s")
+        summarize_atomic_edges(nodes, edges)
 
-    # ---- dp_SR (SR DP, no SOG lock) ----
     t0 = time.time()
     solver = BellmanSolver(nodes, edges)
     solver.solve()
     res = solver.result(eta_mode="hard", eta=cfg.eta_h)
     solve_t = time.time() - t0
 
-    if args.csv:
-        write_arc_csv(Path("sr_dp.csv"), res.schedule, waypoints)
+    if verbose:
+        _print_header("dp_SR — SUMMARY")
+        print(f"  Total fuel:  {res.total_fuel_mt:.3f} mt")
+        print(f"  Voyage time: {res.voyage_time_h:.3f} h  (ETA = {cfg.eta_h:.1f} h)")
+        print(f"  Graph: {len(nodes)} nodes, {len(edges)} atomic edges")
+        print(f"  Build: {build_t:.1f} s  Solve: {solve_t:.2f} s")
 
-    # ---- Summary ----
-    _print_header("dp_SR — SUMMARY")
-    print(f"  Total fuel:  {res.total_fuel_mt:.3f} mt")
-    print(f"  Voyage time: {res.voyage_time_h:.3f} h  (ETA = {cfg.eta_h:.1f} h)")
-    print(f"  Graph: {len(nodes)} nodes, {len(edges)} atomic edges")
-    print(f"  Build: {build_t:.1f} s  Solve: {solve_t:.2f} s\n")
+    return {
+        "total_fuel_mt": res.total_fuel_mt,
+        "voyage_time_h": res.voyage_time_h,
+        "n_nodes": len(nodes),
+        "n_edges": len(edges),
+        "build_s": build_t,
+        "solve_s": solve_t,
+        "schedule": res.schedule,
+        "waypoints": waypoints,
+        "eta_h": cfg.eta_h,
+        "sample_hour": sample_hour,
+    }
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        result = solve(args)
+    except FileNotFoundError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    if args.csv:
+        write_arc_csv(Path("sr_dp.csv"), result["schedule"], result["waypoints"])
     return 0
 
 

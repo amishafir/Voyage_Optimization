@@ -152,7 +152,9 @@ def eval_arc(
     sh_list = frame.voyage.sample_hours
     if not sh_list:
         return r
-    sh_base = sh_list[0]
+    # Voyage-start anchor: frame.base_sample_hour overrides sh_list[0] for the
+    # departure-time sweep. 0 (default) → sh_list[0], preserving legacy behaviour.
+    sh_base = frame.base_sample_hour if frame.base_sample_hour else sh_list[0]
 
     # Spatial sub-segment breakpoints (H-line bounds strictly inside (d1, d2)).
     pts: List[float] = [d1]
@@ -191,7 +193,7 @@ def eval_arc(
                 continue
 
             if sample_hour is None:
-                cur_sh = frame.voyage.active_sample_hour(ta)
+                cur_sh = frame.voyage.active_sample_hour(ta, sh_base=sh_base)
             else:
                 cur_sh = sample_hour
 
@@ -265,7 +267,7 @@ def eval_baseline(
     sh_list = frame.voyage.sample_hours
     if not sh_list:
         return segs
-    sh_base = sh_list[0]
+    sh_base = frame.base_sample_hour if frame.base_sample_hour else sh_list[0]
 
     for i in range(len(bounds) - 1):
         sd = bounds[i]
@@ -301,7 +303,7 @@ def eval_baseline(
                 continue
 
             if sample_hour is None:
-                cur_sh = frame.voyage.active_sample_hour(ta)
+                cur_sh = frame.voyage.active_sample_hour(ta, sh_base=sh_base)
             else:
                 cur_sh = sample_hour
 
@@ -407,6 +409,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--max_speed", type=float, default=None)
     ap.add_argument("--res_nm", type=float, default=1.0,
                     help="Distance grid resolution in NM (default 1.0, range [0.1, 10])")
+    ap.add_argument("--sample_hour", type=int, default=0,
+                    help="Voyage-start sample_hour anchor for the departure-time "
+                         "sweep. 0 (default) = use sh_list[0] (legacy). >0 = anchor "
+                         "the time-varying weather lookup at this sample_hour.")
     ap.add_argument("--baseline", action="store_true",
                     help="Compute fixed mean-SOG baseline (no graph)")
     ap.add_argument("--csv", action="store_true",
@@ -414,26 +420,33 @@ def parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
+def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
+          verbose: bool = True) -> dict:
+    """Run dp_luo with the given args and return a result dict.
 
+    The ``voyage`` arg lets callers (e.g. the chain-sweep orchestrator) load
+    ``VoyageWeather`` once and reuse it across many solve() calls on the same
+    HDF5 file. Pass ``None`` to load on demand.
+
+    Returns:
+        dict with keys total_fuel_mt, voyage_time_h, n_blocks, solve_s,
+        path_arcs, waypoints, eta_h, sample_hour, baseline_segs (None unless
+        args.baseline=True).
+    """
     if args.res_nm < 0.1 or args.res_nm > 10.0:
-        print(f"Error: --res_nm must be in [0.1, 10.0], got {args.res_nm}",
-              file=sys.stderr)
-        return 1
+        raise ValueError(f"--res_nm must be in [0.1, 10.0], got {args.res_nm}")
 
     yaml_path = Path(args.yaml)
     h5_path = Path(args.h5)
     if not yaml_path.exists():
-        print(f"YAML not found: {yaml_path}", file=sys.stderr)
-        return 1
+        raise FileNotFoundError(f"YAML not found: {yaml_path}")
     if not h5_path.exists():
-        print(f"HDF5 not found: {h5_path}", file=sys.stderr)
-        return 1
+        raise FileNotFoundError(f"HDF5 not found: {h5_path}")
 
     route, waypoints = load_route_auto(yaml_path, eta_h=args.eta)
     route = synthesize_multi_window(route, window_h=6.0)
-    voyage = VoyageWeather(h5_path)
+    if voyage is None:
+        voyage = VoyageWeather(h5_path)
 
     cfg = GraphConfig.from_route(route)
     if args.eta is not None:
@@ -445,7 +458,9 @@ def main() -> int:
     cfg.v_min = args.min_speed if args.min_speed is not None else (mean_sog - 3.0)
     cfg.v_max = args.max_speed if args.max_speed is not None else (mean_sog + 3.0)
 
-    frame = make_frame(route, voyage, waypoints, cfg=cfg)
+    sample_hour = int(getattr(args, "sample_hour", 0) or 0)
+    frame = make_frame(route, voyage, waypoints, cfg=cfg,
+                       base_sample_hour=sample_hour)
     res_nm = args.res_nm
 
     # ---- Grid parameters --------------------------------------------------
@@ -461,28 +476,24 @@ def main() -> int:
     step_min_eta = int(math.ceil(cfg.v_min * dt_last / res_nm)) if has_eta else 0
     step_max_eta = int(math.floor(cfg.v_max * dt_last / res_nm)) if has_eta else 0
 
-    print("=" * 60)
-    print(f"Luo DP  ({res_nm:.2f} nm grid resolution)")
-    print("=" * 60)
-    print(f"Route:      {cfg.length_nm:.2f} nm  →  L_scaled = {L_scaled}  "
-          f"({L_snapped:.2f} nm)")
-    print(f"Speed:      [{cfg.v_min:.1f}, {cfg.v_max:.1f}] kn")
-    print(f"Regular:    {T_steps} blocks × {cfg.dt_h:.0f} h, "
-          f"step [{step_min}, {step_max}] idx  "
-          f"([{step_min * res_nm:.2f}, {step_max * res_nm:.2f}] nm)")
-    if has_eta:
-        print(f"ETA block:  1 × {dt_last:.1f} h (t={T_max_h:.0f}→{cfg.eta_h:.0f}), "
-              f"step [{step_min_eta}, {step_max_eta}] idx")
-    else:
-        print(f"ETA = {cfg.eta_h:.0f} h is a multiple of {cfg.dt_h:.0f} h — no partial block")
-    print(f"H-lines:    {len(frame.h_line_distances)} boundaries")
+    if verbose:
+        print("=" * 60)
+        print(f"Luo DP  ({res_nm:.2f} nm grid resolution)")
+        print("=" * 60)
+        print(f"Route:      {cfg.length_nm:.2f} nm  →  L_scaled = {L_scaled}  "
+              f"({L_snapped:.2f} nm)")
+        print(f"Speed:      [{cfg.v_min:.3f}, {cfg.v_max:.3f}] kn")
+        print(f"Regular:    {T_steps} blocks × {cfg.dt_h:.0f} h")
+        if has_eta:
+            print(f"ETA block:  1 × {dt_last:.1f} h")
+        print(f"sh_base:    {sample_hour}  "
+              f"(0 = sh_list[0]={voyage.sample_hours[0] if voyage.sample_hours else 'n/a'})")
 
     # ---- Sub-segment boundaries (sorted, deduplicated, physical NM) ------
     bounds = list(frame.h_line_distances)
     bounds.append(0.0)
     bounds.append(cfg.length_nm)
     bounds.sort()
-    # Dedupe to within 1e-9
     deduped: List[float] = []
     for b in bounds:
         if not deduped or abs(b - deduped[-1]) >= 1e-9:
@@ -491,20 +502,24 @@ def main() -> int:
 
     # ---- Baseline mode ----------------------------------------------------
     if args.baseline:
-        print("=" * 60)
-        print("Baseline (fixed mean SOG)")
-        print("=" * 60)
-        print(f"Route:      {cfg.length_nm:.2f} nm  ETA: {cfg.eta_h:.1f} h")
-        print(f"Mean SOG:   {mean_sog:.4f} kn")
-        print(f"Boundaries: {len(bounds) - 1} sub-segments")
-
+        if verbose:
+            print("=" * 60)
+            print(f"Baseline (fixed mean SOG = {mean_sog:.4f} kn)")
         segs = eval_baseline(frame, bounds)
         total_fuel = sum(s.fuel_mt for s in segs)
-        print(f"Total fuel: {total_fuel:.3f} mt")
-
-        if args.csv:
-            write_baseline_csv(Path("baseline.csv"), segs, waypoints)
-        return 0
+        if verbose:
+            print(f"Total fuel: {total_fuel:.3f} mt")
+        return {
+            "total_fuel_mt": total_fuel,
+            "voyage_time_h": cfg.eta_h,
+            "n_blocks": None,
+            "solve_s": 0.0,
+            "path_arcs": [],
+            "baseline_segs": segs,
+            "waypoints": waypoints,
+            "eta_h": cfg.eta_h,
+            "sample_hour": sample_hour,
+        }
 
     # ---- For Luo DP, replace the L endpoint with L_snapped if they differ -
     bounds = [b for b in bounds
@@ -530,7 +545,6 @@ def main() -> int:
 
     t_start = time.time()
 
-    # ---- Regular blocks ---------------------------------------------------
     for blk in range(T_steps):
         t_h = col_t[blk]
         ndp = [INF] * (L_scaled + 1)
@@ -552,7 +566,6 @@ def main() -> int:
             best_fuel = dp[L_scaled]
             best_col = blk + 1
 
-    # ---- Partial ETA block ------------------------------------------------
     if has_eta:
         t_h = T_max_h
         ndp = [INF] * (L_scaled + 1)
@@ -574,34 +587,58 @@ def main() -> int:
             best_fuel = dp[L_scaled]
             best_col = last_col
 
-    solve_s = time.time() - t_start
+    solve_s_dur = time.time() - t_start
 
     if best_col < 0:
-        print("No feasible path to destination found.", file=sys.stderr)
-        return 1
+        raise RuntimeError("Luo DP: no feasible path to destination found.")
 
-    print("=" * 60)
-    print(f"Total fuel:  {best_fuel:.3f} mt")
-    print(f"Voyage time: {col_t[best_col]:.1f} h  ({best_col} blocks)")
-    print(f"Solve time:  {solve_s:.2f} s")
-    print("=" * 60)
+    if verbose:
+        print("=" * 60)
+        print(f"Total fuel:  {best_fuel:.3f} mt")
+        print(f"Voyage time: {col_t[best_col]:.1f} h  ({best_col} blocks)")
+        print(f"Solve time:  {solve_s_dur:.2f} s")
+        print("=" * 60)
 
-    # ---- Backtrack optimal path ------------------------------------------
+    # Backtrack optimal path + reconstruct per-block arcs for CSV
     path_d = [0] * (best_col + 1)
     path_d[best_col] = L_scaled
     for k in range(best_col, 0, -1):
         path_d[k - 1] = parent[k][path_d[k]]
 
-    # ---- CSV --------------------------------------------------------------
-    if args.csv:
-        path_arcs: List[Tuple[ArcResult, int]] = []
-        for k in range(best_col):
-            dur = col_t[k + 1] - col_t[k]
-            arc = eval_arc(path_d[k], path_d[k + 1], col_t[k], dur,
-                           bounds, frame, res_nm)
-            path_arcs.append((arc, k))
-        write_luo_csv(Path("luo_dp.csv"), path_arcs, waypoints)
+    path_arcs: List[Tuple[ArcResult, int]] = []
+    for k in range(best_col):
+        dur = col_t[k + 1] - col_t[k]
+        arc = eval_arc(path_d[k], path_d[k + 1], col_t[k], dur,
+                       bounds, frame, res_nm)
+        path_arcs.append((arc, k))
 
+    return {
+        "total_fuel_mt": best_fuel,
+        "voyage_time_h": col_t[best_col],
+        "n_blocks": best_col,
+        "solve_s": solve_s_dur,
+        "path_arcs": path_arcs,
+        "baseline_segs": None,
+        "waypoints": waypoints,
+        "eta_h": cfg.eta_h,
+        "sample_hour": sample_hour,
+    }
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        result = solve(args)
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    if args.csv:
+        if result["baseline_segs"] is not None:
+            write_baseline_csv(Path("baseline.csv"), result["baseline_segs"],
+                               result["waypoints"])
+        else:
+            write_luo_csv(Path("luo_dp.csv"), result["path_arcs"],
+                          result["waypoints"])
     return 0
 
 

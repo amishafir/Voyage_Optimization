@@ -173,20 +173,26 @@ class VoyageWeather:
     def forecast_hours(self) -> List[int]:
         return self._forecast_hours
 
-    def active_sample_hour(self, t_voyage_h: float) -> int:
+    def active_sample_hour(self, t_voyage_h: float, sh_base: Optional[int] = None) -> int:
         # Mirror of VoyageWeather::active_sample_hour in pipeline/dp_cpp/src/weather.cpp
         # (commit 752ae0b). Maps voyage time t [h] to the largest sample_hour in
-        # the file that is <= (earliest + floor(t)), clamped to the latest available.
+        # the file that is <= (anchor + floor(t)), clamped to the latest available.
+        #
+        # `sh_base`: voyage-start anchor (departure-time sweep). If None, anchor
+        # at sh[0] (legacy / file-front behaviour). If supplied, the user-chosen
+        # base is the conceptual t=0 sample_hour; the returned value is still
+        # bisect-rounded to the nearest available sh in the file (so off-grid
+        # bases like 286 with 6h cadence resolve to 282 at t=0).
         sh = self._sample_hours
         if not sh:
             return 0
-        sh_base, sh_top = sh[0], sh[-1]
-        target = sh_base + int(floor(t_voyage_h + 1e-9))
-        if target <= sh_base:
-            return sh_base
-        if target >= sh_top:
-            return sh_top
+        base = sh[0] if sh_base is None else int(sh_base)
+        target = base + int(floor(t_voyage_h + 1e-9))
+        if target >= sh[-1]:
+            return sh[-1]
         idx = bisect_right(sh, target) - 1
+        if idx < 0:
+            return sh[0]
         return sh[idx]
 
     @property

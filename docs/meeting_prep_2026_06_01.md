@@ -142,6 +142,84 @@ Backward-compat verified: Route 1 Python SR fuel still 354.821 mt (matches May 2
 2. **Python `Frame` default SOG range is wrong.** `frame.py:166-167` hardcodes `v_min=9.0, v_max=13.0`. Both `SR_main.py` / `luo_main.py` override this with `mean_sog ± 3` (correct). But `run_route2.py` / `run_route1.py` don't override → they silently run with a narrow asymmetric range. Fix: either remove the hardcoded defaults from `GraphConfig.from_route` or have the orchestrator scripts set the range explicitly.
 3. **The `--sample-hour` argument in `run_route2.py` / `run_route1.py` is now a no-op for time-varying mode.** The May 25 port made `active_sample_hour(t)` anchor at `sh_list[0]` (file front) regardless of the `base_sample_hour` argument to `Frame`. Same sh=0 and sh=18 outputs prove this. Either remove the flag from the orchestrators or wire it through to the active-sample-hour anchor (probably the latter — Task 2's departure-time sweep needs it).
 
+### 5.5 Task 2 — Multi-instance experiment: consecutive-voyage chain on Mode C actual weather
+
+Run on 2026-06-01 against the fresh Shlomo2 HDF5 files (`experiment_b_138wp.h5` sh=[6..2052], `experiment_d_391wp.h5` sh=[0..2052]). Each voyage starts when the previous one arrives — `sh_base_{N+1} = sh_base_N + ETA`, fixed-ETA stepping so SR and Luo see identical departure weather at every voyage. Same mean_sog ± 3 SOG range as Task 1. Mode C: per-block actual weather anchored at the voyage-start sample_hour (`VoyageWeather.active_sample_hour(t, sh_base=N)`).
+
+Voyage 0 of each route reproduces the existing parity numbers exactly:
+- Route 1 voyage 0 (sh_base=6): **SR 354.821 mt, Luo 361.561 mt** — matches the May 25 parity to 3 dp
+- Route 2 voyage 0 (sh_base=0): **SR 203.198 mt, Luo 210.250 mt** — matches Task 1 §5.1 to 3 dp
+
+Per-route summary across the full chain:
+
+| Route | n | SR fuel (mt) mean ± std | Luo fuel (mt) mean ± std | SR−Luo gap (mt) mean | Gap % mean | SR fuel range |
+|---|---:|---:|---:|---:|---:|---:|
+| Route 1 (Malacca, ETA 280) | 7 | 344.87 ± 7.77 | 351.26 ± 8.72 | −6.391 | −1.81 % | 334.8 – 355.2 (20.4 mt spread) |
+| Route 2 (Atlantic, ETA 168) | 12 | 201.90 ± 10.32 | 207.36 ± 11.03 | −5.457 | −2.62 % | 190.8 – 227.9 (37.1 mt spread) |
+
+Route 1 (Malacca) per-voyage:
+
+| # | sh_base | SR (mt) | Luo (mt) | gap (mt) | gap % |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 6 | 354.821 | 361.561 | −6.740 | −1.86 |
+| 1 | 286 | 355.225 | 364.675 | −9.450 | −2.59 |
+| 2 | 566 | 337.702 | 342.414 | −4.713 | −1.38 |
+| 3 | 846 | 348.191 | 353.146 | −4.955 | −1.40 |
+| 4 | 1126 | 337.604 | 340.874 | −3.270 | −0.96 |
+| 5 | 1406 | 334.828 | 343.857 | −9.029 | −2.63 |
+| 6 | 1686 | 345.728 | 352.312 | −6.584 | −1.87 |
+
+Route 2 (Atlantic) per-voyage:
+
+| # | sh_base | SR (mt) | Luo (mt) | gap (mt) | gap % |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 0 | 203.198 | 210.250 | −7.052 | −3.35 |
+| 1 | 168 | 204.167 | 209.507 | −5.340 | −2.55 |
+| 2 | 336 | 195.239 | 201.952 | −6.713 | −3.32 |
+| 3 | 504 | 206.124 | 212.224 | −6.100 | −2.87 |
+| 4 | 672 | 215.931 | 223.495 | −7.565 | −3.38 |
+| 5 | 840 | 190.752 | 196.894 | −6.142 | −3.12 |
+| 6 | 1008 | 227.914 | 233.853 | −5.939 | −2.54 |
+| 7 | 1176 | 194.397 | 198.253 | −3.856 | −1.94 |
+| 8 | 1344 | 194.641 | 197.054 | −2.413 | −1.22 |
+| 9 | 1512 | 192.750 | 196.896 | −4.146 | −2.11 |
+| 10 | 1680 | 199.101 | 203.488 | −4.387 | −2.16 |
+| 11 | 1848 | 198.568 | 204.405 | −5.837 | −2.86 |
+
+All voyages arrive at exactly the ETA (slack = 0 across the board) — the hard ETA constraint is binding everywhere; both solvers always prefer to slow-steam right up to the deadline.
+
+#### 5.5.1 Headline findings
+
+1. **Weather sensitivity is 3× higher on the Atlantic per voyage hour.** Route 1 fuel spread = 20.4 mt over 280 h (0.073 mt/h). Route 2 fuel spread = 37.1 mt over 168 h (0.22 mt/h). North Atlantic departure conditions vary far more than Persian Gulf → Malacca conditions. The Route 2 SR fuel range is 18 % of its mean; Route 1 is 6 %.
+2. **The SR−Luo gap is more variable on Route 1 than Route 2.** Route 1 gap σ = 2.11 mt (range −3.27 to −9.45). Route 2 gap σ = 1.43 mt (range −2.41 to −7.57). The Luo per-block SOG-lock penalty depends more on Malacca departure cycle than on Atlantic — possibly because the longer voyage gives SR more opportunities to exploit within-block weather variation.
+3. **The gap as a *percentage* is higher on the shorter (Atlantic) voyage.** Route 1 mean gap = −1.81 %, Route 2 mean gap = −2.62 % — confirms Task 1 §5.2 observation across a full chain, not just one departure: the SR−Luo penalty is comparable in absolute mt but roughly twice as large in % terms on the half-length voyage.
+4. **Worst and best voyages.** Route 2 voyage 6 (sh_base=1008) was the worst single voyage on both solvers (SR 227.9 mt, Luo 233.9 mt) — fuel ~16 % higher than the best Route 2 voyage (sh_base=840, SR 190.8 mt). One bad weather window can drive a single-voyage fuel difference larger than the entire SR−Luo gap.
+
+#### 5.5.2 Code landed during Task 2
+
+| File | Change |
+|---|---|
+| `pipeline/dp_rebuild/weather.py` | `active_sample_hour(t, sh_base=None)` — new `sh_base` arg anchors the voyage start; default None uses `sh_list[0]` (preserves legacy behaviour). |
+| `pipeline/dp_rebuild/atomic_edges.py` | `_emit_from_src` passes `frame.base_sample_hour` to `active_sample_hour` (loose end §5.4 #3 resolved). |
+| `pipeline/dp_rebuild/luo_main.py` | `eval_arc` / `eval_baseline` honour `frame.base_sample_hour`. New `solve(args, voyage=None)` API for orchestrator reuse. New `--sample_hour N` CLI. |
+| `pipeline/dp_rebuild/SR_main.py` | Same `solve(args, voyage=None)` API + `--sample_hour N` CLI. |
+| `pipeline/dp_rebuild/run_chain_sweep.py` | **NEW**. Consecutive-voyage chain orchestrator: loads `VoyageWeather` once per route, sweeps `sh_base` by fixed ETA, calls `SR_main.solve` and `luo_main.solve` per voyage, writes `runs/2026_06_01_chain_sweep/results.csv` plus per-voyage per-arc CSVs. |
+| `pipeline/dp_rebuild/analyze_chain_sweep.py` | **NEW**. Reads results.csv, prints per-route stats + per-voyage tables + markdown summary blocks. |
+
+Backward compat: SR_main / luo_main with no `--sample_hour` arg (or `--sample_hour 0`) reproduce all pre-existing reference numbers exactly (Route 1 354.821 mt, Route 2 203.198 mt).
+
+#### 5.5.3 Outputs
+
+- `runs/2026_06_01_chain_sweep/results.csv` — 19 rows, schema in `run_chain_sweep.CSV_HEADER`
+- `runs/2026_06_01_chain_sweep/{route1,route2}/voyage_{idx:02d}/{sr,luo}.csv` — per-arc schedules for every voyage (38 CSVs)
+- Total wall: 130 min on local Mac (Route 1: ~45 min, Route 2: ~85 min; two voyages had unusually slow Luo solves of ~21 min, otherwise ~3 min/voyage)
+
+#### 5.5.4 Next steps (Task 3 carryover)
+
+1. **Repeat the chain in Mode B** — `predicted_weather` anchored at each voyage's `sh_base` (the operational planner). Mode B − Mode C per voyage = value of perfect information. Needs the Mode B port (carryover §1).
+2. **Plan-on-forecast → simulate-on-actual** — pair each Mode B plan with a `simulate_voyage` run on actual weather to get the realistic `planned vs simulated` gap per voyage.
+3. **Add departure-time x-axis to the eventual plot** — `sh_base` is sample_hour, which maps roughly to "days into the 85-day collection window". Useful for spotting seasonal weather patterns.
+
 ---
 
 ## 6. Questions for Supervisor

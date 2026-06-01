@@ -120,13 +120,17 @@ def _emit_from_src(
     # commit 752ae0b). override_sample_hour is not None  → legacy static mode.
     # override_sample_hour is None  → active_sample_hour(src_t), with NaN walkback
     # through sh_list to the most recent valid sample at the same cell.
+    #
+    # frame.base_sample_hour anchors the voyage start (departure-time sweep);
+    # 0 (default) means "use sh_list[0]" — legacy behaviour preserved.
     sh_list = frame.voyage.sample_hours
     if override_sample_hour is not None:
         sample_hour = override_sample_hour
     elif not sh_list:
         return []
     else:
-        sample_hour = frame.voyage.active_sample_hour(src_t)
+        sh_base_arg = frame.base_sample_hour if frame.base_sample_hour else None
+        sample_hour = frame.voyage.active_sample_hour(src_t, sh_base=sh_base_arg)
 
     weather = frame.cell_weather_at(src_d, sample_hour, forecast_hour)
     if weather.has_nan() and override_sample_hour is None:
