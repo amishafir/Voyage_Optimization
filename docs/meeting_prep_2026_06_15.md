@@ -213,7 +213,52 @@ Full detail in §4.11. Headline:
 |---|---:|---:|---:|---:|---:|
 | Route 2, sh_base=0 | 212.467 | 204.851 | 212.439 | −3.58 % | −0.01 % |
 
-All sanity gates pass for both solvers. Chain (19 voyages) and Route 1 pending the caching optimisation (§4.12).
+All sanity gates pass for both solvers. (Python single-voyage; the C++ port —
+§4.12 — reproduces this within ~0.15 % and made the chain below feasible.)
+
+### 6.2 Rolling Horizon — Route 2 full chain (12 departures, C++)
+
+The C++ RH port (2.0 min/voyage vs Python's 532 min) unblocked the departure
+sweep. All 12 Route 2 voyages (sh_base = 0 … 1848, ETA 168), each with its
+Mode C oracle. Output: `runs/2026_06_15_rh_cpp_chain/results.csv`.
+
+| sh_base | oracle SR | Naive | RH-SR | RH-Luo | RH-SR vs Naive | RH-Luo vs Naive |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0    | 203.357 | 212.609 | 205.001 | 212.115 | −3.58 % | −0.23 % |
+| 168  | — | 212.775 | 208.340 | 211.409 | −2.08 % | −0.64 % |
+| 336  | — | 203.647 | 200.985 | 203.417 | −1.31 % | −0.11 % |
+| 504  | — | 214.538 | 212.606 | 216.006 | −0.90 % | +0.68 % |
+| 672  | — | 225.978 | 222.380 | 224.904 | −1.59 % | −0.48 % |
+| 840  | — | 200.496 | 192.982 | 199.037 | **−3.75 %** | −0.73 % |
+| 1008 | — | 237.087 | 230.532 | 235.327 | −2.76 % | −0.74 % |
+| 1176 | — | 200.425 | 197.329 | 200.708 | −1.54 % | +0.14 % |
+| 1344 | — | 199.348 | 200.816 | 200.486 | **+0.74 %** | +0.57 % |
+| 1512 | — | 198.987 | 195.577 | 198.280 | −1.71 % | −0.36 % |
+| 1680 | — | 206.864 | 201.651 | 205.700 | −2.52 % | −0.56 % |
+| 1848 | — | 206.103 | 201.912 | 206.271 | −2.03 % | +0.08 % |
+| **mean** | | | | | **−1.92 %** | **−0.20 %** |
+
+**Findings:**
+- **RH-SR saves on 11/12 departures (mean −1.92 %, best −3.75 %)**; worse than
+  Naive on only 1 (sh=1344, +0.74 %).
+- **RH-Luo is ≈ break-even (mean −0.20 %)** — marginal save on 8/12, marginal
+  loss on 4/12. The SR-vs-Luo gap holds across the whole window: SR exploits
+  within-block weather variation at H-line crossings; Luo's block DP cannot.
+- **Mechanically all 12 are sound** — `reached`, `slack0`, and `RH ≥ oracle`
+  pass on every voyage.
+
+**Why RH can lose to Naive (important nuance, not a bug):** both Naive and RH
+arrive at ETA over the same distance → identical average speed. Fuel is ~cubic
+(convex) in speed, so by Jensen's inequality a *constant* speed is fuel-optimal
+on *uniform* weather, and any speed variation costs more. RH beats Naive only
+when its weather-routing gain (slow in adverse, fast in favourable) exceeds the
+Jensen penalty of its forecast-driven speed variation. At mild/uniform-weather
+departures (e.g. sh=1344) the penalty wins → RH > Naive. So "RH ≤ Naive" is
+**departure-dependent, not universal** — best shown as a savings-vs-sh_base plot.
+
+### 6.3 Route 1 full chain (7 departures, ETA 280)
+
+*(to fill in — running; partial-final-block path, 47 re-plans/voyage)*
 
 ---
 
