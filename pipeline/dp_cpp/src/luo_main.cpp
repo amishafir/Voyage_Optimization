@@ -57,7 +57,8 @@ static const     ShipParameters SHIP{};
 // Returns ok=false on NaN weather or infeasible SWS.
 static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h,
                            const std::vector<double>& bounds,
-                           const Frame& fr, double res_nm) {
+                           const Frame& fr, double res_nm,
+                           const TimeKey& time_key = {}) {
     ArcResult r;
     double d1  = d1_idx * res_nm;
     double d2  = d2_idx * res_nm;
@@ -101,20 +102,28 @@ static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h
             double dur = tb - ta;
             if (dur <= 1e-12) continue;
 
-            int sample_hour = fr.voyage->active_sample_hour(
-                ta, fr.base_sample_hour ? fr.base_sample_hour : -1);
+            int cur_sh;
+            int cur_fh = -1;
+            if (time_key) {
+                auto [sh, fh] = time_key(ta);   // rolling-horizon nowcast/forecast
+                cur_sh = sh;
+                cur_fh = fh;
+            } else {
+                cur_sh = fr.voyage->active_sample_hour(
+                    ta, fr.base_sample_hour ? fr.base_sample_hour : -1);
+            }
 
             double da = sd + (ta - t_sd) * sog;
             double db = sd + (tb - t_sd) * sog;
 
-            Weather wx = fr.cell_weather_at(da, sample_hour, /*forecast_hour=*/-1);
+            Weather wx = fr.cell_weather_at(da, cur_sh, cur_fh);
             if (wx.has_nan()) {
-                // Walk back through sh_list to find the most recent valid sample
-                auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
+                // Walk back through sh_list (holding cur_fh) to the most recent valid sample
+                auto it = std::lower_bound(sh_list.begin(), sh_list.end(), cur_sh);
                 while (it != sh_list.begin() && wx.has_nan()) {
                     --it;
-                    wx = fr.cell_weather_at(da, *it, -1);
-                    if (!wx.has_nan()) { sample_hour = *it; break; }
+                    wx = fr.cell_weather_at(da, *it, cur_fh);
+                    if (!wx.has_nan()) { cur_sh = *it; break; }
                 }
                 if (wx.has_nan()) return r;
             }
@@ -140,7 +149,8 @@ static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h
 // sub-segment is split at every sample_hour transition so each piece is
 // evaluated against the weather active at that absolute time.
 static std::vector<Seg> eval_baseline(const Frame& fr,
-                                       const std::vector<double>& bounds) {
+                                       const std::vector<double>& bounds,
+                                       const TimeKey& time_key = {}) {
     double sog = fr.cfg.length_nm / fr.cfg.eta_h;
     std::vector<Seg> segs;
 
@@ -177,24 +187,32 @@ static std::vector<Seg> eval_baseline(const Frame& fr,
             double dur = tb - ta;
             if (dur <= 1e-12) continue;
 
-            int sample_hour = fr.voyage->active_sample_hour(
-                ta, fr.base_sample_hour ? fr.base_sample_hour : -1);
+            int cur_sh;
+            int cur_fh = -1;
+            if (time_key) {
+                auto [sh, fh] = time_key(ta);
+                cur_sh = sh;
+                cur_fh = fh;
+            } else {
+                cur_sh = fr.voyage->active_sample_hour(
+                    ta, fr.base_sample_hour ? fr.base_sample_hour : -1);
+            }
 
             double da = sd + (ta - t_sd) * sog;
             double db = sd + (tb - t_sd) * sog;
 
-            Weather wx = fr.cell_weather_at(da, sample_hour, /*forecast_hour=*/-1);
+            Weather wx = fr.cell_weather_at(da, cur_sh, cur_fh);
             if (wx.has_nan()) {
-                // Walk back through sh_list to find the most recent valid sample
-                auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
+                // Walk back through sh_list (holding cur_fh) to the most recent valid sample
+                auto it = std::lower_bound(sh_list.begin(), sh_list.end(), cur_sh);
                 while (it != sh_list.begin() && wx.has_nan()) {
                     --it;
-                    wx = fr.cell_weather_at(da, *it, -1);
-                    if (!wx.has_nan()) { sample_hour = *it; break; }
+                    wx = fr.cell_weather_at(da, *it, cur_fh);
+                    if (!wx.has_nan()) { cur_sh = *it; break; }
                 }
                 if (wx.has_nan()) {
                     fprintf(stderr, "  NaN weather at d=%.1f nm, sh=%d — piece skipped\n",
-                            da, sample_hour);
+                            da, cur_sh);
                     continue;
                 }
             }
@@ -302,14 +320,14 @@ static void usage(const char* prog) {
 // stays in main() so console order is preserved; path_arcs is now built
 // unconditionally (the RH orchestrator always needs it). No behaviour change.
 LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
-                    bool verbose) {
+                    bool verbose, const TimeKey& time_key, double d_start) {
     const double res_nm = args.res_nm;
 
     auto [route, wps] = load_route_auto(args.yaml, args.eta);
 
     GraphConfig cfg = GraphConfig::from_route(route);
     if (args.eta) cfg.eta_h = *args.eta;
-    double mean_sog = cfg.length_nm / cfg.eta_h;
+    double mean_sog = (cfg.length_nm - d_start) / cfg.eta_h;
     cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
     cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
 
@@ -319,7 +337,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     out.waypoints   = wps;
     out.eta_h       = cfg.eta_h;
     out.sample_hour = args.sample_hour;
-    out.d_start     = 0.0;
+    out.d_start     = d_start;
 
     // ── Grid parameters ──────────────────────────────────────────────────
     const int    L_scaled = (int)std::round(cfg.length_nm / res_nm); // destination index
@@ -406,7 +424,9 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     for (int k = 0; k <= T_steps; ++k) col_t[k] = k * cfg.dt_h;
     if (has_eta) col_t[last_col] = cfg.eta_h;
 
-    dp[0] = 0.0;
+    // Seed the DP at the (sub-)voyage start (d_start=0 → route origin, legacy).
+    const int d_start_idx = (int)std::round(d_start / res_nm);
+    dp[d_start_idx] = 0.0;
 
     double best_fuel = INF_COST;
     int    best_col  = -1;
@@ -425,7 +445,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
             int d2_hi = std::min(d1 + step_max, L_scaled);
 
             for (int d2 = d2_lo; d2 <= d2_hi; ++d2) {
-                auto arc = eval_arc(d1, d2, t_h, cfg.dt_h, bounds, frame, res_nm);
+                auto arc = eval_arc(d1, d2, t_h, cfg.dt_h, bounds, frame, res_nm, time_key);
                 if (!arc.ok) continue;
 
                 double nc = dp[d1] + arc.fuel;
@@ -455,7 +475,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
             int d2_hi = std::min(d1 + step_max_eta, L_scaled);
 
             for (int d2 = d2_lo; d2 <= d2_hi; ++d2) {
-                auto arc = eval_arc(d1, d2, t_h, dt_last, bounds, frame, res_nm);
+                auto arc = eval_arc(d1, d2, t_h, dt_last, bounds, frame, res_nm, time_key);
                 if (!arc.ok) continue;
 
                 double nc = dp[d1] + arc.fuel;
@@ -501,7 +521,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     std::vector<std::pair<ArcResult, int>> path_arcs;
     for (int k = 0; k < best_col; ++k) {
         double dur = col_t[k + 1] - col_t[k];
-        auto arc = eval_arc(path_d[k], path_d[k+1], col_t[k], dur, bounds, frame, res_nm);
+        auto arc = eval_arc(path_d[k], path_d[k+1], col_t[k], dur, bounds, frame, res_nm, time_key);
         path_arcs.push_back({std::move(arc), k});
     }
 
@@ -516,6 +536,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
 int main(int argc, char* argv[]) {
     LuoArgs args;
     bool do_csv = false;
+    bool smoke  = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -533,6 +554,7 @@ int main(int argc, char* argv[]) {
         else if (a == "--res_nm")    args.res_nm    = std::stod(nxt());
         else if (a == "--sample_hour") args.sample_hour = std::stoi(nxt());
         else if (a == "--baseline")  args.baseline  = true;
+        else if (a == "--smoke")     smoke          = true;
         else if (a == "--csv")       do_csv         = true;
         else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", a.c_str()); usage(argv[0]); return 1; }
@@ -547,6 +569,21 @@ int main(int argc, char* argv[]) {
     if (!fs::exists(args.h5))   { fprintf(stderr,"HDF5 not found: %s\n",args.h5.c_str());   return 1; }
 
     VoyageWeather voyage(args.h5);
+
+    // Backward-compat gate: a time_key mirroring Mode C — actual weather at
+    // active_sample_hour — must reproduce the plain Mode C result exactly.
+    if (smoke) {
+        LuoResult m = luo_solve(args, voyage, /*verbose=*/false);
+        auto tk = [&voyage](double t) {
+            return std::make_pair(voyage.active_sample_hour(t, -1), -1);
+        };
+        LuoResult k = luo_solve(args, voyage, /*verbose=*/false, tk, 0.0);
+        bool pass = std::fabs(m.total_fuel_mt - k.total_fuel_mt) < 1e-6;
+        printf("SMOKE dp_luo: ModeC=%.3f mt  time_key-identity=%.3f mt  %s\n",
+               m.total_fuel_mt, k.total_fuel_mt, pass ? "PASS" : "FAIL");
+        return pass ? 0 : 1;
+    }
+
     LuoResult r = luo_solve(args, voyage, /*verbose=*/true);
     if (!r.feasible) return 1;
 

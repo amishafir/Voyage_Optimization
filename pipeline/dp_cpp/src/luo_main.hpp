@@ -53,5 +53,10 @@ struct LuoResult {
 
 // Run dp_luo (or the fixed-mean-SOG baseline if args.baseline). `voyage` is
 // supplied by the caller (reused across solves so the cache stays warm).
+// `time_key` / `d_start`: rolling-horizon hooks. time_key selects mixed
+// nowcast/forecast weather per sub-voyage time (empty → time-varying actual);
+// d_start seeds the DP at round(d_start/res_nm) and centres the speed band on
+// the remaining mean SOG (L - d_start)/eta. Distances stay ABSOLUTE.
 LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
-                    bool verbose = true);
+                    bool verbose = true,
+                    const TimeKey& time_key = {}, double d_start = 0.0);

@@ -28,12 +28,19 @@ static LineType line_type_at(double t, double d, const Frame& frame) {
 static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
                                                const Frame& frame,
                                                int forecast_hour,
-                                               int override_sample_hour) {
+                                               int override_sample_hour,
+                                               const TimeKey& time_key) {
     if (std::abs(src_d - frame.cfg.length_nm) < 1e-9) return {};
 
     const auto& sh_list = frame.voyage->sample_hours();
     int sample_hour;
-    if (override_sample_hour >= 0) {
+    int fh_eff = forecast_hour;
+    if (time_key) {
+        // Rolling-horizon: (sample_hour, forecast_hour) keyed on sub-voyage time.
+        auto [sh, fh] = time_key(src_t);
+        sample_hour = sh;
+        fh_eff      = fh;
+    } else if (override_sample_hour >= 0) {
         sample_hour = override_sample_hour;
     } else if (sh_list.empty()) {
         return {};
@@ -42,13 +49,14 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
             src_t, frame.base_sample_hour ? frame.base_sample_hour : -1);
     }
 
-    Weather wx = frame.cell_weather_at(src_d, sample_hour, forecast_hour);
+    Weather wx = frame.cell_weather_at(src_d, sample_hour, fh_eff);
     if (wx.has_nan() && override_sample_hour < 0) {
-        // Walk back through sh_list to the most recent valid sample at this cell
+        // Walk back through sh_list to the most recent valid sample at this cell,
+        // holding the effective forecast_hour fixed (works for Mode C and RH).
         auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
         while (it != sh_list.begin() && wx.has_nan()) {
             --it;
-            wx = frame.cell_weather_at(src_d, *it, forecast_hour);
+            wx = frame.cell_weather_at(src_d, *it, fh_eff);
             if (!wx.has_nan()) { sample_hour = *it; break; }
         }
     }
@@ -138,26 +146,27 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
 
 std::pair<std::vector<Node>, std::vector<AtomicEdge>>
 build_atomic_edges(const Frame& frame, int forecast_hour,
-                   int override_sample_hour, bool verbose) {
+                   int override_sample_hour, bool verbose,
+                   const TimeKey& time_key, double d_start) {
     double L = frame.cfg.length_nm;
-    static constexpr int EPS_KEY = 9;
+    const TDKey src_key = make_td_key(0.0, d_start);
 
     std::unordered_map<TDKey, Node> node_index;
     auto intern = [&](double t, double d) -> Node& {
         TDKey k = make_td_key(t, d);
         auto it = node_index.find(k);
         if (it != node_index.end()) return it->second;
-        bool is_src  = (k == make_td_key(0.0, 0.0));
+        bool is_src  = (k == src_key);
         bool is_sink = std::abs(d - L) < 1e-9;
         Node n{t, d, line_type_at(t, d, frame), is_src, is_sink};
         return node_index.emplace(k, n).first->second;
     };
 
-    Node& src_node = intern(0.0, 0.0);
+    intern(0.0, d_start);   // register the source node (0, d_start)
 
     std::deque<TDKey> queue;
     std::unordered_set<TDKey> visited;
-    queue.push_back(make_td_key(0.0, 0.0));
+    queue.push_back(src_key);
 
     std::vector<AtomicEdge> edges;
 
@@ -171,7 +180,7 @@ build_atomic_edges(const Frame& frame, int forecast_hour,
         if (n.is_sink) continue;
 
         auto out = emit_from_src(n.time_h, n.distance_nm, frame,
-                                  forecast_hour, override_sample_hour);
+                                  forecast_hour, override_sample_hour, time_key);
         for (auto& e : out) {
             edges.push_back(e);
             intern(e.dst_t, e.dst_d);   // ensure dst is in node_index

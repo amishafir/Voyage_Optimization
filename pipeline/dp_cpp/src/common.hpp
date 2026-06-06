@@ -1,11 +1,19 @@
 #pragma once
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 using WeatherDict = std::unordered_map<std::string, double>;
+
+// Rolling-horizon weather selector: sub-voyage time τ → (sample_hour, forecast_hour).
+// forecast_hour == -1 → actual_weather; ≥ 0 → predicted_weather at that lead.
+// A default-constructed (empty) TimeKey means "no time_key" — callers fall back
+// to the legacy active_sample_hour / override path, preserving Mode C.
+using TimeKey = std::function<std::pair<int, int>(double)>;
 
 struct ShipParameters {
     double length          = 200.0;

@@ -77,7 +77,7 @@ static void usage(const char* prog) {
 // No behaviour change — CSV writing and the SUMMARY print stay in main() so the
 // console order is preserved.
 SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
-                  bool verbose) {
+                  bool verbose, const TimeKey& time_key, double d_start) {
     // ---- Load route ----
     // Dispatches on YAML schema:
     //   "forecasts:"  → legacy segments-table (paper Persian Gulf) + hardcoded WAYPOINTS
@@ -90,7 +90,7 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     if (args.eta)     base_cfg.eta_h   = *args.eta;
     if (args.zeta_nm) base_cfg.zeta_nm = *args.zeta_nm;
     if (args.tau_h)   base_cfg.tau_h   = *args.tau_h;
-    double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
+    double mean_sog = (base_cfg.length_nm - d_start) / base_cfg.eta_h;
     base_cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
     base_cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
     Frame frame = make_frame(route, voyage, wps, &base_cfg, args.sample_hour);
@@ -104,7 +104,8 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     // NaN walkback to the most recent valid sample.
     auto [nodes, edges] = build_atomic_edges(frame, /*forecast_hour=*/-1,
                                               /*override_sample_hour=*/-1,
-                                              /*verbose=*/false);
+                                              /*verbose=*/false,
+                                              time_key, d_start);
     double build_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
     if (verbose) {
@@ -132,13 +133,14 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     out.edges         = std::move(edges);
     out.waypoints     = std::move(wps);
     out.sample_hour   = args.sample_hour;
-    out.d_start       = 0.0;
+    out.d_start       = d_start;
     return out;
 }
 
 int main(int argc, char* argv[]) {
     SRArgs args;
     bool write_csv = false;
+    bool smoke = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -157,6 +159,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--zeta_nm")   args.zeta_nm   = std::stod(need_next());
         else if (arg == "--tau_h")     args.tau_h     = std::stod(need_next());
         else if (arg == "--sample_hour") args.sample_hour = std::stoi(need_next());
+        else if (arg == "--smoke")     smoke          = true;
         else if (arg == "--csv")       write_csv      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", arg.c_str()); usage(argv[0]); return 1; }
@@ -172,6 +175,21 @@ int main(int argc, char* argv[]) {
     }
 
     VoyageWeather voyage(args.h5);
+
+    // Backward-compat gate: a time_key mirroring Mode C — actual weather at
+    // active_sample_hour — must reproduce the plain Mode C result exactly.
+    if (smoke) {
+        SRResult m = sr_solve(args, voyage, /*verbose=*/false);
+        auto tk = [&voyage](double t) {
+            return std::make_pair(voyage.active_sample_hour(t, -1), -1);
+        };
+        SRResult k = sr_solve(args, voyage, /*verbose=*/false, tk, 0.0);
+        bool pass = std::fabs(m.total_fuel_mt - k.total_fuel_mt) < 1e-6;
+        printf("SMOKE dp_SR: ModeC=%.3f mt  time_key-identity=%.3f mt  %s\n",
+               m.total_fuel_mt, k.total_fuel_mt, pass ? "PASS" : "FAIL");
+        return pass ? 0 : 1;
+    }
+
     SRResult r = sr_solve(args, voyage, /*verbose=*/true);
 
     if (write_csv)

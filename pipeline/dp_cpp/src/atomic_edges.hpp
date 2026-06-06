@@ -21,16 +21,23 @@ struct AtomicEdge {
     bool    crosses_v_line = false;
 };
 
-// BFS edge builder: discovers (t,d) nodes lazily from source (0,0).
+// BFS edge builder: discovers (t,d) nodes lazily from source (0, d_start).
 // Returns (nodes, edges) ready for BellmanSolver.
 //
 // override_sample_hour = -1 → use block-start sample_hour per Luo 2024.
 // forecast_hour        = -1 → read actual_weather.
+// time_key (empty)     → legacy path above. When set, OVERRIDES sample_hour /
+//                        forecast_hour per sub-voyage time (rolling horizon).
+// d_start              → absolute distance (nm) the (sub-)voyage begins at;
+//                        the BFS source is (0, d_start). Distances stay ABSOLUTE
+//                        so geo/weather lookups remain geographically correct.
 std::pair<std::vector<Node>, std::vector<AtomicEdge>>
 build_atomic_edges(const Frame& frame,
                    int forecast_hour        = -1,
                    int override_sample_hour = -1,
-                   bool verbose             = false);
+                   bool verbose             = false,
+                   const TimeKey& time_key  = {},
+                   double d_start           = 0.0);
 
 void summarize_atomic_edges(const std::vector<Node>& nodes,
                               const std::vector<AtomicEdge>& edges);

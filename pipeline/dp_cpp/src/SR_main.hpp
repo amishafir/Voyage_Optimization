@@ -40,5 +40,8 @@ struct SRResult {
 // Build the atomic-edge graph and solve dp_SR. `voyage` is supplied by the
 // caller (constructed once, reused across solves so the weather cache stays
 // warm). `verbose` controls the frame/build/summarize console output.
+// `time_key` / `d_start`: rolling-horizon hooks (see build_atomic_edges).
+// time_key empty + d_start 0 → legacy Mode C behaviour.
 SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
-                  bool verbose = true);
+                  bool verbose = true,
+                  const TimeKey& time_key = {}, double d_start = 0.0);
