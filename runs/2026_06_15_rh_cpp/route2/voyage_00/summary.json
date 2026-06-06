@@ -3,10 +3,10 @@
   "sh_base": 0,
   "eta_h": 168,
   "n_replans": 28,
-  "L_nm": 1955.35,
+  "L_nm": 1954.7,
   "naive_mt": 212.609,
   "arrival_h": 168,
-  "runtime_min": 2.02238,
+  "runtime_min": 2.1397,
   "oracle_ref": {"sr": 203.357, "luo": 210.48},
   "results": {
     "sr":  {"realised_mt": 205.001, "final_d_nm": 1954.7, "vs_naive_pct": -3.57831, "vs_oracle_mt": 1.64373},

@@ -47,6 +47,7 @@ struct LuoResult {
     std::vector<Seg> baseline_segs;                     // baseline mode
     std::vector<Waypoint> waypoints;
     double eta_h = 0.0;
+    double route_length_nm = 0.0;   // cfg.length_nm — the destination the solver targets
     int    sample_hour = 0;
     double d_start = 0.0;
 };

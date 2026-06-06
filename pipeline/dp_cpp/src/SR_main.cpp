@@ -125,6 +125,7 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     out.total_fuel_mt = res.total_fuel_mt;
     out.voyage_time_h = res.voyage_time_h;
     out.eta_h         = frame.cfg.eta_h;
+    out.route_length_nm = frame.cfg.length_nm;
     out.n_nodes       = nodes.size();
     out.n_edges       = edges.size();
     out.build_s       = build_t;

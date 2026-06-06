@@ -336,6 +336,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     LuoResult out;
     out.waypoints   = wps;
     out.eta_h       = cfg.eta_h;
+    out.route_length_nm = cfg.length_nm;
     out.sample_hour = args.sample_hour;
     out.d_start     = d_start;
 

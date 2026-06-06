@@ -126,16 +126,22 @@ int main(int argc, char* argv[]) {
 
     VoyageWeather voyage(h5);
     auto [issues, max_lead] = voyage.forecast_cycle_index();
-    double L = voyage.length_nm();
-    printf("Route: L=%.1f nm, ETA=%.0f h, sh_base=%d, %zu forecast cycles\n",
-           L, eta, sh_base, issues.size());
 
     auto t_start = std::chrono::steady_clock::now();
 
     // ── Naive baseline (fixed mean SOG vs actual weather) ──────────────────
+    // The naive solve also yields route_length_nm — the destination the solvers
+    // actually target (route YAML), which is what "reached" must check against.
+    // NOTE: this differs from voyage.length_nm() (the HDF5 interpolated-waypoint
+    // extent) — on Route 1 by ~2.6 nm — so using the HDF5 length here would
+    // spuriously fail the reached gate even though the ship reached the route end.
     LuoArgs nargs; nargs.yaml = yaml; nargs.h5 = h5; nargs.eta = eta;
     nargs.res_nm = 1.0; nargs.baseline = true; nargs.sample_hour = sh_base;
-    double naive_mt = luo_solve(nargs, voyage, /*verbose=*/false).total_fuel_mt;
+    LuoResult nres = luo_solve(nargs, voyage, /*verbose=*/false);
+    double naive_mt = nres.total_fuel_mt;
+    double L = nres.route_length_nm;
+    printf("Route: L=%.1f nm (route; HDF5 extent %.1f), ETA=%.0f h, sh_base=%d, %zu forecast cycles\n",
+           L, voyage.length_nm(), eta, sh_base, issues.size());
     printf("Naive baseline: %.3f mt\n", naive_mt);
 
     // ── RH loop ────────────────────────────────────────────────────────────

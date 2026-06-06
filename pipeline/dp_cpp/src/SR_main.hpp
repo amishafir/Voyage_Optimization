@@ -26,6 +26,7 @@ struct SRResult {
     double total_fuel_mt = 0.0;
     double voyage_time_h = 0.0;
     double eta_h = 0.0;
+    double route_length_nm = 0.0;   // cfg.length_nm — the destination the solver targets
     std::size_t n_nodes = 0;
     std::size_t n_edges = 0;
     double build_s = 0.0;
