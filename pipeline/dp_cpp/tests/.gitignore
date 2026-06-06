@@ -1,0 +1,4 @@
+# Scratch dir where binaries write CSVs during a regression run.
+work/
+
+# golden/ is intentionally NOT ignored — it is the committed frozen reference.
