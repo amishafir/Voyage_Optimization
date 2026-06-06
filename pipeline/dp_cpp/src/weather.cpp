@@ -238,7 +238,17 @@ WeatherDict VoyageWeather::weather_at(double d, int sample_hour, int forecast_ho
     int seg = segment_for_distance(d);
     const auto& wp = nearest_valid_in_segment(d, seg, sample_hour, forecast_hour);
     const auto* row = row_for(wp.node_id, sample_hour, forecast_hour);
-    if (!row) throw std::runtime_error("weather_at: no row found");
+    if (!row) {
+        // No data for this (node, sample_hour, forecast_hour). Predicted-weather
+        // coverage is sparser than actual (esp. at high sample_hours near the
+        // collection edge), so a missing row must degrade gracefully to NaN —
+        // the caller's walkback then falls back to an earlier sample. Mirrors
+        // Python _row_for -> None -> NaN; throwing here aborts the whole run.
+        double nan = std::numeric_limits<double>::quiet_NaN();
+        return {{"wind_speed_10m_kmh", nan}, {"wind_direction_10m_deg", nan},
+                {"beaufort_number", nan}, {"wave_height_m", nan},
+                {"ocean_current_velocity_kmh", nan}, {"ocean_current_direction_deg", nan}};
+    }
     auto dict = row_to_dict(*row);
     dict["beaufort_number"] = static_cast<double>(row->beaufort_number);
     return dict;
