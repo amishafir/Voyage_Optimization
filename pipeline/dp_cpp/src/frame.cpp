@@ -42,6 +42,7 @@ double Frame::paper_heading_at(double d) const {
 Frame make_frame(const Route& route, const VoyageWeather& voyage,
                   const std::vector<Waypoint>& waypoints,
                   const GraphConfig* cfg_override,
+                  int base_sample_hour,
                   double grid_deg, double sog_step) {
     Frame f;
     f.route    = route;
@@ -49,6 +50,7 @@ Frame make_frame(const Route& route, const VoyageWeather& voyage,
     f.waypoints= waypoints;
     f.grid_deg = grid_deg;
     f.sog_step = sog_step;
+    f.base_sample_hour = base_sample_hour;
 
     if (cfg_override)
         f.cfg = *cfg_override;

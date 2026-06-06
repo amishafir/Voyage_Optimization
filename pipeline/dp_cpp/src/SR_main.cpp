@@ -67,6 +67,7 @@ static void usage(const char* prog) {
         "  --max_speed KNOTS Maximum SOG in knots (default: mean_sog + 3)\n"
         "  --zeta_nm  NM     Distance snap resolution for H-line arcs (default: 1.0)\n"
         "  --tau_h    HOURS  Time snap resolution for V-line arcs (default: 0.1)\n"
+        "  --sample_hour H   Departure-time anchor (sample_hour at t=0; default: file front)\n"
         "  --csv             Write per-arc solution CSV (sr_dp.csv)\n",
         prog);
 }
@@ -92,7 +93,7 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
     base_cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
     base_cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
-    Frame frame = make_frame(route, voyage, wps, &base_cfg);
+    Frame frame = make_frame(route, voyage, wps, &base_cfg, args.sample_hour);
     if (verbose) summarize_frame(frame);
 
     // ---- Build atomic-edge graph ----
@@ -155,6 +156,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--max_speed") args.max_speed = std::stod(need_next());
         else if (arg == "--zeta_nm")   args.zeta_nm   = std::stod(need_next());
         else if (arg == "--tau_h")     args.tau_h     = std::stod(need_next());
+        else if (arg == "--sample_hour") args.sample_hour = std::stoi(need_next());
         else if (arg == "--csv")       write_csv      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", arg.c_str()); usage(argv[0]); return 1; }

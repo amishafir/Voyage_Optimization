@@ -129,14 +129,17 @@ VoyageWeather::VoyageWeather(const std::string& h5_path) {
 
 // ---- Public helpers ----
 
-int VoyageWeather::active_sample_hour(double t_voyage_h) const {
+int VoyageWeather::active_sample_hour(double t_voyage_h, int sh_base) const {
     if (sample_hours_.empty()) return 0;
-    const int sh_base = sample_hours_.front();
-    const int sh_top  = sample_hours_.back();
-    int target = sh_base + (int)std::floor(t_voyage_h + 1e-9);
-    if (target <= sh_base) return sh_base;
-    if (target >= sh_top)  return sh_top;
+    // sh_base < 0 → anchor at the earliest sample_hour (legacy). Otherwise the
+    // caller-chosen base is the conceptual t=0; the result is still
+    // bisect-rounded to an available sample (off-grid bases resolve down).
+    const int base   = (sh_base < 0) ? sample_hours_.front() : sh_base;
+    const int sh_top = sample_hours_.back();
+    int target = base + (int)std::floor(t_voyage_h + 1e-9);
+    if (target >= sh_top) return sh_top;
     auto it = std::upper_bound(sample_hours_.begin(), sample_hours_.end(), target);
+    if (it == sample_hours_.begin()) return sample_hours_.front();
     --it;  // last element <= target
     return *it;
 }

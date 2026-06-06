@@ -38,7 +38,8 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
     } else if (sh_list.empty()) {
         return {};
     } else {
-        sample_hour = frame.voyage->active_sample_hour(src_t);
+        sample_hour = frame.voyage->active_sample_hour(
+            src_t, frame.base_sample_hour ? frame.base_sample_hour : -1);
     }
 
     Weather wx = frame.cell_weather_at(src_d, sample_hour, forecast_hour);

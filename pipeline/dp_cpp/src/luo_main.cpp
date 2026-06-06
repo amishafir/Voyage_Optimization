@@ -65,7 +65,7 @@ static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h
 
     const auto& sh_list = fr.voyage->sample_hours();
     if (sh_list.empty()) return r;
-    const int sh_base = sh_list.front();
+    const int sh_base = fr.base_sample_hour ? fr.base_sample_hour : sh_list.front();
 
     // Collect spatial sub-segment breakpoints strictly inside [d1, d2]
     std::vector<double> pts;
@@ -101,7 +101,8 @@ static ArcResult eval_arc(int d1_idx, int d2_idx, double t_h, double block_dur_h
             double dur = tb - ta;
             if (dur <= 1e-12) continue;
 
-            int sample_hour = fr.voyage->active_sample_hour(ta);
+            int sample_hour = fr.voyage->active_sample_hour(
+                ta, fr.base_sample_hour ? fr.base_sample_hour : -1);
 
             double da = sd + (ta - t_sd) * sog;
             double db = sd + (tb - t_sd) * sog;
@@ -145,7 +146,7 @@ static std::vector<Seg> eval_baseline(const Frame& fr,
 
     const auto& sh_list = fr.voyage->sample_hours();
     if (sh_list.empty()) return segs;
-    const int sh_base = sh_list.front();
+    const int sh_base = fr.base_sample_hour ? fr.base_sample_hour : sh_list.front();
 
     for (size_t i = 0; i + 1 < bounds.size(); ++i) {
         double sd = bounds[i], ed = bounds[i + 1];
@@ -176,7 +177,8 @@ static std::vector<Seg> eval_baseline(const Frame& fr,
             double dur = tb - ta;
             if (dur <= 1e-12) continue;
 
-            int sample_hour = fr.voyage->active_sample_hour(ta);
+            int sample_hour = fr.voyage->active_sample_hour(
+                ta, fr.base_sample_hour ? fr.base_sample_hour : -1);
 
             double da = sd + (ta - t_sd) * sog;
             double db = sd + (tb - t_sd) * sog;
@@ -286,6 +288,7 @@ static void usage(const char* prog) {
         "  --min_speed KNOTS Minimum SOG in knots (default: mean_sog - 3)\n"
         "  --max_speed KNOTS Maximum SOG in knots (default: mean_sog + 3)\n"
         "  --res_nm  NM      Distance grid resolution in NM (default: 1.0, range [0.1, 10])\n"
+        "  --sample_hour H   Departure-time anchor (sample_hour at t=0; default: file front)\n"
         "  --baseline        Compute fixed mean-SOG baseline (no graph)\n"
         "  --csv             Write output CSV(s)\n"
         "                    Luo DP  → luo_dp.csv\n"
@@ -310,7 +313,7 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
     cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
 
-    Frame frame = make_frame(route, voyage, wps, &cfg);
+    Frame frame = make_frame(route, voyage, wps, &cfg, args.sample_hour);
 
     LuoResult out;
     out.waypoints   = wps;
@@ -528,6 +531,7 @@ int main(int argc, char* argv[]) {
         else if (a == "--min_speed") args.min_speed = std::stod(nxt());
         else if (a == "--max_speed") args.max_speed = std::stod(nxt());
         else if (a == "--res_nm")    args.res_nm    = std::stod(nxt());
+        else if (a == "--sample_hour") args.sample_hour = std::stoi(nxt());
         else if (a == "--baseline")  args.baseline  = true;
         else if (a == "--csv")       do_csv         = true;
         else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }

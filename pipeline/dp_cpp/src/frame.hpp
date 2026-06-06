@@ -14,6 +14,7 @@ public:
     std::vector<double>    h_line_distances;
     double                 grid_deg  = 0.5;
     double                 sog_step  = 0.1; // kn
+    int                    base_sample_hour = 0;  // departure-time anchor (0 = file front)
 
     // SOG decision grid [v_min, v_max] at sog_step
     const std::vector<double>& sog_grid() const;
@@ -24,7 +25,7 @@ public:
     int    block_index(double t) const { return (int)(t / cfg.dt_h); }
     double block_start_time(double t) const { return cfg.dt_h * block_index(t); }
     int    sample_hour_for_block(double t) const {
-        return static_cast<int>(std::round(block_start_time(t))); }
+        return base_sample_hour + static_cast<int>(std::round(block_start_time(t))); }
 
     double snap_v_dst_d(double d) const {
         return std::round(d / cfg.zeta_nm) * cfg.zeta_nm; }
@@ -41,6 +42,7 @@ private:
 Frame make_frame(const Route& route, const VoyageWeather& voyage,
                   const std::vector<Waypoint>& waypoints,
                   const GraphConfig* cfg_override = nullptr,
+                  int base_sample_hour = 0,
                   double grid_deg = 0.5, double sog_step = 0.1);
 
 void summarize_frame(const Frame& frame);

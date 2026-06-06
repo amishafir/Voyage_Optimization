@@ -88,9 +88,11 @@ public:
     std::string route_name() const { return route_name_; }
 
     // Map voyage time t [h since trip start] → largest sample_hour in the file
-    // that is ≤ (earliest_sample_hour + ⌊t⌋), clamped to the latest available.
-    // Handles non-uniform sample_hour cadence (e.g. 6 h) and missing zero anchor.
-    int active_sample_hour(double t_voyage_h) const;
+    // that is ≤ (anchor + ⌊t⌋), clamped to the latest available.
+    // `sh_base`: departure-time anchor (the conceptual t=0 sample_hour). < 0 →
+    // anchor at the earliest sample_hour (legacy / file-front). Handles
+    // non-uniform cadence (e.g. 6 h) and off-grid bases (bisect-rounded).
+    int active_sample_hour(double t_voyage_h, int sh_base = -1) const;
 
     // Segment-aware weather lookup (nearest valid waypoint in segment)
     WeatherDict weather_at(double d, int sample_hour, int forecast_hour = -1) const;
