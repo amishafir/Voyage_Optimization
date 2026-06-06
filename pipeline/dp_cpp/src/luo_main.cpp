@@ -20,6 +20,7 @@
 //
 // Shortest path from (0, 0) to any (col, L_scaled) with col ≤ last_col.
 
+#include "luo_main.hpp"
 #include "frame.hpp"
 #include "geo_grid.hpp"
 #include "nodes.hpp"
@@ -45,22 +46,7 @@ static constexpr double INF_COST = std::numeric_limits<double>::infinity();
 static constexpr double SWS_MAX  = 25.0;
 static const     ShipParameters SHIP{};
 
-// ── One weather-zone sub-segment within a block ──────────────────────────
-struct Seg {
-    double src_d, dst_d;   // [nm]
-    double src_t;          // [h] absolute time at sub-segment start
-    double sog;            // block SOG [kn] — constant within block
-    double heading_deg;
-    Weather weather;
-    double sws, fcr, fuel_mt, dur_h;
-};
-
-// ── Arc result ────────────────────────────────────────────────────────────
-struct ArcResult {
-    bool   ok = false;
-    double fuel = 0.0;
-    std::vector<Seg> segs;
-};
+// Seg and ArcResult are declared in luo_main.hpp (so LuoResult can carry them).
 
 // Evaluate arc from grid index d1_idx to d2_idx, departing at t_h [h] over
 // block_dur_h hours. Physical distances are d_idx * res_nm.
@@ -308,52 +294,29 @@ static void usage(const char* prog) {
         prog);
 }
 
-int main(int argc, char* argv[]) {
-    std::string yaml_path = "route.yaml";
-    std::string h5_path   = "experiment_b_138wp.h5";
-    std::optional<double> eta_ov, vmin_ov, vmax_ov;
-    double res_nm    = 1.0;
-    bool do_csv      = false;
-    bool do_baseline = false;
+// Run dp_luo (or the fixed-mean-SOG baseline). Verbatim extraction of the former
+// main() body (Phase 0): load route → frame → grid → DP → backtrack. CSV writing
+// stays in main() so console order is preserved; path_arcs is now built
+// unconditionally (the RH orchestrator always needs it). No behaviour change.
+LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
+                    bool verbose) {
+    const double res_nm = args.res_nm;
 
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        auto nxt = [&]() -> const char* {
-            if (i + 1 >= argc) {
-                fprintf(stderr, "Missing value for %s\n", a.c_str()); exit(1);
-            }
-            return argv[++i];
-        };
-        if      (a == "--yaml")      yaml_path    = nxt();
-        else if (a == "--h5")        h5_path      = nxt();
-        else if (a == "--eta")       eta_ov       = std::stod(nxt());
-        else if (a == "--min_speed") vmin_ov      = std::stod(nxt());
-        else if (a == "--max_speed") vmax_ov      = std::stod(nxt());
-        else if (a == "--res_nm")    res_nm       = std::stod(nxt());
-        else if (a == "--baseline")  do_baseline  = true;
-        else if (a == "--csv")       do_csv       = true;
-        else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }
-        else { fprintf(stderr, "Unknown option: %s\n", a.c_str()); usage(argv[0]); return 1; }
-    }
-
-    if (res_nm < 0.1 || res_nm > 10.0) {
-        fprintf(stderr, "Error: --res_nm must be in [0.1, 10.0], got %.3f\n", res_nm);
-        return 1;
-    }
-
-    if (!fs::exists(yaml_path)) { fprintf(stderr,"YAML not found: %s\n",yaml_path.c_str()); return 1; }
-    if (!fs::exists(h5_path))   { fprintf(stderr,"HDF5 not found: %s\n",h5_path.c_str());   return 1; }
-
-    auto [route, wps] = load_route_auto(yaml_path, eta_ov);
-    VoyageWeather voyage(h5_path);
+    auto [route, wps] = load_route_auto(args.yaml, args.eta);
 
     GraphConfig cfg = GraphConfig::from_route(route);
-    if (eta_ov) cfg.eta_h = *eta_ov;
+    if (args.eta) cfg.eta_h = *args.eta;
     double mean_sog = cfg.length_nm / cfg.eta_h;
-    cfg.v_min = vmin_ov.value_or(mean_sog - 3.0);
-    cfg.v_max = vmax_ov.value_or(mean_sog + 3.0);
+    cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
+    cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
 
     Frame frame = make_frame(route, voyage, wps, &cfg);
+
+    LuoResult out;
+    out.waypoints   = wps;
+    out.eta_h       = cfg.eta_h;
+    out.sample_hour = args.sample_hour;
+    out.d_start     = 0.0;
 
     // ── Grid parameters ──────────────────────────────────────────────────
     const int    L_scaled = (int)std::round(cfg.length_nm / res_nm); // destination index
@@ -369,22 +332,24 @@ int main(int argc, char* argv[]) {
     const int step_min_eta = has_eta ? (int)std::ceil (cfg.v_min * dt_last / res_nm) : 0;
     const int step_max_eta = has_eta ? (int)std::floor(cfg.v_max * dt_last / res_nm) : 0;
 
-    printf("============================================================\n");
-    printf("Luo DP  (%.2f nm grid resolution)\n", res_nm);
-    printf("============================================================\n");
-    printf("Route:      %.2f nm  →  L_scaled = %d  (%.2f nm)\n",
-           cfg.length_nm, L_scaled, L_snapped);
-    printf("Speed:      [%.1f, %.1f] kn\n", cfg.v_min, cfg.v_max);
-    printf("Regular:    %d blocks × %.0f h, step [%d, %d] idx  ([%.2f, %.2f] nm)\n",
-           T_steps, cfg.dt_h, step_min, step_max,
-           step_min * res_nm, step_max * res_nm);
-    if (has_eta)
-        printf("ETA block:  1 × %.1f h (t=%.0f→%.0f), step [%d, %d] idx\n",
-               dt_last, T_max_h, cfg.eta_h, step_min_eta, step_max_eta);
-    else
-        printf("ETA = %.0f h is a multiple of %.0f h — no partial block\n",
-               cfg.eta_h, cfg.dt_h);
-    printf("H-lines:    %zu boundaries\n", frame.h_line_distances.size());
+    if (verbose) {
+        printf("============================================================\n");
+        printf("Luo DP  (%.2f nm grid resolution)\n", res_nm);
+        printf("============================================================\n");
+        printf("Route:      %.2f nm  →  L_scaled = %d  (%.2f nm)\n",
+               cfg.length_nm, L_scaled, L_snapped);
+        printf("Speed:      [%.1f, %.1f] kn\n", cfg.v_min, cfg.v_max);
+        printf("Regular:    %d blocks × %.0f h, step [%d, %d] idx  ([%.2f, %.2f] nm)\n",
+               T_steps, cfg.dt_h, step_min, step_max,
+               step_min * res_nm, step_max * res_nm);
+        if (has_eta)
+            printf("ETA block:  1 × %.1f h (t=%.0f→%.0f), step [%d, %d] idx\n",
+                   dt_last, T_max_h, cfg.eta_h, step_min_eta, step_max_eta);
+        else
+            printf("ETA = %.0f h is a multiple of %.0f h — no partial block\n",
+                   cfg.eta_h, cfg.dt_h);
+        printf("H-lines:    %zu boundaries\n", frame.h_line_distances.size());
+    }
 
     // ── Sub-segment boundaries (sorted, deduplicated, physical NM) ────────
     std::vector<double> bounds = frame.h_line_distances;
@@ -397,22 +362,26 @@ int main(int argc, char* argv[]) {
         bounds.end());
 
     // ── Baseline mode (fixed mean SOG, no graph) ──────────────────────────
-    if (do_baseline) {
-        printf("============================================================\n");
-        printf("Baseline (fixed mean SOG)\n");
-        printf("============================================================\n");
-        printf("Route:      %.2f nm  ETA: %.1f h\n", cfg.length_nm, cfg.eta_h);
-        printf("Mean SOG:   %.4f kn\n", mean_sog);
-        printf("Boundaries: %zu sub-segments\n", bounds.size() - 1);
+    if (args.baseline) {
+        if (verbose) {
+            printf("============================================================\n");
+            printf("Baseline (fixed mean SOG)\n");
+            printf("============================================================\n");
+            printf("Route:      %.2f nm  ETA: %.1f h\n", cfg.length_nm, cfg.eta_h);
+            printf("Mean SOG:   %.4f kn\n", mean_sog);
+            printf("Boundaries: %zu sub-segments\n", bounds.size() - 1);
+        }
 
         auto segs = eval_baseline(frame, bounds);
         double total_fuel = 0.0;
         for (const auto& s : segs) total_fuel += s.fuel_mt;
 
-        printf("Total fuel: %.3f mt\n", total_fuel);
-        if (do_csv)
-            write_baseline_csv("baseline.csv", segs, wps);
-        return 0;
+        if (verbose) printf("Total fuel: %.3f mt\n", total_fuel);
+        out.baseline_segs = std::move(segs);
+        out.total_fuel_mt = total_fuel;
+        out.voyage_time_h = cfg.eta_h;
+        out.n_blocks      = 0;
+        return out;
     }
 
     // For the Luo DP the terminal boundary must be L_snapped (the grid-snapped
@@ -505,14 +474,18 @@ int main(int argc, char* argv[]) {
         std::chrono::steady_clock::now() - t_start).count();
 
     if (best_col < 0) {
-        fprintf(stderr, "No feasible path to destination found.\n"); return 1;
+        fprintf(stderr, "No feasible path to destination found.\n");
+        out.feasible = false;
+        return out;
     }
 
-    printf("============================================================\n");
-    printf("Total fuel:  %.3f mt\n",         best_fuel);
-    printf("Voyage time: %.1f h  (%d blocks)\n", col_t[best_col], best_col);
-    printf("Solve time:  %.2f s\n",           solve_s);
-    printf("============================================================\n");
+    if (verbose) {
+        printf("============================================================\n");
+        printf("Total fuel:  %.3f mt\n",         best_fuel);
+        printf("Voyage time: %.1f h  (%d blocks)\n", col_t[best_col], best_col);
+        printf("Solve time:  %.2f s\n",           solve_s);
+        printf("============================================================\n");
+    }
 
     // ── Backtrack optimal path ────────────────────────────────────────────
     std::vector<int> path_d(best_col + 1);
@@ -520,15 +493,64 @@ int main(int argc, char* argv[]) {
     for (int k = best_col; k > 0; --k)
         path_d[k - 1] = parent[k][path_d[k]];
 
-    // ── CSV ───────────────────────────────────────────────────────────────
+    // Reconstruct per-block arcs (always — the RH orchestrator needs them; CSV
+    // writing in main() reuses these).
+    std::vector<std::pair<ArcResult, int>> path_arcs;
+    for (int k = 0; k < best_col; ++k) {
+        double dur = col_t[k + 1] - col_t[k];
+        auto arc = eval_arc(path_d[k], path_d[k+1], col_t[k], dur, bounds, frame, res_nm);
+        path_arcs.push_back({std::move(arc), k});
+    }
+
+    out.path_arcs     = std::move(path_arcs);
+    out.total_fuel_mt = best_fuel;
+    out.voyage_time_h = col_t[best_col];
+    out.n_blocks      = best_col;
+    out.solve_s       = solve_s;
+    return out;
+}
+
+int main(int argc, char* argv[]) {
+    LuoArgs args;
+    bool do_csv = false;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        auto nxt = [&]() -> const char* {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing value for %s\n", a.c_str()); exit(1);
+            }
+            return argv[++i];
+        };
+        if      (a == "--yaml")      args.yaml      = nxt();
+        else if (a == "--h5")        args.h5        = nxt();
+        else if (a == "--eta")       args.eta       = std::stod(nxt());
+        else if (a == "--min_speed") args.min_speed = std::stod(nxt());
+        else if (a == "--max_speed") args.max_speed = std::stod(nxt());
+        else if (a == "--res_nm")    args.res_nm    = std::stod(nxt());
+        else if (a == "--baseline")  args.baseline  = true;
+        else if (a == "--csv")       do_csv         = true;
+        else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }
+        else { fprintf(stderr, "Unknown option: %s\n", a.c_str()); usage(argv[0]); return 1; }
+    }
+
+    if (args.res_nm < 0.1 || args.res_nm > 10.0) {
+        fprintf(stderr, "Error: --res_nm must be in [0.1, 10.0], got %.3f\n", args.res_nm);
+        return 1;
+    }
+
+    if (!fs::exists(args.yaml)) { fprintf(stderr,"YAML not found: %s\n",args.yaml.c_str()); return 1; }
+    if (!fs::exists(args.h5))   { fprintf(stderr,"HDF5 not found: %s\n",args.h5.c_str());   return 1; }
+
+    VoyageWeather voyage(args.h5);
+    LuoResult r = luo_solve(args, voyage, /*verbose=*/true);
+    if (!r.feasible) return 1;
+
     if (do_csv) {
-        std::vector<std::pair<ArcResult, int>> path_arcs;
-        for (int k = 0; k < best_col; ++k) {
-            double dur = col_t[k + 1] - col_t[k];
-            auto arc = eval_arc(path_d[k], path_d[k+1], col_t[k], dur, bounds, frame, res_nm);
-            path_arcs.push_back({std::move(arc), k});
-        }
-        write_csv("luo_dp.csv", path_arcs, wps);
+        if (args.baseline)
+            write_baseline_csv("baseline.csv", r.baseline_segs, r.waypoints);
+        else
+            write_csv("luo_dp.csv", r.path_arcs, r.waypoints);
     }
 
     return 0;

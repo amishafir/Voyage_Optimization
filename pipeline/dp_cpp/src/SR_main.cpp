@@ -1,3 +1,4 @@
+#include "SR_main.hpp"
 #include "atomic_edges.hpp"
 #include "bellman.hpp"
 #include "frame.hpp"
@@ -70,14 +71,72 @@ static void usage(const char* prog) {
         prog);
 }
 
+// Build the atomic-edge graph and solve dp_SR. Verbatim extraction of the
+// former main() body (Phase 0): load route → frame → build → Bellman solve.
+// No behaviour change — CSV writing and the SUMMARY print stay in main() so the
+// console order is preserved.
+SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
+                  bool verbose) {
+    // ---- Load route ----
+    // Dispatches on YAML schema:
+    //   "forecasts:"  → legacy segments-table (paper Persian Gulf) + hardcoded WAYPOINTS
+    //   "waypoints:"  → lat/lon list (e.g. Atlantic), distances + headings computed
+    auto [route, wps] = load_route_auto(args.yaml, args.eta);
+
+    // ---- Build frame ----
+    if (verbose) print_header("dp_SR — frame");
+    GraphConfig base_cfg = GraphConfig::from_route(route);
+    if (args.eta)     base_cfg.eta_h   = *args.eta;
+    if (args.zeta_nm) base_cfg.zeta_nm = *args.zeta_nm;
+    if (args.tau_h)   base_cfg.tau_h   = *args.tau_h;
+    double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
+    base_cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
+    base_cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
+    Frame frame = make_frame(route, voyage, wps, &base_cfg);
+    if (verbose) summarize_frame(frame);
+
+    // ---- Build atomic-edge graph ----
+    if (verbose) print_header("dp_SR — build atomic-edge graph");
+    auto t0 = std::chrono::steady_clock::now();
+    // override_sample_hour = -1 → time-varying weather using the file's
+    // sample_hour grid (e.g. 6 h cadence in experiment_b_138wp.h5), with
+    // NaN walkback to the most recent valid sample.
+    auto [nodes, edges] = build_atomic_edges(frame, /*forecast_hour=*/-1,
+                                              /*override_sample_hour=*/-1,
+                                              /*verbose=*/false);
+    double build_t = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - t0).count();
+    if (verbose) {
+        printf("\nBuild time: %.2f s\n", build_t);
+        summarize_atomic_edges(nodes, edges);
+    }
+
+    // ---- dp_SR (SR DP, no SOG lock) ----
+    t0 = std::chrono::steady_clock::now();
+    BellmanSolver solver(nodes, edges);
+    solver.solve();
+    BellmanResult res = solver.result("hard", frame.cfg.eta_h);
+    double solve_t = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - t0).count();
+
+    SRResult out;
+    out.total_fuel_mt = res.total_fuel_mt;
+    out.voyage_time_h = res.voyage_time_h;
+    out.eta_h         = frame.cfg.eta_h;
+    out.n_nodes       = nodes.size();
+    out.n_edges       = edges.size();
+    out.build_s       = build_t;
+    out.solve_s       = solve_t;
+    out.schedule      = std::move(res.schedule);
+    out.edges         = std::move(edges);
+    out.waypoints     = std::move(wps);
+    out.sample_hour   = args.sample_hour;
+    out.d_start       = 0.0;
+    return out;
+}
+
 int main(int argc, char* argv[]) {
-    std::string yaml_path = "route.yaml";
-    std::string h5_path   = "experiment_b_138wp.h5";
-    std::optional<double> eta_override;
-    std::optional<double> min_speed_override;
-    std::optional<double> max_speed_override;
-    std::optional<double> zeta_nm_override;
-    std::optional<double> tau_h_override;
+    SRArgs args;
     bool write_csv = false;
 
     for (int i = 1; i < argc; ++i) {
@@ -89,76 +148,39 @@ int main(int argc, char* argv[]) {
             }
             return argv[++i];
         };
-        if      (arg == "--yaml")      yaml_path          = need_next();
-        else if (arg == "--h5")        h5_path            = need_next();
-        else if (arg == "--eta")       eta_override       = std::stod(need_next());
-        else if (arg == "--min_speed") min_speed_override = std::stod(need_next());
-        else if (arg == "--max_speed") max_speed_override = std::stod(need_next());
-        else if (arg == "--zeta_nm")   zeta_nm_override   = std::stod(need_next());
-        else if (arg == "--tau_h")     tau_h_override     = std::stod(need_next());
-        else if (arg == "--csv")       write_csv          = true;
+        if      (arg == "--yaml")      args.yaml      = need_next();
+        else if (arg == "--h5")        args.h5        = need_next();
+        else if (arg == "--eta")       args.eta       = std::stod(need_next());
+        else if (arg == "--min_speed") args.min_speed = std::stod(need_next());
+        else if (arg == "--max_speed") args.max_speed = std::stod(need_next());
+        else if (arg == "--zeta_nm")   args.zeta_nm   = std::stod(need_next());
+        else if (arg == "--tau_h")     args.tau_h     = std::stod(need_next());
+        else if (arg == "--csv")       write_csv      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
         else { fprintf(stderr, "Unknown option: %s\n", arg.c_str()); usage(argv[0]); return 1; }
     }
 
-    if (!fs::exists(yaml_path)) {
-        fprintf(stderr, "YAML not found: %s\n", yaml_path.c_str());
+    if (!fs::exists(args.yaml)) {
+        fprintf(stderr, "YAML not found: %s\n", args.yaml.c_str());
         return 1;
     }
-    if (!fs::exists(h5_path)) {
-        fprintf(stderr, "HDF5 not found: %s\n", h5_path.c_str());
+    if (!fs::exists(args.h5)) {
+        fprintf(stderr, "HDF5 not found: %s\n", args.h5.c_str());
         return 1;
     }
 
-    // ---- Load route & weather ----
-    // Dispatches on YAML schema:
-    //   "forecasts:"  → legacy segments-table (paper Persian Gulf) + hardcoded WAYPOINTS
-    //   "waypoints:"  → lat/lon list (e.g. Atlantic), distances + headings computed
-    auto [route, wps] = load_route_auto(yaml_path, eta_override);
-    VoyageWeather voyage(h5_path);
+    VoyageWeather voyage(args.h5);
+    SRResult r = sr_solve(args, voyage, /*verbose=*/true);
 
-    // ---- Build frame ----
-    print_header("dp_SR — frame");
-    GraphConfig base_cfg = GraphConfig::from_route(route);
-    if (eta_override)     base_cfg.eta_h   = *eta_override;
-    if (zeta_nm_override) base_cfg.zeta_nm = *zeta_nm_override;
-    if (tau_h_override)   base_cfg.tau_h   = *tau_h_override;
-    double mean_sog = base_cfg.length_nm / base_cfg.eta_h;
-    base_cfg.v_min = min_speed_override.value_or(mean_sog - 3.0);
-    base_cfg.v_max = max_speed_override.value_or(mean_sog + 3.0);
-    Frame frame = make_frame(route, voyage, wps, &base_cfg);
-    summarize_frame(frame);
-
-    // ---- Build atomic-edge graph ----
-    print_header("dp_SR — build atomic-edge graph");
-    auto t0 = std::chrono::steady_clock::now();
-    // override_sample_hour = -1 → time-varying weather using the file's
-    // sample_hour grid (e.g. 6 h cadence in experiment_b_138wp.h5), with
-    // NaN walkback to the most recent valid sample.
-    auto [nodes, edges] = build_atomic_edges(frame, /*forecast_hour=*/-1,
-                                              /*override_sample_hour=*/-1,
-                                              /*verbose=*/false);
-    double build_t = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - t0).count();
-    printf("\nBuild time: %.2f s\n", build_t);
-    summarize_atomic_edges(nodes, edges);
-
-    // ---- dp_SR (SR DP, no SOG lock) ----
-    t0 = std::chrono::steady_clock::now();
-    BellmanSolver solver(nodes, edges);
-    solver.solve();
-    BellmanResult res = solver.result("hard", frame.cfg.eta_h);
-    double solve_t = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - t0).count();
     if (write_csv)
-        write_arc_csv("sr_dp.csv", res.schedule, edges, wps);
+        write_arc_csv("sr_dp.csv", r.schedule, r.edges, r.waypoints);
 
     // ---- Summary ----
     print_header("dp_SR — SUMMARY");
-    printf("  Total fuel:  %.3f mt\n", res.total_fuel_mt);
-    printf("  Voyage time: %.3f h  (ETA = %.1f h)\n", res.voyage_time_h, frame.cfg.eta_h);
-    printf("  Graph: %zu nodes, %zu atomic edges\n", nodes.size(), edges.size());
-    printf("  Build: %.1f s  Solve: %.2f s\n\n", build_t, solve_t);
+    printf("  Total fuel:  %.3f mt\n", r.total_fuel_mt);
+    printf("  Voyage time: %.3f h  (ETA = %.1f h)\n", r.voyage_time_h, r.eta_h);
+    printf("  Graph: %zu nodes, %zu atomic edges\n", r.n_nodes, r.n_edges);
+    printf("  Build: %.1f s  Solve: %.2f s\n\n", r.build_s, r.solve_s);
 
     return 0;
 }
