@@ -98,6 +98,7 @@ def _emit_from_src(
     forecast_hour: Optional[int] = None,
     override_sample_hour: Optional[int] = None,
     perturber=None,
+    time_key=None,
 ) -> List[AtomicEdge]:
     """Enumerate every atomic edge out of (src_t, src_d).
 
@@ -107,6 +108,14 @@ def _emit_from_src(
     `override_sample_hour`: if set, used for ALL edges (matches today's
     single-snapshot behavior and the test HDF5 which only has hours 0–11).
     If `None`, uses block-start sample_hour (Luo 2024 spec).
+
+    `time_key`: optional `Callable[[float], tuple[int, int | None]]`. When
+    supplied it OVERRIDES both sample_hour and forecast_hour resolution: the
+    sub-voyage time `src_t` maps to `(sample_hour, forecast_hour)`, where a
+    `None` forecast_hour reads actual_weather and an int reads predicted_weather
+    at that lead. Used by the rolling-horizon orchestrator to mix nowcast
+    (actual, first block) with forecast (rest of look-ahead). `time_key` takes
+    precedence over `override_sample_hour`; default `None` preserves Mode C.
 
     `perturber`: optional `WeatherPerturber`. If supplied, the cell-canonical
     weather is post-processed by `perturber.perturb(base, src_t, src_d, waypoints)`
@@ -124,7 +133,11 @@ def _emit_from_src(
     # frame.base_sample_hour anchors the voyage start (departure-time sweep);
     # 0 (default) means "use sh_list[0]" — legacy behaviour preserved.
     sh_list = frame.voyage.sample_hours
-    if override_sample_hour is not None:
+    fh_eff = forecast_hour
+    if time_key is not None:
+        # Rolling-horizon: (sample_hour, forecast_hour) keyed on sub-voyage time.
+        sample_hour, fh_eff = time_key(src_t)
+    elif override_sample_hour is not None:
         sample_hour = override_sample_hour
     elif not sh_list:
         return []
@@ -132,13 +145,15 @@ def _emit_from_src(
         sh_base_arg = frame.base_sample_hour if frame.base_sample_hour else None
         sample_hour = frame.voyage.active_sample_hour(src_t, sh_base=sh_base_arg)
 
-    weather = frame.cell_weather_at(src_d, sample_hour, forecast_hour)
+    weather = frame.cell_weather_at(src_d, sample_hour, fh_eff)
     if weather.has_nan() and override_sample_hour is None:
-        # Walk back through sh_list to most recent valid sample at this cell.
+        # Walk back through sh_list to most recent valid sample at this cell,
+        # holding the effective forecast_hour fixed. Applies to Mode C
+        # (fh_eff=None) and to rolling-horizon (fh_eff = forecast lead).
         idx = bisect_right(sh_list, sample_hour) - 1
         while idx > 0 and weather.has_nan():
             idx -= 1
-            weather = frame.cell_weather_at(src_d, sh_list[idx], forecast_hour)
+            weather = frame.cell_weather_at(src_d, sh_list[idx], fh_eff)
             if not weather.has_nan():
                 sample_hour = sh_list[idx]
                 break
@@ -271,6 +286,8 @@ def build_atomic_edges(
     override_sample_hour: Optional[int] = None,
     perturber=None,
     verbose: bool = False,
+    time_key=None,
+    d_start: float = 0.0,
 ) -> Tuple[List[Node], List[AtomicEdge]]:
     """Build the atomic-edge graph by BFS from the source.
 
@@ -282,11 +299,21 @@ def build_atomic_edges(
     sample_hour (matches today's behavior). If `None`, edges use block-start
     sample_hour per Luo 2024 spec (requires HDF5 to cover all block hours).
 
+    `time_key`: optional rolling-horizon weather selector (see `_emit_from_src`).
+
+    `d_start`: absolute distance (nm) at which the (sub-)voyage begins. 0.0
+    (default) starts at the route origin. The rolling-horizon orchestrator
+    passes the ship's current position so each re-plan solves the remainder of
+    the voyage with a fresh time axis (src_t = 0 at the decision point) while
+    keeping ABSOLUTE distances — geo/weather lookups stay geographically
+    correct (no distance re-anchoring).
+
     `perturber`: optional `WeatherPerturber` for stress-testing — wraps the
     cell-canonical weather lookup to inject within-block temporal variation.
     """
     L = frame.cfg.length_nm
     eps_key = 9
+    src_d0 = round(d_start, eps_key)
 
     # node_index: (rounded t, rounded d) -> Node
     node_index: Dict[Tuple[float, float], Node] = {}
@@ -295,7 +322,7 @@ def build_atomic_edges(
         k = (round(t, eps_key), round(d, eps_key))
         if k in node_index:
             return node_index[k]
-        is_source = (k == (0.0, 0.0))
+        is_source = (k == (0.0, src_d0))
         is_sink = abs(d - L) < 1e-9
         node = Node(
             time_h=t,
@@ -307,7 +334,7 @@ def build_atomic_edges(
         node_index[k] = node
         return node
 
-    src_node = _intern(0.0, 0.0)
+    src_node = _intern(0.0, d_start)
     queue: deque = deque([src_node])
     visited: Set[Tuple[float, float]] = set()
 
@@ -327,6 +354,7 @@ def build_atomic_edges(
             forecast_hour=forecast_hour,
             override_sample_hour=override_sample_hour,
             perturber=perturber,
+            time_key=time_key,
         )
         for e in out:
             edges.append(e)

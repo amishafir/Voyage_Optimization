@@ -103,16 +103,22 @@ def parse_args() -> argparse.Namespace:
 
 
 def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
-          verbose: bool = True) -> dict:
+          verbose: bool = True, time_key=None, d_start: float = 0.0) -> dict:
     """Run dp_SR with the given args and return a result dict.
 
     The ``voyage`` arg lets callers (e.g. the chain-sweep orchestrator) load
     ``VoyageWeather`` once and reuse it across many solve() calls on the same
     HDF5 file. Pass ``None`` to load on demand.
 
+    ``time_key`` / ``d_start``: rolling-horizon hooks (see
+    ``atomic_edges.build_atomic_edges``). ``time_key`` selects mixed
+    nowcast/forecast weather keyed on sub-voyage time; ``d_start`` is the
+    absolute distance (nm) the sub-voyage begins at. With ``d_start > 0`` the
+    speed band is centred on the REMAINING mean SOG ``(L - d_start) / eta``.
+
     Returns:
         dict with keys total_fuel_mt, voyage_time_h, n_nodes, n_edges,
-        build_s, solve_s, schedule, waypoints, eta_h, sample_hour.
+        build_s, solve_s, schedule, waypoints, eta_h, sample_hour, d_start.
     """
     yaml_path = Path(args.yaml)
     h5_path = Path(args.h5)
@@ -137,7 +143,7 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
     if args.tau_h is not None:
         cfg.tau_h = args.tau_h
 
-    mean_sog = cfg.length_nm / cfg.eta_h
+    mean_sog = (cfg.length_nm - d_start) / cfg.eta_h
     cfg.v_min = args.min_speed if args.min_speed is not None else (mean_sog - 3.0)
     cfg.v_max = args.max_speed if args.max_speed is not None else (mean_sog + 3.0)
 
@@ -162,7 +168,9 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
     nodes, edges = build_atomic_edges(frame,
                                       forecast_hour=None,
                                       override_sample_hour=None,
-                                      verbose=False)
+                                      verbose=False,
+                                      time_key=time_key,
+                                      d_start=d_start)
     build_t = time.time() - t0
     if verbose:
         print(f"Build time: {build_t:.2f} s")
@@ -192,6 +200,7 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         "waypoints": waypoints,
         "eta_h": cfg.eta_h,
         "sample_hour": sample_hour,
+        "d_start": d_start,
     }
 
 

@@ -127,6 +127,7 @@ def eval_arc(
     res_nm: float,
     sample_hour: Optional[int] = None,
     forecast_hour: Optional[int] = None,
+    time_key=None,
 ) -> ArcResult:
     """Evaluate one block arc (d1_idx → d2_idx) departing at t_h.
 
@@ -141,6 +142,13 @@ def eval_arc(
     legacy static-deterministic mode (all pieces read the same sample_hour).
     On a NaN read in time-varying mode, walks back through ``sh_list`` to the
     most recent valid sample at the same cell; drops the arc if walkback fails.
+
+    ``time_key``: optional ``Callable[[float], tuple[int, int | None]]`` used by
+    the rolling-horizon orchestrator. When supplied it OVERRIDES sample_hour /
+    forecast_hour resolution per temporal piece: piece-start voyage time maps to
+    ``(sample_hour, forecast_hour)`` (None forecast_hour → actual, int →
+    predicted at that lead). Takes precedence over ``sample_hour``; default
+    ``None`` preserves the time-varying-actual behaviour above.
 
     Mirrors C++ luo_main.cpp eval_arc (commit 752ae0b).
     """
@@ -192,7 +200,10 @@ def eval_arc(
             if dur <= 1e-12:
                 continue
 
-            if sample_hour is None:
+            cur_fh = forecast_hour
+            if time_key is not None:
+                cur_sh, cur_fh = time_key(ta)
+            elif sample_hour is None:
                 cur_sh = frame.voyage.active_sample_hour(ta, sh_base=sh_base)
             else:
                 cur_sh = sample_hour
@@ -201,13 +212,13 @@ def eval_arc(
             db = sd + (tb - t_sd) * sog
 
             wx = frame.cell_weather_at(da, sample_hour=cur_sh,
-                                       forecast_hour=forecast_hour)
-            if wx.has_nan() and sample_hour is None:
+                                       forecast_hour=cur_fh)
+            if wx.has_nan() and (sample_hour is None or time_key is not None):
                 idx = bisect_right(sh_list, cur_sh) - 1
                 while idx > 0 and wx.has_nan():
                     idx -= 1
                     wx = frame.cell_weather_at(da, sample_hour=sh_list[idx],
-                                               forecast_hour=forecast_hour)
+                                               forecast_hour=cur_fh)
                     if not wx.has_nan():
                         cur_sh = sh_list[idx]
                         break
@@ -248,6 +259,7 @@ def eval_baseline(
     bounds: List[float],
     sample_hour: Optional[int] = None,
     forecast_hour: Optional[int] = None,
+    time_key=None,
 ) -> List[Seg]:
     """Fixed mean-SOG baseline with time-varying weather.
 
@@ -302,7 +314,10 @@ def eval_baseline(
             if dur <= 1e-12:
                 continue
 
-            if sample_hour is None:
+            cur_fh = forecast_hour
+            if time_key is not None:
+                cur_sh, cur_fh = time_key(ta)
+            elif sample_hour is None:
                 cur_sh = frame.voyage.active_sample_hour(ta, sh_base=sh_base)
             else:
                 cur_sh = sample_hour
@@ -311,13 +326,13 @@ def eval_baseline(
             db = sd + (tb - t_sd) * sog
 
             wx = frame.cell_weather_at(da, sample_hour=cur_sh,
-                                       forecast_hour=forecast_hour)
-            if wx.has_nan() and sample_hour is None:
+                                       forecast_hour=cur_fh)
+            if wx.has_nan() and (sample_hour is None or time_key is not None):
                 idx = bisect_right(sh_list, cur_sh) - 1
                 while idx > 0 and wx.has_nan():
                     idx -= 1
                     wx = frame.cell_weather_at(da, sample_hour=sh_list[idx],
-                                               forecast_hour=forecast_hour)
+                                               forecast_hour=cur_fh)
                     if not wx.has_nan():
                         cur_sh = sh_list[idx]
                         break
@@ -421,17 +436,24 @@ def parse_args() -> argparse.Namespace:
 
 
 def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
-          verbose: bool = True) -> dict:
+          verbose: bool = True, time_key=None, d_start: float = 0.0) -> dict:
     """Run dp_luo with the given args and return a result dict.
 
     The ``voyage`` arg lets callers (e.g. the chain-sweep orchestrator) load
     ``VoyageWeather`` once and reuse it across many solve() calls on the same
     HDF5 file. Pass ``None`` to load on demand.
 
+    ``time_key`` / ``d_start``: rolling-horizon hooks. ``time_key`` selects
+    mixed nowcast/forecast weather keyed on sub-voyage time (see ``eval_arc``);
+    ``d_start`` is the absolute distance (nm) the sub-voyage begins at — the DP
+    is seeded at ``round(d_start / res_nm)`` instead of 0 and the speed band is
+    centred on the REMAINING mean SOG ``(L - d_start) / eta``. Distances stay
+    ABSOLUTE so weather/geo lookups remain geographically correct.
+
     Returns:
         dict with keys total_fuel_mt, voyage_time_h, n_blocks, solve_s,
-        path_arcs, waypoints, eta_h, sample_hour, baseline_segs (None unless
-        args.baseline=True).
+        path_arcs, waypoints, eta_h, sample_hour, d_start, baseline_segs (None
+        unless args.baseline=True).
     """
     if args.res_nm < 0.1 or args.res_nm > 10.0:
         raise ValueError(f"--res_nm must be in [0.1, 10.0], got {args.res_nm}")
@@ -454,7 +476,7 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         if route.windows:
             route.windows[-1].end = float(args.eta)
             route = synthesize_multi_window(route, window_h=6.0)
-    mean_sog = cfg.length_nm / cfg.eta_h
+    mean_sog = (cfg.length_nm - d_start) / cfg.eta_h
     cfg.v_min = args.min_speed if args.min_speed is not None else (mean_sog - 3.0)
     cfg.v_max = args.max_speed if args.max_speed is not None else (mean_sog + 3.0)
 
@@ -519,6 +541,7 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
             "waypoints": waypoints,
             "eta_h": cfg.eta_h,
             "sample_hour": sample_hour,
+            "d_start": d_start,
         }
 
     # ---- For Luo DP, replace the L endpoint with L_snapped if they differ -
@@ -539,7 +562,9 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
     if has_eta:
         col_t.append(cfg.eta_h)
 
-    dp[0] = 0.0
+    # Seed the DP at the (sub-)voyage start. d_start=0 → route origin (legacy).
+    d_start_idx = int(round(d_start / res_nm))
+    dp[d_start_idx] = 0.0
     best_fuel = INF
     best_col = -1
 
@@ -554,7 +579,8 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
             d2_lo = min(d1 + step_min, L_scaled)
             d2_hi = min(d1 + step_max, L_scaled)
             for d2 in range(d2_lo, d2_hi + 1):
-                arc = eval_arc(d1, d2, t_h, cfg.dt_h, bounds, frame, res_nm)
+                arc = eval_arc(d1, d2, t_h, cfg.dt_h, bounds, frame, res_nm,
+                               time_key=time_key)
                 if not arc.ok:
                     continue
                 nc = dp[d1] + arc.fuel
@@ -575,7 +601,8 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
             d2_lo = min(d1 + step_min_eta, L_scaled)
             d2_hi = min(d1 + step_max_eta, L_scaled)
             for d2 in range(d2_lo, d2_hi + 1):
-                arc = eval_arc(d1, d2, t_h, dt_last, bounds, frame, res_nm)
+                arc = eval_arc(d1, d2, t_h, dt_last, bounds, frame, res_nm,
+                               time_key=time_key)
                 if not arc.ok:
                     continue
                 nc = dp[d1] + arc.fuel
@@ -609,7 +636,7 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
     for k in range(best_col):
         dur = col_t[k + 1] - col_t[k]
         arc = eval_arc(path_d[k], path_d[k + 1], col_t[k], dur,
-                       bounds, frame, res_nm)
+                       bounds, frame, res_nm, time_key=time_key)
         path_arcs.append((arc, k))
 
     return {
@@ -622,6 +649,7 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         "waypoints": waypoints,
         "eta_h": cfg.eta_h,
         "sample_hour": sample_hour,
+        "d_start": d_start,
     }
 
 

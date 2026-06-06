@@ -145,6 +145,48 @@ Plus a 1-page divergence summary (how often new forecasts changed the block-0 de
 6. Verify three sanity gates
 7. If green, scale to chain
 
+### 4.10 Executed process — how planning and simulation actually work
+
+Implemented and run 2026-06-02/03. Code: `pipeline/dp_rebuild/run_rh.py` (orchestrator), with a `time_key` callable threaded through `atomic_edges.py` (SR) and `luo_main.py` (Luo). Single voyage = **56 plans** (28 SR + 28 Luo, one of each per 6 h re-plan) plus 1 Naive baseline.
+
+**Planning — mixed actual/forecast weather.** At each re-plan `k` the solver receives weather through `time_key(τ)`, where `τ` is sub-voyage time from the decision point. It splits the look-ahead:
+
+| Sub-voyage time | Weather source | Meaning |
+|---|---|---|
+| `τ < 6 h` (block 0) | **ACTUAL** at the decision wall-clock (`forecast_hour=None`) | nowcast — captain observes current conditions |
+| `τ ≥ 6 h` (tail) | **FORECAST** from the most-recent cycle `sh_fc ≤ T_wall`, lead `= (T_wall − sh_fc) + 6·⌊τ/6⌋` | only forecasts available beyond the present |
+
+Each plan is solved end-to-end against this *mix* — first 6 h on real weather, the entire remainder on (imperfect) forecast — producing a full speed schedule to the destination. Only block 0 is committed.
+
+**Simulation — execution, not a separate simulator.** There is **no separate `simulate_voyage` pass.** The "simulation" is the execution loop: at each step we take **block 0** of the plan (its SOG, distance, fuel) and advance. Because block 0 was planned on *actual* weather, the realised fuel **equals** the planned block-0 fuel — there is no plan-vs-actual discrepancy *within* a block. Realised voyage fuel = **Σ of the 28 executed block-0 fuels**, each on actual weather.
+
+The key consequence to state at the meeting: **forecast error does not appear as a within-block fuel gap — it appears as suboptimal speed *decisions*.** The block-0 SOG the captain commits to was chosen partly to suit a forecast tail that turned out wrong, so the speed profile is slightly off-optimal. That is exactly why RH realised fuel sits *above* the Mode C oracle (which chose every SOG knowing the true weather): the gap is the cost of deciding under imperfect foresight, evaluated on real weather.
+
+The **Naive baseline** is the one genuine forward simulation: a single fixed mean SOG (`L/ETA`) sailed through the actual, time-varying weather (`eval_baseline`), no re-planning.
+
+**Graphs built.** Only SR materialises an explicit `(t,d)` atomic-edge graph (one fresh build per re-plan → **28 SR graphs**, each smaller as `d_start` advances and `eta_sub` shrinks). Luo is a `(column, distance)` DP lattice evaluated arc-by-arc (**28 lattices**). Naive builds no graph.
+
+### 4.11 First-run results (Route 2, sh_base=0) — all gates pass
+
+| | Naive (mt) | RH-SR (mt) | RH-Luo (mt) |
+|---|---:|---:|---:|
+| realised fuel | 212.467 | **204.851** | **212.439** |
+| vs Naive | — | **−3.58 %** | **−0.01 %** |
+| vs Mode C oracle | — | +1.653 (oracle 203.198) | +2.189 (oracle 210.250) |
+
+Gates (both solvers): reached destination ✓, slack = 0 (arrival = 168 h) ✓, RH ≤ Naive ✓, RH ≥ oracle ✓ — realised fuel lands cleanly in the `oracle ≤ RH ≤ Naive` sandwich.
+
+**Headline finding:** SR (exploits within-block weather variation at H-line crossings) saves a meaningful **3.58 %**; Luo's block-level DP under forecast essentially **breaks even** (−0.01 %). Divergence diagnostic (did the refreshed forecast change the block-0 SOG vs the prior plan?): RH-SR **8/27 re-plans (30 %)**, mean |Δ| 0.19 kn; RH-Luo **17/27 (63 %)**, mean |Δ| 0.43 kn — Luo fidgets more but gains less.
+
+Outputs: `runs/2026_06_15_rh/route2/voyage_00/` (`summary.json` + per-replan/realized CSVs).
+
+### 4.12 Deviations from the locked design + findings
+
+- **No `route.trim_from` (§4.4 item 2).** Geo/weather lookups key off *absolute* distance via the waypoint list, so re-anchoring each sub-voyage to `d=0` would read weather at the wrong location. Instead kept distances **absolute**, started the solver at `d_start`, reset only the time axis. Backward-compat gate confirms correctness (reproduces 203.198 / 210.250 exactly through the `time_key` path).
+- **Forecasts are not issued every 6 h.** `predicted_weather` cycles are at sample_hours `[0, 18, 24, 30, …]` (`sh=6, 12` have no forecast). So the §4.2 `time_key` was refined to use the **most-recent available cycle** with a staleness-adjusted lead. For `sh_base=0` only `k=1,2` are stale (fall back to the hour-0 cycle); `k≥3` are fresh. More faithful to §4.2's intent.
+- **Runtime (scaling blocker).** Single voyage took **8.9 h**, not the ~45 min estimate. RH forecast mode touches predicted cells at ~24 distinct leads per solve (each a distinct cache key), vs Mode C's single `fh=None` per sample; every fresh forecast cycle pays a cold-cache cost (~8 Luo solves spiked to 3000–4400 s). **Must optimise cell-weather caching before the 19-voyage chain sweep** (otherwise the chain is days).
+- **Partial-final-block fix.** Orchestrator now handles ETAs that aren't multiples of 6 h (`ceil` blocks, final block = remainder, arrival = sum of durations). Needed for Route 1 (280 h → 47 re-plans, last block 4 h). Route 2 (168 h) unaffected.
+
 ---
 
 ## 5. Data Collection Status
@@ -163,7 +205,15 @@ By June 15 we should have ~14 more days of forecast cycles on each file (~56 add
 
 ## 6. Results Tables
 
-### 6.1 *(to fill in — depends on which of §3 / §4 items complete in the two weeks)*
+### 6.1 Rolling Horizon — Route 2, sh_base=0 (the §4.8 table)
+
+Full detail in §4.11. Headline:
+
+| Voyage | Naive (mt) | RH-SR (mt) | RH-Luo (mt) | RH-SR vs Naive | RH-Luo vs Naive |
+|---|---:|---:|---:|---:|---:|
+| Route 2, sh_base=0 | 212.467 | 204.851 | 212.439 | −3.58 % | −0.01 % |
+
+All sanity gates pass for both solvers. Chain (19 voyages) and Route 1 pending the caching optimisation (§4.12).
 
 ---
 
