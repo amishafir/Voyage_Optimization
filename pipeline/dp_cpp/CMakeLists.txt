@@ -63,3 +63,33 @@ target_link_libraries(dp_luo PRIVATE
     ${HDF5_LIBRARIES}
     yaml-cpp
 )
+
+# ---- Rolling-horizon orchestrator ----
+# Links sr_solve() + luo_solve() in-process; SR_main.cpp / luo_main.cpp are
+# compiled with RH_NO_MAIN so their CLI main()s are dropped (run_rh.cpp owns main).
+set(RUN_RH_SOURCES
+    src/physics.cpp
+    src/geo_grid.cpp
+    src/route.cpp
+    src/nodes.cpp
+    src/weather.cpp
+    src/frame.cpp
+    src/atomic_edges.cpp
+    src/bellman.cpp
+    src/SR_main.cpp
+    src/luo_main.cpp
+    src/run_rh.cpp
+)
+
+add_executable(dp_run_rh ${RUN_RH_SOURCES})
+target_compile_definitions(dp_run_rh PRIVATE RH_NO_MAIN)
+
+target_include_directories(dp_run_rh PRIVATE
+    src
+    ${HDF5_INCLUDE_DIRS}
+)
+
+target_link_libraries(dp_run_rh PRIVATE
+    ${HDF5_LIBRARIES}
+    yaml-cpp
+)

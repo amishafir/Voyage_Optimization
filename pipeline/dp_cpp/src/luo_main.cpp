@@ -533,6 +533,9 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     return out;
 }
 
+// main() is compiled out (-DRH_NO_MAIN) when this TU is linked into the
+// run_rh orchestrator, which provides its own main(). luo_solve() stays linkable.
+#ifndef RH_NO_MAIN
 int main(int argc, char* argv[]) {
     LuoArgs args;
     bool do_csv = false;
@@ -596,3 +599,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+#endif  // RH_NO_MAIN

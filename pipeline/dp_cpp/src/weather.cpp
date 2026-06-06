@@ -144,6 +144,24 @@ int VoyageWeather::active_sample_hour(double t_voyage_h, int sh_base) const {
     return *it;
 }
 
+std::pair<std::vector<int>, std::unordered_map<int,int>>
+VoyageWeather::forecast_cycle_index() const {
+    // Max positive forecast lead available per predicted-weather issue (sample_hour).
+    std::unordered_map<int,int> max_lead;
+    for (const auto& kv : predicted_) {
+        int fh = std::get<1>(kv.first);
+        int sh = std::get<2>(kv.first);
+        auto it = max_lead.find(sh);
+        if (it == max_lead.end()) max_lead.emplace(sh, 0);   // 0 if no positive lead
+        if (fh > max_lead[sh]) max_lead[sh] = fh;
+    }
+    std::vector<int> issues;
+    issues.reserve(max_lead.size());
+    for (const auto& kv : max_lead) issues.push_back(kv.first);
+    std::sort(issues.begin(), issues.end());
+    return {issues, max_lead};
+}
+
 // ---- Internal helpers ----
 
 const VoyageWeather::WeatherRow* VoyageWeather::row_for(int node_id, int sample_hour,

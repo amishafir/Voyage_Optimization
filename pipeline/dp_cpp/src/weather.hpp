@@ -87,6 +87,11 @@ public:
     const std::vector<int>& forecast_hours() const { return forecast_hours_; }
     std::string route_name() const { return route_name_; }
 
+    // Rolling-horizon support: forecast-cycle index from predicted_weather.
+    // Returns {sorted distinct issue sample_hours, {issue → max positive lead}}.
+    std::pair<std::vector<int>, std::unordered_map<int,int>>
+    forecast_cycle_index() const;
+
     // Map voyage time t [h since trip start] → largest sample_hour in the file
     // that is ≤ (anchor + ⌊t⌋), clamped to the latest available.
     // `sh_base`: departure-time anchor (the conceptual t=0 sample_hour). < 0 →
