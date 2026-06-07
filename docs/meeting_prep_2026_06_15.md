@@ -286,6 +286,34 @@ within noise (mean −0.20 % / −0.10 %). The headline is the **SR-vs-Luo
 contrast** — stable across both routes and the full collection window — and the
 nuance that RH ≤ Naive is departure-dependent (Jensen vs weather-routing, §6.2).
 
+### 6.4 Key insights (talking points)
+
+Tables above (§6.2 Route 2, §6.3 Route 1). Two insights per route:
+
+**Route 2 — Atlantic (ETA 168, 12 departures, mean RH-SR −1.92 %, RH-Luo −0.20 %)**
+1. RH-SR saves on 11/12 (best −3.75 % @ sh=840) but the saving swings −0.9 %…
+   −3.75 % (and +0.74 % once, sh=1344) — it tracks how much the weather varies
+   in that departure's window. → present as a savings-vs-departure curve, not one
+   number.
+2. RH-Luo is break-even (mean −0.20 %) and marginally *positive* on 4/12. Jensen:
+   Naive and RH share the same mean speed (both hit ETA), and cubic fuel makes
+   constant speed optimal on uniform weather — Luo's block DP can't beat it. The
+   ~1.7 pp SR-vs-Luo gap is the signal.
+
+**Route 1 — Malacca (ETA 280, 7 departures, mean RH-SR −1.16 %, RH-Luo −0.10 %)**
+1. Same pattern but *weaker* savings (mean −1.16 % vs −1.92 %, band −0.33 %…
+   −2.26 %). The oracle sits close to Naive too (e.g. sh=1126: oracle 337.6 vs
+   Naive 342.7) → Route 1's weather is milder/more uniform, so there's less
+   weather-routing headroom for *any* method.
+2. The partial-final-block path is correct at scale — all 7 voyages (47 re-plans,
+   4 h final block) land exactly on the route end at 280 h — and RH-Luo is
+   break-even again, confirming the SR-vs-Luo contrast is route-independent.
+
+**Cross-route takeaway:** the result isn't a single saving figure — it's (a) the
+robust SR-vs-Luo gap (SR exploits within-block weather variation, Luo doesn't),
+and (b) that RH's benefit over set-and-forget is real but **departure- and
+route-dependent**, bounded by weather variability via the Jensen tradeoff.
+
 ---
 
 ## 7. Questions for Supervisor
