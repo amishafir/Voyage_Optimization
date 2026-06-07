@@ -256,33 +256,35 @@ Jensen penalty of its forecast-driven speed variation. At mild/uniform-weather
 departures (e.g. sh=1344) the penalty wins → RH > Naive. So "RH ≤ Naive" is
 **departure-dependent, not universal** — best shown as a savings-vs-sh_base plot.
 
-### 6.3 Route 1 chain (4 of 7 departures, ETA 280)
+### 6.3 Route 1 full chain (7 departures, ETA 280)
 
 Route 1 (Persian Gulf → Malacca, L = 3393.2 nm, ETA 280, 47 re-plans/voyage,
-partial 4 h final block). **4 of 7 voyages completed** — the run was stopped at
-voyage 04 because the laptop thermally throttled (per-voyage time ran away:
-15 → 23 → 105 → 306 min). The remaining 3 (sh = 1126, 1406, 1686) are resumable
-on a cool machine — `run_rh_chain.py` skips any voyage with an existing
-`summary.json`. Output: `runs/2026_06_15_rh_cpp_chain/route1/`.
+partial 4 h final block). **All 7 voyages completed.** Output:
+`runs/2026_06_15_rh_cpp_chain/route1/`.
 
 | sh_base | oracle SR | Naive | RH-SR | RH-Luo | RH-SR vs Naive | RH-Luo vs Naive |
 |---:|---:|---:|---:|---:|---:|---:|
-| 6   | 354.914 | 362.743 | 358.859 | 362.565 | −1.07 % | −0.05 % |
-| 286 | 355.228 | 367.034 | 358.726 | 367.719 | −2.26 % | +0.19 % |
-| 566 | 338.250 | 345.423 | 342.820 | 344.514 | −0.75 % | −0.26 % |
-| 846 | 348.528 | 354.735 | 350.330 | 354.358 | −1.24 % | −0.11 % |
-| **mean (4)** | | | | | **−1.33 %** | **−0.06 %** |
+| 6    | 354.914 | 362.743 | 358.859 | 362.565 | −1.07 % | −0.05 % |
+| 286  | 355.228 | 367.034 | 358.726 | 367.719 | −2.26 % | +0.19 % |
+| 566  | 338.250 | 345.423 | 342.820 | 344.514 | −0.75 % | −0.26 % |
+| 846  | 348.528 | 354.735 | 350.330 | 354.358 | −1.24 % | −0.11 % |
+| 1126 | 337.606 | 342.677 | 341.550 | 341.694 | −0.33 % | −0.29 % |
+| 1406 | 335.233 | 346.186 | 344.111 | 346.573 | −0.60 % | +0.11 % |
+| 1686 | 347.230 | 356.032 | 349.321 | 355.097 | −1.88 % | −0.26 % |
+| **mean (7)** | | | | | **−1.16 %** | **−0.10 %** |
 
 **Findings (consistent with Route 2 §6.2):**
-- RH-SR saves on all 4 (−0.75 % … −2.26 %, mean −1.33 %).
-- RH-Luo ≈ break-even (mean −0.06 %); marginally worse than Naive at sh=286
-  (+0.19 %) — the same Jensen tradeoff as Route 2.
-- All 4 mechanically sound — `reached`, `slack0`, `RH ≥ oracle` pass; the partial
+- RH-SR saves on all 7 (−0.33 % … −2.26 %, mean −1.16 %).
+- RH-Luo ≈ break-even (mean −0.10 %); marginally worse than Naive at sh=286
+  (+0.19 %) and sh=1406 (+0.11 %) — the same Jensen tradeoff as Route 2.
+- All 7 mechanically sound — `reached`, `slack0`, `RH ≥ oracle` pass; the partial
   4 h final block lands the ship exactly on the route end (arrival = 280 h).
 
-**Combined picture (16 voyages, both routes):** RH-SR robustly saves
-(~1.3–1.9 % mean per route, up to −3.75 %); RH-Luo is break-even within noise.
-The headline is the SR-vs-Luo contrast, stable across routes and departures.
+**Combined picture (19 voyages, both routes):** RH-SR robustly saves on 18/19
+(mean −1.92 % Route 2, −1.16 % Route 1; up to −3.75 %); RH-Luo is break-even
+within noise (mean −0.20 % / −0.10 %). The headline is the **SR-vs-Luo
+contrast** — stable across both routes and the full collection window — and the
+nuance that RH ≤ Naive is departure-dependent (Jensen vs weather-routing, §6.2).
 
 ---
 
