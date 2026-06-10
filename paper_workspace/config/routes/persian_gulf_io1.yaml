@@ -1,0 +1,10 @@
+name: Persian Gulf to Indian Ocean 1
+description: WP 1-7 subset (1,678 nm, ~140h). Fits within 168h Open-Meteo forecast window.
+waypoints:
+  - {lat: 24.75, lon: 52.83, name: "Port A (Persian Gulf)"}
+  - {lat: 26.55, lon: 56.45, name: "Gulf of Oman"}
+  - {lat: 24.08, lon: 60.88, name: "Arabian Sea 1"}
+  - {lat: 21.73, lon: 65.73, name: "Arabian Sea 2"}
+  - {lat: 17.96, lon: 69.19, name: "Arabian Sea 3"}
+  - {lat: 14.18, lon: 72.07, name: "Arabian Sea 4"}
+  - {lat: 10.45, lon: 75.16, name: "Indian Ocean 1"}

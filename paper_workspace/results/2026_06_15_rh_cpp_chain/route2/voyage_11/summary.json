@@ -1,0 +1,19 @@
+{
+  "route": "route2",
+  "sh_base": 1848,
+  "eta_h": 168,
+  "n_replans": 28,
+  "L_nm": 1954.7,
+  "naive_mt": 206.103,
+  "arrival_h": 168,
+  "runtime_min": 2.16309,
+  "oracle_ref": {"sr": 198.927, "luo": 204.792},
+  "results": {
+    "sr":  {"realised_mt": 201.912, "final_d_nm": 1954.7, "vs_naive_pct": -2.03335, "vs_oracle_mt": 2.98548},
+    "luo": {"realised_mt": 206.271, "final_d_nm": 1955, "vs_naive_pct": 0.0813776, "vs_oracle_mt": 1.47899}
+  },
+  "gates": {
+    "sr":  {"reached": 1, "slack0": 1, "rh_le_naive": 1, "rh_ge_oracle": 1},
+    "luo": {"reached": 1, "slack0": 1, "rh_le_naive": 0, "rh_ge_oracle": 1}
+  }
+}

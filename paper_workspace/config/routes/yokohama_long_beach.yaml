@@ -1,0 +1,19 @@
+name: Yokohama to Long Beach (North Pacific Great Circle)
+description: >
+  Great Circle route across the North Pacific, 4,782 nm, ~17 days at 12 kn.
+  Arcs north to 47.65°N through the Aleutian storm track — one of the harshest
+  commercial shipping corridors (winter BN 8-10, waves 4-6m mean, 8-20m storms).
+  Crosses the International Date Line near WP04-WP05.
+waypoints:
+  - {lat: 35.45, lon: 139.64, name: "Yokohama"}
+  - {lat: 39.29, lon: 147.37, name: "Kuroshio Extension"}
+  - {lat: 42.55, lon: 155.93, name: "NW Pacific"}
+  - {lat: 45.12, lon: 165.32, name: "Emperor Seamounts"}
+  - {lat: 46.85, lon: 175.45, name: "Date Line West"}
+  - {lat: 47.65, lon: -173.94, name: "Aleutian Basin"}
+  - {lat: 47.44, lon: -163.21, name: "South of Aleutians"}
+  - {lat: 46.25, lon: -152.76, name: "Gulf of Alaska"}
+  - {lat: 44.17, lon: -142.91, name: "NE Pacific"}
+  - {lat: 41.30, lon: -133.85, name: "Offshore Oregon"}
+  - {lat: 37.78, lon: -125.64, name: "Offshore California"}
+  - {lat: 33.75, lon: -118.22, name: "Long Beach"}

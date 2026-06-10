@@ -1,0 +1,5 @@
+# Heavy binary copies — duplicates of files already in the repo
+# (pipeline/data/*.h5 and context/literature/pdfs/). Kept locally for a
+# self-contained workspace, but not committed to avoid bloating git.
+data/
+context/literature/pdfs/

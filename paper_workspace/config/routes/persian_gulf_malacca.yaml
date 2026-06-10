@@ -1,0 +1,15 @@
+name: Persian Gulf to Strait of Malacca
+waypoints:
+  - {lat: 24.75, lon: 52.83, name: "Port A (Persian Gulf)"}
+  - {lat: 26.55, lon: 56.45, name: "Gulf of Oman"}
+  - {lat: 24.08, lon: 60.88, name: "Arabian Sea 1"}
+  - {lat: 21.73, lon: 65.73, name: "Arabian Sea 2"}
+  - {lat: 17.96, lon: 69.19, name: "Arabian Sea 3"}
+  - {lat: 14.18, lon: 72.07, name: "Arabian Sea 4"}
+  - {lat: 10.45, lon: 75.16, name: "Indian Ocean 1"}
+  - {lat:  7.00, lon: 78.46, name: "Indian Ocean 2"}
+  - {lat:  5.64, lon: 82.12, name: "Bay of Bengal"}
+  - {lat:  4.54, lon: 87.04, name: "Indian Ocean 3"}
+  - {lat:  5.20, lon: 92.27, name: "Andaman Sea 1"}
+  - {lat:  5.64, lon: 97.16, name: "Andaman Sea 2"}
+  - {lat:  1.81, lon: 100.10, name: "Port B (Strait of Malacca)"}

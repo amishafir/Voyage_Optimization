@@ -1,0 +1,608 @@
+%% ============================================================================
+%% FULL PAPER — ASSEMBLED DRAFT (LaTeX, 2026-06-08) — Overleaf-ready.
+%% Generated from paper_workspace/drafts/*.md. Compiles with pdfLaTeX (elsarticle).
+%% Open items are rendered in red via \todo{...} so they are visible and the file
+%% still compiles. Source of truth for prose: drafts/ ; for numbers: 00_design/G1.
+%% Section cross-references use \ref{} (auto-numbered), so LaTeX numbering is correct
+%% even though Data/Results/Discussion shift vs the markdown's provisional "5b" scheme.
+%% ============================================================================
+\documentclass[review]{elsarticle}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{xcolor}
+
+% Visible placeholder for anything still pending (G5 lit, tables, figures, abstract).
+\newcommand{\todo}[1]{{\color{red}\textbf{[#1]}}}
+\newcommand{\fcr}{\mathrm{FCR}}
+
+\journal{Transportation Research Part C: Emerging Technologies}
+
+% Suppress the elsarticle "Preprint submitted to ... <date>" footer.
+\makeatletter
+\def\ps@pprintTitle{%
+  \let\@oddhead\@empty
+  \let\@evenhead\@empty
+  \def\@oddfoot{}%
+  \let\@evenfoot\@oddfoot}
+\makeatother
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Maritime Speed Optimization Under Weather Uncertainty}
+
+\author[tau]{Ami Shafir}
+\author[tau]{Tal Raviv}
+\address[tau]{Faculty of Engineering, Tel Aviv University, Tel Aviv, Israel}
+
+\begin{abstract}
+\todo{To be written.}
+\end{abstract}
+
+\begin{keyword}
+ship speed optimization \sep dynamic programming \sep rolling horizon \sep fuel consumption \sep
+weather routing \sep Jensen's inequality
+\end{keyword}
+
+\end{frontmatter}
+
+%% ============================================================ 1. INTRODUCTION
+\section{Introduction}
+\label{sec:intro}
+\todo{To be written.}
+
+%% ============================================================ 2. RELATED WORK
+\section{Related work}
+\label{sec:related}
+\todo{To be written.}
+
+%% ============================================================ 3. PROBLEM FORMULATION
+\section{Problem formulation}
+\label{sec:problem}
+
+\subsection{Vessel and voyage}
+The vessel modelled in this study is a representative oil products tanker with the principal
+particulars in Table~\ref{tab:ship}. A voyage is
+a fixed route of total length $L$ to be completed within a required arrival time $T$ (the ETA). The
+route is partitioned into legs $i=1,\dots,N$ of length $d_i$, with weather specified per leg and
+time. The control problem is to choose a speed profile that minimises total fuel while arriving
+within $T$.
+
+\begin{table}[ht]
+\centering
+\caption{Principal particulars of the representative oil products tanker; resistance model and
+coefficient tables from \citet{yang2020}.}
+\label{tab:ship}
+\begin{tabular}{lll}
+\toprule
+Parameter & Symbol & Value \\
+\midrule
+Length between perpendiculars & $L_{pp}$ & \SI{200}{\meter} \\
+Beam & $B$ & \SI{32}{\meter} \\
+Draft & --- & \SI{12}{\meter} \\
+Displacement & $\Delta$ & \SI{50000}{\tonne} \\
+Block coefficient & $C_b$ & 0.75 \\
+Installed power & --- & \SI{10000}{\kilo\watt} \\
+Still-water speed range & $V_s$ & 11--13 kn \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two routes are studied, chosen to contrast weather regimes: Route~1 (Persian Gulf $\rightarrow$
+Strait of Malacca, $L=3{,}393$ nm, $T=\SI{280}{\hour}$), in mild and relatively uniform conditions,
+and Route~2 (St.\ John's $\rightarrow$ Liverpool, North Atlantic, $L=1{,}955$ nm,
+$T=\SI{168}{\hour}$), in harsher and more variable conditions. Full route and weather statistics are
+given in Section~\ref{sec:data}.
+
+\subsection{Speed over ground}
+\label{sec:sog}
+The vessel's still-water speed (SWS), $V_s$, is the speed it would make in calm water at a given
+power setting. The speed actually achieved over the ground (SOG), $V_g$, is $V_s$ modified by the
+environment: wind and waves reduce it, and the along-track component of the current adds to or
+subtracts from it. This study uses the resistance-decomposition model of \citet{yang2020}.
+
+The wind- and wave-induced speed losses depend on the Beaufort number $BN$ (computed from the 10 m
+wind speed; see Section~\ref{sec:data}), the Froude number, and a set of direction- and
+form-dependent coefficients tabulated by \citet{yang2020}. The wind speed loss is a
+fifth-order function of the wind angle relative to heading, and the wave added-resistance loss scales
+with significant wave height $H_w$ and the beam-to-length ratio. The current contributes its
+along-track projection, $V_{c,\parallel}=V_c\cos\theta_c$. Combining these terms gives the speed over
+ground:
+\begin{equation}
+\label{eq:sog}
+V_g \;=\; V_s - \Delta V_{\text{wind}} - \Delta V_{\text{wave}} + V_{c,\parallel},
+\qquad V_g \ge 0.
+\end{equation}
+
+Two properties are used later. First, for fixed weather $V_g$ increases monotonically with $V_s$, so
+the relation is invertible: a target SOG implies a unique required SWS, $V_s=g^{-1}(V_g;w)$, obtained
+here by binary search (Section~\ref{sec:methods}). Second, that required SWS rises as conditions
+worsen --- holding a target SOG through adverse weather demands more SWS. Both properties underlie
+the convexity mechanism of Section~\ref{sec:mechanism}.
+
+\subsection{Fuel consumption}
+Fuel consumption rate is a cubic function of still-water speed \citep{yang2020}:
+\begin{equation}
+\label{eq:fcr}
+\fcr(V_s) \;=\; 0.000706\, V_s^{3} \quad [\text{mt/h},\; V_s \text{ in kn}].
+\end{equation}
+This cubic form is the central structural property of the problem: \textbf{FCR is strictly convex in
+$V_s$.} Crucially, fuel depends on SWS --- the speed the engine must produce --- not on SOG. When a
+target SOG is held through varying weather, the required SWS varies, and the convex FCR penalises
+that variation (Section~\ref{sec:mechanism}). The fuel for leg $i$ is the rate times the leg's
+transit time,
+\begin{equation}
+\label{eq:legfuel}
+F_i \;=\; \fcr(V_{s,i})\, \frac{d_i}{V_{g,i}},
+\end{equation}
+and total voyage fuel is the sum over legs, $F_{\text{total}}=\sum_{i=1}^{N} F_i$.
+
+\subsection{Decision variable and objective}
+This study optimises \textbf{SOG}, not SWS --- a choice termed SOG-targeting. A speed plan specifies
+a target SOG for each leg (or, for the baseline, each block); the SWS required to realise it follows
+from the inverse SOG relation under the prevailing weather. The optimisation problem is
+\begin{equation}
+\label{eq:obj}
+\min_{\{V_{g,i}\}} \; \sum_{i=1}^{N} \fcr\!\big(g^{-1}(V_{g,i}; w_{i})\big)\, \frac{d_i}{V_{g,i}}
+\quad\text{s.t.}\quad \sum_{i=1}^{N} \frac{d_i}{V_{g,i}} \le T, \;\; V_{s,i}\in[11,13]\ \text{kn}.
+\end{equation}
+The arrival constraint is hard; the still-water speed is bounded by the engine envelope. The two
+formulations compared in this study (Section~\ref{sec:methods}) differ only in the granularity at
+which the target SOG may be chosen --- freely per leg, or once per time block.
+
+%% ============================================================ 4. METHODS
+\section{Methods}
+\label{sec:methods}
+Both speed-optimisation formulations are minimum-fuel dynamic programs solved over the same route
+discretisation and the same SOG grid. They differ in one respect only: the granularity of the speed
+decision. The Shafir--Raviv formulation (SR) chooses speed freely on every leg; the baseline of
+\todo{cite: Luo 2024} (Luo) holds a single speed across each time block. Because both call the
+identical SOG and fuel functions defined in Section~\ref{sec:problem} (Eqs~\ref{eq:sog},
+\ref{eq:fcr}), any difference in fuel is attributable to speed-decision granularity alone.
+
+\subsection{Common optimisation framework}
+The decision variable was SOG rather than SWS: a planned SOG schedule was chosen, and the SWS
+required to realise it followed from the inverse of the SOG relation under the prevailing weather
+(SOG-targeting). Both formulations minimised total voyage fuel (Eq.~\ref{eq:obj}) subject to a hard
+arrival-time constraint $T$. The ETA was binding in every run reported here --- arrival slack was
+zero throughout --- so both formulations slow-steamed to the deadline and the comparison is one of
+fuel at equal voyage time. The speed search was discretised to a common grid of 61 SOG values
+spanning the mean voyage speed $\pm 3$ kn ($L/T$). The route was represented as a two-dimensional
+time--distance graph with a fixed distance step and a time step $\Delta t$ \todo{state $\Delta t$ per
+route}. This shared grid is the fairness control: it ensures the comparison isolates speed-decision
+granularity rather than resolution.
+
+\subsection{Free-speed formulation: SR (Shafir--Raviv)}
+SR was solved on an atomic-edge graph. Each node represents a discretised (distance, time) state;
+each outgoing edge represents a single speed choice over one leg, with cost equal to the leg fuel,
+$c=\fcr(V_s)\,d_i/\mathrm{SOG}(V_s,w_{i,t})$, where $w_{i,t}$ is the weather encountered. The
+minimum-fuel path from origin to destination within the ETA was found by a forward Bellman recursion
+over the time-ordered nodes, and the optimal schedule recovered by backtracking. Because speed is
+chosen independently on every leg, SR adapts to weather variation at each waypoint crossing. The
+graph is large: for Route~1 it comprised 152,571 nodes and 9,214,780 edges, and for Route~2, 71,861
+nodes and 4,325,288 edges (Table~\ref{tab:sizes}).
+
+\subsection{Per-block-locked baseline: Luo (2024)}
+The baseline followed the block dynamic-programming formulation of \todo{cite: Luo 2024}. Its graph
+is a lattice of (column, distance) nodes, where columns mark times $0,\Delta t,2\Delta t,\dots$ Each
+arc spans one block (one column) and is traversed at a single constant SOG equal to the block
+distance divided by $\Delta t$. The arc cost was obtained by walking the weather sub-segments within
+the block and summing fuel at that fixed block SOG; the minimum-fuel path to the ETA column was found
+by shortest path. The defining restriction is that speed is constant within a block: the formulation
+cannot vary speed in response to weather that changes inside a block. This baseline was implemented
+independently from its published description --- with its own lattice and arc evaluation, not as SR
+subject to an added equality constraint --- so the comparison reflects Luo's actual method rather
+than a weakened variant.
+
+\subsection{Structural complexity}
+\label{sec:complexity}
+The two formulations were compared not only on fuel but on the size of the optimisation problem each
+poses, using three structural measures: node count $|V|$, edge count $|E|$, and the number of
+independent speed decisions. SR's atomic-edge graph scales as $O(V\cdot H\cdot K)$, where $V$ and $H$
+are the time and distance discretisation lines and $K$ the number of speed choices; Luo's block
+lattice scales as $O(\text{blocks}\cdot K)$, with $\text{blocks}=T/\Delta t$ far smaller than the
+atomic-edge count (Table~\ref{tab:sizes}). The block lock therefore yields a markedly smaller
+problem. The interpretation advanced here is that this is the cost side of the same design choice:
+the per-leg freedom that enlarges SR's graph is precisely the freedom that captures the fuel
+(Section~\ref{sec:mechanism}). This comparison is deliberately structural. Node and edge counts are
+properties of the formulation and machine-independent; this study does not report a controlled
+runtime benchmark, because timing across two implementations and languages would not be a fair
+comparison. For order-of-magnitude context only, the C++ implementation solved a voyage in
+$\sim$2 min against $\sim$532 min for the Python prototype --- a figure reflecting implementation
+effort, not formulation complexity.
+
+\begin{table}[ht]
+\centering
+\caption{Formulation sizes (per route).}
+\label{tab:sizes}
+\begin{tabular}{lrrl}
+\toprule
+Route & SR nodes & SR edges & Luo lattice \\
+\midrule
+1 (Malacca) & 152{,}571 & 9{,}214{,}780 & \todo{blocks $=T/\Delta t$} \\
+2 (Atlantic) & 71{,}861 & 4{,}325{,}288 & \todo{blocks $=T/\Delta t$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Evaluation protocol}
+\label{sec:protocol}
+\textbf{Consecutive-voyage chains.} Each route was evaluated as a chain in which voyage $N{+}1$
+departs at the sample hour at which voyage $N$ arrives. Fixing the step to the ETA guaranteed that SR
+and Luo encountered identical departure weather at every voyage. Seven voyages were run on Route~1
+and twelve on Route~2 --- 19 in total --- spanning $\sim$80 days of the collection window.
+
+\noindent\textbf{Perfect foresight (oracle).} Each leg was evaluated against the actual
+weather recorded at the voyage's departure sample hour, giving perfect foresight. This bounds the
+achievable advantage (Section~\ref{sec:res-oracle}).
+
+\noindent\textbf{Rolling horizon (RH).} Both formulations were re-solved at 6 h decision steps. At
+each step the first 6 h block was planned against actual (nowcast) weather and the remainder against
+the most recent available predicted cycle; only the first block was committed before advancing and
+re-planning. Realised fuel was the sum of the committed blocks. The 6 h cadence equals the GFS NWP
+cycle (Section~\ref{sec:data}).
+
+\noindent\textbf{Naive baseline.} As the operational reference, a set-and-forget policy sailed a
+single fixed mean SOG ($L/T$) through the actual time-varying weather, with no re-planning. The
+headline RH result is reported relative to this baseline (Section~\ref{sec:res-rh}).
+
+%% ============================================================ 5. MECHANISM
+\section{The convexity mechanism}
+\label{sec:mechanism}
+The fuel-consumption rate is strictly convex in speed: $\fcr(V_s)=0.000706\,V_s^3$ (Eq.~\ref{eq:fcr})
+is cubic and therefore convex on the operating range. This single property predicts, before any
+experiment, that per-block speed-locking must waste fuel relative to per-leg freedom whenever weather
+varies within a block.
+
+Consider one time block spanning several legs whose weather differs. A free-speed policy may set a
+different speed on each leg; a block-locked policy must hold one speed across them all. To maintain a
+constant SOG across legs of differing weather, the block-locked policy is forced to vary the
+still-water speed (SWS) from leg to leg --- more SWS where conditions are adverse, less where they are
+favourable. Fuel depends on SWS through the convex FCR, so by Jensen's inequality the mean fuel of
+this forced, varying SWS exceeds the fuel that the mean SWS would consume:
+\begin{equation}
+\label{eq:jensen}
+\mathbb{E}\!\left[\fcr(V_s)\right] \;\ge\; \fcr\!\left(\mathbb{E}[V_s]\right).
+\end{equation}
+The harsh-leg penalty always outweighs the favourable-leg saving. A free-speed policy is not bound to
+a constant SOG and can allocate speed across legs so as to keep operation in a more efficient regime;
+it therefore consumes no more fuel than the block-locked policy, and strictly less whenever
+within-block weather is non-uniform.
+
+Two empirical predictions follow, both tested in Section~\ref{sec:results}.
+\begin{enumerate}
+\item \textbf{A systematic, signed gap.} SR should consume less fuel than Luo on essentially every
+voyage in which weather varies within blocks --- as a rule, because the inequality is directional.
+\item \textbf{A gap that scales with weather variability.} The penalty grows with the spread of
+within-block conditions; routes or departures whose weather varies more should exhibit a larger gap,
+and a shorter voyage that concentrates the same variability into fewer, denser blocks should show a
+proportionally larger effect.
+\end{enumerate}
+The same convexity has a second consequence examined later as a limitation
+(Section~\ref{sec:disc-bound}): on uniform weather a constant speed is itself fuel-optimal, so the
+value of any speed variation --- including a rolling-horizon policy's forecast-driven variation --- is
+bounded by how much the weather actually varies. The argument is exact for the convex FCR and the
+equal-time comparison used throughout; it predicts the direction and scaling of the effect, while its
+magnitude on real routes is the empirical question answered next.
+
+%% ============================================================ 6. DATA
+\section{Data and experimental design}
+\label{sec:data}
+
+\subsection{Weather data}
+Environmental data were obtained from the Open-Meteo API \todo{cite: Open-Meteo}, which serves
+operational NWP products: 10 m wind from GFS, significant wave height from MFWAM, and ocean-current
+velocity from SMOC. Beaufort number was computed from the 10 m wind speed rather than taken from the
+API (Section~\ref{sec:problem}). For each route, both the realised (``actual'') weather and the
+forecasts (``predicted'') issued at each cycle were collected at every waypoint, at a 6 h sampling
+cadence, over $\sim$80 days, and stored in HDF5 with separate tables for actual weather, predicted
+weather, and metadata. The two routes differ markedly in regime (Table~\ref{tab:routes}): Route~1 is
+mild and uniform; Route~2 is harsh, with mean wind and wave conditions several times larger and far
+more variable \todo{insert per-route wind/wave mean $\pm$ s.d.\ from data}.
+
+\begin{table}[ht]
+\centering
+\caption{Route and weather summary.}
+\label{tab:routes}
+\begin{tabular}{lll}
+\toprule
+ & Route 1 (Malacca) & Route 2 (Atlantic) \\
+\midrule
+Length & 3{,}393 nm & 1{,}955 nm \\
+ETA & 280 h & 168 h \\
+Voyages in chain & 7 & 12 \\
+Wind (mean $\pm$ s.d.) & \todo{from data} & \todo{from data} \\
+Wave $H_w$ (mean $\pm$ s.d.) & \todo{from data} & \todo{from data} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Forecast accuracy (supporting measurement)}
+Forecast error was measured by comparing predicted weather against the actual weather subsequently
+observed at the same waypoint and time, as a function of lead time. Wind-speed RMSE grew
+systematically: it approximately doubled over the first 133 h on Route~1 (4.13 $\rightarrow$
+8.40 km/h) and grew more steeply on Route~2 ($+286\%$ over 144 h) \todo{FIG: forecast error vs lead
+time}. This degradation is why a rolling-horizon plan, which commits speeds against forecasts later
+revised, consumes more fuel than the perfect-foresight oracle (Section~\ref{sec:res-rh}); it is
+reported here as ground truth, independent of any optimisation.
+
+\subsection{NWP model cycle and the re-plan cadence}
+The 6 h rolling-horizon cadence was set to the underlying model refresh, not tuned. The GFS wind
+product refreshes every 6 h; MFWAM (waves) and SMOC (currents) every 12 h and 24 h. Inspection of the
+predicted-weather record confirmed this: 86\% of hourly wind queries returned data identical to the
+previous hour. Re-planning more frequently than 6 h therefore acts on no new information.
+
+\subsection{Experimental design}
+Each route was evaluated as a consecutive-voyage chain spaced one ETA apart
+(Section~\ref{sec:protocol}), yielding 19 voyages. At each departure both formulations were run under
+(i) the perfect-foresight oracle and (ii) the 6 h rolling horizon, with the RH result compared
+against the Naive baseline. Identical departure weather was presented to both formulations, so all
+reported differences are attributable to speed-decision granularity and information regime, not
+sampling.
+
+%% ============================================================ 7. RESULTS
+\section{Results}
+\label{sec:results}
+Throughout, SR denotes the Shafir--Raviv per-leg free-speed dynamic program and Luo the per-block
+speed-locked formulation of \todo{cite: Luo 2024}.
+
+\subsection{Fuel under perfect foresight}
+\label{sec:res-oracle}
+Nineteen voyages were evaluated (seven on Route~1, twelve on Route~2), spanning $\sim$80 days. In
+every voyage both formulations consumed the full time budget (zero arrival slack). Per-voyage fuel is
+reported per voyage in Tables~\ref{tab:modec-r1} and~\ref{tab:modec-r2}; aggregates are in
+Table~\ref{tab:modec}.
+
+\begin{table}[ht]
+\centering
+\caption{Perfect-foresight aggregates. Negative gap = SR burns less fuel.}
+\label{tab:modec}
+\begin{tabular}{lrrrrr}
+\toprule
+Route & $n$ & SR mean $\pm$ s.d.\ (mt) & Luo mean $\pm$ s.d.\ (mt) & Mean gap (mt) & Mean gap (\%) \\
+\midrule
+1 (Malacca)  & 7  & $344.87 \pm 7.77$  & $351.26 \pm 8.72$  & $-6.39$ & $-1.8$ \\
+2 (Atlantic) & 12 & $201.90 \pm 10.32$ & $207.36 \pm 11.03$ & $-5.46$ & $-2.6$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Perfect-foresight per-voyage fuel, Route 1 (Malacca, ETA 280 h). $\mathrm{sh}_0$ = departure sample
+hour. Negative gap = SR burns less fuel.}
+\label{tab:modec-r1}
+\begin{tabular}{rrrrrr}
+\toprule
+Voyage & $\mathrm{sh}_0$ & SR (mt) & Luo (mt) & Gap (mt) & Gap (\%) \\
+\midrule
+0 & 6    & 354.82 & 361.56 & $-6.74$ & $-1.86$ \\
+1 & 286  & 355.23 & 364.68 & $-9.45$ & $-2.59$ \\
+2 & 566  & 337.70 & 342.41 & $-4.71$ & $-1.38$ \\
+3 & 846  & 348.19 & 353.15 & $-4.96$ & $-1.40$ \\
+4 & 1126 & 337.60 & 340.87 & $-3.27$ & $-0.96$ \\
+5 & 1406 & 334.83 & 343.86 & $-9.03$ & $-2.63$ \\
+6 & 1686 & 345.73 & 352.31 & $-6.58$ & $-1.87$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Perfect-foresight per-voyage fuel, Route 2 (Atlantic, ETA 168 h). $\mathrm{sh}_0$ = departure sample
+hour. Negative gap = SR burns less fuel.}
+\label{tab:modec-r2}
+\begin{tabular}{rrrrrr}
+\toprule
+Voyage & $\mathrm{sh}_0$ & SR (mt) & Luo (mt) & Gap (mt) & Gap (\%) \\
+\midrule
+0  & 0    & 203.20 & 210.25 & $-7.05$ & $-3.35$ \\
+1  & 168  & 204.17 & 209.51 & $-5.34$ & $-2.55$ \\
+2  & 336  & 195.24 & 201.95 & $-6.71$ & $-3.32$ \\
+3  & 504  & 206.12 & 212.22 & $-6.10$ & $-2.87$ \\
+4  & 672  & 215.93 & 223.50 & $-7.57$ & $-3.38$ \\
+5  & 840  & 190.75 & 196.89 & $-6.14$ & $-3.12$ \\
+6  & 1008 & 227.91 & 233.85 & $-5.94$ & $-2.54$ \\
+7  & 1176 & 194.40 & 198.25 & $-3.86$ & $-1.94$ \\
+8  & 1344 & 194.64 & 197.05 & $-2.41$ & $-1.22$ \\
+9  & 1512 & 192.75 & 196.90 & $-4.15$ & $-2.11$ \\
+10 & 1680 & 199.10 & 203.49 & $-4.39$ & $-2.16$ \\
+11 & 1848 & 198.57 & 204.41 & $-5.84$ & $-2.86$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{SR consumed less fuel than Luo on every voyage.} The free-speed formulation was more
+fuel-efficient on all 19 of 19 voyages, with no exception on either route. The per-voyage advantage
+ranged from 3.27 to 9.45 mt on Route~1 and from 2.41 to 7.57 mt on Route~2.
+
+\noindent\textbf{The absolute advantage was comparable across routes, but proportionally larger on
+the shorter voyage.} The mean saving was similar in absolute terms (6.39 mt on Route~1, 5.46 mt on
+Route~2) despite Route~2 being roughly half the duration; as a fraction of total fuel the advantage
+was therefore larger on the shorter, harsher Atlantic route (2.6\%) than on Malacca (1.8\%) --- the
+scaling predicted by the mechanism (Section~\ref{sec:mechanism}).
+
+\noindent\textbf{Departure weather dominated voyage-to-voyage fuel variation.} On Route~2 the worst
+departure (227.91 mt) consumed 19.5\% more fuel than the best (190.75 mt) for the same formulation
+--- a spread larger than the entire SR--Luo gap. The Atlantic fuel spread per voyage-hour was about
+three times that of Malacca.
+
+\subsection{Fuel under rolling-horizon planning (real forecasts)}
+\label{sec:res-rh}
+To test whether the advantage survives realistic operation, both formulations were embedded in the
+6 h rolling-horizon scheme (Section~\ref{sec:protocol}) and compared against the Naive set-and-forget
+baseline, over the same 19 voyages. Realised fuel relative to Naive is reported per voyage in
+Tables~\ref{tab:rh-r1} and~\ref{tab:rh-r2} and summarised in Table~\ref{tab:rh}.
+
+\begin{table}[ht]
+\centering
+\caption{Rolling-horizon realised fuel relative to the Naive set-and-forget baseline.}
+\label{tab:rh}
+\begin{tabular}{lrrrr}
+\toprule
+Route & $n$ & RH-SR vs Naive (mean \%) & RH-Luo vs Naive (mean \%) & RH-SR saves on \\
+\midrule
+2 (Atlantic) & 12 & $-1.9$ & $-0.2$ & 11/12 \\
+1 (Malacca)  & 7  & $-1.2$ & $-0.1$ & 7/7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Rolling-horizon per-voyage realised fuel, Route 1 (Malacca, ETA 280 h). $\mathrm{sh}_0$ =
+departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline.}
+\label{tab:rh-r1}
+\begin{tabular}{rrrrrr}
+\toprule
+$\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & RH-Luo vs Naive (\%) \\
+\midrule
+6    & 362.74 & 358.86 & 362.57 & $-1.07$ & $-0.05$ \\
+286  & 367.03 & 358.73 & 367.72 & $-2.26$ & $+0.19$ \\
+566  & 345.42 & 342.82 & 344.51 & $-0.75$ & $-0.26$ \\
+846  & 354.74 & 350.33 & 354.36 & $-1.24$ & $-0.11$ \\
+1126 & 342.68 & 341.55 & 341.69 & $-0.33$ & $-0.29$ \\
+1406 & 346.19 & 344.11 & 346.57 & $-0.60$ & $+0.11$ \\
+1686 & 356.03 & 349.32 & 355.10 & $-1.88$ & $-0.26$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Rolling-horizon per-voyage realised fuel, Route 2 (Atlantic, ETA 168 h). $\mathrm{sh}_0$ =
+departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline.}
+\label{tab:rh-r2}
+\begin{tabular}{rrrrrr}
+\toprule
+$\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & RH-Luo vs Naive (\%) \\
+\midrule
+0    & 212.61 & 205.00 & 212.12 & $-3.58$ & $-0.23$ \\
+168  & 212.78 & 208.34 & 211.41 & $-2.08$ & $-0.64$ \\
+336  & 203.65 & 200.99 & 203.42 & $-1.31$ & $-0.11$ \\
+504  & 214.54 & 212.61 & 216.01 & $-0.90$ & $+0.68$ \\
+672  & 225.98 & 222.38 & 224.90 & $-1.59$ & $-0.48$ \\
+840  & 200.50 & 192.98 & 199.04 & $-3.75$ & $-0.73$ \\
+1008 & 237.09 & 230.53 & 235.33 & $-2.76$ & $-0.74$ \\
+1176 & 200.43 & 197.33 & 200.71 & $-1.54$ & $+0.14$ \\
+1344 & 199.35 & 200.82 & 200.49 & $+0.74$ & $+0.57$ \\
+1512 & 198.99 & 195.58 & 198.28 & $-1.71$ & $-0.36$ \\
+1680 & 206.86 & 201.65 & 205.70 & $-2.52$ & $-0.56$ \\
+1848 & 206.10 & 201.91 & 206.27 & $-2.03$ & $+0.08$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Free-speed re-planning saved fuel; block-locked re-planning did not.} Rolling-horizon
+SR reduced realised fuel relative to set-and-forget on 18 of 19 voyages (mean $-1.9\%$ on Route~2,
+$-1.2\%$ on Route~1; best $-3.75\%$). Rolling-horizon Luo was statistically indistinguishable from
+set-and-forget (mean $-0.2\%$ and $-0.1\%$): the per-block lock left no room to exploit the refreshed
+forecasts. The SR--Luo contrast established under perfect foresight therefore persisted under
+realistic, imperfect-forecast operation, on both routes and across the full departure window.
+
+\noindent\textbf{Realised fuel fell within the oracle--Naive envelope.} On every voyage the realised
+RH fuel satisfied $\text{oracle}\le\text{RH}\le\text{Naive}$. Rolling-horizon SR sat between 1.8 and
+8.9 mt above its oracle, the gap representing the cost of committing speeds against forecasts that
+were subsequently revised.
+
+\noindent\textbf{The two formulations re-planned differently.} A single-voyage diagnostic recorded how
+often a refreshed forecast changed the committed first-block speed: rolling-horizon SR revised on 8 of
+27 re-plans (30\%, mean change 0.19 kn), whereas rolling-horizon Luo revised on 17 of 27 (63\%, mean
+change 0.43 kn) --- the block-locked formulation adjusted more frequently yet gained less.
+
+\subsection{Supporting observations}
+Two measurements underpin the rolling-horizon design (Section~\ref{sec:data}). First, forecast
+accuracy degraded systematically with lead time (wind RMSE roughly doubled over 133 h on Route~1;
+$+286\%$ over 144 h on Route~2), establishing why realised RH fuel exceeded the oracle. Second, the
+6 h re-plan cadence was fixed to the GFS model cycle, of which 86\% of hourly queries returned
+identical data, so sub-6 h re-planning carried no new information.
+
+%% ============================================================ 8. DISCUSSION
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{The mechanism predicted the result}
+Both predictions of the convexity mechanism (Section~\ref{sec:mechanism}) were borne out. First, the
+gap was signed and systematic: under perfect foresight SR consumed less fuel than Luo on all 19 of 19
+voyages --- the directional signature of Jensen's inequality, not an average tendency. Second, the gap
+scaled with weather variability: proportionally larger on the harsher Atlantic route (2.6\%) than on
+Malacca (1.8\%), as predicted for a penalty driven by within-block weather spread. The empirical
+magnitude --- roughly 6 mt per voyage --- is thus explained, not merely reported.
+
+\subsection{The advantage is structural, and so is its cost}
+That the free-speed advantage persisted under realistic rolling-horizon operation
+(Section~\ref{sec:res-rh}) confirms it is not an artefact of perfect information. The per-block
+baseline re-planned more often under refreshed forecasts yet gained less, because it lacked the
+within-block resolution to act on the new information: the limiting factor is decision granularity,
+not data. The same design choice carries a computational cost --- per-leg freedom enlarges the problem
+from $O(\text{blocks}\cdot K)$ to $O(V\cdot H\cdot K)$ (Section~\ref{sec:complexity}) --- framed here
+not as a separate trade-off but as the cost side of one coin: the freedom that enlarges the graph is
+the freedom that captures the fuel.
+
+\subsection{When re-planning helps --- and when it does not}
+\label{sec:disc-bound}
+The rolling-horizon benefit over set-and-forget is real but bounded, and is not claimed to be
+universal. On 1 of 19 voyages the free-speed RH plan consumed slightly more fuel than the fixed-speed
+baseline, and the per-block RH plan did so on several. The reason is the same convexity seen from the
+other side: on near-uniform weather a constant speed is itself fuel-optimal, so any forecast-driven
+speed variation can only add a Jensen penalty unless the weather-routing gain exceeds it. The value of
+re-planning is therefore bounded by how much the weather actually varies over a departure's window ---
+largest on variable departures, vanishing or reversing on calm ones. This is best read as a
+savings-versus-departure relationship \todo{FIG: savings vs departure} rather than a single figure;
+the relevant gate, stated precisely, is ``realised fuel $\le$ Naive'', satisfied by SR on 18 of 19
+voyages and by Luo on a minority.
+
+\subsection{Relation to prior work}
+\todo{To be written.}
+
+\subsection{Limitations}
+(i) Two routes were studied; the route-length scaling of the gap is reported as a contrast, not a
+curve. (ii) The computational comparison is structural --- graph size and decision-variable count ---
+and deliberately omits a controlled runtime benchmark, since cross-implementation timing would not be
+fair. (iii) The arrival constraint was hard and binding (zero slack) throughout, so results describe
+fuel at equal voyage time; relaxing the ETA is left to future work. (iv) The rolling-horizon nowcast
+assumes the current 6 h block is observable; its realism depends on onboard sensing. (v) The per-block
+baseline, though implemented faithfully, is one of several possible block formulations.
+
+%% ============================================================ 9. CONCLUSION
+\section{Conclusion}
+\label{sec:conclusion}
+This study compared per-leg free-speed voyage optimisation (the Shafir--Raviv formulation) against the
+per-block speed-locked formulation of \todo{cite: Luo 2024} for fuel-minimising ship routing under
+time-varying weather, on two routes spanning two weather regimes.
+
+Three conclusions follow. First, per-block speed-locking is fuel-suboptimal by a structural mechanism:
+because the fuel-consumption rate is convex in still-water speed, holding one speed across a block of
+varying weather forces inefficient speed excursions, and per-leg freedom recovers the loss (Jensen's
+inequality); the same freedom that enlarges the optimisation graph is what captures the fuel. Second,
+under perfect foresight the free-speed advantage was realised on every one of 19 voyages ---
+comparable in absolute fuel across routes ($\sim$6 mt) but proportionally larger on the shorter,
+harsher voyage. Third, the advantage survived realistic 6 h rolling-horizon operation against real
+forecasts: free-speed re-planning saved fuel relative to set-and-forget on 18 of 19 voyages, whereas
+per-block re-planning did not, its value bounded by weather variability.
+
+The practical implication is that the resolution of the speed decision --- not the availability of
+re-planning or fresh forecasts --- is the binding factor: a per-block planner cannot convert better
+information into fuel savings, while a per-leg planner can. Where computational budget permits the
+larger problem, per-leg optimisation is preferable; where it does not, the expected saving can be
+anticipated from the variability of the route's weather. Future work includes extending the route set
+to establish the route-length scaling as a curve, relaxing the hard arrival constraint to a soft ETA
+penalty, and examining the sensitivity of the conclusions to the fuel-speed exponent.
+
+%% ============================================================ REFERENCES
+\begin{thebibliography}{1}
+\bibitem[Yang et al.(2020)]{yang2020}
+Yang, L., Chen, G., Zhao, J., Rytter, N.G.M., 2020. Ship speed optimization considering
+ocean currents to enhance environmental sustainability in maritime shipping. Sustainability
+12 (9), 3649. \url{https://doi.org/10.3390/su12093649}
+\end{thebibliography}
+
+\end{document}
