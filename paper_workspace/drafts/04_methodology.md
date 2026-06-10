@@ -46,9 +46,7 @@ within the ETA was found by a forward Bellman recursion over the time-ordered no
 
 Because speed is chosen independently on every leg, SR can adapt to weather variation at each
 waypoint crossing — slowing where conditions are adverse and accelerating where they are
-favourable, subject only to the ETA. The resulting graph is large: for Route 1 it comprised
-152,571 nodes and 9,214,780 edges, and for Route 2, 71,861 nodes and 4,325,288 edges
-[TABLE: formulation sizes].
+favourable, subject only to the ETA.
 
 ## 4.3 Per-block-locked baseline: Luo (2024)
 
@@ -66,28 +64,7 @@ independently from its published description — with its own lattice and arc ev
 subject to an added equality constraint — so that the comparison reflects Luo's actual method
 rather than a weakened variant.
 
-## 4.4 Structural complexity
-
-The two formulations were compared not only on fuel but on the size of the optimisation problem
-each poses. Three structural measures were used: node count $|V|$, edge count $|E|$, and the
-number of independent speed decisions. SR's atomic-edge graph scales as $O(V \cdot H \cdot K)$,
-where $V$ and $H$ are the time and distance discretisation lines and $K$ the number of speed
-choices; Luo's block lattice scales as $O(\text{blocks} \cdot K)$, with the block count
-$\text{blocks} = T/\Delta t$ far smaller than the atomic-edge count [TABLE: formulation sizes].
-
-The block lock therefore yields a markedly smaller problem. The interpretation advanced in this
-study is that this is the *cost side of the same design choice*: the per-leg freedom that
-enlarges SR's graph is precisely the freedom that captures the fuel (Section 5). Cost and benefit
-are two faces of one decision, not independent properties.
-
-This comparison is deliberately *structural*. Node and edge counts are properties of the
-formulation and are machine-independent; this study does not report a controlled runtime
-benchmark, because timing across two implementations and languages would not constitute a fair
-comparison. For order-of-magnitude context only, the C++ implementation solved a voyage in
-approximately 2 min against approximately 532 min for the Python prototype — a figure that
-reflects implementation effort, not formulation complexity.
-
-## 4.5 Evaluation protocol
+## 4.4 Evaluation protocol
 
 **Consecutive-voyage chains.** Each route was evaluated as a chain in which voyage $N+1$ departs
 at the sample hour at which voyage $N$ arrives ($\text{sh\_base}_{N+1} = \text{sh\_base}_N + T$).

@@ -5,6 +5,7 @@
  Overleaf version (Introduction/Related work there are stripped to placeholders).
  Naming: perfect foresight (oracle) + rolling horizon (RH) + Naive. (No "Mode C".)
  Vessel: representative oil products tanker; Yang et al. (2020) cited for model + FCR.
+ Structural-complexity / compute axis removed (2 contributions: mechanism + quantification + operational).
 ====================================================================== -->
 
 
@@ -60,8 +61,8 @@ faithful published baseline. — pillars 4, 5.]
 
 This study addresses three questions, which form a single mechanism viewed from three sides.
 
-**RQ1.** Does relaxing the per-block speed lock to per-leg speed freedom reduce voyage fuel,
-what is the mechanism, and at what computational cost?
+**RQ1.** Does relaxing the per-block speed lock to per-leg speed freedom reduce voyage fuel, and
+what is the mechanism?
 
 **RQ2.** Under perfect weather foresight, how large is the fuel gap between free-speed and
 per-block-locked optimisation, and how does it vary across routes, weather regimes, and
@@ -74,12 +75,9 @@ forecasts, relative to set-and-forget operation?
 
 The contributions are threefold.
 
-1. **Mechanism and its computational cost.** This study shows that per-block speed-locking is
-   fuel-suboptimal whenever weather varies within a block, by Jensen's inequality applied to the
-   convex fuel-consumption-rate curve, and that per-leg speed freedom recovers the loss. The same
-   freedom that enlarges the optimisation graph — from the per-block lattice of order
-   $O(\text{blocks} \times K)$ to the atomic-edge graph of order $O(V \cdot H \cdot K)$ — is what
-   captures the fuel; computational cost and fuel benefit are two faces of one design choice.
+1. **Mechanism.** This study shows that per-block speed-locking is fuel-suboptimal whenever
+   weather varies within a block, by Jensen's inequality applied to the convex fuel-consumption-rate
+   curve, and that per-leg speed freedom recovers the loss.
 
 2. **Quantification against a faithful baseline.** The fuel advantage of free-speed over the
    per-block-locked formulation of [CITE: Luo 2024] is quantified under perfect foresight across
@@ -257,9 +255,7 @@ within the ETA was found by a forward Bellman recursion over the time-ordered no
 
 Because speed is chosen independently on every leg, SR can adapt to weather variation at each
 waypoint crossing — slowing where conditions are adverse and accelerating where they are
-favourable, subject only to the ETA. The resulting graph is large: for Route 1 it comprised
-152,571 nodes and 9,214,780 edges, and for Route 2, 71,861 nodes and 4,325,288 edges
-[TABLE: formulation sizes].
+favourable, subject only to the ETA.
 
 ## 4.3 Per-block-locked baseline: Luo (2024)
 
@@ -277,28 +273,7 @@ independently from its published description — with its own lattice and arc ev
 subject to an added equality constraint — so that the comparison reflects Luo's actual method
 rather than a weakened variant.
 
-## 4.4 Structural complexity
-
-The two formulations were compared not only on fuel but on the size of the optimisation problem
-each poses. Three structural measures were used: node count $|V|$, edge count $|E|$, and the
-number of independent speed decisions. SR's atomic-edge graph scales as $O(V \cdot H \cdot K)$,
-where $V$ and $H$ are the time and distance discretisation lines and $K$ the number of speed
-choices; Luo's block lattice scales as $O(\text{blocks} \cdot K)$, with the block count
-$\text{blocks} = T/\Delta t$ far smaller than the atomic-edge count [TABLE: formulation sizes].
-
-The block lock therefore yields a markedly smaller problem. The interpretation advanced in this
-study is that this is the *cost side of the same design choice*: the per-leg freedom that
-enlarges SR's graph is precisely the freedom that captures the fuel (Section 5). Cost and benefit
-are two faces of one decision, not independent properties.
-
-This comparison is deliberately *structural*. Node and edge counts are properties of the
-formulation and are machine-independent; this study does not report a controlled runtime
-benchmark, because timing across two implementations and languages would not constitute a fair
-comparison. For order-of-magnitude context only, the C++ implementation solved a voyage in
-approximately 2 min against approximately 532 min for the Python prototype — a figure that
-reflects implementation effort, not formulation complexity.
-
-## 4.5 Evaluation protocol
+## 4.4 Evaluation protocol
 
 **Consecutive-voyage chains.** Each route was evaluated as a chain in which voyage $N+1$ departs
 at the sample hour at which voyage $N$ arrives ($\text{sh\_base}_{N+1} = \text{sh\_base}_N + T$).
@@ -591,20 +566,13 @@ was proportionally larger on the harsher, more variable Atlantic route (2.6 %) t
 Malacca route (1.8 %), as predicted for a penalty driven by within-block weather spread. The
 empirical magnitude — roughly 6 mt per voyage — is thus explained, not merely reported.
 
-## 7.2 The advantage is structural, and so is its cost
+## 7.2 Decision granularity, not data, is the limiting factor
 
 That the free-speed advantage persisted under realistic rolling-horizon operation (Section 6.2) —
 where it saved fuel against set-and-forget while the per-block baseline did not — confirms the
 effect is not an artefact of perfect information. The per-block baseline re-planned *more* often
 under refreshed forecasts yet gained *less*, because it lacked the within-block resolution to act
 on the new information. The limiting factor is decision granularity, not data.
-
-The same design choice carries a computational cost. Per-leg freedom enlarges the optimisation
-problem from $O(\text{blocks} \cdot K)$ to $O(V \cdot H \cdot K)$ (Section 4.4). This study frames
-that not as a separate trade-off but as the cost side of one coin: the freedom that enlarges the
-graph is the freedom that captures the fuel. Whether the additional fuel saving justifies the
-larger problem is an operational decision, but the saving is structural and the cost is
-structural, and they arise together.
 
 ## 7.3 When re-planning helps — and when it does not (limitation)
 
@@ -632,13 +600,11 @@ operational validation across real departures.]
 
 Several bounds on the present results should be noted. (i) Two routes were studied; while they
 span two contrasting regimes, the route-length scaling of the gap is reported as a contrast, not a
-curve, and additional routes would be needed to establish it as a law. (ii) The computational
-comparison is *structural* — graph size and decision-variable count — and this study deliberately
-does not report a controlled runtime benchmark, since cross-implementation timing would not be a
-fair comparison. (iii) The arrival constraint was hard and binding (zero slack) throughout, so the
-results describe fuel at equal voyage time; relaxing the ETA is left to future work. (iv) The
-rolling-horizon nowcast assumes the current 6 h block is observable; the realism of this
-assumption depends on onboard sensing. (v) The per-block baseline, though implemented faithfully
+curve, and additional routes would be needed to establish it as a law. (ii) The arrival constraint
+was hard and binding (zero slack) throughout, so the results describe fuel at equal voyage time;
+relaxing the ETA is left to future work. (iii) The rolling-horizon nowcast assumes the current 6 h
+block is observable; the realism of this assumption depends on onboard sensing. (iv) The per-block
+baseline, though implemented faithfully
 from its published description, is one of several possible block formulations.
 
 # 8. Conclusion
@@ -650,8 +616,7 @@ time-varying weather, on two routes spanning two weather regimes.
 Three conclusions follow. First, per-block speed-locking is fuel-suboptimal by a structural
 mechanism: because the fuel-consumption rate is convex in still-water speed, holding one speed
 across a block of varying weather forces inefficient speed excursions, and per-leg freedom recovers
-the loss (Jensen's inequality). The same freedom that enlarges the optimisation graph is what
-captures the fuel — cost and benefit are one design choice. Second, under perfect foresight the
+the loss (Jensen's inequality). Second, under perfect foresight the
 free-speed advantage was realised on every one of 19 voyages — comparable in absolute fuel across
 routes (~6 mt) but proportionally larger on the shorter, harsher voyage. Third, the advantage
 survived realistic 6 h rolling-horizon operation against real forecasts: free-speed re-planning
@@ -660,9 +625,8 @@ did not, its value being bounded by weather variability.
 
 The practical implication is that the resolution of the speed decision — not the availability of
 re-planning or fresh forecasts — is the binding factor: a per-block planner cannot convert better
-information into fuel savings, while a per-leg planner can. Where computational budget permits the
-larger problem, per-leg optimisation is preferable; where it does not, the expected saving can be
-anticipated from the variability of the route's weather.
+information into fuel savings, while a per-leg planner can. The expected saving can be anticipated
+from the variability of the route's weather.
 
 Future work includes extending the route set to establish the route-length scaling as a curve
 rather than a contrast, relaxing the hard arrival constraint to a soft ETA penalty, and examining
@@ -674,5 +638,4 @@ the sensitivity of the conclusions to the fuel-speed exponent.
 ## References
 Yang, L., Chen, G., Zhao, J., Rytter, N.G.M., 2020. Ship speed optimization considering ocean
 currents to enhance environmental sustainability in maritime shipping. Sustainability 12 (9), 3649.
-https://doi.org/10.3390/su12093649  
-[REFERENCES->G5] Remaining citations (Luo 2024, Open-Meteo, pillars 1-6) added at G5.
+https://doi.org/10.3390/su12093649

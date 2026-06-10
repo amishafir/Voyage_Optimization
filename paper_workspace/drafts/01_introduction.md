@@ -36,8 +36,8 @@ faithful published baseline. — pillars 4, 5.]
 
 This study addresses three questions, which form a single mechanism viewed from three sides.
 
-**RQ1.** Does relaxing the per-block speed lock to per-leg speed freedom reduce voyage fuel,
-what is the mechanism, and at what computational cost?
+**RQ1.** Does relaxing the per-block speed lock to per-leg speed freedom reduce voyage fuel, and
+what is the mechanism?
 
 **RQ2.** Under perfect weather foresight, how large is the fuel gap between free-speed and
 per-block-locked optimisation, and how does it vary across routes, weather regimes, and
@@ -50,12 +50,9 @@ forecasts, relative to set-and-forget operation?
 
 The contributions are threefold.
 
-1. **Mechanism and its computational cost.** This study shows that per-block speed-locking is
-   fuel-suboptimal whenever weather varies within a block, by Jensen's inequality applied to the
-   convex fuel-consumption-rate curve, and that per-leg speed freedom recovers the loss. The same
-   freedom that enlarges the optimisation graph — from the per-block lattice of order
-   $O(\text{blocks} \times K)$ to the atomic-edge graph of order $O(V \cdot H \cdot K)$ — is what
-   captures the fuel; computational cost and fuel benefit are two faces of one design choice.
+1. **Mechanism.** This study shows that per-block speed-locking is fuel-suboptimal whenever
+   weather varies within a block, by Jensen's inequality applied to the convex fuel-consumption-rate
+   curve, and that per-leg speed freedom recovers the loss.
 
 2. **Quantification against a faithful baseline.** The fuel advantage of free-speed over the
    per-block-locked formulation of [CITE: Luo 2024] is quantified under perfect foresight across

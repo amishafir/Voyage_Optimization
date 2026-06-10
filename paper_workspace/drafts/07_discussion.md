@@ -16,20 +16,13 @@ was proportionally larger on the harsher, more variable Atlantic route (2.6 %) t
 Malacca route (1.8 %), as predicted for a penalty driven by within-block weather spread. The
 empirical magnitude — roughly 6 mt per voyage — is thus explained, not merely reported.
 
-## 7.2 The advantage is structural, and so is its cost
+## 7.2 Decision granularity, not data, is the limiting factor
 
 That the free-speed advantage persisted under realistic rolling-horizon operation (Section 6.2) —
 where it saved fuel against set-and-forget while the per-block baseline did not — confirms the
 effect is not an artefact of perfect information. The per-block baseline re-planned *more* often
 under refreshed forecasts yet gained *less*, because it lacked the within-block resolution to act
 on the new information. The limiting factor is decision granularity, not data.
-
-The same design choice carries a computational cost. Per-leg freedom enlarges the optimisation
-problem from $O(\text{blocks} \cdot K)$ to $O(V \cdot H \cdot K)$ (Section 4.4). This study frames
-that not as a separate trade-off but as the cost side of one coin: the freedom that enlarges the
-graph is the freedom that captures the fuel. Whether the additional fuel saving justifies the
-larger problem is an operational decision, but the saving is structural and the cost is
-structural, and they arise together.
 
 ## 7.3 When re-planning helps — and when it does not (limitation)
 
@@ -57,13 +50,11 @@ operational validation across real departures.]
 
 Several bounds on the present results should be noted. (i) Two routes were studied; while they
 span two contrasting regimes, the route-length scaling of the gap is reported as a contrast, not a
-curve, and additional routes would be needed to establish it as a law. (ii) The computational
-comparison is *structural* — graph size and decision-variable count — and this study deliberately
-does not report a controlled runtime benchmark, since cross-implementation timing would not be a
-fair comparison. (iii) The arrival constraint was hard and binding (zero slack) throughout, so the
-results describe fuel at equal voyage time; relaxing the ETA is left to future work. (iv) The
-rolling-horizon nowcast assumes the current 6 h block is observable; the realism of this
-assumption depends on onboard sensing. (v) The per-block baseline, though implemented faithfully
+curve, and additional routes would be needed to establish it as a law. (ii) The arrival constraint
+was hard and binding (zero slack) throughout, so the results describe fuel at equal voyage time;
+relaxing the ETA is left to future work. (iii) The rolling-horizon nowcast assumes the current 6 h
+block is observable; the realism of this assumption depends on onboard sensing. (iv) The per-block
+baseline, though implemented faithfully
 from its published description, is one of several possible block formulations.
 
 <!--
