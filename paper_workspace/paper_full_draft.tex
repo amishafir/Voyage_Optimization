@@ -177,7 +177,7 @@ which the target SOG may be chosen --- freely per leg, or once per time block.
 Both speed-optimisation formulations are minimum-fuel dynamic programs solved over the same route
 discretisation and the same SOG grid. They differ in one respect only: the granularity of the speed
 decision. The Shafir--Raviv formulation (SR) chooses speed freely on every leg; the baseline of
-\todo{cite: Luo 2024} (Luo) holds a single speed across each time block. Because both call the
+\citet{luo2024} (Luo) holds a single speed across each time block. Because both call the
 identical SOG and fuel functions defined in Section~\ref{sec:problem} (Eqs~\ref{eq:sog},
 \ref{eq:fcr}), any difference in fuel is attributable to speed-decision granularity alone.
 
@@ -202,7 +202,7 @@ over the time-ordered nodes, and the optimal schedule recovered by backtracking.
 chosen independently on every leg, SR adapts to weather variation at each waypoint crossing.
 
 \subsection{Per-block-locked baseline: Luo (2024)}
-The baseline followed the block dynamic-programming formulation of \todo{cite: Luo 2024}. Its graph
+The baseline followed the block dynamic-programming formulation of \citet{luo2024}. Its graph
 is a lattice of (column, distance) nodes, where columns mark times $0,\Delta t,2\Delta t,\dots$ Each
 arc spans one block (one column) and is traversed at a single constant SOG equal to the block
 distance divided by $\Delta t$. The arc cost was obtained by walking the weather sub-segments within
@@ -278,7 +278,7 @@ magnitude on real routes is the empirical question answered next.
 \label{sec:data}
 
 \subsection{Weather data}
-Environmental data were obtained from the Open-Meteo API \todo{cite: Open-Meteo}, which serves
+Environmental data were obtained from the Open-Meteo API \citep{openmeteo}, which serves
 operational NWP products: 10 m wind from GFS, significant wave height from MFWAM, and ocean-current
 velocity from SMOC. Beaufort number was computed from the 10 m wind speed rather than taken from the
 API (Section~\ref{sec:problem}). For each route, both the realised (``actual'') weather and the
@@ -332,7 +332,7 @@ sampling.
 \section{Results}
 \label{sec:results}
 Throughout, SR denotes the Shafir--Raviv per-leg free-speed dynamic program and Luo the per-block
-speed-locked formulation of \todo{cite: Luo 2024}.
+speed-locked formulation of \citet{luo2024}.
 
 \subsection{Fuel under perfect foresight}
 \label{sec:res-oracle}
@@ -551,7 +551,7 @@ baseline, though implemented faithfully, is one of several possible block formul
 \section{Conclusion}
 \label{sec:conclusion}
 This study compared per-leg free-speed voyage optimisation (the Shafir--Raviv formulation) against the
-per-block speed-locked formulation of \todo{cite: Luo 2024} for fuel-minimising ship routing under
+per-block speed-locked formulation of \citet{luo2024} for fuel-minimising ship routing under
 time-varying weather, on two routes spanning two weather regimes.
 
 Three conclusions follow. First, per-block speed-locking is fuel-suboptimal by a structural mechanism:
@@ -572,11 +572,7 @@ to establish the route-length scaling as a curve, relaxing the hard arrival cons
 penalty, and examining the sensitivity of the conclusions to the fuel-speed exponent.
 
 %% ============================================================ REFERENCES
-\begin{thebibliography}{1}
-\bibitem[Yang et al.(2020)]{yang2020}
-Yang, L., Chen, G., Zhao, J., Rytter, N.G.M., 2020. Ship speed optimization considering
-ocean currents to enhance environmental sustainability in maritime shipping. Sustainability
-12 (9), 3649. \url{https://doi.org/10.3390/su12093649}
-\end{thebibliography}
+\bibliographystyle{elsarticle-harv}
+\bibliography{refs}
 
 \end{document}
