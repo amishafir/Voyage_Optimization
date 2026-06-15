@@ -17,6 +17,7 @@
 \usepackage{multirow}
 \usepackage{siunitx}
 \usepackage{xcolor}
+\usepackage{gensymb}
 
 % Visible placeholder for anything still pending (G5 lit, tables, figures, abstract).
 \newcommand{\todo}[1]{{\color{red}\textbf{[#1]}}}
@@ -73,11 +74,15 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \begin{description}
 	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive way points in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly refred to in the literature as expected time of arrival (ETA).
-	\item [Weather]    The weather condition are given by the wind speed and direciton, sea current speed and direction, and wave condition measured in Beufor units. In reality these conditions changes continuesly in time and space but our model they are assume fixed for ea....
-	\item[FCR]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical caracteristics of the vessle, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. The calculation or estimation of this function is an independent challange which is not part of the contribution of this paper. We use a method propsoed by (CITE Sustenability) which is described in Appnedix X. We assume that the vessel charactersitcs are fixed, .  The vessle course is fixed at of the route segments and the SOG is a decision variable of the speed optinization problem.
-	
+	\item [Weather]    The weather condition are given by the wind speed and direciton, sea current speed and direction, and wave condition measured in Beufor units. In reality these conditions changes continuesly in time and space but in our model they are assume fixed for each discterized time and space unit. The time, for this end, is discretized to units of six hours and the space to squres of $0.5\degree \times 0.5\degree$ latitiued and longitude. Recall that each latitude degree and each longitude degree at the equator is 60 NM (111 km).  This discretization level was choosen because it used by global weather and forecast services.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
+	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical caracteristics of the vessle, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtain this function as an input. The calculation or estimation of this function is an independent challange which is not part of the contribution of this paper. We use a method propsoed by (CITE Sustenability) which is described in Appnedix X.  We assume that the vessel charactersitcs are fixed.  The vessle course is fixed at of the route segments.  It is assumed that the FCR is a increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessle. 
 \end{description}
 
+
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
+
+
+In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future see conditions and each location along the planed voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer. 
 
 
 
