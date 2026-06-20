@@ -65,12 +65,97 @@ weather routing \sep Jensen's inequality
 %% ============================================================ 2. RELATED WORK
 \section{Related work}
 \label{sec:related}
-\todo{To be written.}
 
-Contributions: \begin{enumerate}
-	\item Tractable dynamic program formulation for the determinstic speed control problem with adaptive discretization of time and space (as oppose to previous work that allow changing the speed only at fix time epoch).
-	\item First study to propose a speed control algorithm that considers stochastic sea conditions and utilize noisy forecast information to enhance fuel efficency of sea vessles in long voyages.  
-	\item A sea voyage simulation based on actual sea conditions data is developed and use to demonstrate the economies of the proposed model over baseline fixed speed approach and a state of the art method from the litrature. In particualr, we demonstrate a subsetntial fuel saving due to better speed control of up to few percentages in rough sea conditions. This relative saving is translate to several metric tones of bunjer fuel per voyage. 
+Speed optimisation is the single highest-leverage operational lever for reducing ship fuel use and
+greenhouse-gas emissions \citep{Bouman2017, IMO2023}, and its economics have been understood since the
+cube-law relation between fuel rate and speed was formalised \citep{Ronen2011, Psaraftis2013}. We
+organise prior work along the three axes most relevant to this paper: how the speed decision is
+modelled and solved, how weather and forecast uncertainty are handled, and how the resulting methods
+are evaluated. Each axis exposes a gap that one of our contributions addresses.
+
+\subsection{Speed-optimisation models and the granularity of the speed decision}
+The fuel-consumption rate is convex, and approximately cubic, in speed \citep{Ronen2011,
+Psaraftis2023}, and this convexity is the workhorse of the field: under uniform conditions it implies
+that a constant speed is fuel-optimal \citep{Hvattum2013}, a property exploited by recursive-smoothing
+and shortest-path formulations \citep{Norstad2011, Fagerholt2010} and by the linear and mixed-integer
+programs used for fleet and routing problems \citep{Bektas2011, Wang2012}. These models treat
+conditions as constant per segment and optimise a single speed accordingly. When the environment
+varies in time and space the speed decision must be resolved more finely, which motivates graph and
+dynamic-programming formulations over a space--time grid \citep{Zaccone2018} and fuel models that
+distinguish still-water speed from speed over ground \citep{yang2020}.
+
+The state of the art for fuel-minimising speed control under varying weather is the multistage-graph
+formulation of \citet{luo2024}, which we adopt as our principal baseline. There the voyage is divided
+into stages equal to the meteorological forecast cycle; each stage is traversed at a single constant
+speed, the stage nodes discretise the remaining distance to the destination, and the minimum-fuel
+path is found by shortest path and re-solved as updated forecasts arrive. The defining characteristic
+is that \emph{speed is held constant across an entire forecast-cycle stage} --- the construction
+resolves the speed decision only to that coarse stage. This is structural rather than incidental: the
+number of candidate speed profiles grows as $K^{N}$ in the number of stages $N$ (with $K$ discrete
+speed levels), and the formulation keeps stages coarse precisely to hold that combinatorial cost in
+check. Refining it to the resolution at which the weather actually varies --- the native grid of the
+forecast product, several cells per stage --- would require stages defined by space rather than by
+time, whose durations then depend on the chosen speed, taking the model outside its fixed-duration
+multistage structure and inflating the very profile space it exists to contain. Prior formulations
+therefore cannot reach a per-cell speed resolution tractably. Our first contribution is a dynamic
+program that does: speed is free to change at every cell boundary, yet the problem is solved by a
+single pass over a directed acyclic graph.
+
+\subsection{Weather forecasts and rolling-horizon speed control}
+The value of any forecast-driven plan is bounded by forecast skill, which degrades with lead time as a
+consequence of atmospheric predictability limits \citep{Lorenz1969}; this degradation has been
+quantified for maritime conditions \citep{Marjanovic2025}, and the quality of the underlying forecast
+and reanalysis products is well established \citep{Stopa2014}. Two responses appear in the
+speed-optimisation literature. The first represents uncertainty explicitly, through ensemble forecasts
+that yield fuel-consumption bands \citep{Vettor2022} or feed an optimiser for a modest saving over a
+single deterministic forecast \citep{Luo2023}. The second re-optimises as information arrives:
+rolling-horizon and model-predictive control are well founded in operations research
+\citep{Sethi1991} and have been applied to ship speed through horizon segmentation with periodic
+re-optimisation \citep{Tzortzis2021} and to schedule recovery under port-delay uncertainty
+\citep{Zheng2023}; \citet{luo2024} likewise re-solves each forecast cycle, and surveys flag adaptive
+re-planning as an open direction \citep{Zis2020}.
+
+Two gaps remain. First, existing approaches either assume a probabilistic error model (ensembles) or
+leave the re-planning cadence disconnected from the forecast product, and none measure how real
+forecast error, growing with lead time, \emph{propagates through the optimiser} into realised fuel.
+Second, and central to this paper, the advantage of a finer speed decision has been argued only under
+perfect information; whether it survives realistic operation against imperfect, periodically refreshed
+forecasts is untested. Our second contribution addresses both: we drive the optimiser with real
+operational forecasts, assume no model of the forecast--realisation relationship, align the re-plan
+cadence to the forecast refresh, and show that the granularity advantage persists under this regime.
+
+\subsection{Evaluation against realistic data and baselines}
+Many speed-optimisation studies are validated on constant or synthetic weather, or on a single voyage,
+and a common simplification equates still-water speed with speed over ground \citep{Cariou2011} ---
+whereas operational practice targets an arrival time, as the prevalence of virtual-arrival agreements
+attests \citep{Jia2017}. The fuel benefit of speed control is strongly weather-dependent
+\citep{Taskar2020, Tezdogan2015}, so its magnitude can be assessed only on realistic, varied
+conditions; the foundational fuel model we adopt was itself validated on a limited set of noon reports
+\citep{yang2020}. Our third contribution closes this gap with an evaluation driven by real
+sea-conditions data, benchmarking the proposed model against both an operational fixed-speed reference
+and the state-of-the-art method of \citet{luo2024} across many consecutive voyages on two contrasting
+routes.
+
+\subsection{Contributions}
+\begin{enumerate}
+\item \textbf{A tractable dynamic program with adaptive, per-cell speed resolution.} We formulate the
+deterministic speed-control problem so that speed may change at every boundary where the operative
+data change --- each weather-cell crossing or heading change --- rather than being held constant
+across the coarse forecast-cycle stages of prior multistage-graph formulations. This fine resolution,
+which such formulations cannot reach without a prohibitive growth of the speed-profile space, is
+obtained tractably by a single Bellman sweep over a directed acyclic graph.
+\item \textbf{Speed control under real forecast uncertainty.} We embed the program in a
+rolling-horizon scheme driven by real operational weather forecasts, without assuming any
+probabilistic model linking forecast to realisation. We quantify how forecast-error growth with lead
+time propagates through the optimiser into realised fuel, tie the re-plan cadence to the forecast
+refresh cycle, and show that the speed-granularity advantage persists under realistic,
+imperfect-forecast operation.
+\item \textbf{A realistic, data-driven evaluation against a state-of-the-art baseline.} We develop a
+voyage simulation driven by real sea-conditions data and use it to benchmark the proposed model
+against an operational fixed-speed policy and the method of \citet{luo2024}, over many consecutive
+voyages on two contrasting routes. We demonstrate fuel savings of up to a few percent in rough
+conditions --- several metric tonnes of bunker fuel per voyage --- attributable to finer speed
+control.
 \end{enumerate}
 
 %% ============================================================ 3. PROBLEM FORMULATION
