@@ -51,3 +51,9 @@ pipeline/data/*
 !pipeline/data/.gitkeep
 pipeline/output/*
 !pipeline/output/.gitkeep
+
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.out
+*.spl

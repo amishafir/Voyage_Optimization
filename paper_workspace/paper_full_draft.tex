@@ -167,12 +167,12 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \begin{description}
 	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive way points in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly refred to in the literature as expected time of arrival (ETA).
-	\item [Sea conditions]    The sea conditions  are given by the wind speed and direciton, sea current speed and direction, and wave condition measured in Beufor units. In reality these conditions changes continuesly in time and space but in our model they are assume fixed for each discterized time and space unit. The time, for this end, is discretized to units of six hours and the space to squres of $0.5\degree \times 0.5\degree$ latitiued and longitude. Recall that each latitude degree and each longitude degree at the equator is 60 NM (111 km).  This discretization level was choosen because it used by global weather and forecast services.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
-	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical caracteristics of the vessle, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtain this function as an input. The calculation or estimation of this function is an independent challange which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, which is described in Appendix~\ref{app:fcr}.  We assume that the vessel charactersitcs are fixed.  The vessle course is fixed at of the route segments.  It is assumed that the FCR is a increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessle. 
+	\item [Sea conditions]    The sea conditions  are given by the wind speed and direciton, sea current speed and direction, and wave condition measured in Beufor units. In reality these conditions changes continuesly in time and space but in our model they are assume fixed for each discterized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours and the space to \emph{cells} of $0.5\degree \times 0.5\degree$ latitude and longitude. Recall that each latitude degree and each longitude degree at the equator is 60 NM (111 km).  This discretization level was chosen because it used by global weather and forecast services.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
+	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtain this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, which is described in Appendix~\ref{app:fcr}.  We assume that the vessel characteristics are fixed.  The vessle course is fixed at of the route segments.  It is assumed that the FCR is a increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
 
 
 In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future sea conditions and each location along the planed voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer. 
@@ -273,35 +273,31 @@ which the target SOG may be chosen --- freely per leg, or once per time block.
 \section{Methods}
 \label{sec:methods}
 
-We solve the deterministic speed-control problem of Section~\ref{sec:problem} as a finite
-deterministic dynamic program (DP). The voyage is represented in the time--distance plane, with
-along-track distance $d\in[0,L]$ and elapsed time $t\in[0,T]$; the vessel follows a non-decreasing
-trajectory from $(0,0)$ to the destination distance $L$, with instantaneous slope equal to the speed
-over ground (SOG), $\mathrm{d}d/\mathrm{d}t=V_g$. The control is the SOG profile, and the still-water
-speed (SWS) required to realise a given SOG under the prevailing conditions follows from the inverse
-of the SOG response of Section~\ref{sec:problem}, $V_s=\Phi^{-1}(V_g;w,\psi)$, where $w$ denotes the
-sea state and $\psi$ the heading.
+We solve the deterministic speed-control problem of Section~\ref{sec:problem} as a discrete
+dynamic program (DP) with discretized state and action spaces. The voyage is represented in the time-distance plane, with
+along-track distance $d\in[0,L]$ and elapsed time $t\in[0,T]$; the vessel follows an increasing
+trajectory from $(0,0)$ to the destination distance $(L,t)$ for some $t\leq T$, with instantaneous slope equal $v(t)$. %to the SOG of the vessel at time instance, $v(t)$ . The control variable is the SOG, and the FCR required to realize it under the prevailing sea conditions and current vessel course follows from the FCR function.
+%of the SOG response of Section~\ref{sec:problem}, $V_s=\Phi^{-1}(V_g;w,\psi)$, where $w$ denotes the
+%sea state and $\psi$ the heading.
 
-Two structural properties reduce this continuous-control problem to a finite one without loss of
-optimality, up to the grid resolution. First, the heading is constant along each route segment and
-the sea conditions are constant over each space--time discretisation cell (Section~\ref{sec:problem});
-the quantities that determine fuel therefore change only at a finite set of boundaries. Second, the
-fuel-consumption rate is convex in speed (Section~\ref{sec:problem}): over any stretch of homogeneous
-conditions traversed in a fixed time, a constant speed is fuel-optimal, so it is sufficient to hold a
-single speed per cell. An optimal control is consequently piecewise constant, changing only at cell
-boundaries, and the decision reduces to choosing one SOG per traversed cell.
+Three structural properties reduce this continuous-control problem to a finite one without loss of
+optimality.  First, the heading is constant in each route segment (hence in each leg). Second,
+the sea conditions are constant within each sea cell and time block. 
+Third, the FCR is convex function of the SOG (see Section~\ref{sec:problem}).
+Therefore, under optimal control the SOG remain constant as long as the vessel is in the same leg and within the same time block. 
+
 
 \subsection{State space}
 \label{sec:states}
-Two finite families of grid lines partition the time--distance plane.
+
+To create a finite set of states we first define to families of lines that partition the time-distance plane.  ADD A FIGURE
 \begin{itemize}
 \item \emph{Distance lines} at constant $d$, located at the ordered breakpoints
 $0=d_0<d_1<\dots<d_M=L$, placed at every heading change (segment boundary) and every sea-condition
 cell boundary crossed by the route. Between consecutive distance lines the heading and the spatial
 weather cell are fixed.
-\item \emph{Time lines} at constant $t$, located at $0=t_0<t_1<\dots$, spaced by the decision period
-$\Delta t$ together with the instants at which the sea-condition input is refreshed. Between
-consecutive time lines the temporal weather cell is fixed.
+\item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiplications of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$. Between
+consecutive time lines sea conditions at each cell are fixed.
 \end{itemize}
 Each distance line carries nodes spaced $\tau$ apart in time, and each time line carries nodes spaced
 $\zeta$ apart in distance, so that arrival instants and positions are represented to a controlled
