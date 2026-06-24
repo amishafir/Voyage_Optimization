@@ -165,14 +165,15 @@ control.
 In this paper we study the problem of controling the speed of sea vessels with the goal of minimizing it total voyage fule consumption considering dynamic and stochastic sea conditions and utlizing noisy weather forecasts.  As a first step, we define a dynamic determinstic version of the problem were the sea conditions at each location along the plan route at each time during the planning horizon  is known and we then extened to a stocastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem and the method by which the fuel consuption is calculated. This description requires some understanding of the physical asspect of sea voyage which we berifely provide here. 
 
 \begin{description}
-	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive way points in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
+	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly refred to in the literature as expected time of arrival (ETA).
 	\item [Sea conditions]    The sea conditions  are given by the wind speed and direciton, sea current speed and direction, and wave condition measured in Beufor units. In reality these conditions changes continuesly in time and space but in our model they are assume fixed for each discterized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours and the space to \emph{cells} of $0.5\degree \times 0.5\degree$ latitude and longitude. Recall that each latitude degree and each longitude degree at the equator is 60 NM (111 km).  This discretization level was chosen because it used by global weather and forecast services.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
 	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtain this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, which is described in Appendix~\ref{app:fcr}.  We assume that the vessel characteristics are fixed.  The vessle course is fixed at of the route segments.  It is assumed that the FCR is a increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  In addition, we assume that the speed of the vessel is seleceted from a discerete set of possibilities, $V$, e.g., $V = \{10.0, 10.1, \ldots,18.5\}$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
+
 
 
 In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future sea conditions and each location along the planed voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer. 
@@ -286,26 +287,46 @@ the sea conditions are constant within each sea cell and time block.
 Third, the FCR is convex function of the SOG (see Section~\ref{sec:problem}).
 Therefore, under optimal control the SOG remain constant as long as the vessel is in the same leg and within the same time block. 
 
+As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitutde or longtide line, a new subssegment starts. Within each time blcok, the sea conditions are assumed constant throoughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (mahor) segment, the vessel changes its heading which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$, $l_i$ is the length of segment $i$ and $d_i = d_{i-1} + l_{i-1}$ with $d_0 = 0$ is the cumulative distance from the begining of the route. In particular $d_M = L$.
+Next we denote the FCR of the vessel when straming at speed $v \in V$ at  subsegment $i$ at time $t$ by $FCR_i(v, t)$.
+
+
+
 
 \subsection{State space}
 \label{sec:states}
 
-To create a finite set of states we first define to families of lines that partition the time-distance plane.  ADD A FIGURE
+To create a finite set of states we first define two families of lines that partition the time-distance plane.  ADD A FIGURE
 \begin{itemize}
-\item \emph{Distance lines} at constant $d$, located at the ordered breakpoints
-$0=d_0<d_1<\dots<d_M=L$, placed at every heading change (segment boundary) and every sea-condition
-cell boundary crossed by the route. Between consecutive distance lines the heading and the spatial
-weather cell are fixed.
+\item Vertical \emph{distance lines} placed at the subsegments breakpoints $d_0, d_1, \ldots, d_M$. Note that between any pair consecutive distance lines the heading of the vessel is fixed and it is in the same cell. 
 \item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiplications of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$. Between
 consecutive time lines sea conditions at each cell are fixed.
 \end{itemize}
+
+The recangular areas defined by the vertical and horizontal lines represents sub-spaces of the distance-time space where the optimal speed of the vessel is constant. The only points in this space where the vessel need to make a decision are the on the lines. Moreover, since the the vessel speed is selected from a finite set $V$, the set of reachable points on these lines is finite.  We define the set of states as 
+\begin{equation}
+	\label{eq:state-space}
+	\mathcal{S}=\bigl\{(d,t): (d,t) \text{ is on one of the distance or time lines and it is reachable from point } (0,0) \bigr\}.
+\end{equation}
+where by reachable we mean that the vessel can be at  distance-time $(d,t)$ by steaming at a fixed speed from $V$ in each of the rectuglar sub-spaces along its voyage on the distance-time space. 
+
+
+The problem of miniming the total fuel consumption of the voyage can be formulated as the following forward belmen equation:
+
+\begin{equation}
+\label{eq:cost-to-arrive}
+C^{*}(d,t)=\min_{v \in V}  \begin{cases}  C^*(d-6v, t-6)+6FCR_{i(d)-1}(v,t-6) & \text{if } i(d-6v) +1 = i(d) \vee t \text{ mod } 6 = 0, \\
+	C^*(d_{i(d)-1}, 
+	t- (d -d_{i(d)-1})/ v)  
+	+ (d -d_{i(d)-1})/ v) FCR_{i(d)-1}(v,) & \text{otherwise} 
+  \end{cases}
+\end{equation}
+
+
+
 Each distance line carries nodes spaced $\tau$ apart in time, and each time line carries nodes spaced
 $\zeta$ apart in distance, so that arrival instants and positions are represented to a controlled
 resolution. A \emph{state} is a node on the union of these lines,
-\begin{equation}
-\label{eq:state-space}
-\mathcal{S}=\bigl\{(t,d):\ t \text{ on a time line or } d \text{ on a distance line},\ 0\le t\le T,\ 0\le d\le L\bigr\}.
-\end{equation}
 A state carries both coordinates because each is needed downstream: the distance $d$ selects the
 heading $\psi(d)$ and the spatial weather cell, while the time $t$ selects the temporal weather cell
 and is checked against the arrival deadline. The process begins at the source $s_0=(0,0)$ and ends on
