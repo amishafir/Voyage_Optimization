@@ -12,6 +12,39 @@
 | 2 | *(to fill in)* | not started |
 | 3 | *(to fill in)* | not started |
 
+### §4 reconciliation after Tal's revision (`301fc5b`, pulled 2026-06-28)
+
+Tal rewrote §3's solution paragraph and the whole §4 intro + §4.1 (State space) in **new notation**, but left the old §4.2/§4.3 in place underneath — so §4 is currently a half-merge with two contradictory formulations. This re-scopes the items below.
+
+**What Tal's edit resolved/changed:**
+- SOG now has a symbol, `v(t)`, and there is a **discrete speed set `V`** (e.g. {10.0,…,18.5} kn) — §3, line 175.
+- Discretisation units renamed: time → **blocks** (6 h), space → **cells** (0.5°) — line 170.
+- New preprocessing paragraph (line 290) formally defines **subsegments**: `M` = number of subsegments, `l_i` = segment length, `d_i = d_{i-1}+l_{i-1}`, `d_0=0`, `d_M=L`, and `FCR_i(v,t)`.
+- §4.1 rewritten: new state-space def (reachable nodes) + a **forward Bellman recursion** `C*(d,t)`.
+- Explicit **"ADD A FIGURE"** placeholder in §4.1 (line 299).
+
+**Revised status of our existing items:**
+
+| Item | Status after Tal |
+|---|---|
+| Define L, d, T, SOG, FCR before §4 | **Mostly done.** `v` (SOG), `V`, `L` (`d_M=L`), `FCR_i` now defined. Remaining: introduce `L` and along-track `d` in §3 (first bound only in §4); `V_s`/`Φ⁻¹` still live only in the commented-out block. |
+| Rename leg → subsegment | **Critical & half-done.** Tal added "subsegment" as the formal term but old text still says "leg" (lines 285, 288, 362). Unify to "subsegment". |
+| §4.1 grid figure (+ sketch) | **Now explicitly requested** by Tal ("ADD A FIGURE"). Promote idea → build; our sketch maps directly. |
+
+**NEW issues from the half-merge (must fix):**
+1. **Duplicate `\label{eq:cost-to-arrive}`** — Tal's new eq (~line 308) and the old one (line 409). LaTeX clash; `\eqref` ambiguous.
+2. **Two parallel, contradictory formulations coexist.** Tal's forward `C*(d,t)` cases-recursion (new) vs old §4.2 "Feasible actions and transitions" + §4.3 "Bellman equation" (`J*`, `f(s,u)`, `δ_d/δ_t`, `Φ⁻¹`, `ρ`, `𝒰`/`K`). **Decide which is canonical, delete/rewrite the other.** (Recommendation: keep Tal's forward `C*` direction; rewrite §4.2/§4.3 in his notation or cut them.)
+3. **Coordinate-order clash:** Tal uses `(d,t)`; old text uses `(t,d)` (state def, `𝒮_T={(t,L)}`, lexicographic on `(t,d)`). Pick one.
+4. **`i(d)` undefined** — subsegment-index-as-function-of-distance used in Tal's recursion (`i(d)`, `i(d-6v)`) is never defined. Add it.
+5. **Typos in Tal's recursion:** `FCR_{i(d)-1}(v,)` missing the time arg; unbalanced parens in `(d-d_{i(d)-1})/v)`. Clean up the math (and re-derive the two cases carefully — block-boundary vs subsegment-boundary binding).
+6. **Orphaned fragment** (lines 327–329): "Each distance line carries nodes spaced `τ`… A state is a node…" dangles — its equation was deleted; `τ`/`ζ` now undefined and unused. Remove or fold in.
+7. **Old §4.2/§4.3 undefined symbols** (only if those subsections survive): `Φ⁻¹`, `ψ`, `w`, `V_s^max`, `𝒰`/`K`, `ρ`.
+
+**Proposed order of attack (to agree at the meeting):**
+(a) decide canonical formulation [#2] → (b) delete/rewrite the losing subsections, fixing coord order [#3], orphan [#6], duplicate label [#1] → (c) define `i(d)` [#4] and fix recursion typos [#5] → (d) finish the leg→subsegment unification → (e) build the §4.1 figure → (f) backfill any params still undefined in §3.
+
+---
+
 ### Action item for this week — define all parameters before §4 (Methods)
 
 **Goal:** ensure every symbol/parameter used in §4 (Methods) of `paper_workspace/paper_full_draft.tex` is defined in the active (compiled) text *before* §4.
@@ -75,14 +108,33 @@ Decide the framing at the meeting; no script written yet.
 
 **Goal:** add a figure to **§4.1 "State space"** (`\label{sec:states}`) that makes the time–distance grid legible. The text defines two families of grid lines but has no illustration; a reader currently has to build the lattice mentally.
 
+**Now aligned to Tal's `301fc5b` notation** (his version dropped the `τ`/`ζ` node spacings; uses `(d,t)` order, subsegment breakpoints, discrete speed set `V`). The figure replaces his literal "ADD A FIGURE" placeholder at line 299.
+
 **What the figure must show:**
-- Axes: **x = time `t`** (0…T), **y = distance `d`** (0…L).
-- **Horizontal distance lines** (constant `d`) at the breakpoints `0 = d₀ < d₁ < … < d_M = L` — placed at every heading change (segment boundary) and every weather-cell crossing.
-- **Vertical time lines** (constant `t`) at `0 = t₀ < t₁ < …` — spaced by the decision period `Δt` and the weather-refresh instants.
-- **Nodes** at the line intersections / node spacings (`τ` along distance lines, `ζ` along time lines).
-- Source `s₀ = (0,0)`, destination set `S_T = {(t,L) : t ≤ T}`, and a sample non-decreasing trajectory whose slope = SOG, bending at each boundary it hits.
+- Axes — match Tal's `(d,t)` convention in the text. (His sketch draws **distance on y, time on x**; keep figure and prose consistent — fix whichever drifts.)
+- **Vertical distance lines** at the **subsegment breakpoints** `d₀, d₁, …, d_M = L`. Distinguish two kinds of breakpoint: a **segment/heading-change** boundary (waypoint) vs a **cell-crossing** boundary (0.5° line) — different line style.
+- **Horizontal time lines** at `0, 6, 12, …` and a final line at `T` (when `T` isn't a multiple of 6) — i.e. `{6i : 6i < T} ∪ {T}`.
+- **Shade the rectangles** bounded by the lines — these are the constant-speed sub-spaces (the figure's whole point: decisions happen only *on* the lines).
+- A sample **trajectory** from `(0,0)`, piecewise-linear, slope = a chosen `v ∈ V`, bending only where it crosses a line; mark the **reachable nodes** where it meets lines. Optionally a 2nd trajectory at a different `v` to show branching (matches the multi-coloured diagonals in the sketch below).
 
 This is the concrete, in-paper companion to the broader segment/sub-segment concept figure above (which is more schematic/geographic); keep them distinct — §4.1 grid is the formal state-space picture, the other is the intuition-builder. Decide at the meeting whether one figure can serve both. No script written yet.
+
+**Reference sketch (hand-drawn starting point):**
+
+![Grid sketch for §4.1](meeting_prep_assets/2026_06_29_grid_sketch.png)
+
+The sketch shows the intended idea: the red box is the time–distance plane; the coloured diagonals are candidate trajectories at different SOG (slope = speed — steeper = faster); the horizontal grey line is a grid line (a distance/time line) that the trajectories cross at different points. Use this as the basis for the formal §4.1 figure.
+
+### Idea to develop — figure showing how segments change with time / weather / distance
+
+**Goal:** a figure that *demonstrates the changing segments* — i.e. how the same route is cut into different sub-segments depending on **time**, **weather**, and **distance**. The point is that the sub-segment partition is not fixed: it shifts as the weather cells move/refresh in time and as the vessel advances in distance, so the "where does one constant-condition stretch end and the next begin" boundaries are dynamic.
+
+**Candidate framings to discuss:**
+- A few route segments shown at **two or three different departure times**, side by side, with the weather field (and therefore the cell-crossing boundaries) different in each — so the reader sees the *same* segments resolved into *different* sub-segments.
+- A single segment with the weather evolving along the time axis, showing the sub-segment boundaries sliding as conditions change during the traversal.
+- Colour/shade each sub-segment by its prevailing condition (e.g. Beaufort / wave height) to make the weather-driven subdivision visible.
+
+**Relation to the other two figure items:** this is the *dynamic* counterpart — the segment/sub-segment concept figure shows the hierarchy, the §4.1 grid shows the formal lattice, and this one shows that the partition itself **varies with time/weather/distance**. Decide at the meeting whether these collapse into one multi-panel figure or stay separate. No script written yet.
 
 ---
 
