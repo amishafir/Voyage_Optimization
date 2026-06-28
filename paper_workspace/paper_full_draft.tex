@@ -6,7 +6,7 @@
 %% Section cross-references use \ref{} (auto-numbered), so LaTeX numbering is correct
 %% even though Data/Results/Discussion shift vs the markdown's provisional "5b" scheme.
 %% ============================================================================
-\documentclass[review]{elsarticle}
+\documentclass[review,authoryear]{elsarticle}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -78,28 +78,30 @@ The fuel-consumption rate is convex, and approximately cubic, in speed \citep{Ro
 Psaraftis2023}, and this convexity is the workhorse of the field: under uniform conditions it implies
 that a constant speed is fuel-optimal \citep{Hvattum2013}, a property exploited by recursive-smoothing
 and shortest-path formulations \citep{Norstad2011, Fagerholt2010} and by the linear and mixed-integer
-programs used for fleet and routing problems \citep{Bektas2011, Wang2012}. These models treat
-conditions as constant per segment and optimise a single speed accordingly. When the environment
-varies in time and space the speed decision must be resolved more finely, which motivates graph and
-dynamic-programming formulations over a space--time grid \citep{Zaccone2018} and fuel models that
-distinguish still-water speed from speed over ground \citep{yang2020}.
+programs used for fleet and routing problems \citep{Bektas2011, Wang2012}. These models share a common
+feature: they resolve the speed decision \emph{coarsely} --- one speed per voyage leg or per planning
+segment, with conditions treated as constant over that span. When the environment varies in time and
+space, however, the same convexity that rewards a constant speed under uniform conditions
+\emph{penalises} it under varying ones, since holding a single speed across changing weather forces the
+engine through inefficient excursions (Section~\ref{sec:discussion}). This is the reason to expect that
+a finer speed decision --- one that tracks the weather as it changes along the route --- should save
+fuel, and it motivates the graph and dynamic-programming formulations that optimise speed over a
+space--time grid \citep{Zaccone2018}, together with fuel models that distinguish still-water speed from
+speed over ground \citep{yang2020}.
 
 The state of the art for fuel-minimising speed control under varying weather is the multistage-graph
-formulation of \citet{luo2024}, which we adopt as our principal baseline. There the voyage is divided
-into stages equal to the meteorological forecast cycle; each stage is traversed at a single constant
-speed, the stage nodes discretise the remaining distance to the destination, and the minimum-fuel
-path is found by shortest path and re-solved as updated forecasts arrive. The defining characteristic
-is that \emph{speed is held constant across an entire forecast-cycle stage} --- the construction
-resolves the speed decision only to that coarse stage. This is structural rather than incidental: the
-number of candidate speed profiles grows as $K^{N}$ in the number of stages $N$ (with $K$ discrete
-speed levels), and the formulation keeps stages coarse precisely to hold that combinatorial cost in
-check. Refining it to the resolution at which the weather actually varies --- the native grid of the
-forecast product, several cells per stage --- would require stages defined by space rather than by
-time, whose durations then depend on the chosen speed, taking the model outside its fixed-duration
-multistage structure and inflating the very profile space it exists to contain. Prior formulations
-therefore cannot reach a per-cell speed resolution tractably. Our first contribution is a dynamic
-program that does: speed is free to change at every cell boundary, yet the problem is solved by a
-single pass over a directed acyclic graph.
+formulation of \citet{luo2024}, which we adopt as our benchmark. Like its predecessors it resolves
+speed coarsely: the voyage is divided into stages of one meteorological forecast cycle, and \emph{speed
+is held constant across an entire stage}. This coarseness is structural rather than incidental --- the
+number of candidate speed profiles grows as $K^{N}$ in the number of stages (with $K$ discrete speed
+levels), so the formulation keeps stages coarse to contain that combinatorial cost, and refining it to
+the resolution at which the weather actually varies would inflate the very profile space it exists to
+limit (we describe this baseline in detail in Section~\ref{sec:data}). Two questions therefore remain
+open. First, no prior formulation reaches a per-cell speed resolution \emph{tractably}. Second, and
+more fundamental, whether such resolution actually pays --- whether finer granularity yields a real
+fuel saving --- has never been established on a like-for-like comparison. Our first contribution
+answers both: the granularity of the speed decision is the binding factor, and the finest useful
+granularity is made tractable by a single pass over a directed acyclic graph.
 
 \subsection{Weather forecasts and rolling-horizon speed control}
 The value of any forecast-driven plan is bounded by forecast skill, which degrades with lead time as a
