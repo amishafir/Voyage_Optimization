@@ -388,6 +388,106 @@ def option_legend():
     plt.close(fig)
 
 
+# ===================== SPATIAL MAP companion (geographic cells + route)
+def option_map():
+    """Spatial (lon/lat) companion to the time-distance state-space figure.
+
+    Shows the 0.5 deg geographic cells, the route, start/end points, and the
+    heading change at the interior waypoint. Each cell-boundary crossing along
+    the route becomes a subsegment breakpoint (a distance line) in the
+    time-distance figure; the heading-change waypoint is the segment boundary.
+    """
+    from math import ceil, floor
+    import numpy as np
+
+    cell = 0.5
+    lon0, lon1, lat0, lat1 = 0.0, 3.5, 0.0, 2.5
+    A = (0.20, 0.30)      # Port A — start (d_0)
+    W = (1.80, 1.55)      # interior waypoint — heading change
+    B = (3.30, 0.70)      # Port B — end (d_M)
+    route = [A, W, B]
+
+    fig, ax = plt.subplots(figsize=(7.2, 5.2))
+
+    # Shade the geographic cells the route passes through
+    samp = []
+    for (x0, y0), (x1, y1) in zip(route[:-1], route[1:]):
+        for s in np.linspace(0, 1, 600):
+            samp.append((x0 + s * (x1 - x0), y0 + s * (y1 - y0)))
+    traversed = {(int(x // cell), int(y // cell)) for x, y in samp}
+    for cx, cy in traversed:
+        ax.add_patch(plt.Rectangle((cx * cell, cy * cell), cell, cell,
+                                   facecolor="#e8f0f8", edgecolor="none", zorder=0.3))
+
+    # 0.5 deg grid lines = geographic cell boundaries
+    for x in np.arange(lon0, lon1 + 1e-9, cell):
+        ax.axvline(x, color="#cfd8dc", lw=0.8, ls=(0, (1, 3)), zorder=1)
+    for y in np.arange(lat0, lat1 + 1e-9, cell):
+        ax.axhline(y, color="#cfd8dc", lw=0.8, ls=(0, (1, 3)), zorder=1)
+
+    # Route (orange, matching the voyage line in the state-space figure)
+    rx = [p[0] for p in route]
+    ry = [p[1] for p in route]
+    ax.plot(rx, ry, color="#e64a19", lw=2.6, zorder=4, solid_capstyle="round")
+
+    # Cell-boundary crossings along the route = subsegment breakpoints
+    def seg_crossings(p0, p1):
+        (x0, y0), (x1, y1) = p0, p1
+        ts = []
+        if abs(x1 - x0) > 1e-12:
+            for k in range(ceil(min(x0, x1) / cell), floor(max(x0, x1) / cell) + 1):
+                t = (k * cell - x0) / (x1 - x0)
+                if 1e-6 < t < 1 - 1e-6:
+                    ts.append(t)
+        if abs(y1 - y0) > 1e-12:
+            for k in range(ceil(min(y0, y1) / cell), floor(max(y0, y1) / cell) + 1):
+                t = (k * cell - y0) / (y1 - y0)
+                if 1e-6 < t < 1 - 1e-6:
+                    ts.append(t)
+        return [(x0 + t * (x1 - x0), y0 + t * (y1 - y0)) for t in sorted(set(round(v, 6) for v in ts))]
+
+    crossings = []
+    for p0, p1 in zip(route[:-1], route[1:]):
+        crossings += seg_crossings(p0, p1)
+    ax.scatter([c[0] for c in crossings], [c[1] for c in crossings], s=24,
+               color="#1a1a1a", zorder=6, edgecolor="white", lw=0.7)
+    # one callout tying a crossing to the subsegment concept
+    if len(crossings) >= 3:
+        ax.annotate("cell-boundary crossing\n$\\to$ subsegment breakpoint",
+                    crossings[2], textcoords="offset points", xytext=(14, -34),
+                    fontsize=8, color="#444",
+                    arrowprops=dict(arrowstyle="->", color="#444", lw=1.0))
+
+    # Heading-change waypoint (navy, matching the segment lines)
+    ax.scatter([W[0]], [W[1]], s=120, marker="v", color="#0d3b66", zorder=7,
+               edgecolor="white", lw=1.0)
+    ax.annotate("heading change (course $\\psi$)", W, textcoords="offset points",
+                xytext=(10, 16), fontsize=8.5, color="#0d3b66", va="center")
+
+    # Start / end
+    ax.scatter([A[0]], [A[1]], s=80, color="#1565c0", zorder=7, edgecolor="white", lw=1.0)
+    ax.annotate("Port A — start ($d_0$)", A, textcoords="offset points", xytext=(8, -12),
+                fontsize=9, color="#1565c0")
+    ax.scatter([B[0]], [B[1]], s=120, marker="*", color="#c62828", zorder=7,
+               edgecolor="white", lw=0.8)
+    ax.annotate("Port B — end ($d_M$)", B, textcoords="offset points", xytext=(-10, 10),
+                fontsize=9, color="#c62828", ha="right")
+
+    ax.set_xlim(lon0, lon1)
+    ax.set_ylim(lat0, lat1)
+    ax.set_aspect("equal")
+    ax.set_xlabel(r"longitude (cells $=0.5\degree$)")
+    ax.set_ylabel(r"latitude (cells $=0.5\degree$)")
+    ax.set_title("Spatial map — route over the geographic cells "
+                 "(companion to the time--distance state space)",
+                 fontsize=9.5, color="#444", pad=10)
+    for sp in ("top", "right"):
+        ax.spines[sp].set_visible(False)
+
+    save(fig, "state_space_map")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     option_a()
     option_b()
@@ -396,3 +496,4 @@ if __name__ == "__main__":
     option_e()
     option_f()
     option_legend()
+    option_map()
