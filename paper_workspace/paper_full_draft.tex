@@ -174,7 +174,7 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  In addition, we assume that the speed of the vessel is seleceted from a discerete set of possibilities, $V$, e.g., $V = \{10.0, 10.1, \ldots,18.5\}$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  In addition, we assume that the speed of the vessel is seleceted from a discerete set of possibilities, $\mathcal{V}$, e.g., $\mathcal{V} = \{10.0, 10.1, \ldots,18.5\}$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
 
 
 
@@ -301,8 +301,8 @@ Next we denote the FCR of the vessel when straming at speed $v \in V$ at  subseg
 To create a finite set of states we first define two families of lines that partition the time-distance plane.  ADD A FIGURE
 \begin{itemize}
 \item Vertical \emph{distance lines} placed at the subsegments breakpoints $d_0, d_1, \ldots, d_M$. Note that between any pair consecutive distance lines the heading of the vessel is fixed and it is in the same cell. 
-\item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiplications of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$. Between
-consecutive time lines sea conditions at each cell are fixed.
+\item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiplications of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$.  The time lines are indexed $0,\ldots, \lceil T/6 \rceil= \Theta$  and we denote these times by 
+$0=t_0, t_1,\ldots, t_{\Theta}=T$. Between consecutive time lines sea conditions at each cell are fixed.
 \end{itemize}
 
 The recangular areas defined by the vertical and horizontal lines represents sub-spaces of the distance-time space where the optimal speed of the vessel is constant. The only points in this space where the vessel need to make a decision are the on the lines. Moreover, since the the vessel speed is selected from a finite set $V$, the set of reachable points on these lines is finite.  We define the set of states as 
@@ -312,30 +312,42 @@ The recangular areas defined by the vertical and horizontal lines represents sub
 \end{equation}
 where by reachable we mean that the vessel can be at  distance-time $(d,t)$ by steaming at a fixed speed from $V$ in each of the rectuglar sub-spaces along its voyage on the distance-time space. 
 
+We define the sub-segment of a given distance $d$ within the the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) \arg\max_i\{ t_j < t\} $.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
+When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area ion Figure X  in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
+Since in any such rectangular the sea condition and the heading of the vessel are fixed, the FCR is determined only by the vessel speed.  We denote this FCR by $\phi(d, t; v)$
 
-The problem of miniming the total fuel consumption of the voyage can be formulated as the following forward belmen equation:
+The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward bellmen equation:
 
 \begin{equation}
 \label{eq:cost-to-arrive}
-C^{*}(d,t)=\min_{v \in V}  \begin{cases}  C^*(d-6v, t-6)+6FCR_{i(d)-1}(v,t-6) & \text{if } i(d-6v) +1 = i(d) \vee t \text{ mod } 6 = 0, \\
-	C^*(d_{i(d)-1}, 
-	t- (d -d_{i(d)-1})/ v)  
-	+ (d -d_{i(d)-1})/ v) FCR_{i(d)-1}(v,) & \text{otherwise} 
+C^{*}(d,t)=\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
+	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)  
+	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.} 
   \end{cases}
+\end{equation}
+With the boundary condition 
+$$C^*(0,0) = 0.$$
+The solution of this Bellman equation is the total fuel consumption up to each point $(d,t)$ in the distance-time plan, for each reachable point we save the speed that minimized this consumption since the previous decision point $(\underline{d}, \underline{t})$. 
+
+\begin{equation}
+\label{eq:opt-speed}
+V^{*}(d,t)=\arg\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
+	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)  
+	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.} 
+\end{cases}
 \end{equation}
 
 
-
-Each distance line carries nodes spaced $\tau$ apart in time, and each time line carries nodes spaced
-$\zeta$ apart in distance, so that arrival instants and positions are represented to a controlled
-resolution. A \emph{state} is a node on the union of these lines,
-A state carries both coordinates because each is needed downstream: the distance $d$ selects the
-heading $\psi(d)$ and the spatial weather cell, while the time $t$ selects the temporal weather cell
-and is checked against the arrival deadline. The process begins at the source $s_0=(0,0)$ and ends on
-the destination set $\mathcal{S}_T=\{(t,L)\in\mathcal{S}:\ t\le T\}$.
-
-\subsection{Feasible actions and transitions}
+\subsection{Solving the Bellman equation}
 \label{sec:actions}
+
+TODO  
+
+Add pseudo code  
+
+Enumerate the reachable stats 
+
+
 At a non-terminal state $s=(t,d)$ the decision is the SOG to hold next, chosen from a finite grid
 spanning the operating speed band,
 \begin{equation}
