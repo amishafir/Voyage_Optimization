@@ -115,9 +115,10 @@ def arc_of(la, lo):
     return best
 events.sort(key=lambda e: arc_of(e[0], e[1]))
 
-# Focus on a few consecutive points (5-8: the Strait of Hormuz cluster) and zoom
-# the display window tightly around them, keeping their original numbers.
-FOCUS = {5, 6, 7, 8}
+# Focus on a span of consecutive points around the heading change (Strait of
+# Hormuz) and zoom the display window tightly around them, keeping their
+# original numbers.
+FOCUS = {3, 4, 5, 6, 7, 8, 9, 10}
 focus = [(i, la, lo, ty) for i, (la, lo, ty) in enumerate(events, start=1) if i in FOCUS]
 _flo = [lo for _, _, lo, _ in focus]
 _fla = [la for _, la, _, _ in focus]
@@ -184,8 +185,9 @@ gl.right_labels = False
 gl.xlabel_style = {"size": 7}
 gl.ylabel_style = {"size": 7}
 
-ax.set_title("Strait of Hormuz (points 5--8): each cell crossing and the "
-             "heading change is a speed-change point", fontsize=9, pad=6)
+ax.set_title("Persian Gulf $\\to$ Strait of Hormuz $\\to$ Gulf of Oman: each cell "
+             "crossing and the heading change is a speed-change point",
+             fontsize=8.6, pad=6)
 
 ax.legend(handles=[
     Line2D([0], [0], color=TRACK, lw=2.2, label="route"),
@@ -195,7 +197,8 @@ ax.legend(handles=[
            markeredgecolor="white", label="heading change (course $\\psi$)"),
     Patch(facecolor=TINT[0], edgecolor="#7fa3c4", alpha=0.8,
           label="0.5$\\degree$ weather cell (subsegment)"),
-], loc="upper right", fontsize=7.5, frameon=True, framealpha=0.95)
+], loc="upper center", bbox_to_anchor=(0.5, -0.10), ncol=2, fontsize=7.5,
+   frameon=True, framealpha=0.95)
 
 fig.savefig("route_cells_zoom.pdf", dpi=300, bbox_inches="tight", pad_inches=0.02)
 fig.savefig("route_cells_zoom.png", dpi=200, bbox_inches="tight", pad_inches=0.02)
