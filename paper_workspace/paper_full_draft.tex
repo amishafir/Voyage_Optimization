@@ -174,9 +174,7 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  In addition, we assume that the speed of the vessel is seleceted from a discerete set of possibilities, $\mathcal{V}$, e.g., $\mathcal{V} = \{10.0, 10.1, \ldots,18.5\}$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
-
-
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  The SOG of the vessel is seleceted from a bounded interval, $\mathcal{V}=[v_{min}, v_{max}]$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
 
 In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future sea conditions and each location along the planed voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer. 
 
@@ -276,7 +274,7 @@ which the target SOG may be chosen --- freely per leg, or once per time block.
 \section{Methods}
 \label{sec:methods}
 
-We solve the deterministic speed-control problem of Section~\ref{sec:problem} as a discrete
+We approximate the deterministic speed-control problem of Section~\ref{sec:problem} as a discrete
 dynamic program (DP) with discretized state and action spaces. The voyage is represented in the time-distance plane, with
 along-track distance $d\in[0,L]$ and elapsed time $t\in[0,T]$; the vessel follows an increasing
 trajectory from $(0,0)$ to the destination distance $(L,t)$ for some $t\leq T$, with instantaneous slope equal $v(t)$. %to the SOG of the vessel at time instance, $v(t)$ . The control variable is the SOG, and the FCR required to realize it under the prevailing sea conditions and current vessel course follows from the FCR function.
@@ -349,11 +347,7 @@ address discretisation first, then give the enumeration and the sweep as pseudoc
 
 \subsubsection{Discretising the free coordinate}
 \label{sec:snap}
-A state lies on a line, so exactly one of its two coordinates is pinned to a breakpoint (a distance
-line $d_i$ or a time line $t_j$); the other coordinate is free. The free coordinate takes a
-\emph{continuum} of values as the speed choices vary: crossing several distance lines within one time
-block, for instance, produces an arrival time $\underline t+\sum_k l_k/v_k$ that differs for every
-speed combination $(v_k)\in V^{k}$. The reachable set is therefore finite --- $V$ is finite and the
+Any state in which the DP make a decision lies either on a distance line $d_i$ or a time line $t_j$, so one of its two coordinates is pinned to such a breakpoint. Moreover, since the speed of the vessel is selected from a finite set $V$,  the other coordinate can also obtained a value from a finite set. Therefore the set of reachable states is finite --- $V$ is finite and the
 number of lines is finite --- but its cardinality can grow as $|V|^{\,\text{(lines crossed)}}$, which
 is not tractable.
 
