@@ -192,3 +192,11 @@
 | Weather resolution | per segment (1 value) | **per 0.5° cell** | ✅ vertical lines |
 | Forecast fidelity | wind/temp only; waves = actual | **all drivers, real forecast** | ❌ data, not graph |
 | Complexity class | polynomial | polynomial (larger) | — no advantage (T13) |
+
+**T16 — §3/§4 alignment review vs T1–T15 (fixes to make; handle later).** `[status: reviewed 2026-07-11; fixes pending]`
+Core method (§4/§4.1/§4.2) is well-aligned with T5–T12 (build→solve flow, snap grid, both algorithms, tractability numbers). Misalignments found, ranked:
+1. **[for Tal — important] `K^N`-forces-coarseness claim contradicts T13.** §4.2.4 ("…`K^N` growth… forces coarse stages in the block formulations…") and §2.1 ("keeps stages coarse to contain that combinatorial cost… refining… would inflate the profile space") both imply Luo stays coarse to avoid a `K^N` blow-up. **T13 refuted this:** Luo discretizes distance (`ζ=1 NM`), is polynomial, and makes the `K^N`→polynomial argument itself. So `K^N` = naive enumeration (both DPs avoid it); Luo's per-block resolution is a *modeling choice*, not forced. Reviewer-with-Luo risk. Reword to: block methods resolve per-stage (choice); we reach finer per-cell resolution at the *same* polynomial class and show it pays. Touches Tal's §2.1 → discuss at meeting, don't silently edit.
+2. **[fix] `V` vs `𝒱` bridge missing (§3↔§4).** §3 now says SOG ∈ interval `𝒱=[v_min,v_max]` (Tal); §4 uses finite set `V` (`v∈V`) with no link. That link *is* the "approximation" (§4 opening) — cf. T6. Add one sentence "`V ⊂ 𝒱` is a finite speed grid discretizing the interval" + unify symbol `𝒱`/`V`.
+3. **[safe typos]** §4 line 290 `d_i = d_{i-1}+l_{i-1}` → `+ l_i` (T3); §4.1 line 313 `j(t) \arg\max` missing `=`; §4.2.1 (Tal reword) "make"→"makes", "obtained"→"obtain", and slightly muddled ("finite set" then `|V|^{lines}` — could restore T6's "continuum→exponential without snapping" motivation). *(#3 partly overlaps existing §3 "§4/§4.1 clean-ups" open-items.)*
+4. **[fix] §3 line 172 "wave condition measured in Beaufort units"** — Beaufort is a *wind* scale; waves = wave height (m). Slip.
+5. **[decision] Figure placeholders** `ADD A FIGURE` / `Figure X` (§4.1 lines 299, 314) → wire in `combined_twin_D` (already tracked in Open Items / Figures).
