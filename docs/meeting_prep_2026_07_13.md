@@ -154,3 +154,41 @@
 - **Step B — backtrack.** Walk `parent_arc` from `s★` → its winning incoming arc → that arc's `src` → … → `(0,0)`; reverse to source→sink order. Each arc carries its realized speed (+ cell/weather/SWS), so the sequence **is** the optimal speed schedule, leg by leg. `O(#legs)`, no fuel arithmetic.
 - **Forward vs backward:** sweep computes the fuel *values* (and stores one back-pointer arc per node); backtrack reads only those pointers to reconstruct *which speeds* produced the minimum.
 - **Full chain closed:** build (T8/T10) → sweep in lex order (T10) → pick best on-time sink (A) → backtrack (B) → optimal schedule.
+
+**T12 — Complexity, step by step.** `[status: verified; consistent with measured Route 1 counts]`
+- **Quantities:** `M` subsegments (distance lines = `M+1`); `Θ≈⌈T/6⌉` time lines; `K=|V|` speeds; `N_t=⌈T/τ⌉` time-slots per distance line (τ=0.1 h); `N_d=⌈L/ζ⌉` distance-slots per time line (ζ=1 NM); `P` = per-arc physics cost (SWS-inverse binary search + FCR — a big constant).
+- **Sizes:** `|S| ≤ (M+1)N_t + (Θ+1)N_d = O(M·T/τ + Θ·L/ζ)`; arcs `|A| = O(K·|S|)` (≤ K arcs/node).
+- **Per step:** (1) frame `O(M+Θ)`; (2) **build (BFS + arc physics)** `O(K·|S|·P)` — *dominant*, `P` dominates; (3) topo sort `O(|S| log|S|)`; (4) **sweep/relaxation** `O(K·|S|)=O(|A|)` — add+compare only, no physics; (5) sink pick `O(T/τ)`; (6) backtrack `O(M+Θ)`.
+- **Total:** `O(K·P·(M·T/τ + Θ·L/ζ))` build-dominated + `O(K·|S| + |S|log|S|)` sweep/sort. The DP itself is ~linear in `|A|`; physics is the one-off cost (explains Route 1's 830 s build vs 8.3 s sweep).
+- **Route 1 check:** `|S|≈1.5×10⁵`, `|A|≈9.2×10⁶` (matches measured 9.21M), sweep ≈8.3 s, build ≈830 s.
+- **Punchline (= Contribution 1 as complexity):** everything is **polynomial** in `M`, `Θ(≈T/6)`, `1/τ`, `1/ζ`, `K` — vs the `K^N` (exponential-in-stages) profile enumeration of naive/block methods. The snap grid `(ζ,τ)` is what converts the exponential reachable set to the polynomial `|S|`, making the single `O(K·|S|)` sweep tractable.
+- Caveat: `|S|=O(M·T/τ+Θ·L/ζ)` is the *dense* bound; the reachable set is smaller (feasible-speed cone `v_min·t ≤ d ≤ v_max·t` trims it, ~25% on Route 1) — lowers the constant, not the asymptotic form.
+
+**T13 — HYPOTHESIS: do we have a complexity advantage over Luo? Hinges on whether Luo snaps.** `[status: UNVALIDATED — verify against Luo 2024]`
+- **Default finding (from our own framing):** *no* complexity advantage. `|S_SR| = O(M·T/τ + Θ·L/ζ)` vs `|S_Luo| = O(Θ·L/ζ)` — we're *larger* (~4× on Route 1, the extra `M·T/τ` per-cell nodes). Our edge over Luo is **fuel/resolution**, not compute. The complexity *result* we own is tractability vs naive `K^M` enumeration — an advantage over enumeration, not over Luo.
+- **The open hypothesis (Ami):** Luo may build the graph **without snapping** the free coordinate → node explosion. Correct *mechanism*: without a grid, cumulative distance at each column takes `K^Θ` distinct values (every speed sequence lands differently, nothing merges) → exponential. Snapping is what makes it polynomial (§4.2.1).
+- **But it cuts both ways:** the same explosion threatens *both* formulations; each is saved by snapping its free coordinate (we snap time `τ` on distance lines; Luo would snap distance `ζ` at columns). Our §5 already calls Luo a "(column, distance) **lattice**" — i.e. assumes Luo snaps → polynomial → no gap.
+- **Decisive question to verify in `Luo 2024.pdf`:** what are Luo's nodes indexed by, and is **cumulative distance discretized to a grid**? If **yes** → both polynomial, no advantage (keep fuel framing). If **no** (speed discretized only, distance free) → Luo really is `K^Θ` and **we have a real complexity advantage** (and §2.1's `K^N` would literally describe Luo). Cannot claim Luo explodes while §5 calls it a lattice — must confirm first.
+
+**T13 — RESOLVED (2026-07-11): hypothesis REFUTED. Luo snaps; no complexity advantage.** `[status: verified against Luo 2024.pdf]`
+- **Luo explicitly discretizes distance with interval `ζ`** — Table 2 defines `ζ` = "distance interval used to discretize the range of remaining distance represented by the nodes in each stage"; §5.2.2 builds each stage's node set over the feasible range `[lb,ub]` (the `v_min..v_max` reachability cone) as `⌊(ub−lb)/ζ⌋+1` discretized values; §6.2 uses **`ζ = 1 NM`** (identical to ours). They also prune (remove zero-outdegree nodes from the penultimate stage back).
+- **Luo makes the `K^N`→polynomial argument themselves** (§5.2): "there are `101^(N^k)` speed profiles… computationally intractable… we propose a multistage graph." So the tractability framing in our §2.1 is *Luo's own*, not a novelty over Luo.
+- **Verdict:** both snap the free coordinate (Luo: distance `ζ`; us: distance `ζ` + time `τ`), both cone-restrict, both prune, both are polynomial single-pass graph solves. We are the *larger* graph (extra `M·T/τ` per-cell nodes) — more expensive, not less. **No complexity advantage. Drop that claim.**
+- **Real, defensible differences (resolution → fuel, not compute):** (i) Luo re-chooses speed once per ~6 h *segment*; we re-choose per *cell crossing* (finer speed). (ii) Luo uses **one weather value per segment** (segment-start waypoint, Eq. 22) over ~72 NM; we resolve weather **per 0.5° cell** (finer weather). NB our §5 describes the Luo baseline as "walking sub-segments" — a *stronger/fairer* Luo than their paper; keep that consistent.
+- **Runtime not comparable:** Luo reports 146 min / 220 min per voyage on a laptop, but that includes `n` rolling re-solves + per-edge ANN + NetworkX Dijkstra; our 8.3 s is a single sweep. No runtime claim either.
+
+**T14 — Luo's forecast is atmospheric-only; waves come from ERA5 reanalysis (= actual).** `[status: verified against Luo 2024.pdf]`
+- Luo *is* forecast-driven (NOAA GEFS control member, 6-hourly, rolling re-optimization). **But the forecast covers only wind speed, wind direction, 2 m temperature** — footnote 4 (p.6): NOAA ensemble forecast "does not include oceanographic data such as wave height." All **wave/ocean variables come from ERA5 reanalysis** (Eq. 22, p.12), which Luo itself calls "ground truth" (§3.2) — i.e. *actual*, not available at decision time.
+- Implication: waves (dominant added-resistance driver) are fed in as **actual** in Luo's "forecast-driven" run → understates true forecast error. Our Contribution 2/3 uses **real forecasts for all drivers** (wind/waves/currents) with a clean actual-vs-predicted split and measures error propagation. Real, citable differentiator.
+
+**T15 — Main difference SR vs Luo, in one place.** `[status: verified]`
+- **The modeling difference = the vertical distance lines.** Luo's graph has only stage columns (6 h cycles), nodes `(stage, discretized-distance)`, no distance-line decision nodes. We add a vertical line at **every cell crossing + heading change** (the extra `M·T/τ` nodes). Those lines, sitting on cell boundaries, buy **two** things at once: (1) **finer speed** — re-choose speed per cell vs one speed per ~6 h/~72 NM segment; (2) **finer weather** — per-0.5°-cell weather vs one value per segment.
+- **Why it matters:** convexity/Jensen — one speed across varying within-block weather wastes fuel; per-cell speed recovers it. Granularity = binding factor, convexity = mechanism.
+- **The one difference NOT in the graph:** forecast fidelity (T14) — all-driver real forecasts vs Luo's wind-only forecast + actual waves. Data-side (Contribution 2), not structure.
+
+| Axis | Luo | Us | In the graph? |
+|---|---|---|---|
+| Speed decision | per 6 h segment | **per cell** | ✅ vertical lines |
+| Weather resolution | per segment (1 value) | **per 0.5° cell** | ✅ vertical lines |
+| Forecast fidelity | wind/temp only; waves = actual | **all drivers, real forecast** | ❌ data, not graph |
+| Complexity class | polynomial | polynomial (larger) | — no advantage (T13) |
