@@ -122,3 +122,35 @@
   - `(ζ, τ)` (snap / node spacing) = the **rounding of each landing point's free coordinate**; NOT an up-front "dots every X" placement — it's applied per-landing.
 - **Why the snap is mandatory (can't skip node spacing):** the free coordinate depends on the *entire* history of speeds (e.g. `t̲ + Σ lₖ/vₖ`), so without snapping no two paths share a node → node count grows `|V|^(lines crossed)` → exponential. Snapping merges near-coincident arrivals onto shared grid points → finite, tractable graph (§4.2.1).
 - **Speed variety ≈ `min(|V|, landing-point resolution)`.** Snap-induced speed quantization scales as `δv ≈ ζ/Δt` (distance snap) or `δv ≈ v²·τ/Δd` (time snap) — so it's fine on short legs (V is the binding menu) but can approach/exceed the 0.1 kn V-step on long legs.
+
+**T7 — Two kinds of "interval": between the lines (frame) vs along a line (nodes).** `[status: verified; matches §4.1 / frame.py]`
+- **Between the lines (the frame):**
+  - **Time lines** — evenly spaced **6 h** (`0,6,12,…`) plus a line at `T`; only the *final* gap can be shorter (Route 1, T=280 h → last interval 4 h, rest 6 h). Regular.
+  - **Distance lines** — **variable / irregular**, = one subsegment length, set by the route: a line at each 0.5° cell crossing + each waypoint. Route 1: `M=162` over 3,393 NM → ~21 NM average, ranging ~1–2 NM (cell-corner clusters) up to a full cell side (~17–30 NM). Heading-dependent (T1).
+- **Along a line (node / snap spacing, from T6):** land on a **distance line** → free coord is time → nodes on a **τ = 0.1 h** grid; land on a **time line** → free coord is distance → nodes on a **ζ = 1 NM** grid.
+- Summary: *lines* spaced by physics/geometry (6 h in time; irregular cell-driven gaps in distance); *nodes on those lines* spaced by the chosen snap (0.1 h / 1 NM).
+
+**T8 — Construction order: frame → lazy BFS (arcs create nodes), NOT a dense node-first pass.** `[status: verified; matches atomic_edges build]`
+- Frame (lines + snap resolution `ζ,τ`) is fixed first ✓. But nodes are **not** pre-populated across the whole lattice before arcs.
+- **Arc-first / lazy interning:** BFS from the source `(0,0)`. Pop a node → emit velocity arcs (one per speed in `V`) → each arc lands on a snapped point → that point is **interned as a node only then** (created because an arc reached it) and queued if new. Repeat until the queue drains. So **arcs discover/create nodes**; a node exists iff some trajectory reaches it.
+- **Why lazy, not eager:** the full dense lattice is mostly unreachable. Route 1 dense grid ≈ 600k lattice points (≈456k distance-line + ≈160k time-line) but only ≈152k reachable (~25%); the unreachable ones are physically impossible states (e.g. 3,000 NM by hour 6, or 5 NM by hour 200). Eager-then-prune wastes ~75%.
+- Also coupled: determining reachability *is* the arc-tracing pass, so nodes-first can't be cleanly separated from arcs anyway.
+- So `(ζ,τ)` defines the **lattice** landings may snap to; the nodes that **exist** are the subset of lattice points the arcs actually hit.
+
+**T9 — What nodes and arcs store for the Bellman sweep (cumulative vs incremental).** `[status: verified; matches bellman.py]`
+- **Node** carries: (1) `cost[node]` = minimum **cumulative** fuel to arrive (`C*`); (2) `parent_arc[node]` = the single winning incoming arc (back-pointer for path recovery).
+- **Arc** (`AtomicEdge`) carries: (1) its **source** `(src_t,src_d)` and **destination** `(dst_t,dst_d)` nodes; (2) its own **incremental** leg fuel `fuel_mt = FCR·Δt` (+ the physics it came from: realized speed, SWS, FCR, weather, heading — kept for schedule recovery). It does **not** store cumulative fuel.
+- **Cumulative lives on the node; incremental lives on the arc.** The sweep joins them via relaxation: `cost[dst] = min over incoming arcs of ( cost[src] + arc.fuel_mt )`; when an arc improves `cost[dst]`, set `parent_arc[dst] = that arc`.
+- Correction to the intuitive phrasing: the arc *references* its departure node, but the cumulative fuel is **read from that node** at relax time — it is not carried inside the arc.
+
+**T10 — Build pass vs sweep pass are separate, and run in different orders.** `[status: verified; matches atomic_edges + bellman.py]`
+- **Build (BFS, T8):** from `(0,0)` emit `|V|` arcs (61 in the paper run; 41 = frame default) → each lands on a snapped point → node is **new or "united"** with an existing node sharing the same `(t,d)` key (interning/merging). A node can collect **many** incoming arcs (paths converge) — that convergence is why a min is needed later. Discovery order is irrelevant; this only *creates the graph*.
+- **Sweep (solve):** a *separate* pass over the finished graph. It creates **no** nodes. Steps: (1) **sort all nodes lexicographically by `(t,d)`** — this is "the sweep order"; (2) process each once, relaxing its outgoing arcs (`cost[dst]=min(cost[src]+arc.fuel)`, T9).
+- **Why lex `(t,d)`, not BFS order:** to finalize a node's `C*`, all its incoming arcs (hence all predecessors) must be relaxed first. Since every arc strictly increases both `t` and `d` (T5), every predecessor is lexicographically earlier → lex sort guarantees "all predecessors before me" → **one pass suffices**. BFS discovery order does *not* guarantee this (a node can be found early via a fast arc yet have a cheaper incoming arc from a later-discovered predecessor), so `C*` can't be computed during the build.
+
+**T11 — Finishing: sink selection + backtrack (fuel is already known; backward recovers the path).** `[status: verified; matches bellman.py]`
+- After the sweep every node holds its min cumulative fuel `C*` (accumulated **forward**). The last part does **not** recompute fuel — it recovers the schedule.
+- **Step A — pick the answer node (sink selection).** Arrival isn't one node: `d=L` is reached at several times `t`. Take the cheapest on-time one: `F★ = min{ C*(L,t) : t ≤ T }` — that value **is** the minimal voyage fuel (just a min over sinks). Late arrivals `t>T` excluded (hard ETA); soft-ETA variant minimises `C*(L,t)+λ·max(0,t−T)`. Winning sink = `s★`.
+- **Step B — backtrack.** Walk `parent_arc` from `s★` → its winning incoming arc → that arc's `src` → … → `(0,0)`; reverse to source→sink order. Each arc carries its realized speed (+ cell/weather/SWS), so the sequence **is** the optimal speed schedule, leg by leg. `O(#legs)`, no fuel arithmetic.
+- **Forward vs backward:** sweep computes the fuel *values* (and stores one back-pointer arc per node); backtrack reads only those pointers to reconstruct *which speeds* produced the minimum.
+- **Full chain closed:** build (T8/T10) → sweep in lex order (T10) → pick best on-time sink (A) → backtrack (B) → optimal schedule.
