@@ -312,3 +312,30 @@ Adopting node-first for §6 makes the current **method text describe the *old* m
 
 Plan: I rewrite §5 + §6 (mine); prepare a node-first Algorithm 1 + updated tractability counts as
 a marked proposal for Tal's §4.2.
+
+### Phase 2 RH — two Route-1 bugs found & fixed (2026-07-16/17)
+Route 2 (Atlantic, `experiment_d`) RH ran clean end-to-end; **Route 1** (`experiment_b`,
+Gulf→Malacca) exposed two latent bugs that node-first surfaces because it reaches source
+states speed-first did not:
+
+1. **Off-grid nowcast KeyError.** Route 1's ETA-stepped `sh_bases` (286, 566, …) are not
+   multiples of the 6 h actual-weather grid, so the RH nowcast `time_key` returned raw
+   `t_wall=286` and `weather_at` raised `actual_weather missing for (0,286)`. **Fix:**
+   `make_time_key` snaps the nowcast to the nearest stored actual sample ≤ `t_wall`
+   (286→282), mirroring `active_sample_hour`. (Committed.)
+2. **Forecast-gap crash, then slowness.** Some Route-1 cells have no *predicted* coverage at
+   a given (issue, lead); the NaN-walkback tried older actual sample-hours as predicted issue
+   times → `predicted_weather missing (76,144,1710)` KeyError. First fix (tolerate the
+   KeyError in the walkback) worked but was catastrophically slow — **1545 s for one replan**
+   (a 284-step walk × expensive segment-fallback scan per gap source; the "cold-cache"
+   pathology). **Proper fix (3 parts):**
+   - `cell_weather_at_d` fallback returns **NaN instead of raising** on a missing predicted
+     key (correctness);
+   - walkback **restored for forecast** weather (returning `[]` on NaN disconnected the sink —
+     "No sink reachable"); the walk now finds a valid older issue or exhausts to `[]`;
+   - **memo cache** on `cell_weather_at_d` keyed by `(d, sample_hour, forecast_hour, grid_deg)`
+     — collapses the repeated gap-region scans.
+   **Validated:** voyage-6 (the pathological case) fuel **41.686** (identical to the slow
+   correct run) in **157 s / 6 replans (~26 s/replan)** vs >1545 s/replan before — ~60×.
+   Oracle (Mode C, actual weather) unaffected — the fallback KeyError branch never fires for
+   actual keys and the memo is value-transparent.

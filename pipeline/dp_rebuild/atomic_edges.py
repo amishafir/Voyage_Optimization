@@ -148,9 +148,13 @@ def _emit_from_src(
 
     weather = frame.cell_weather_at(src_d, sample_hour, fh_eff)
     if weather.has_nan() and override_sample_hour is None:
-        # Walk back through sh_list to most recent valid sample at this cell,
+        # Walk back through sh_list to the most recent valid sample at this cell,
         # holding the effective forecast_hour fixed. Applies to Mode C
-        # (fh_eff=None) and to rolling-horizon (fh_eff = forecast lead).
+        # (fh_eff=None) and to rolling-horizon (fh_eff = forecast lead). For
+        # forecast weather, cell_weather_at_d now returns NaN (not KeyError)
+        # when the (issue, lead) key is absent, so the walk continues to an
+        # older issue instead of crashing; if it exhausts, the source emits no
+        # edges below.
         idx = bisect_right(sh_list, sample_hour) - 1
         while idx > 0 and weather.has_nan():
             idx -= 1

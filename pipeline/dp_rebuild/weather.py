@@ -474,6 +474,19 @@ class VoyageWeather:
         paper-waypoint polyline (`geo_grid.position_at_d`), derives the
         cell, and returns `cell_weather` for that cell.
         """
+        # Memoize: the forward closure probes the same (d, sample_hour,
+        # forecast_hour) many times (across sources sharing a distance, and the
+        # sample-hour walkback re-probing older issues). Results are
+        # deterministic in these keys, so cache the resolved dict. This collapses
+        # the repeated expensive segment-fallback scans in forecast-gap regions.
+        cache = self.__dict__.setdefault("_cwd_cache", {})
+        ck = (round(float(d), 4), int(sample_hour),
+              -1 if forecast_hour is None else int(forecast_hour),
+              round(float(grid_deg), 4))
+        cached = cache.get(ck)
+        if cached is not None:
+            return cached
+
         # Local import keeps h5_weather.py free of a hard dependency on
         # geo_grid for code paths that don't use cell aggregation.
         from geo_grid import position_at_d
@@ -498,12 +511,25 @@ class VoyageWeather:
             wx["wave_height_m"],
             wx["ocean_current_velocity_kmh"],
         )):
-            fb = self.weather_at(
-                d, sample_hour=sample_hour, forecast_hour=forecast_hour,
-            )
+            try:
+                fb = self.weather_at(
+                    d, sample_hour=sample_hour, forecast_hour=forecast_hour,
+                )
+            except KeyError:
+                # The (issue, lead) predicted key is absent for every waypoint in
+                # the segment (sparse forecast coverage on some routes). Treat as
+                # an unavailable cell: return NaN so the caller's sample-hour
+                # walkback moves to an older issue, or the source emits no edges.
+                # beaufort_number stays int to satisfy Weather.from_dict.
+                nanfb = {f: float("nan") for f in WEATHER_FIELDS}
+                nanfb["beaufort_number"] = 0
+                cache[ck] = nanfb
+                return nanfb
             # weather_at returns BN as float; mirror cell_weather's int contract.
             fb["beaufort_number"] = int(round(float(fb["beaufort_number"])))
+            cache[ck] = fb
             return fb
+        cache[ck] = wx
         return wx
 
 
