@@ -99,6 +99,7 @@ def _emit_from_src(
     override_sample_hour: Optional[int] = None,
     perturber=None,
     time_key=None,
+    node_first: bool = False,
 ) -> List[AtomicEdge]:
     """Enumerate every atomic edge out of (src_t, src_d).
 
@@ -184,6 +185,59 @@ def _emit_from_src(
     eps = 1e-9
 
     edges: List[AtomicEdge] = []
+
+    if node_first:
+        # Node-first (Tal, T20): emit the DISTINCT reachable far-wall grid nodes
+        # between v_min and v_max, SOG = dd/dt per node — no SOG grid, no
+        # target-vs-realised gap. Corner handling: if the next distance line is
+        # too close to resolve on the tau grid, skip it and glide to the time
+        # line (mirrors the speed-first h_too_close fallback). Reuses the weather
+        # resolved above, so time_key / d_start (RH) work unchanged.
+        vmin, vmax = frame.cfg.v_min, frame.cfg.v_max
+        zeta, tau, T = frame.cfg.zeta_nm, frame.cfg.tau_h, frame.cfg.eta_h
+        cand: Set[Tuple[float, float]] = set()
+        dd = (next_h - src_d) if next_h is not None else None
+        resolvable_d = (next_h is not None and dd is not None and dd > eps
+                        and frame.snap_h_dst_t(src_t + dd / vmax) > src_t + eps)
+        if resolvable_d:                                     # distance line binds
+            t_fast = src_t + dd / vmax
+            t_slow = src_t + dd / vmin
+            t_hi = min(t_slow, next_v if next_v is not None else T, T)
+            for k in range(round(t_fast / tau), round(t_hi / tau) + 1):
+                dst_t = round(k * tau, 9)
+                if src_t + eps < dst_t <= T + eps:
+                    cand.add((dst_t, round(next_h, 9)))
+        if next_v is not None:                               # time line binds
+            dt = next_v - src_t
+            if dt > eps:
+                d_slow = src_d + vmin * dt
+                d_fast = src_d + vmax * dt
+                d_cap = next_h if resolvable_d else L        # glide past a too-close line
+                d_hi = min(d_fast, d_cap, L)
+                for k in range(round(d_slow / zeta), round(d_hi / zeta) + 1):
+                    dst_d = round(k * zeta, 9)
+                    if src_d + eps < dst_d <= L + eps:
+                        cand.add((round(next_v, 9), dst_d))
+        for dst_t, dst_d in cand:
+            ddt, ddd = dst_t - src_t, dst_d - src_d
+            if ddt <= eps or ddd <= eps:
+                continue
+            realized_sog = ddd / ddt
+            sws = calculate_sws_from_sog(target_sog=realized_sog, weather=weather_dict,
+                                         ship_heading_deg=heading, ship_parameters=None)
+            if sws != sws or sws > _SWS_MAX_FEASIBLE:
+                continue
+            fcr = calculate_fuel_consumption_rate(sws)
+            fuel = fcr * ddt
+            if isnan(fuel):
+                continue
+            crosses_v = (next_v is not None and abs(dst_t - next_v) < eps)
+            edges.append(AtomicEdge(
+                src_t=src_t, src_d=src_d, dst_t=dst_t, dst_d=dst_d,
+                sog=realized_sog, target_sog=realized_sog, weather=weather,
+                heading_deg=heading, sws=sws, fcr_mt_per_h=fcr, fuel_mt=fuel,
+                crosses_v_line=crosses_v))
+        return edges
 
     for target_sog in frame.sog_grid():
         dt_to_h = ((next_h - src_d) / target_sog) if next_h is not None else 1e18
@@ -288,6 +342,7 @@ def build_atomic_edges(
     verbose: bool = False,
     time_key=None,
     d_start: float = 0.0,
+    node_first: bool = False,
 ) -> Tuple[List[Node], List[AtomicEdge]]:
     """Build the atomic-edge graph by BFS from the source.
 
@@ -355,6 +410,7 @@ def build_atomic_edges(
             override_sample_hour=override_sample_hour,
             perturber=perturber,
             time_key=time_key,
+            node_first=node_first,
         )
         for e in out:
             edges.append(e)

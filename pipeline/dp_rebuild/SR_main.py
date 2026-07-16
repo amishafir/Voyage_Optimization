@@ -99,11 +99,15 @@ def parse_args() -> argparse.Namespace:
                          "the time-varying weather lookup at this sample_hour.")
     ap.add_argument("--csv", action="store_true",
                     help="Write per-arc solution CSV (sr_dp.csv)")
+    ap.add_argument("--node_first", action="store_true",
+                    help="Use node-first arc enumeration (Tal, T20) instead of the "
+                         "speed grid — distinct far-wall grid nodes, corner-handled.")
     return ap.parse_args()
 
 
 def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
-          verbose: bool = True, time_key=None, d_start: float = 0.0) -> dict:
+          verbose: bool = True, time_key=None, d_start: float = 0.0,
+          node_first: Optional[bool] = None) -> dict:
     """Run dp_SR with the given args and return a result dict.
 
     The ``voyage`` arg lets callers (e.g. the chain-sweep orchestrator) load
@@ -165,12 +169,15 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         _print_header("dp_SR — build atomic-edge graph")
 
     t0 = time.time()
+    if node_first is None:
+        node_first = bool(getattr(args, "node_first", False))
     nodes, edges = build_atomic_edges(frame,
                                       forecast_hour=None,
                                       override_sample_hour=None,
                                       verbose=False,
                                       time_key=time_key,
-                                      d_start=d_start)
+                                      d_start=d_start,
+                                      node_first=node_first)
     build_t = time.time() - t0
     if verbose:
         print(f"Build time: {build_t:.2f} s")
