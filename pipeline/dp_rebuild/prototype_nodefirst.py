@@ -80,29 +80,37 @@ def emit_nodefirst(src_t, src_d, frame, sample_hour) -> List[AtomicEdge]:
     zeta, tau = frame.cfg.zeta_nm, frame.cfg.tau_h
     cand: Set[Tuple[float, float]] = set()
 
-    # --- fast speeds bind on the distance line d-bar: enumerate arrival TIMES ---
-    # Use round() (not ceil/floor) on the window bounds so the boundary grid
-    # nodes that v_max / v_min snap to are INCLUDED — matching what speed-first
-    # reaches by rounding (otherwise node-first clips the speed range narrower).
-    if next_d is not None:
-        dd = next_d - src_d
-        if dd > _EPS:
-            t_fast = src_t + dd / vmax            # v=vmax -> earliest
-            t_slow = src_t + dd / vmin            # v=vmin -> latest
-            t_hi = min(t_slow, next_t if next_t is not None else T, T)  # cap at corner / ETA
-            k0, k1 = round(t_fast / tau), round(t_hi / tau)
-            for k in range(k0, k1 + 1):
-                dst_t = round(k * tau, 9)
-                if dst_t > src_t + _EPS and dst_t <= T + _EPS:
-                    cand.add((dst_t, round(next_d, 9)))
+    # A distance line is "resolvable" only if even the fastest speed lands a
+    # non-degenerate snapped time on it. If it is too close (a cell-corner
+    # cluster), we SKIP it and glide to the time line — mirroring speed-first's
+    # h_too_close fallback. Without this, node-first is forced to stop at the
+    # tiny leg and misses the far time-line successors speed-first reaches (the
+    # ~1.5% fuel gap; see diagnostic_nodefirst_diff.py).
+    dd = (next_d - src_d) if next_d is not None else None
+    resolvable_d = (next_d is not None and dd > _EPS
+                    and frame.snap_h_dst_t(src_t + dd / vmax) > src_t + _EPS)
 
-    # --- slow speeds bind on the time line t-bar: enumerate arrival DISTANCES ---
+    # --- distance line binds (fast speeds): enumerate arrival TIMES ---
+    if resolvable_d:
+        t_fast = src_t + dd / vmax            # v=vmax -> earliest
+        t_slow = src_t + dd / vmin            # v=vmin -> latest
+        t_hi = min(t_slow, next_t if next_t is not None else T, T)  # cap at corner / ETA
+        k0, k1 = round(t_fast / tau), round(t_hi / tau)
+        for k in range(k0, k1 + 1):
+            dst_t = round(k * tau, 9)
+            if dst_t > src_t + _EPS and dst_t <= T + _EPS:
+                cand.add((dst_t, round(next_d, 9)))
+
+    # --- time line binds (slow speeds): enumerate arrival DISTANCES ---
+    # Cap at next_d only if that line is a resolvable stop; otherwise glide past
+    # it (cap at L) so the far time-line nodes are reached in one leg.
     if next_t is not None:
         dt = next_t - src_t
         if dt > _EPS:
             d_slow = src_d + vmin * dt             # v=vmin -> nearest
             d_fast = src_d + vmax * dt             # v=vmax -> farthest
-            d_hi = min(d_fast, next_d if next_d is not None else L, L)
+            d_cap = next_d if resolvable_d else L
+            d_hi = min(d_fast, d_cap, L)
             k0, k1 = round(d_slow / zeta), round(d_hi / zeta)
             for k in range(k0, k1 + 1):
                 dst_d = round(k * zeta, 9)
