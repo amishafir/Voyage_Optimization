@@ -225,3 +225,25 @@ Core method (§4/§4.1/§4.2) is well-aligned with T5–T12 (build→solve flow,
 - **Certificate (practical):** `F★_DP` converges **quadratically** to `F★_cont` as `ζ,τ→0`, `|V|→∞`. Run two resolutions (halve `ζ,τ`, refine `V`); if `F★_DP` moves by `Δ`, residual gap ≈ `Δ/3` (Richardson, quadratic rate). **TODO: run this to get a concrete number.**
 - **Statement:** `F★_cont ≤ F★_DP ≤ F★_cont + O(step²) ≪` FCR model's own 4–6 %.
 - **Caveats:** `O(step²)` is a local-optimality argument (smooth/convex-ish problem); no closed-form global *lower* bound — we lean on the feasible upper bound + observed convergence. Realised `v̄` is checked for engine feasibility (SWS ≤ max), not clamped to `[v_min,v_max]`.
+
+**T20 — Tal's node-first speed decision (proposal + assessment).** `[status: proposed — prototyping]`
+- **Proposal (Tal, 2026-07-16):** instead of looping the 41/61 speeds, from each node find the reachable stretch of the **far walls** (next distance line `d̄`, next time line `t̄`) between `v_min` and `v_max`, round to the `ζ/τ` grid, then **scan every discrete node** in that L-shape and compute `SOG=Δd/Δt` + fuel for each. Decision = "*which reachable grid node*", not "*which of 41 speeds*".
+- **What it is:** the **node-first** construction — the dual of our speed-first build (T6). Merits: (1) **removes the speed grid `V`** → speed resolution = the node grid; (2) **eliminates the target-vs-realised mismatch (T18)** — every successor is an exact node, SOG exact, one speed only; (3) enumerates **exactly the distinct reachable successors** → *adaptive* fan-out (fewer arcs on short legs = no redundancy; finer on long legs = no gaps); (4) optimum **≥ as good** (superset of options); same Bellman sweep.
+- **Trades:** variable/larger fan-out on long legs (~tens, comparable to 41); more build logic (L-shape, corner speed `v_crit=(d̄−d)/(t̄−t)`, clip to `[v_min,v_max]`); a rounded node can imply SOG slightly outside range → clip / SWS-check.
+- **Impact:** finer resolution → slightly lower fuel, but by T19 it's **second-order** (fraction of a mt) → mainly a **rigor/cleanliness win**. Collapses the T18/T19 approximation from *two* sources (`V` + snap) to *one* (the node grid), and resolves the `V`-vs-`𝒱` gap (T16 #2) — the "speed set" is no longer a tunable grid.
+- **To confirm with Tal:** replace `V` (my read) vs supplement it.
+- **A/B RESULT (2026-07-16, `prototype_nodefirst.py`, Route 1, `ζ=1,τ=0.1`, `|V|=61`):**
+
+  | | speed-first | node-first |
+  |---|--:|--:|
+  | nodes | 152,571 | 133,798 |
+  | arcs | 9,214,780 | **1,132,415** |
+  | fan-out | 61.0 | 8.5 |
+  | fuel (mt) | 368.869 | 374.289 |
+  | build (s) | 199 | **31** |
+  | solve (s) | 8.7 | **1.4** |
+
+  - **Efficiency win confirmed & large:** ~8× fewer arcs, ~6× faster build+solve (emits distinct successors, not 61-with-redundancy).
+  - **BUT node-first is +1.47% worse on fuel — robustly** (same at coarse `ζ=5,τ=0.5`: +1.5%; unchanged by a boundary-`round` fix that added the window-edge nodes → 374.299→374.289 mt). So the gap is **NOT resolution and NOT boundary rounding** — it's a **systematic difference in the reachable graph** (speed-first reaches ~12% more nodes / a better optimum); mechanism not yet isolated.
+  - **⟹ my earlier "optimum ≥ speed-first (superset)" claim was WRONG.** The two constructions are not equivalent; naive node-first gives up ~1.5% — i.e. the whole SR-vs-Luo edge. **Do not adopt as-is.**
+  - **Verdict:** promising *efficiency* optimization; the ~1.5% fuel gap must be understood + closed before it can replace the 61-speed enumeration. **TODO:** instrument per-source successor-set diff (speed-first vs node-first) to find the missing trajectories.
