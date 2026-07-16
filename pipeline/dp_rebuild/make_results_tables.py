@@ -33,6 +33,32 @@ from typing import Dict, List
 ROUTE_LABEL = {"route1": "Malacca", "route2": "Atlantic"}
 ROUTE_ETA = {"route1": 280, "route2": 168}
 
+# Paper rolling-horizon baselines to REUSE (RH-Luo, and Naive for cross-check).
+# RH-Luo is not re-run (only SR changed to node-first; Luo/Naive are unchanged
+# and reproduce exactly, verified in the oracle). Keyed by (route, sh_base) ->
+# (naive_mt, rh_luo_mt), transcribed from tab:rh-r1 / tab:rh-r2.
+PAPER_RH = {
+    ("route1", 6):    (362.74, 362.57),
+    ("route1", 286):  (367.03, 367.72),
+    ("route1", 566):  (345.42, 344.51),
+    ("route1", 846):  (354.74, 354.36),
+    ("route1", 1126): (342.68, 341.69),
+    ("route1", 1406): (346.19, 346.57),
+    ("route1", 1686): (356.03, 355.10),
+    ("route2", 0):    (212.61, 212.12),
+    ("route2", 168):  (212.78, 211.41),
+    ("route2", 336):  (203.65, 203.42),
+    ("route2", 504):  (214.54, 216.01),
+    ("route2", 672):  (225.98, 224.90),
+    ("route2", 840):  (200.50, 199.04),
+    ("route2", 1008): (237.09, 235.33),
+    ("route2", 1176): (200.43, 200.71),
+    ("route2", 1344): (199.35, 200.49),
+    ("route2", 1512): (198.99, 198.28),
+    ("route2", 1680): (206.86, 205.70),
+    ("route2", 1848): (206.10, 206.27),
+}
+
 
 def _read_csv(path: Path) -> List[dict]:
     with open(path, newline="") as f:
@@ -137,11 +163,17 @@ def rh_per_voyage(rows: List[dict], route: str) -> str:
         r"\midrule",
     ]
     for r in rr:
-        nv, sr, luo = _f(r["naive_mt"]), _f(r["rh_sr_mt"]), _f(r["rh_luo_mt"])
-        spct, lpct = _f(r["rh_sr_vs_naive_pct"]), _f(r["rh_luo_vs_naive_pct"])
+        sh = int(r["sh_base"])
+        nv, sr = _f(r["naive_mt"]), _f(r["rh_sr_mt"])
+        luo = _f(r["rh_luo_mt"])
+        if luo != luo:  # skip_luo run -> reuse paper RH-Luo
+            luo = PAPER_RH.get((route, sh), (float("nan"), float("nan")))[1]
+        # both %s against the fresh Naive for internal consistency
+        spct = (sr - nv) / nv * 100.0 if nv else float("nan")
+        lpct = (luo - nv) / nv * 100.0 if (nv and luo == luo) else float("nan")
         luo_s = f"{luo:.2f}" if luo == luo else "---"
         lpct_s = f"${lpct:+.2f}$" if lpct == lpct else "---"
-        out.append(f"{int(r['sh_base'])} & {nv:.2f} & {sr:.2f} & {luo_s} & "
+        out.append(f"{sh} & {nv:.2f} & {sr:.2f} & {luo_s} & "
                    f"${spct:+.2f}$ & {lpct_s} \\\\")
     out += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     return "\n".join(out)
@@ -160,8 +192,15 @@ def rh_aggregate(rows: List[dict]) -> str:
     ]
     for route in ("route2", "route1"):  # paper orders Atlantic first here
         rr = [r for r in rows if r["route"] == route]
-        spct = [_f(r["rh_sr_vs_naive_pct"]) for r in rr]
-        lpct = [_f(r["rh_luo_vs_naive_pct"]) for r in rr]
+        spct, lpct = [], []
+        for r in rr:
+            sh = int(r["sh_base"])
+            nv, sr = _f(r["naive_mt"]), _f(r["rh_sr_mt"])
+            luo = _f(r["rh_luo_mt"])
+            if luo != luo:
+                luo = PAPER_RH.get((route, sh), (float("nan"), float("nan")))[1]
+            spct.append((sr - nv) / nv * 100.0 if nv else float("nan"))
+            lpct.append((luo - nv) / nv * 100.0 if (nv and luo == luo) else float("nan"))
         sm, _ = _mean_sd(spct)
         lm, _ = _mean_sd(lpct)
         saves = sum(1 for x in spct if x == x and x < 0)
@@ -205,14 +244,31 @@ def prose_stats(oracle: List[dict], rh: List[dict]) -> str:
     lines.append(f"\nSR<Luo overall: {all_sr_lt_luo}/{total}")
 
     lines += ["", "=" * 64, "PROSE STATS (§6.2 rolling horizon)", "=" * 64]
+    # fresh oracle SR per (route, sh) for the RH-vs-oracle envelope stat
+    oracle_sr = {(r["route"], int(r["sh_base"])): _f(r["sr_fuel_mt"])
+                 for r in oracle}
     all_sr_saves = 0
     total_rh = 0
+    naive_absdiffs = []
     for route in ("route1", "route2"):
         rr = [r for r in rh if r["route"] == route]
         if not rr:
             continue
-        spct = [_f(r["rh_sr_vs_naive_pct"]) for r in rr]
-        lpct = [_f(r["rh_luo_vs_naive_pct"]) for r in rr]
+        spct, lpct, above_oracle = [], [], []
+        for r in rr:
+            sh = int(r["sh_base"])
+            nv, sr = _f(r["naive_mt"]), _f(r["rh_sr_mt"])
+            luo = _f(r["rh_luo_mt"])
+            paper = PAPER_RH.get((route, sh))
+            if luo != luo and paper:
+                luo = paper[1]
+            if paper:
+                naive_absdiffs.append(abs(nv - paper[0]))  # fresh vs paper Naive
+            spct.append((sr - nv) / nv * 100.0 if nv else float("nan"))
+            lpct.append((luo - nv) / nv * 100.0 if (nv and luo == luo) else float("nan"))
+            orc = oracle_sr.get((route, sh))
+            if orc is not None and orc == orc:
+                above_oracle.append(sr - orc)
         sm, _ = _mean_sd(spct)
         lm, _ = _mean_sd(lpct)
         saves = sum(1 for x in spct if x == x and x < 0)
@@ -221,12 +277,18 @@ def prose_stats(oracle: List[dict], rh: List[dict]) -> str:
         valid_s = [x for x in spct if x == x]
         lines += [
             f"\n{route} ({ROUTE_LABEL[route]}), n={len(rr)}:",
-            f"  RH-SR vs Naive mean : {sm:+.2f}%   (best {min(valid_s):+.2f}%)",
-            f"  RH-Luo vs Naive mean: {lm:+.2f}%" if lm == lm else
-            "  RH-Luo vs Naive mean: --- (reused from paper)",
+            f"  RH-SR vs Naive mean : {sm:+.2f}%   (best {min(valid_s):+.2f}%, "
+            f"worst {max(valid_s):+.2f}%)",
+            f"  RH-Luo vs Naive mean: {lm:+.2f}% (reused paper RH-Luo)",
             f"  RH-SR saves on      : {saves}/{len(rr)}",
+            f"  RH-SR above oracle  : {min(above_oracle):.2f} .. {max(above_oracle):.2f} mt"
+            if above_oracle else "  RH-SR above oracle  : n/a",
         ]
     lines.append(f"\nRH-SR saves overall: {all_sr_saves}/{total_rh}")
+    if naive_absdiffs:
+        lines.append(f"Naive reproduction (fresh vs paper): "
+                     f"max |Δ| = {max(naive_absdiffs):.3f} mt, "
+                     f"mean {sum(naive_absdiffs)/len(naive_absdiffs):.3f} mt")
     return "\n".join(lines)
 
 
