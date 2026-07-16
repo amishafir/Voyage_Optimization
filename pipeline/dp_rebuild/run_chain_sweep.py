@@ -71,7 +71,7 @@ ROUTES = {
 
 
 CSV_HEADER = [
-    "route", "label", "voyage_idx", "sh_base", "eta_h",
+    "route", "label", "voyage_idx", "sh_base", "eta_h", "sr_mode",
     "sr_fuel_mt", "luo_fuel_mt", "gap_mt", "gap_pct",
     "sr_voyage_time_h", "luo_voyage_time_h",
     "sr_slack_h", "luo_slack_h",
@@ -88,7 +88,7 @@ def _resolve(p: str) -> str:
     return str((_HERE / pp).resolve())
 
 
-def _build_args(route_cfg: dict, sh_base: int) -> Namespace:
+def _build_args(route_cfg: dict, sh_base: int, node_first: bool = False) -> Namespace:
     """Construct the Namespace expected by SR_main.solve / luo_main.solve."""
     return Namespace(
         yaml=_resolve(route_cfg["yaml"]),
@@ -102,6 +102,7 @@ def _build_args(route_cfg: dict, sh_base: int) -> Namespace:
         sample_hour=sh_base,
         baseline=False,
         csv=False,
+        node_first=node_first,   # SR only; luo_main ignores it
     )
 
 
@@ -111,13 +112,15 @@ def _print_hdr(s: str) -> None:
 
 
 def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
-              skip_csv: bool, max_voyages: int = 0) -> List[dict]:
+              skip_csv: bool, max_voyages: int = 0, node_first: bool = False,
+              skip_luo: bool = False) -> List[dict]:
     """Run the consecutive-voyage chain for one route."""
     sh_bases = route_cfg["sh_bases"]
     if max_voyages and max_voyages > 0:
         sh_bases = sh_bases[:max_voyages]
     _print_hdr(f"CHAIN — {route_key} ({route_cfg['label']})  "
-               f"ETA={route_cfg['eta']}  voyages={len(sh_bases)}"
+               f"ETA={route_cfg['eta']}  voyages={len(sh_bases)}  "
+               f"SR={'node-first' if node_first else 'speed-first'}"
                + (f" (truncated from {len(route_cfg['sh_bases'])})"
                   if max_voyages and max_voyages > 0 else ""))
 
@@ -131,7 +134,7 @@ def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
     for voyage_idx, sh_base in enumerate(sh_bases):
         _print_hdr(f"{route_key}  voyage {voyage_idx:02d}/{len(route_cfg['sh_bases'])-1}  "
                    f"sh_base={sh_base}")
-        args = _build_args(route_cfg, sh_base)
+        args = _build_args(route_cfg, sh_base, node_first=node_first)
 
         t0 = time.time()
         sr_res = SR_main.solve(args, voyage=voyage, verbose=False)
@@ -140,17 +143,24 @@ def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
               f"t={sr_res['voyage_time_h']:7.3f} h  "
               f"({sr_total:5.1f}s wall)", flush=True)
 
-        t0 = time.time()
-        luo_res = luo_main.solve(args, voyage=voyage, verbose=False)
-        luo_total = time.time() - t0
-        print(f"  Luo  : fuel={luo_res['total_fuel_mt']:8.3f} mt  "
-              f"t={luo_res['voyage_time_h']:7.3f} h  "
-              f"({luo_total:5.1f}s wall)", flush=True)
+        if skip_luo:
+            luo_res = {"total_fuel_mt": float("nan"), "voyage_time_h": float("nan"),
+                       "path_arcs": [], "waypoints": sr_res["waypoints"],
+                       "n_blocks": 0, "solve_s": 0.0}
+            print("  Luo  : skipped (--skip_luo; baseline unchanged, reuse prior)", flush=True)
+        else:
+            t0 = time.time()
+            luo_res = luo_main.solve(args, voyage=voyage, verbose=False)
+            luo_total = time.time() - t0
+            print(f"  Luo  : fuel={luo_res['total_fuel_mt']:8.3f} mt  "
+                  f"t={luo_res['voyage_time_h']:7.3f} h  "
+                  f"({luo_total:5.1f}s wall)", flush=True)
 
         gap = sr_res["total_fuel_mt"] - luo_res["total_fuel_mt"]
-        gap_pct = (gap / luo_res["total_fuel_mt"] * 100.0
-                   if luo_res["total_fuel_mt"] else float("nan"))
-        print(f"  gap  : {gap:+.3f} mt ({gap_pct:+.2f} %)", flush=True)
+        luo_f = luo_res["total_fuel_mt"]
+        gap_pct = (gap / luo_f * 100.0 if luo_f == luo_f and luo_f else float("nan"))
+        if not skip_luo:
+            print(f"  gap  : {gap:+.3f} mt ({gap_pct:+.2f} %)", flush=True)
 
         # Per-voyage arc CSVs
         if not skip_csv:
@@ -158,8 +168,9 @@ def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
             voyage_dir.mkdir(parents=True, exist_ok=True)
             write_arc_csv(voyage_dir / "sr.csv", sr_res["schedule"],
                           sr_res["waypoints"])
-            write_luo_csv(voyage_dir / "luo.csv", luo_res["path_arcs"],
-                          luo_res["waypoints"])
+            if luo_res["path_arcs"]:
+                write_luo_csv(voyage_dir / "luo.csv", luo_res["path_arcs"],
+                              luo_res["waypoints"])
 
         rows.append({
             "route": route_key,
@@ -167,6 +178,7 @@ def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
             "voyage_idx": voyage_idx,
             "sh_base": sh_base,
             "eta_h": route_cfg["eta"],
+            "sr_mode": "node-first" if node_first else "speed-first",
             "sr_fuel_mt": sr_res["total_fuel_mt"],
             "luo_fuel_mt": luo_res["total_fuel_mt"],
             "gap_mt": gap,
@@ -198,6 +210,12 @@ def parse_args() -> Namespace:
     ap.add_argument("--max_voyages", type=int, default=0,
                     help="Truncate each route's chain to first N voyages (0 = all). "
                          "Useful for validation runs.")
+    ap.add_argument("--node_first", action="store_true",
+                    help="Use node-first SR arc enumeration (Tal, T20) instead of "
+                         "the 61-speed grid. Luo/Naive unaffected.")
+    ap.add_argument("--skip_luo", action="store_true",
+                    help="Skip the (slow, unchanged) Luo baseline; write SR only. "
+                         "Reuse prior Luo numbers when only SR changed (node-first refresh).")
     return ap.parse_args()
 
 
@@ -221,7 +239,8 @@ def main() -> int:
     t_start = time.time()
     for route_key in chosen:
         rows = run_chain(route_key, ROUTES[route_key], out_dir, args.skip_csv,
-                         max_voyages=args.max_voyages)
+                         max_voyages=args.max_voyages, node_first=args.node_first,
+                         skip_luo=args.skip_luo)
         all_rows.extend(rows)
 
     # Write summary CSV

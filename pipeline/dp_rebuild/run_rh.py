@@ -152,17 +152,20 @@ def luo_block_metrics(path_arcs, blk_idx: int) -> Optional[Tuple[float, float, f
 # Orchestration
 # ----------------------------------------------------------------------
 
-def base_args(eta: float, sh_base: int) -> Namespace:
+def base_args(eta: float, sh_base: int, node_first: bool = False,
+              yaml: str = YAML, h5: str = H5) -> Namespace:
     return Namespace(
-        yaml=YAML, h5=H5, eta=eta,
+        yaml=yaml, h5=h5, eta=eta,
         min_speed=None, max_speed=None, zeta_nm=None, tau_h=None,
         res_nm=1.0, sample_hour=sh_base, baseline=False, csv=False,
+        node_first=node_first,   # SR only; Luo/Naive ignore it
     )
 
 
-def run_naive(voyage: VoyageWeather, eta: float, sh_base: int) -> dict:
+def run_naive(voyage: VoyageWeather, eta: float, sh_base: int,
+              yaml: str = YAML, h5: str = H5) -> dict:
     """Naive fixed-mean-SOG baseline against ACTUAL weather (Mode C)."""
-    args = base_args(eta, sh_base)
+    args = base_args(eta, sh_base, yaml=yaml, h5=h5)
     args.baseline = True
     res = luo_main.solve(args, voyage=voyage, verbose=False)
     return {"total_fuel_mt": res["total_fuel_mt"],
@@ -170,7 +173,8 @@ def run_naive(voyage: VoyageWeather, eta: float, sh_base: int) -> dict:
 
 
 def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
-           max_replans: int = 0) -> dict:
+           max_replans: int = 0, node_first: bool = False,
+           yaml: str = YAML, h5: str = H5, skip_luo: bool = False) -> dict:
     """Run the RH loop for SR and Luo. Returns totals + per-replan rows.
 
     ETA need not be a multiple of DT_H: the loop runs ceil(eta/DT_H) re-plans
@@ -197,7 +201,8 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
         b1_hi = min(2 * DT_H, eta_sub)  # block-1 upper bound (diagnostic)
         t_wall = sh_base + int(DT_H * k)
         tk, sh_fc, staleness = make_time_key(t_wall, issues, max_lead)
-        args_k = base_args(eta_sub, sh_base)
+        args_k = base_args(eta_sub, sh_base, node_first=node_first,
+                           yaml=yaml, h5=h5)
 
         print(f"\n[k={k:02d}] T_wall={t_wall:4d}  eta_sub={eta_sub:5.0f}h  "
               f"blk_dur={blk_dur:.0f}h  "
@@ -241,14 +246,23 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
               f"-> d={end_d:.1f}  ({sr_wall:.0f}s)", flush=True)
 
         # ---- Luo ----
-        t0 = time.time()
-        luo = luo_main.solve(args_k, voyage=voyage, verbose=False,
-                             time_key=tk, d_start=state["luo"]["d"])
-        luo_wall = time.time() - t0
-        b0 = luo_block_metrics(luo["path_arcs"], 0)
-        b1 = luo_block_metrics(luo["path_arcs"], 1)
-        f0L, end_dL, sog0L = b0 if b0 else (0.0, state["luo"]["d"], 0.0)
-        b1_sogL = b1[2] if b1 else None
+        if skip_luo:
+            # Luo/Naive unchanged by the node-first SR refresh — skip the
+            # (slow) Luo re-plan and reuse prior RH-Luo numbers. Fill NaN so
+            # downstream code stays shape-compatible.
+            luo = {"path_arcs": [], "solve_s": 0.0}
+            luo_wall = 0.0
+            f0L, end_dL, sog0L = float("nan"), state["luo"]["d"], float("nan")
+            b1_sogL = None
+        else:
+            t0 = time.time()
+            luo = luo_main.solve(args_k, voyage=voyage, verbose=False,
+                                 time_key=tk, d_start=state["luo"]["d"])
+            luo_wall = time.time() - t0
+            b0 = luo_block_metrics(luo["path_arcs"], 0)
+            b1 = luo_block_metrics(luo["path_arcs"], 1)
+            f0L, end_dL, sog0L = b0 if b0 else (0.0, state["luo"]["d"], 0.0)
+            b1_sogL = b1[2] if b1 else None
         divL = (sog0L - state["luo"]["prev_b1_sog"]
                 if state["luo"]["prev_b1_sog"] is not None else float("nan"))
         rows["luo"].append({
@@ -305,6 +319,8 @@ def main() -> int:
     ap.add_argument("--out_dir", default="runs/2026_06_15_rh/route2/voyage_00")
     ap.add_argument("--sh_base", type=int, default=SH_BASE_DEFAULT)
     ap.add_argument("--eta", type=float, default=ETA_DEFAULT)
+    ap.add_argument("--node_first", action="store_true",
+                    help="Use node-first SR arc enumeration (T20). Luo/Naive unaffected.")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -326,7 +342,7 @@ def main() -> int:
 
     print("\n=== Rolling-horizon loop ===", flush=True)
     rh = run_rh(voyage, issues, max_lead, args.eta, args.sh_base,
-                max_replans=args.max_replans)
+                max_replans=args.max_replans, node_first=args.node_first)
 
     # Write per-replan + realised CSVs
     write_replan_csv(out_dir / "rh_sr_replans.csv", rh["rows"]["sr"])
