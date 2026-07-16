@@ -259,3 +259,56 @@ Core method (§4/§4.1/§4.2) is well-aligned with T5–T12 (build→solve flow,
   - Node-first ≤ speed-first on **both** routes (matches / marginally better from finer resolution), **~8–10× fewer arcs, ~6–9× faster**. Verdict (adopt) stands.
   - **Sanity:** Route 1 speed-first **354.4 mt ≈ paper Route 1 voyage-0 SR (354.82 mt)** → correct pairing confirmed. Route 2 ~211 mt is Route-2 magnitude (paper SR ~202), not Route 1.
   - **§4.2.4 tractability numbers UNAFFECTED:** node/arc counts are geometry-driven — the correct Route 1 run gives the **identical** 152,571 nodes / 9.21M arcs / 8.5 s solve. Only *fuel* differed on the mismatched instance (which §4.2.4 does not cite). No paper change needed on that count.
+
+---
+
+## Phase 2 — re-running both experiments with node-first (2026-07-16)
+
+**Decision (locked with user):** adopt node-first as *the* SR method; motivation for the §6
+rewrite = refresh/reproduce; keep §6's 3-part structure (perfect-foresight / rolling-horizon /
+supporting observations).
+
+**Phase 1 (done, committed `735a69c`):** ported node-first into the production SR path behind a
+`--node_first` flag — `atomic_edges._emit_from_src` (corner-handled branch), `SR_main.solve`,
+and both drivers. Parity re-checked: Route 1 vy0 node-first = 353.955 mt.
+
+**Phase 2 tooling (committed `1872ebe`):**
+- `run_chain_sweep.py` — `--node_first`, `--skip_luo`, `sr_mode` CSV column.
+- `run_rh.py` — parametrized by `yaml`/`h5`; `--skip_luo` branch (run RH-SR alone).
+- `run_rh_sweep.py` — route-aware consecutive-voyage RH chain over **both** routes (reuses
+  `run_chain_sweep.ROUTES`); `--node_first` / `--skip_luo`.
+- `make_results_tables.py` — emits all six §6 LaTeX tables + prose stats from the sweep CSVs.
+
+**Runs (2026-07-16):**
+- Oracle: `run_chain_sweep --node_first` (SR **and** Luo, both routes) → fresh, internally
+  consistent §6.1 dataset. `runs/2026_07_16_nf_oracle_full/`.
+- RH: `run_rh_sweep --node_first --skip_luo` (RH-SR + fresh Naive, both routes, 19 voyages) →
+  §6.2. `runs/2026_07_16_rh_nodefirst/`. RH-Luo reused from paper (see below).
+
+**No-drift finding (settles "re-run Luo or reuse?"):** fresh Route 1 vy0 **Luo = 361.561 mt**
+= paper's **361.56** (identical). Luo/`luo_main` is fully reproducible ⟹ the paper's RH-Luo and
+Naive baselines are valid to reuse. This also explains why fresh node-first SR sits marginally
+*above* paper speed-first SR on 3 Route-2 voyages: not drift — genuine per-voyage node-first vs
+speed-first variation (node-first ≤ speed-first only in aggregate). RH-Luo re-run is infeasible
+anyway (full-voyage Luo = 424 s ⟹ RH-Luo ≈ 18 h/route), so reuse is the only path.
+
+**Fresh node-first oracle SR (SR-only pre-run, both routes):** R1 mean **344.43 ± 8.47** mt
+(paper 344.87), R2 mean **201.54 ± 10.57** mt (paper 201.90) — both slightly lower, as expected.
+Against the (reproduced) paper Luo the SR–Luo gap **widens** to ≈ −1.9 % (R1) / −2.8 % (R2) from
+−1.8 % / −2.6 %. Story strengthens.
+
+### ⚠ Dependency for §4/§5 (coordinate with Tal before finalizing §6)
+Adopting node-first for §6 makes the current **method text describe the *old* method**:
+- **§4.2 Algorithm 1** (`for v ∈ V do …`, lines ~411–419) is the **speed-first** enumeration.
+  Node-first replaces the `V`-loop with an enumeration of the distinct far-wall grid nodes
+  reachable within `[v_min, v_max]` (with the too-close-distance-line corner rule). This fits
+  Tal's interval `𝒱=[v_min,v_max]` reframing *better* than 61 arbitrary samples.
+- **§4.2 tractability** (line ~474): `|V|=61 speeds`, `9.2×10⁶ arcs`, `~8 s` are speed-first.
+  Node-first is **~1.18×10⁶ arcs** (≈8× fewer) and **~1.4 s** solve — a *stronger* tractability
+  claim. Exact node/arc counts will be taken from the fresh oracle CSV (`sr_n_nodes`,
+  `sr_n_edges`) and proposed to Tal.
+- **§5 line ~583**: "common grid of 61 SOG values spanning L/T ± 3 kn" → describe the node-first
+  action set (band `L/T ± 3` kn retained; action = reachable grid nodes, not 61 samples).
+
+Plan: I rewrite §5 + §6 (mine); prepare a node-first Algorithm 1 + updated tractability counts as
+a marked proposal for Tal's §4.2.
