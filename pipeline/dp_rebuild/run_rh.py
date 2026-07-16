@@ -86,12 +86,17 @@ def make_time_key(
     issues: List[int],
     max_lead: Dict[int, int],
     dt_h: float = DT_H,
+    actual_hours: Optional[List[int]] = None,
 ) -> Callable[[float], Tuple[int, Optional[int]]]:
     """Build the rolling-horizon weather selector for a decision at wall-clock
     time ``t_wall`` (= sh_base + 6k).
 
-    tau < dt_h          -> (t_wall, None)            actual nowcast
+    tau < dt_h          -> (t_now, None)             actual nowcast
     tau >= dt_h         -> (sh_fc, lead)             most-recent forecast cycle
+        t_now = latest actual sample_hour <= t_wall   (off-grid t_wall like 286
+                snaps to the most recent stored sample, e.g. 282 at 6h cadence
+                --- mirrors VoyageWeather.active_sample_hour, so RH block-0
+                nowcast matches the Mode C oracle's actual-weather resolution)
         sh_fc = latest forecast issue <= t_wall
         lead  = (t_wall - sh_fc) + 6*floor(tau/dt_h), capped at max_lead[sh_fc]
     """
@@ -101,9 +106,18 @@ def make_time_key(
     staleness = t_wall - sh_fc
     cap = max_lead.get(sh_fc, 0)
 
+    # Snap the nowcast wall-clock to the nearest available actual sample_hour
+    # <= t_wall (actual_weather is stored on a 6h grid; off-grid decision times
+    # would otherwise raise KeyError in weather_at).
+    if actual_hours:
+        j = bisect_right(actual_hours, t_wall) - 1
+        t_now = actual_hours[max(0, j)]
+    else:
+        t_now = t_wall
+
     def time_key(tau: float) -> Tuple[int, Optional[int]]:
         if tau < dt_h:
-            return (t_wall, None)
+            return (t_now, None)
         lead = staleness + int(dt_h * (tau // dt_h))
         if lead > cap:
             lead = cap
@@ -200,7 +214,8 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
         blk_dur = min(DT_H, eta_sub)
         b1_hi = min(2 * DT_H, eta_sub)  # block-1 upper bound (diagnostic)
         t_wall = sh_base + int(DT_H * k)
-        tk, sh_fc, staleness = make_time_key(t_wall, issues, max_lead)
+        tk, sh_fc, staleness = make_time_key(t_wall, issues, max_lead,
+                                             actual_hours=voyage.sample_hours)
         args_k = base_args(eta_sub, sh_base, node_first=node_first,
                            yaml=yaml, h5=h5)
 
