@@ -232,7 +232,7 @@ Core method (§4/§4.1/§4.2) is well-aligned with T5–T12 (build→solve flow,
 - **Trades:** variable/larger fan-out on long legs (~tens, comparable to 41); more build logic (L-shape, corner speed `v_crit=(d̄−d)/(t̄−t)`, clip to `[v_min,v_max]`); a rounded node can imply SOG slightly outside range → clip / SWS-check.
 - **Impact:** finer resolution → slightly lower fuel, but by T19 it's **second-order** (fraction of a mt) → mainly a **rigor/cleanliness win**. Collapses the T18/T19 approximation from *two* sources (`V` + snap) to *one* (the node grid), and resolves the `V`-vs-`𝒱` gap (T16 #2) — the "speed set" is no longer a tunable grid.
 - **To confirm with Tal:** replace `V` (my read) vs supplement it.
-- **A/B RESULT (2026-07-16, `prototype_nodefirst.py`, Route 1, `ζ=1,τ=0.1`, `|V|=61`):**
+- **A/B RESULT** *(⚠ MISMATCHED instance — Route 1 geometry + Route 2 weather; superseded by the corrected two-route table below, but the method comparison + mechanism are valid)* **(`prototype_nodefirst.py`, `ζ=1,τ=0.1`, `|V|=61`):**
 
   | | speed-first | node-first |
   |---|--:|--:|
@@ -249,3 +249,13 @@ Core method (§4/§4.1/§4.2) is well-aligned with T5–T12 (build→solve flow,
 - **MECHANISM FOUND + FIXED (`diagnostic_nodefirst_diff.py`):** node-first missed successors *only* at sources just before a **too-close distance line** (cell-corner clusters, `next_d` 1–3 NM ahead; T3/T7). There, speed-first's `h_too_close` fallback **skips the unresolvable line and glides to the next time line** (reaching far time-line nodes in one leg); naive node-first was forced to stop → missed them (373/451 missed successors were time-line, inside `[v_min,v_max]` — not a bleed). **Fix:** give node-first the same rule — if a distance line is too close to resolve on the τ-grid, skip it and extend the time-line window past it.
 - **AFTER FIX (Route 1, `ζ=1,τ=0.1`):** node-first fuel **368.830** vs speed-first 368.869 → **−0.011% (−0.04 mt), i.e. identical/second-order**, at **1.18M arcs vs 9.2M (~8×)** and build **33 s vs 201 s**, solve **1.4 s vs 8.5 s**. (Coarse grid: −0.37%.)
 - **VERDICT: adopt node-first with the corner handling.** Reproduces the exact optimum at ~8× lower cost, *and* cleans up the model — removes the speed grid `V`, kills the target-vs-realised mismatch (T18), resolves the `V`-vs-`𝒱` gap (T16 #2). Open: Tal's call on replace-vs-supplement, and port the corner-handling into the production `atomic_edges` (C++ + Python) if adopted.
+- **DATA-PAIRING CORRECTION (2026-07-16) + CORRECT TWO-ROUTE NUMBERS.** HDF5 `route_name` metadata: **`experiment_b_138wp` = Route 1** (Persian Gulf→Malacca); **`experiment_d_391wp` = Route 2** (St John's→Liverpool, N. Atlantic). Earlier A/B (and the T12 tractability run) mistakenly paired the Route 1 yaml with `experiment_d` (Route 2 weather). Re-ran both with correct pairings (Route 1 `sample_hour=6`, since `experiment_b` has no hour 0; Route 2 `sample_hour=0`):
+
+  | Route | fuel current | fuel node-first | Δ fuel | arcs (cur→nf) | build (s) | solve (s) |
+  |---|--:|--:|--:|--:|--:|--:|
+  | **1 · Gulf→Malacca** (3,393 nm, 280 h) | 354.4 | 353.6 | **−0.22 %** | 9.21M→1.18M (7.8×) | 200→28 | 8.5→1.4 |
+  | **2 · St John's→Liverpool** (1,955 nm, 163 h) | 211.4 | 209.7 | **−0.79 %** | 4.06M→0.42M (9.8×) | 90→10 | 4.5→0.5 |
+
+  - Node-first ≤ speed-first on **both** routes (matches / marginally better from finer resolution), **~8–10× fewer arcs, ~6–9× faster**. Verdict (adopt) stands.
+  - **Sanity:** Route 1 speed-first **354.4 mt ≈ paper Route 1 voyage-0 SR (354.82 mt)** → correct pairing confirmed. Route 2 ~211 mt is Route-2 magnitude (paper SR ~202), not Route 1.
+  - **§4.2.4 tractability numbers UNAFFECTED:** node/arc counts are geometry-driven — the correct Route 1 run gives the **identical** 152,571 nodes / 9.21M arcs / 8.5 s solve. Only *fuel* differed on the mismatched instance (which §4.2.4 does not cite). No paper change needed on that count.
