@@ -68,6 +68,7 @@ static void usage(const char* prog) {
         "  --zeta_nm  NM     Distance snap resolution for H-line arcs (default: 1.0)\n"
         "  --tau_h    HOURS  Time snap resolution for V-line arcs (default: 0.1)\n"
         "  --sample_hour H   Departure-time anchor (sample_hour at t=0; default: file front)\n"
+        "  --node_first      Node-first arc enumeration (T20) instead of the SOG grid\n"
         "  --csv             Write per-arc solution CSV (sr_dp.csv)\n",
         prog);
 }
@@ -105,7 +106,8 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     auto [nodes, edges] = build_atomic_edges(frame, /*forecast_hour=*/-1,
                                               /*override_sample_hour=*/-1,
                                               /*verbose=*/false,
-                                              time_key, d_start);
+                                              time_key, d_start,
+                                              args.node_first);
     double build_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
     if (verbose) {
@@ -163,6 +165,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--zeta_nm")   args.zeta_nm   = std::stod(need_next());
         else if (arg == "--tau_h")     args.tau_h     = std::stod(need_next());
         else if (arg == "--sample_hour") args.sample_hour = std::stoi(need_next());
+        else if (arg == "--node_first") args.node_first  = true;
         else if (arg == "--smoke")     smoke          = true;
         else if (arg == "--csv")       write_csv      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }

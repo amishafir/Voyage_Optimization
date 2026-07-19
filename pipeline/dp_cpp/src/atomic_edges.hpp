@@ -37,7 +37,8 @@ build_atomic_edges(const Frame& frame,
                    int override_sample_hour = -1,
                    bool verbose             = false,
                    const TimeKey& time_key  = {},
-                   double d_start           = 0.0);
+                   double d_start           = 0.0,
+                   bool node_first          = false);
 
 void summarize_atomic_edges(const std::vector<Node>& nodes,
                               const std::vector<AtomicEdge>& edges);

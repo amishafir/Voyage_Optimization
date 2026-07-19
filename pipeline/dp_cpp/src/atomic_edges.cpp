@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <deque>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -29,7 +30,8 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
                                                const Frame& frame,
                                                int forecast_hour,
                                                int override_sample_hour,
-                                               const TimeKey& time_key) {
+                                               const TimeKey& time_key,
+                                               bool node_first = false) {
     if (std::abs(src_d - frame.cfg.length_nm) < 1e-9) return {};
 
     const auto& sh_list = frame.voyage->sample_hours();
@@ -73,6 +75,78 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
     static constexpr double eps = 1e-9;
 
     std::vector<AtomicEdge> edges;
+
+    if (node_first) {
+        // Node-first (Tal, T20): emit the DISTINCT reachable far-wall grid nodes
+        // between v_min and v_max, SOG = dd/dt per node — no SOG grid, no
+        // target-vs-realised gap. Corner handling: if the next distance line is
+        // too close to resolve on the tau grid, skip it and glide to the time
+        // line (mirrors the speed-first h_too_close fallback). Mirror of the
+        // Python node_first branch in atomic_edges.py.
+        const double vmin = frame.cfg.v_min, vmax = frame.cfg.v_max;
+        const double zeta = frame.cfg.zeta_nm, tau = frame.cfg.tau_h;
+        const double T = frame.cfg.eta_h;
+        // round to 9 decimals (dedupe grid) and Python-style round-half-to-even
+        // for the integer loop bounds, so the reachable-node set matches Python.
+        auto r9 = [](double x) { return std::round(x * 1e9) / 1e9; };
+        auto pyround = [](double x) -> long {
+            double f = std::floor(x), diff = x - f;
+            if (diff < 0.5) return (long)f;
+            if (diff > 0.5) return (long)f + 1;
+            long fl = (long)f;
+            return (fl % 2 == 0) ? fl : fl + 1;   // tie -> even
+        };
+        std::set<std::pair<double, double>> cand;  // (dst_t, dst_d)
+
+        bool resolvable_d = false;
+        double dd_h = 0.0;
+        if (next_h) {
+            dd_h = *next_h - src_d;
+            if (dd_h > eps && frame.snap_h_dst_t(src_t + dd_h / vmax) > src_t + eps)
+                resolvable_d = true;
+        }
+        if (resolvable_d) {                       // distance line binds → enum arrival TIMES
+            double t_fast = src_t + dd_h / vmax;
+            double t_slow = src_t + dd_h / vmin;
+            double t_hi = std::min(t_slow, std::min(next_v ? *next_v : T, T));
+            for (long k = pyround(t_fast / tau); k <= pyround(t_hi / tau); ++k) {
+                double dst_t = r9(k * tau);
+                if (dst_t > src_t + eps && dst_t <= T + eps)
+                    cand.insert({dst_t, r9(*next_h)});
+            }
+        }
+        if (next_v) {                             // time line binds → enum arrival DISTANCES
+            double dt = *next_v - src_t;
+            if (dt > eps) {
+                double d_slow = src_d + vmin * dt;
+                double d_fast = src_d + vmax * dt;
+                double d_cap = resolvable_d ? *next_h : L;   // glide past a too-close line
+                double d_hi = std::min(d_fast, std::min(d_cap, L));
+                for (long k = pyround(d_slow / zeta); k <= pyround(d_hi / zeta); ++k) {
+                    double dst_d = r9(k * zeta);
+                    if (dst_d > src_d + eps && dst_d <= L + eps)
+                        cand.insert({r9(*next_v), dst_d});
+                }
+            }
+        }
+        for (const auto& [dst_t, dst_d] : cand) {
+            double ddt = dst_t - src_t, ddd = dst_d - src_d;
+            if (ddt <= eps || ddd <= eps) continue;
+            double realized_sog = ddd / ddt;
+            double sws = calculate_sws_from_sog(realized_sog, wx_dict, heading,
+                                                 DEFAULT_SHIP_PARAMS);
+            if (std::isnan(sws) || sws > SWS_MAX_FEASIBLE) continue;
+            double fcr = calculate_fuel_consumption_rate(sws);
+            double fuel = fcr * ddt;
+            if (std::isnan(fuel)) continue;
+            bool crosses_v = (next_v && std::abs(dst_t - *next_v) < eps);
+            edges.push_back({src_t, src_d, dst_t, dst_d,
+                             realized_sog, realized_sog, wx, heading,
+                             sws, fcr, fuel, crosses_v});
+        }
+        return edges;
+    }
+
     edges.reserve(frame.sog_grid().size());
 
     for (double target_sog : frame.sog_grid()) {
@@ -147,7 +221,8 @@ static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
 std::pair<std::vector<Node>, std::vector<AtomicEdge>>
 build_atomic_edges(const Frame& frame, int forecast_hour,
                    int override_sample_hour, bool verbose,
-                   const TimeKey& time_key, double d_start) {
+                   const TimeKey& time_key, double d_start,
+                   bool node_first) {
     double L = frame.cfg.length_nm;
     const TDKey src_key = make_td_key(0.0, d_start);
 
@@ -180,7 +255,8 @@ build_atomic_edges(const Frame& frame, int forecast_hour,
         if (n.is_sink) continue;
 
         auto out = emit_from_src(n.time_h, n.distance_nm, frame,
-                                  forecast_hour, override_sample_hour, time_key);
+                                  forecast_hour, override_sample_hour, time_key,
+                                  node_first);
         for (auto& e : out) {
             edges.push_back(e);
             intern(e.dst_t, e.dst_d);   // ensure dst is in node_index

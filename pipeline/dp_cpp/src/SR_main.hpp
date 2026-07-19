@@ -20,6 +20,7 @@ struct SRArgs {
     std::optional<double> zeta_nm;
     std::optional<double> tau_h;
     int sample_hour = 0;   // departure-time anchor (Phase 1; unused in Phase 0)
+    bool node_first = false;  // node-first arc enumeration (T20) vs the SOG grid
 };
 
 struct SRResult {
