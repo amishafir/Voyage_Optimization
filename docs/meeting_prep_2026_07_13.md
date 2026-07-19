@@ -339,3 +339,29 @@ states speed-first did not:
    correct run) in **157 s / 6 replans (~26 s/replan)** vs >1545 s/replan before — ~60×.
    Oracle (Mode C, actual weather) unaffected — the fallback KeyError branch never fires for
    actual keys and the memo is value-transparent.
+
+### Phase 2 COMPLETE — §6 rewritten with node-first (2026-07-19)
+Both experiments re-run node-first; §6 (tables + prose), Discussion, and §5 refreshed & committed.
+
+**§6.1 perfect foresight:** Luo reproduces the prior numbers exactly (no drift). Node-first SR
+slightly lower → SR–Luo gap **widens**: R1 −6.84 mt (−1.9%), R2 −5.81 mt (−2.8%). **SR<Luo 19/19**
+preserved. Node-first Route-1 graph: 133,963 nodes / **1.18M arcs** / 1.6 s solve (vs speed-first
+152,571 / 9.2M / 8.5 s) — ~8× fewer arcs, ~5× faster.
+
+**§6.2 rolling horizon:** RH-Luo reused (Luo path reproduces exactly), Naive recomputed fresh
+(baseline path evolved; max fresh-vs-paper Δ 1.52 mt on R2 sh1344, mean 0.35 mt — fresh is
+current-correct). RH-SR mean **−1.3% (R1) / −1.8% (R2)**; saves on **17/19** (was 18/19). Two
+marginal losses: R1 sh566 +0.10%, R2 sh1344 +0.39% (early commitment vs later-revised forecast).
+RH-Luo indistinguishable from Naive (within 0.05%). Envelope: RH-SR 1.3–8.0 mt above its oracle.
+Replan diagnostic (R2 sh0): node-first RH-SR revises **12/27 (44%, 0.69 kn)** vs paper speed-first
+8/27 — reframed prose around "Luo revises more often (17/27) yet gains nothing; SR's revisions pay
+off" (the mean-kn magnitude no longer favours the old framing, so it was dropped).
+
+**Reproducibility:** `runs/2026_07_16_nf_oracle_full/` (oracle), `runs/2026_07_16_rh_nodefirst/`
+(RH). Regenerate tables: `make_results_tables.py --oracle_dir … --rh_dir …`.
+
+**OPEN — §4.2/§5 method text (needs Tal):** §4.2 Algorithm 1 (`for v ∈ V`) + tractability
+(`|V|=61`, 9.2M arcs, 8 s) still describe speed-first. Node-first replaces the V-loop with the
+reachable far-wall grid nodes and gives 1.18M arcs / 1.6 s (a *stronger* tractability claim; exact
+counts above). §5 already softened to "speed band L/T ± 3 kn" (no "61 values"). Proposal: rewrite
+Algorithm 1 to node-first + update the tractability paragraph.
