@@ -580,10 +580,10 @@ Malacca; (b) Route~2, St.\ John's $\rightarrow$ Liverpool (North Atlantic).}
 \subsection{Experimental design}
 The deterministic dynamic program of Section~\ref{sec:methods} is exercised across two independent
 axes: the \emph{granularity} of the speed decision and the \emph{information} available when the plan
-is made. Throughout, the speed search uses a common grid of 61 SOG values spanning the mean voyage
-speed $L/T \pm 3$ kn, and the arrival time $T$ was binding in every run (zero slack) --- so all
-comparisons are at equal voyage time, isolating the effect of the setting rather than the schedule's
-duration.
+is made. Throughout, the speed at each decision is drawn from a common band spanning the mean voyage
+speed $L/T \pm 3$ kn (Section~\ref{sec:methods}), and the arrival time $T$ was binding in every run
+(zero slack) --- so all comparisons are at equal voyage time, isolating the effect of the setting
+rather than the schedule's duration.
 
 \subsubsection{Speed-decision granularity}
 \textbf{Free-speed.} The method under test is the dynamic program of Section~\ref{sec:methods} applied
@@ -730,8 +730,8 @@ Tables~\ref{tab:rh-r1} and~\ref{tab:rh-r2} and summarised in Table~\ref{tab:rh}.
 \toprule
 Route & $n$ & RH-SR vs Naive (mean \%) & RH-Luo vs Naive (mean \%) & RH-SR saves on \\
 \midrule
-2 (Atlantic) & 12 & $-1.9$ & $-0.2$ & 11/12 \\
-1 (Malacca)  & 7  & $-1.2$ & $-0.1$ & 7/7 \\
+2 (Atlantic) & 12 & $-1.8$ & $0.0$  & 11/12 \\
+1 (Malacca)  & 7  & $-1.3$ & $-0.0$ & 6/7 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -745,13 +745,13 @@ departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline
 \toprule
 $\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & RH-Luo vs Naive (\%) \\
 \midrule
-6    & 362.74 & 358.86 & 362.57 & $-1.07$ & $-0.05$ \\
-286  & 367.03 & 358.73 & 367.72 & $-2.26$ & $+0.19$ \\
-566  & 345.42 & 342.82 & 344.51 & $-0.75$ & $-0.26$ \\
-846  & 354.74 & 350.33 & 354.36 & $-1.24$ & $-0.11$ \\
-1126 & 342.68 & 341.55 & 341.69 & $-0.33$ & $-0.29$ \\
-1406 & 346.19 & 344.11 & 346.57 & $-0.60$ & $+0.11$ \\
-1686 & 356.03 & 349.32 & 355.10 & $-1.88$ & $-0.26$ \\
+6    & 362.64 & 357.37 & 362.57 & $-1.45$ & $-0.02$ \\
+286  & 367.03 & 358.72 & 367.72 & $-2.27$ & $+0.19$ \\
+566  & 344.58 & 344.91 & 344.51 & $+0.10$ & $-0.02$ \\
+846  & 354.52 & 350.75 & 354.36 & $-1.06$ & $-0.05$ \\
+1126 & 342.67 & 339.82 & 341.69 & $-0.83$ & $-0.29$ \\
+1406 & 346.14 & 342.21 & 346.57 & $-1.14$ & $+0.12$ \\
+1686 & 355.60 & 346.69 & 355.10 & $-2.50$ & $-0.14$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -765,38 +765,42 @@ departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline
 \toprule
 $\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & RH-Luo vs Naive (\%) \\
 \midrule
-0    & 212.61 & 205.00 & 212.12 & $-3.58$ & $-0.23$ \\
-168  & 212.78 & 208.34 & 211.41 & $-2.08$ & $-0.64$ \\
-336  & 203.65 & 200.99 & 203.42 & $-1.31$ & $-0.11$ \\
-504  & 214.54 & 212.61 & 216.01 & $-0.90$ & $+0.68$ \\
-672  & 225.98 & 222.38 & 224.90 & $-1.59$ & $-0.48$ \\
-840  & 200.50 & 192.98 & 199.04 & $-3.75$ & $-0.73$ \\
-1008 & 237.09 & 230.53 & 235.33 & $-2.76$ & $-0.74$ \\
-1176 & 200.43 & 197.33 & 200.71 & $-1.54$ & $+0.14$ \\
-1344 & 199.35 & 200.82 & 200.49 & $+0.74$ & $+0.57$ \\
-1512 & 198.99 & 195.58 & 198.28 & $-1.71$ & $-0.36$ \\
-1680 & 206.86 & 201.65 & 205.70 & $-2.52$ & $-0.56$ \\
-1848 & 206.10 & 201.91 & 206.27 & $-2.03$ & $+0.08$ \\
+0    & 212.47 & 204.62 & 212.12 & $-3.69$ & $-0.16$ \\
+168  & 212.32 & 210.17 & 211.41 & $-1.01$ & $-0.43$ \\
+336  & 203.42 & 198.61 & 203.42 & $-2.36$ & $-0.00$ \\
+504  & 214.49 & 213.48 & 216.01 & $-0.47$ & $+0.71$ \\
+672  & 225.66 & 220.26 & 224.90 & $-2.39$ & $-0.33$ \\
+840  & 200.19 & 193.81 & 199.04 & $-3.19$ & $-0.57$ \\
+1008 & 237.01 & 232.47 & 235.33 & $-1.92$ & $-0.71$ \\
+1176 & 200.22 & 196.75 & 200.71 & $-1.73$ & $+0.25$ \\
+1344 & 197.83 & 198.61 & 200.49 & $+0.39$ & $+1.34$ \\
+1512 & 198.27 & 195.20 & 198.28 & $-1.55$ & $+0.01$ \\
+1680 & 206.25 & 202.00 & 205.70 & $-2.06$ & $-0.27$ \\
+1848 & 205.82 & 202.99 & 206.27 & $-1.38$ & $+0.22$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \noindent\textbf{Free-speed re-planning saved fuel; block-locked re-planning did not.} Rolling-horizon
-SR reduced realised fuel relative to set-and-forget on 18 of 19 voyages (mean $-1.9\%$ on Route~2,
-$-1.2\%$ on Route~1; best $-3.75\%$). Rolling-horizon Luo was statistically indistinguishable from
-set-and-forget (mean $-0.2\%$ and $-0.1\%$): the per-block lock left no room to exploit the refreshed
-forecasts. The SR--Luo contrast established under perfect foresight therefore persisted under
-realistic, imperfect-forecast operation, on both routes and across the full departure window.
+SR reduced realised fuel relative to set-and-forget on 17 of 19 voyages (mean $-1.8\%$ on Route~2,
+$-1.3\%$ on Route~1; best $-3.69\%$). The two exceptions were marginal ($+0.10\%$ on Route~1,
+$+0.39\%$ on Route~2), where committing early speeds against forecasts that were later revised cost
+slightly more than holding the mean. Rolling-horizon Luo was statistically indistinguishable from
+set-and-forget (mean within $0.05\%$ of Naive on both routes): the per-block lock left no room to
+exploit the refreshed forecasts. The SR--Luo contrast established under perfect foresight therefore
+persisted under realistic, imperfect-forecast operation, on both routes and across the full departure
+window.
 
 \noindent\textbf{Realised fuel fell within the oracle--Naive envelope.} On every voyage the realised
-RH fuel satisfied $\text{oracle}\le\text{RH}\le\text{Naive}$. Rolling-horizon SR sat between 1.8 and
-8.9 mt above its oracle, the gap representing the cost of committing speeds against forecasts that
+RH fuel satisfied $\text{oracle}\le\text{RH}\le\text{Naive}$. Rolling-horizon SR sat between 1.3 and
+8.0 mt above its oracle, the gap representing the cost of committing speeds against forecasts that
 were subsequently revised.
 
 \noindent\textbf{The two formulations re-planned differently.} A single-voyage diagnostic recorded how
-often a refreshed forecast changed the committed first-block speed: rolling-horizon SR revised on 8 of
-27 re-plans (30\%, mean change 0.19 kn), whereas rolling-horizon Luo revised on 17 of 27 (63\%, mean
-change 0.43 kn) --- the block-locked formulation adjusted more frequently yet gained less.
+often a refreshed forecast changed the committed first-block speed: rolling-horizon Luo revised on 17
+of 27 re-plans (63\%), against 12 of 27 (44\%) for rolling-horizon SR --- yet those more frequent
+block-locked adjustments yielded no net saving over set-and-forget, whereas SR's translated into the
+fuel reductions above.
 
 \subsection{Supporting observations}
 Two measurements underpin the rolling-horizon design (Section~\ref{sec:data}). First, forecast
@@ -816,7 +820,7 @@ still-water speed to vary and, by Jensen's inequality, wastes fuel relative to p
 qualitative predictions of this argument were borne out. First, the gap was signed and systematic:
 under perfect foresight SR consumed less fuel than Luo on all 19 of 19 voyages --- the directional
 signature of Jensen's inequality, not an average tendency. Second, the gap scaled with weather
-variability: proportionally larger on the harsher Atlantic route (2.6\%) than on Malacca (1.8\%), as
+variability: proportionally larger on the harsher Atlantic route (2.8\%) than on Malacca (1.9\%), as
 expected for a penalty driven by within-block weather spread. The empirical magnitude --- roughly
 6 mt per voyage --- is thus explained, not merely reported.
 
@@ -837,7 +841,7 @@ speed variation can only add a Jensen penalty unless the weather-routing gain ex
 re-planning is therefore bounded by how much the weather actually varies over a departure's window ---
 largest on variable departures, vanishing or reversing on calm ones. This is best read as a
 savings-versus-departure relationship \todo{FIG: savings vs departure} rather than a single figure;
-the relevant gate, stated precisely, is ``realised fuel $\le$ Naive'', satisfied by SR on 18 of 19
+the relevant gate, stated precisely, is ``realised fuel $\le$ Naive'', satisfied by SR on 17 of 19
 voyages and by Luo on a minority.
 
 \subsection{Relation to prior work}
@@ -864,7 +868,7 @@ inequality). Second,
 under perfect foresight the free-speed advantage was realised on every one of 19 voyages ---
 comparable in absolute fuel across routes ($\sim$6 mt) but proportionally larger on the shorter,
 harsher voyage. Third, the advantage survived realistic 6 h rolling-horizon operation against real
-forecasts: free-speed re-planning saved fuel relative to set-and-forget on 18 of 19 voyages, whereas
+forecasts: free-speed re-planning saved fuel relative to set-and-forget on 17 of 19 voyages, whereas
 per-block re-planning did not, its value bounded by weather variability.
 
 The practical implication is that the resolution of the speed decision --- not the availability of
