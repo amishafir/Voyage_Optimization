@@ -365,3 +365,49 @@ off" (the mean-kn magnitude no longer favours the old framing, so it was dropped
 reachable far-wall grid nodes and gives 1.18M arcs / 1.6 s (a *stronger* tractability claim; exact
 counts above). §5 already softened to "speed band L/T ± 3 kn" (no "61 values"). Proposal: rewrite
 Algorithm 1 to node-first + update the tractability paragraph.
+
+---
+
+## §3–5 method-text redesign for node-first (design, 2026-07-19)
+
+§6 now reports **node-first** but §4 (and §5 line 583) still describe the **speed-first** method
+(finite speed set `V`, 61 samples). §6 changes are committed & pushed; the method text is scoped
+out for now. Below is the design of what §3–5 need. **Core reframe:** node-first never discretizes
+speed — it discretizes the *plane* (ζ/τ grid) and reads speed off as v̄=Δd/Δt ∈ 𝒱. So the fix is to
+**drop the finite set `V`** and let the ζ/τ grid be the only discretization, expressing everything
+over the continuous interval 𝒱=[v_min,v_max]. This also **removes a latent §3↔§4 mismatch** (§3 line
+177 already says SOG ∈ continuous 𝒱; §4 currently discretizes speed into 61 samples).
+
+### §3 — Problem formulation
+- **Live text (line 177) already correct** — "SOG selected from bounded interval 𝒱=[v_min,v_max]",
+  "fixed during each leg." Node-first is *more* consistent with this than speed-first was.
+- Lines 182–272 (Vessel/SOG/FCR/Decision-variable incl. all "target SOG" wording) are inside a
+  `\begin{comment}` block — NOT rendered, so no action.
+- Optional: one bridge sentence that the discretization (§4) is spatial (ζ/τ grid), not on speed.
+
+### §4 — Methods (Tal's section; touches §4.1 Bellman eqs + §4.2)
+| Spot | Now (speed-first) | Node-first |
+|---|---|---|
+| §4 prose (291, 306, 311) "v ∈ V", "finite set V" | finite speed set | continuous 𝒱 + ζ/τ grid; speeds realized |
+| Eqs. 12–13 Bellman `min_{v∈V}` / `argmin_{v∈V}` | minimize over speed set | minimize over reachable far-wall **grid nodes**; v̄=Δd/Δt derived, ∈𝒱 |
+| §4.2.1 Discretising | snapping "merges arrivals produced by distinct speed sequences" | the ζ/τ grid **is** the action set — enumerate grid nodes directly (no merge needed) |
+| Eq. 6 arc bound `\|A\|=O(\|V\|·\|S\|)` | scales with speed-set size | `\|A\|=O(K·\|S\|)`, K≈8 reachable far-wall nodes/source |
+| Algorithm 1 `for v∈V` (lines 411–419) | speed loop | enumerate far-wall grid nodes in [v_min,v_max]; **corner rule** (skip a too-close distance line, glide to the time line) |
+| §4.2.4 Tractability `\|V\|=61`, ~9.2×10⁶ arcs, ~8 s | speed-first counts | **133,963 nodes / 1.18×10⁶ arcs / 1.6 s** (Route 1) — ≈8× fewer arcs, ≈5× faster (a STRONGER tractability claim) |
+
+### §5 — Data & experimental design
+- Line 583 "common grid of 61 SOG values spanning L/T ± 3 kn" → "speed band 𝒱 spanning L/T ± 3 kn,
+  discretized on the ζ/τ grid (§4.2)". §5.2.1 "free-speed, re-chosen at every boundary crossing"
+  already fits node-first.
+
+### Two bonus points the rewrite enables
+1. **Removes the target-vs-realised speed gap** — speed-first snaps a *target* SOG (realised
+   differs); node-first's speed IS the realised Δd/Δt.
+2. **Collapses two approximation sources into one** — speed-first approximates via both the `V`
+   grid AND the snap; node-first has only the ζ/τ grid, tightening the O(step²) error argument.
+
+### Open decisions (for Tal / next session)
+1. Drop `V` entirely (recommended — coherent 𝒱 story) vs keep `V` as "the discretization"?
+2. §4 edit ownership: I draft vs Tal owns (prior instruction kept §4/§4.1 clean).
+3. §8 Discussion / §9 Conclusion still say "2.6%/1.8%" and "18 of 19" (reverted to match old §6);
+   sync when the method text is finalized.
