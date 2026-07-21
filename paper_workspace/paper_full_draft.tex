@@ -288,7 +288,12 @@ Third, the FCR is convex function of the SOG (see Section~\ref{sec:problem}).
 Therefore, under optimal control the SOG remain constant as long as the vessel is in the same leg and within the same time block. 
 
 As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitutde or longtide line, a new subssegment starts. Within each time blcok, the sea conditions are assumed constant throoughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (mahor) segment, the vessel changes its heading which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$, $l_i$ is the length of segment $i$ and $d_i = d_{i-1} + l_{i-1}$ with $d_0 = 0$ is the cumulative distance from the begining of the route. In particular $d_M = L$.
+% ==== OLD (finite speed set V) — superseded by node-first (continuous 𝒱); kept, not rendered ====
+\begin{comment}
 Next we denote the FCR of the vessel when straming at speed $v \in V$ at  subsegment $i$ at time $t$ by $FCR_i(v, t)$.
+\end{comment}
+% ==== NEW (node-first, continuous interval 𝒱) ====
+Next we denote the FCR of the vessel when steaming at speed $v \in \mathcal{V}$ at subsegment~$i$ and time~$t$ by $FCR_i(v, t)$.
 
 
 
@@ -303,12 +308,22 @@ To create a finite set of states we first define two families of lines that part
 $0=t_0, t_1,\ldots, t_{\Theta}=T$. Between consecutive time lines sea conditions at each cell are fixed.
 \end{itemize}
 
-The recangular areas defined by the vertical and horizontal lines represents sub-spaces of the distance-time space where the optimal speed of the vessel is constant. The only points in this space where the vessel need to make a decision are the on the lines. Moreover, since the the vessel speed is selected from a finite set $V$, the set of reachable points on these lines is finite.  We define the set of states as 
+% ==== OLD (finiteness from a finite speed set V) — superseded below; kept, not rendered ====
+\begin{comment}
+The recangular areas defined by the vertical and horizontal lines represents sub-spaces of the distance-time space where the optimal speed of the vessel is constant. The only points in this space where the vessel need to make a decision are the on the lines. Moreover, since the the vessel speed is selected from a finite set $V$, the set of reachable points on these lines is finite.  We define the set of states as
+\end{comment}
+% ==== NEW (speed drawn from the continuous interval 𝒱; finiteness imposed later by discretisation) ====
+The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the distance--time plane in which the optimal speed of the vessel is constant. The only points at which the vessel makes a decision lie on the lines. Since the speed is drawn from the continuous interval $\mathcal{V}=[v_{\min},v_{\max}]$, the reachable points on these lines form a continuum; we render the state set finite in Section~\ref{sec:solve} by discretising the free coordinate onto a regular grid. We define the set of states as
 \begin{equation}
 	\label{eq:state-space}
 	\mathcal{S}=\bigl\{(d,t): (d,t) \text{ is on one of the distance or time lines and it is reachable from point } (0,0) \bigr\}.
 \end{equation}
-where by reachable we mean that the vessel can be at  distance-time $(d,t)$ by steaming at a fixed speed from $V$ in each of the rectuglar sub-spaces along its voyage on the distance-time space. 
+% ==== OLD (fixed speed from finite V) — superseded below; kept, not rendered ====
+\begin{comment}
+where by reachable we mean that the vessel can be at  distance-time $(d,t)$ by steaming at a fixed speed from $V$ in each of the rectuglar sub-spaces along its voyage on the distance-time space.
+\end{comment}
+% ==== NEW (fixed speed from the continuous interval 𝒱) ====
+where by reachable we mean that the vessel can be at distance--time $(d,t)$ by steaming at some fixed speed from $\mathcal{V}$ in each rectangular sub-space along its voyage through the distance--time plane.
 
 We define the sub-segment of a given distance $d$ within the the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) \arg\max_i\{ t_j < t\} $.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
 When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area ion Figure X  in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
@@ -316,22 +331,42 @@ Since in any such rectangular the sea condition and the heading of the vessel ar
 
 The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward bellmen equation:
 
+% ==== OLD (min over finite speed set V) — superseded by min over 𝒱; kept, not rendered ====
+\begin{comment}
+\begin{equation}
+C^{*}(d,t)=\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
+	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
+	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
+  \end{cases}
+\end{equation}
+\end{comment}
+% ==== NEW (min over the continuous interval 𝒱 — exact; §4.2 approximates by the grid) ====
 \begin{equation}
 \label{eq:cost-to-arrive}
-C^{*}(d,t)=\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
-	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)  
-	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.} 
+C^{*}(d,t)=\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
+	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
+	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
   \end{cases}
 \end{equation}
 With the boundary condition 
 $$C^*(0,0) = 0.$$
 The solution of this Bellman equation is the total fuel consumption up to each point $(d,t)$ in the distance-time plan, for each reachable point we save the speed that minimized this consumption since the previous decision point $(\underline{d}, \underline{t})$. 
 
+% ==== OLD (argmin over finite speed set V) — superseded by argmin over 𝒱; kept, not rendered ====
+\begin{comment}
+\begin{equation}
+V^{*}(d,t)=\arg\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
+	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
+	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
+\end{cases}
+\end{equation}
+\end{comment}
+% ==== NEW (argmin over the continuous interval 𝒱) ====
 \begin{equation}
 \label{eq:opt-speed}
-V^{*}(d,t)=\arg\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
-	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)  
-	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.} 
+V^{*}(d,t)=\arg\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
+	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
+	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
 \end{cases}
 \end{equation}
 
@@ -347,24 +382,48 @@ address discretisation first, then give the enumeration and the sweep as pseudoc
 
 \subsubsection{Discretising the free coordinate}
 \label{sec:snap}
+% ==== OLD (finiteness from finite V; |V|^lines blow-up) — superseded; kept, not rendered ====
+\begin{comment}
 Any state in which the DP make a decision lies either on a distance line $d_i$ or a time line $t_j$, so one of its two coordinates is pinned to such a breakpoint. Moreover, since the speed of the vessel is selected from a finite set $V$,  the other coordinate can also obtained a value from a finite set. Therefore the set of reachable states is finite --- $V$ is finite and the
 number of lines is finite --- but its cardinality can grow as $|V|^{\,\text{(lines crossed)}}$, which
 is not tractable.
+\end{comment}
+% ==== NEW (continuous 𝒱 -> continuum of reachable points; K^lines blow-up of a naive speed grid) ====
+Any state at which the DP makes a decision lies on a distance line $d_i$ or a time line $t_j$, so one
+of its two coordinates is pinned to a breakpoint. The other, free coordinate is continuous: the speed
+is drawn from the interval $\mathcal{V}$, so from a single state the vessel can reach a continuum of
+points on the next line, and over the whole voyage the reachable set is infinite --- and even a naive
+discretisation of the speed into $K$ values would let the state count grow as
+$K^{\,\text{(lines crossed)}}$, which is not tractable.
 
 We contain this by discretising the free coordinate onto a fine regular grid. Let
 $\langle x\rangle_{\zeta}:=\zeta\,\mathrm{round}(x/\zeta)$ denote $x$ rounded to the nearest multiple
 of $\zeta>0$; the time operator $\langle\cdot\rangle_{\tau}$ is defined identically with step $\tau$ in
 place of $\zeta$. When an arc terminates on a time line, its free coordinate (distance) is snapped to a
 grid of step $\zeta$; when it terminates on a distance line, its free coordinate (time) is snapped to a
-grid of step $\tau$. We use $\zeta=1$ NM and $\tau=0.1$ h. Snapping merges the many near-coincident
+grid of step $\tau$. We use $\zeta=1$ NM and $\tau=0.1$ h. % ==== OLD (snap merges distinct-speed arrivals; arc bound in |V|) — superseded; kept, not rendered ====
+\begin{comment}
+Snapping merges the many near-coincident
 arrivals produced by distinct speed sequences into a single shared state, so that each distance line
 carries at most $\lceil T/\tau\rceil$ states and each time line at most $\lceil L/\zeta\rceil$, giving
 \begin{equation}
-\label{eq:state-bound}
 |\mathcal{S}| \;=\; O\!\left(M\,\frac{T}{\tau} \;+\; \Theta\,\frac{L}{\zeta}\right),\qquad
 |\mathcal{A}| \;=\; O\!\left(|V|\,|\mathcal{S}|\right),
 \end{equation}
-where $\mathcal{A}$ is the induced arc set (each state emits at most $|V|$ arcs). The snap steps are
+where $\mathcal{A}$ is the induced arc set (each state emits at most $|V|$ arcs).
+\end{comment}
+% ==== NEW (grid nodes ARE the discrete states/actions; arc bound in K) ====
+The grid nodes on each line are then the discrete states, and from a state we enumerate directly the
+reachable grid nodes on the next line ahead (Section~\ref{sec:enumerate}) --- so no speed set is ever
+introduced. Each distance line carries at most $\lceil T/\tau\rceil$ states and each time line at most
+$\lceil L/\zeta\rceil$, giving
+\begin{equation}
+\label{eq:state-bound}
+|\mathcal{S}| \;=\; O\!\left(M\,\frac{T}{\tau} \;+\; \Theta\,\frac{L}{\zeta}\right),\qquad
+|\mathcal{A}| \;=\; O\!\left(K\,|\mathcal{S}|\right),
+\end{equation}
+where $\mathcal{A}$ is the induced arc set and $K$ is the number of far-wall grid nodes reachable
+within $\mathcal{V}$ from a state (bounded by the speed-band width divided by the grid step). The snap steps are
 small relative to the physical scales --- $\zeta=1$ NM against segments of tens to hundreds of NM, and
 $\tau=0.1$ h against six-hour blocks --- so the induced timing error is at most half a step and is
 negligible next to the accuracy of the FCR function itself (Appendix~\ref{app:fcr}).
@@ -376,12 +435,27 @@ The state set and its arcs are generated by a forward closure from the origin
 \begin{equation}
 \overline{d}(d)=\min\{d_i : d_i>d\},\qquad \overline{t}(t)=\min\{t_j : t_j>t\}
 \end{equation}
-be the next distance line and next time line strictly ahead. Choosing a speed $v\in V$, the vessel
+be the next distance line and next time line strictly ahead. % ==== OLD (iterate over speeds v in V, hold until a line) — superseded; kept, not rendered ====
+\begin{comment}
+Choosing a speed $v\in V$, the vessel
 holds $v$ until it first meets one of these two lines: it reaches $\overline{d}(d)$ after
 $\delta_d=(\overline{d}(d)-d)/v$ and $\overline{t}(t)$ after $\delta_t=\overline{t}(t)-t$, and the arc
 terminates at the nearer. Its free coordinate is snapped as in Section~\ref{sec:snap}, giving a
 successor $(d',t')$; the realised speed over the arc is $\bar v=\Delta d/\Delta t$ with
-$\Delta d=d'-d$, $\Delta t=t'-t$. The leg on which a single speed is held is thus of no fixed length:
+$\Delta d=d'-d$, $\Delta t=t'-t$.
+\end{comment}
+% ==== NEW (enumerate the reachable grid nodes on the two lines directly) ====
+Rather than iterate over a set of speeds, we enumerate the reachable grid nodes on these two lines
+directly. On the next distance line $\overline{d}(d)$, holding any speed in $\mathcal{V}$ gives an
+arrival time between $t+(\overline{d}(d)-d)/v_{\max}$ and $t+(\overline{d}(d)-d)/v_{\min}$ (clipped at
+$\overline{t}(t)$ and $T$); we take every multiple of $\tau$ in that range as a candidate arrival. On
+the next time line $\overline{t}(t)$, the reachable distance lies between $d+v_{\min}\delta_t$ and
+$d+v_{\max}\delta_t$ with $\delta_t=\overline{t}(t)-t$; we take every multiple of $\zeta$. Each
+candidate grid node is a successor $(d',t')$, reached by holding the single speed
+$\bar v=\Delta d/\Delta t\in\mathcal{V}$ over the leg, with $\Delta d=d'-d$ and $\Delta t=t'-t$;
+because the node already lies on the grid, no target-versus-realised speed gap arises. A distance line
+too close to resolve on the $\tau$-grid --- its snapped arrival collapsing back onto $t$ --- is
+skipped, and the vessel glides past it to the next time line. The leg on which a single speed is held is thus of no fixed length:
 it ends at the first boundary at which either the sea conditions change (a distance line) or a decision
 epoch is reached (a time line), so the control discretisation is \emph{adaptive} --- induced by the
 data rather than by a fixed step. An arc is discarded if it is degenerate ($\Delta d\le0$ or
@@ -394,6 +468,8 @@ Eq.~\eqref{eq:cost-to-arrive} --- times the duration, $\phi(d,t;\bar v)\,\Delta 
 $(0,0)$ and adding each previously-unseen successor as a new state, the closure discovers exactly the
 reachable set $\mathcal{S}$ of Eq.~\eqref{eq:state-space}; states with $d=L$ are sinks and emit no arcs.
 
+% ==== OLD Algorithm 1 (speed-first: for v in V) — superseded by node-first; kept, not rendered ====
+\begin{comment}
 \begin{center}
 \fbox{\begin{minipage}{0.95\textwidth}
 \textbf{Algorithm~1: Enumerate reachable states and build the arc set}\\[-6pt]
@@ -414,6 +490,36 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \>\> \textbf{else} $(d',t')\leftarrow\bigl(\langle d+v\,\delta_t\rangle_\zeta,\,\overline{t}\bigr)$ \quad{\small$\triangleright$ time line binds}\\
 \>\> $\Delta d\leftarrow d'-d$;\quad $\Delta t\leftarrow t'-t$;\quad $\bar v\leftarrow\Delta d/\Delta t$\\
 \>\> \textbf{if} $\Delta d\le0$ \textbf{or} $\Delta t\le0$ \textbf{or} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
+\>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(d',t')\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,\Delta t\,\bigr\}$\\
+\>\> \textbf{if} $(d',t')\notin\mathcal{S}$ \textbf{then} $\mathcal{S}\leftarrow\mathcal{S}\cup\{(d',t')\}$;\ $\mathrm{push}(Q,(d',t'))$\\
+\> \textbf{end for}\\
+\textbf{end while}
+\end{tabbing}
+\end{minipage}}
+\end{center}
+\end{comment}
+% ==== NEW Algorithm 1 (node-first: enumerate reachable far-wall grid nodes) ====
+\begin{center}
+\fbox{\begin{minipage}{0.95\textwidth}
+\textbf{Algorithm~1: Enumerate reachable states and build the arc set (node-first)}\\[-6pt]
+\rule{\linewidth}{0.4pt}
+\footnotesize
+\begin{tabbing}
+xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
+\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\zeta,\tau$, FCR $\phi$\\
+\textbf{Output:} state set $\mathcal{S}$, arc set $\mathcal{A}$\\
+$\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad queue $Q\leftarrow[(0,0)]$\\
+\textbf{while} $Q$ not empty \textbf{do}\\
+\> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t\ge T$ \textbf{then continue}\\
+\> $\overline{d}\leftarrow\min\{d_i>d\}$;\quad $\overline{t}\leftarrow\min\{t_j>t\}$;\quad $C\leftarrow\emptyset$ \quad{\small$\triangleright$ candidate successors $(d',t')$}\\
+\> $\text{res}\leftarrow\bigl[\langle t+(\overline{d}-d)/v_{\max}\rangle_\tau>t\bigr]$ \quad{\small$\triangleright$ is the next distance line resolvable on the $\tau$-grid?}\\
+\> \textbf{if} res \textbf{then} \quad{\small$\triangleright$ distance line binds: enumerate arrival \emph{times}}\\
+\>\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{t+(\overline{d}-d)/v_{\max}}{\tau}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(t+(\overline{d}-d)/v_{\min},\,\overline{t},\,T)}{\tau}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(\overline{d},\,k\tau)\}$\\
+\> $d_{\mathrm{cap}}\leftarrow \overline{d}$ \textbf{if} res \textbf{else} $L$ \quad{\small$\triangleright$ time line binds: enumerate arrival \emph{distances} (glide past a too-close line)}\\
+\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{d+v_{\min}(\overline{t}-t)}{\zeta}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(d+v_{\max}(\overline{t}-t),\,d_{\mathrm{cap}})}{\zeta}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(k\zeta,\,\overline{t})\}$\\
+\> \textbf{for} $(d',t')\in C$ \textbf{do}\\
+\>\> $\Delta d\leftarrow d'-d$;\quad $\Delta t\leftarrow t'-t$;\quad $\bar v\leftarrow\Delta d/\Delta t$\\
+\>\> \textbf{if} $\Delta d\le0$ \textbf{or} $\Delta t\le0$ \textbf{or} $\bar v\notin\mathcal{V}$ \textbf{or} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
 \>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(d',t')\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,\Delta t\,\bigr\}$\\
 \>\> \textbf{if} $(d',t')\notin\mathcal{S}$ \textbf{then} $\mathcal{S}\leftarrow\mathcal{S}\cup\{(d',t')\}$;\ $\mathrm{push}(Q,(d',t'))$\\
 \> \textbf{end for}\\
@@ -471,9 +577,18 @@ walk $\mathrm{pred}(\cdot)$ from $s^{\star}$ to $(0,0)$, collecting the recorded
 The construction realises the per-cell speed resolution of Contribution~1 at a cost that stays
 polynomial in the route and horizon (Eq.~\eqref{eq:state-bound}), in contrast to the $K^{N}$ growth of
 the profile space that forces coarse stages in the block formulations of Section~\ref{sec:related}. On
+% ==== OLD (|V|=61 speeds; 9.2e6 arcs; ~8 s — speed-first) — superseded; kept, not rendered ====
+\begin{comment}
 Route~1 ($L=3{,}393$ NM, $T=280$ h, $M=162$ subsegments, $|V|=61$ speeds)
 the closure of Algorithm~1 yields about $1.5\times10^{5}$ states and $9.2\times10^{6}$
-arcs, and the single forward sweep of Algorithm~2 solves it in roughly eight seconds; the
+arcs, and the single forward sweep of Algorithm~2 solves it in roughly eight seconds;
+\end{comment}
+% ==== NEW (node-first: ~1.2e6 arcs; <2 s) ====
+Route~1 ($L=3{,}393$ NM, $T=280$ h, $M=162$ subsegments, speed band of width $6$ kn)
+the closure of Algorithm~1 yields about $1.3\times10^{5}$ states and $1.2\times10^{6}$
+arcs --- the node-first enumeration emits only the $\sim\!8$ distinct reachable far-wall nodes per
+state rather than one arc per speed --- and the single forward sweep of Algorithm~2 solves it in
+under two seconds; the
 one-off arc construction, dominated by the per-arc still-water-speed inversion and FCR evaluation, is a
 separate preprocessing cost.
 
@@ -580,10 +695,19 @@ Malacca; (b) Route~2, St.\ John's $\rightarrow$ Liverpool (North Atlantic).}
 \subsection{Experimental design}
 The deterministic dynamic program of Section~\ref{sec:methods} is exercised across two independent
 axes: the \emph{granularity} of the speed decision and the \emph{information} available when the plan
+% ==== OLD (common grid of 61 SOG values) — superseded by the band 𝒱; kept, not rendered ====
+\begin{comment}
 is made. Throughout, the speed search uses a common grid of 61 SOG values spanning the mean voyage
 speed $L/T \pm 3$ kn, and the arrival time $T$ was binding in every run (zero slack) --- so all
 comparisons are at equal voyage time, isolating the effect of the setting rather than the schedule's
 duration.
+\end{comment}
+% ==== NEW (speed drawn from the band 𝒱; enumeration is node-first, §4.2) ====
+is made. Throughout, the speed at each decision is drawn from a common band spanning the mean voyage
+speed $L/T \pm 3$ kn --- the interval $\mathcal{V}$ of Section~\ref{sec:methods}, enumerated
+node-first on the $\zeta,\tau$ grid --- and the arrival time $T$ was binding in every run (zero slack)
+--- so all comparisons are at equal voyage time, isolating the effect of the setting rather than the
+schedule's duration.
 
 \subsubsection{Speed-decision granularity}
 \textbf{Free-speed.} The method under test is the dynamic program of Section~\ref{sec:methods} applied
