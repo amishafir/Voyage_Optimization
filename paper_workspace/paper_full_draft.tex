@@ -992,15 +992,19 @@ expected for a penalty driven by within-block weather spread. The empirical magn
 
 \subsection{Decision granularity, not data, is the limiting factor}
 That the free-speed advantage persisted under realistic rolling-horizon operation
-(Section~\ref{sec:res-rh}) confirms it is not an artefact of perfect information. The per-block
-baseline re-planned more often under refreshed forecasts yet gained less, because it lacked the
-within-block resolution to act on the new information: the limiting factor is decision granularity,
-not data.
+(Section~\ref{sec:res-rh}) confirms it is not an artefact of perfect information. A single-voyage
+diagnostic makes the point concrete: the per-block baseline revised its committed first-block speed on
+17 of 27 re-plans, against 12 of 27 for the free-speed program, yet only the latter's revisions turned
+into fuel savings. The block-locked planner re-planned \emph{more} often under refreshed forecasts and
+still gained less, because it lacked the within-block resolution to act on the new information --- it
+can shift the single speed it holds over an entire stage, but cannot place a slower leg exactly where
+and when the weather worsens. The limiting factor is therefore decision granularity, not data: better
+information helps only a planner able to exploit it at the resolution at which the weather varies.
 
 \subsection{When re-planning helps --- and when it does not}
 \label{sec:disc-bound}
 The rolling-horizon benefit over set-and-forget is real but bounded, and is not claimed to be
-universal. On 1 of 19 voyages the free-speed RH plan consumed slightly more fuel than the fixed-speed
+universal. On 2 of 19 voyages the free-speed RH plan consumed slightly more fuel than the fixed-speed
 baseline, and the per-block RH plan did so on several. The reason is the same convexity seen from the
 other side: on near-uniform weather a constant speed is itself fuel-optimal, so any forecast-driven
 speed variation can only add a Jensen penalty unless the weather-routing gain exceeds it. The value of
@@ -1011,7 +1015,29 @@ the relevant gate, stated precisely, is ``realised fuel $\le$ Naive'', satisfied
 voyages and by Luo on a minority.
 
 \subsection{Relation to prior work}
-\todo{To be written.}
+Our findings sharpen, rather than overturn, the established picture. The convexity of fuel in speed has
+long been used to argue that a constant speed is optimal under uniform conditions \citep{Ronen2011,
+Hvattum2013}; we use the same property from the other side --- under \emph{varying} conditions a
+constant-speed or coarse-stage plan carries a systematic Jensen penalty --- and we measure it. Against
+the state-of-the-art multistage-graph formulation of \citet{luo2024}, which holds speed constant across
+each forecast-cycle stage to keep the $K^{N}$ profile space tractable, our contribution is twofold and
+empirical: the per-cell resolution that stage-based formulations cannot reach without combinatorial
+blow-up is obtained here in a single polynomial-time pass over a directed acyclic graph, and, on a
+like-for-like comparison, that finer resolution is shown to \emph{pay} --- the free-speed program
+consumed less fuel than \citet{luo2024} on all 19 voyages under perfect foresight, with the gap growing
+with weather variability exactly as the convexity argument predicts.
+
+The result also speaks to the forecast-uncertainty literature. Where earlier work established the value
+of finer or adaptive planning only under perfect information, or represented uncertainty through
+ensembles \citep{Vettor2022, Luo2023}, we drive the optimiser with real operational forecasts, assume
+no probabilistic model of the forecast--realisation relationship, and tie the re-plan cadence to the
+forecast refresh cycle rather than choosing it freely \citep{Tzortzis2021, Zheng2023}. Under this
+regime the granularity advantage persists (17 of 19 voyages), and the per-block baseline's inability to
+convert refreshed forecasts into savings --- despite re-planning more often --- isolates decision
+granularity, not information, as the binding factor. Finally, in contrast to evaluations on constant or
+synthetic weather, on single voyages, or under the simplification $V_s\!=\!V_g$ \citep{Cariou2011}, our
+benchmark is driven by real sea-conditions data with an explicit still-water-to-ground speed correction
+and SOG-targeted arrival, over many consecutive voyages on two contrasting routes.
 
 \subsection{Limitations}
 (i) Two routes were studied; the route-length scaling of the gap is reported as a contrast, not a
