@@ -411,3 +411,28 @@ over the continuous interval 𝒱=[v_min,v_max]. This also **removes a latent §
 2. §4 edit ownership: I draft vs Tal owns (prior instruction kept §4/§4.1 clean).
 3. §8 Discussion / §9 Conclusion still say "2.6%/1.8%" and "18 of 19" (reverted to match old §6);
    sync when the method text is finalized.
+
+### §3–5 node-first method text — IMPLEMENTED (1a), old kept under \begin{comment} (2026-07-21)
+The designed §3–5 rewrite is now implemented in `paper_workspace/paper_full_draft.tex` (commit
+`5014c71`), and renders in Overleaf. Approach **1a** (drop the finite speed set `V` for the continuous
+interval `𝒱=[v_min,v_max]` + the `ζ,τ` grid). **Every changed passage keeps its OLD (speed-first)
+version inline under `\begin{comment}` (hidden, not deleted); the NEW (node-first) version is active
+right beside it.** 11 edits: §4.1 (5) · §4.2.1 (2) · §4.2.2 (2) · §4.2.4 (1) · §5 (1); §3 unchanged
+(already uses 𝒱); §4.2.3 forward sweep + Algorithm 2 unchanged (method-agnostic).
+
+- FCR notation, "reachable" def, and Bellman Eqs. (2)/(3): `v∈V` → `min/argmin over 𝒱` (exact
+  continuous problem; §4.2 approximates by the grid).
+- §4.2.1: intractability reframed `|V|^lines` → continuum / `K^lines`; the grid nodes ARE the
+  states/actions; arc bound `O(|V||S|)` → `O(K|S|)` (K≈8 vs |V|=61).
+- §4.2.2: enumeration prose speed-loop → reachable far-wall grid nodes (+corner rule); **Algorithm 1
+  rewritten node-first** (`for v∈V` → candidate-node enumeration with `d_cap` glide-past rule).
+- §4.2.4 tractability: `|V|=61 / 9.2e6 arcs / ~8 s` → `speed band / ~1.2e6 arcs / <2 s`.
+- §5: "grid of 61 SOG values" → "band 𝒱, enumerated node-first on the ζ,τ grid".
+
+**Change-log (active-vs-commented + explanation, all 11 edits):**
+- Local: [`docs/method_changes_node_first.html`](method_changes_node_first.html)
+- Published artifact: https://claude.ai/code/artifact/929178ab-ab4d-41ab-b2fc-112d91fb4274
+
+**Overleaf note:** compile only works with `paper_full_draft.tex` (or a file renamed `main.tex`) set as
+the Main document — a stray `main.tex`/`main_old.tex` root in the project caused an emergency-stop
+until the root was switched. Our file is fully self-contained (elsarticle, no `\input`s).

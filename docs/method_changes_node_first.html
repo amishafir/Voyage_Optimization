@@ -1,0 +1,312 @@
+<title>§3–5 node-first rewrite — change log</title>
+<style>
+  :root{
+    --ground:#eef1f5; --surface:#ffffff; --surface-2:#f4f6f9;
+    --ink:#1c2531; --muted:#5b6979; --faint:#8896a6; --hair:#d9e0e8;
+    --accent:#1f5c86; --accent-soft:#e6eef4;
+    --old-line:#b06a2c; --old-bg:#fbf2e7; --old-ink:#875223; --old-hair:#eddcc6;
+    --new-line:#2e7d5b; --new-bg:#e9f4ee; --new-ink:#1f5f43; --new-hair:#cbe6d6;
+    --code-bg:#f7f9fb; --code-ink:#26313f;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#101519; --surface:#171e26; --surface-2:#131920;
+      --ink:#dbe3ec; --muted:#93a1b1; --faint:#6b7887; --hair:#26303b;
+      --accent:#6fabd6; --accent-soft:#17242f;
+      --old-line:#c98a4a; --old-bg:#231a10; --old-ink:#d3a468; --old-hair:#3a2c1a;
+      --new-line:#4fae82; --new-bg:#132019; --new-ink:#88cfa7; --new-hair:#22362b;
+      --code-bg:#0e141a; --code-ink:#c3cedb;
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#eef1f5; --surface:#ffffff; --surface-2:#f4f6f9;
+    --ink:#1c2531; --muted:#5b6979; --faint:#8896a6; --hair:#d9e0e8;
+    --accent:#1f5c86; --accent-soft:#e6eef4;
+    --old-line:#b06a2c; --old-bg:#fbf2e7; --old-ink:#875223; --old-hair:#eddcc6;
+    --new-line:#2e7d5b; --new-bg:#e9f4ee; --new-ink:#1f5f43; --new-hair:#cbe6d6;
+    --code-bg:#f7f9fb; --code-ink:#26313f;
+  }
+  :root[data-theme="dark"]{
+    --ground:#101519; --surface:#171e26; --surface-2:#131920;
+    --ink:#dbe3ec; --muted:#93a1b1; --faint:#6b7887; --hair:#26303b;
+    --accent:#6fabd6; --accent-soft:#17242f;
+    --old-line:#c98a4a; --old-bg:#231a10; --old-ink:#d3a468; --old-hair:#3a2c1a;
+    --new-line:#4fae82; --new-bg:#132019; --new-ink:#88cfa7; --new-hair:#22362b;
+    --code-bg:#0e141a; --code-ink:#c3cedb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:60rem;margin:0 auto;padding:2.4rem 1.5rem 5rem}
+
+  header.masthead{border-bottom:2px solid var(--ink);padding-bottom:1.4rem;margin-bottom:2rem}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 .6rem}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(1.9rem,4vw,2.7rem);line-height:1.12;
+    margin:0 0 .5rem;text-wrap:balance;letter-spacing:-.01em}
+  .lede{font-size:1.06rem;color:var(--muted);max-width:44rem;margin:.2rem 0 0}
+  .lede b{color:var(--ink);font-weight:600}
+
+  .summary{background:var(--surface);border:1px solid var(--hair);border-radius:10px;
+    padding:1.3rem 1.5rem;margin:1.8rem 0 2.2rem}
+  .summary h2{font-family:var(--serif);font-size:1.15rem;margin:0 0 .5rem;font-weight:600}
+  .summary p{margin:.4rem 0;color:var(--muted);font-size:.96rem}
+  .summary .mono{font-family:var(--mono);font-size:.92em;color:var(--ink);
+    background:var(--accent-soft);padding:.05em .35em;border-radius:4px}
+
+  .legend{display:flex;gap:1.6rem;flex-wrap:wrap;margin:1rem 0 0;font-size:.85rem}
+  .legend .chip{display:inline-flex;align-items:center;gap:.5rem;color:var(--muted)}
+  .swatch{width:.9rem;height:.9rem;border-radius:3px;flex:none}
+  .sw-old{background:var(--old-bg);border:1.5px solid var(--old-line)}
+  .sw-new{background:var(--new-bg);border:1.5px solid var(--new-line)}
+
+  .sec-head{display:flex;align-items:baseline;gap:.8rem;margin:2.6rem 0 1rem;
+    padding-bottom:.4rem;border-bottom:1px solid var(--hair)}
+  .sec-head h2{font-family:var(--serif);font-size:1.4rem;font-weight:600;margin:0}
+  .sec-head .tag{font-family:var(--mono);font-size:.74rem;letter-spacing:.08em;color:var(--faint);
+    text-transform:uppercase}
+
+  .change{background:var(--surface);border:1px solid var(--hair);border-radius:11px;
+    padding:1.25rem 1.35rem 1.4rem;margin:1rem 0;box-shadow:0 1px 2px rgba(20,30,45,.04)}
+  .change > .top{display:flex;align-items:baseline;gap:.7rem;margin-bottom:.85rem}
+  .num{font-family:var(--mono);font-size:.8rem;font-weight:600;color:var(--surface);
+    background:var(--accent);border-radius:6px;padding:.15em .5em;flex:none;
+    font-variant-numeric:tabular-nums}
+  .change h3{font-family:var(--serif);font-size:1.1rem;font-weight:600;margin:0;line-height:1.25}
+
+  .panel{border-radius:8px;padding:.6rem .8rem;margin:.5rem 0;overflow-x:auto}
+  .panel .plabel{font-family:var(--mono);font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;
+    display:flex;align-items:center;gap:.45rem;margin-bottom:.4rem;font-weight:600}
+  .panel .dot{width:.6rem;height:.6rem;border-radius:50%;flex:none}
+  .panel pre{margin:0;font-family:var(--mono);font-size:.82rem;line-height:1.5;color:var(--code-ink);
+    white-space:pre;tab-size:2}
+  .old{background:var(--old-bg);border:1px solid var(--old-hair)}
+  .old .plabel{color:var(--old-line)} .old .dot{background:var(--old-line)}
+  .new{background:var(--new-bg);border:1px solid var(--new-hair)}
+  .new .plabel{color:var(--new-line)} .new .dot{background:var(--new-line)}
+
+  .why{font-size:.95rem;color:var(--muted);margin:.85rem .1rem 0;padding-left:.9rem;
+    border-left:2px solid var(--accent)}
+  .why b{color:var(--ink);font-weight:600}
+  .why .m{font-family:var(--mono);font-size:.88em;color:var(--ink)}
+
+  .note{font-size:.9rem;color:var(--muted);background:var(--surface-2);border:1px dashed var(--hair);
+    border-radius:9px;padding:.9rem 1.1rem;margin:1rem 0}
+  .note b{color:var(--ink)}
+  footer{margin-top:3rem;padding-top:1.2rem;border-top:1px solid var(--hair);
+    font-size:.82rem;color:var(--faint);font-family:var(--mono)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--accent-soft);padding:.05em .3em;border-radius:4px}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Paper · method text · §3–5 diff</p>
+    <h1>Node-first rewrite: what changed in the method sections</h1>
+    <p class="lede">Every edit below replaces the old <b>speed-first</b> wording with the adopted
+      <b>node-first</b> formulation. The old version is <b>kept in the source</b>, wrapped in
+      <span class="mono">\begin{comment}</span> (hidden from the PDF); the new version sits right beside it,
+      active. Nothing was deleted.</p>
+  </header>
+
+  <section class="summary">
+    <h2>The one idea behind all of it</h2>
+    <p>The DP no longer chooses speed from a finite set <span class="mono">V</span> (the old
+      61-value grid). Speed is a continuous variable on the interval
+      <span class="mono">𝒱 = [v_min, v_max]</span>; the DP instead discretises the
+      <em>time–distance plane</em> onto the <span class="mono">ζ, τ</span> grid and reads speed off as
+      <span class="mono">v̄ = Δd/Δt</span>. So the ζ/τ grid is the only discretisation, and the finite
+      speed set disappears — which also fixes a latent §3↔§4 mismatch (§3 already defined 𝒱 as
+      continuous).</p>
+    <div class="legend">
+      <span class="chip"><span class="swatch sw-new"></span> active — rendered in the PDF (node-first)</span>
+      <span class="chip"><span class="swatch sw-old"></span> commented — kept in source, not rendered (speed-first)</span>
+    </div>
+  </section>
+
+  <div class="sec-head"><h2>§3 · Problem formulation</h2><span class="tag">unchanged</span></div>
+  <div class="note"><b>No change.</b> The live text already introduces speed on the continuous
+    interval <span class="mono">𝒱 = [v_min, v_max]</span> and states that the SOG is constant per leg —
+    node-first is fully consistent with it (the old “target SOG” paragraph was already commented out
+    from before).</div>
+
+  <div class="sec-head"><h2>§4.1 · State space &amp; Bellman equation</h2><span class="tag">5 edits</span></div>
+
+  <div class="change">
+    <div class="top"><span class="num">1</span><h3>FCR notation — the speed argument</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>Next we denote the FCR of the vessel when straming at speed $v \in V$ at
+subsegment $i$ at time $t$ by $FCR_i(v, t)$.</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>Next we denote the FCR of the vessel when steaming at speed $v \in \mathcal{V}$
+at subsegment~$i$ and time~$t$ by $FCR_i(v, t)$.</pre></div>
+    <p class="why">Sets the convention for everything that follows: the fuel rate is written for a speed
+      drawn from the continuous band <span class="m">𝒱</span>, not a member of a finite list
+      <span class="m">V</span>.</p>
+  </div>
+
+  <div class="change">
+    <div class="top"><span class="num">2</span><h3>Why the state set is finite</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>… The only points … where the vessel need to make a decision are on the lines.
+Moreover, since the vessel speed is selected from a finite set $V$, the set of
+reachable points on these lines is finite. We define the set of states as</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>… The only points at which the vessel makes a decision lie on the lines. Since
+the speed is drawn from the continuous interval $\mathcal{V}=[v_{\min},v_{\max}]$,
+the reachable points on these lines form a continuum; we render the state set
+finite in Section~\ref{sec:solve} by discretising the free coordinate onto a
+regular grid. We define the set of states as</pre></div>
+    <p class="why"><b>Finiteness no longer comes from a finite speed set.</b> With a continuous 𝒱 the
+      reachable points are a continuum; finiteness is imposed later, by snapping the free coordinate to
+      the <span class="m">ζ/τ</span> grid. Removes the dependence on an arbitrary speed grid.</p>
+  </div>
+
+  <div class="change">
+    <div class="top"><span class="num">3</span><h3>Definition of “reachable”</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>… by steaming at a fixed speed from $V$ in each of the rectuglar sub-spaces …</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>… by steaming at some fixed speed from $\mathcal{V}$ in each rectangular
+sub-space along its voyage through the distance--time plane.</pre></div>
+    <p class="why">Same substitution — “fixed speed from <span class="m">V</span>” →
+      “from <span class="m">𝒱</span>”.</p>
+  </div>
+
+  <div class="change">
+    <div class="top"><span class="num">4</span><h3>Bellman cost-to-arrive, Eq. (2)</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>C*(d,t) = min_{v \in V}  { … case 1 … ; … case 2 … }</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>C*(d,t) = min_{v \in \mathcal{V}}  { … case 1 … ; … case 2 … }</pre></div>
+    <p class="why">The minimisation now runs over the <b>continuous interval 𝒱</b>, so Eq. (2) states the
+      <em>exact</em> continuous problem. Section 4.2 then <em>approximates</em> it by discretising the
+      plane — matching the paper’s “we approximate …” framing. (Only the subscript changes; the two
+      cases are untouched.)</p>
+  </div>
+
+  <div class="change">
+    <div class="top"><span class="num">5</span><h3>Optimal speed, Eq. (3)</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>V*(d,t) = argmin_{v \in V}  { … }</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>V*(d,t) = argmin_{v \in \mathcal{V}}  { … }</pre></div>
+    <p class="why">The recovered optimal speed is likewise an argmin over the continuous band 𝒱.</p>
+  </div>
+
+  <div class="sec-head"><h2>§4.2.1 · Discretising the free coordinate</h2><span class="tag">2 edits</span></div>
+
+  <div class="change">
+    <div class="top"><span class="num">6</span><h3>Why the naive state set is intractable</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>… since the speed of the vessel is selected from a finite set $V$, the other
+coordinate can also obtain a value from a finite set. Therefore the set of
+reachable states is finite --- $V$ is finite and the number of lines is finite
+--- but its cardinality can grow as $|V|^{(lines crossed)}$, which is not tractable.</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>Any state at which the DP makes a decision lies on a distance line or a time
+line … The other, free coordinate is continuous: the speed is drawn from the
+interval $\mathcal{V}$, so from a single state the vessel can reach a continuum
+of points on the next line, and over the whole voyage the reachable set is
+infinite --- and even a naive discretisation of the speed into $K$ values would
+let the state count grow as $K^{(lines crossed)}$, which is not tractable.</pre></div>
+    <p class="why">Reframes the blow-up: it is no longer “because <span class="m">|V|</span> is finite” but
+      “because speed is <b>continuous</b> (a continuum of successors), and even a crude
+      <span class="m">K</span>-value speed grid would explode as <span class="m">K^(lines)</span>” —
+      motivating the grid discretisation without ever committing to a speed set.</p>
+  </div>
+
+  <div class="change">
+    <div class="top"><span class="num">7</span><h3>What snapping does · arc-count bound, Eq. (6)</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>Snapping merges the many near-coincident arrivals produced by distinct speed
+sequences into a single shared state … giving
+   |S| = O(M·T/τ + Θ·L/ζ),   |A| = O(|V|·|S|),
+where A is the induced arc set (each state emits at most |V| arcs).</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>The grid nodes on each line are then the discrete states, and from a state we
+enumerate directly the reachable grid nodes on the next line ahead --- so no
+speed set is ever introduced. … giving
+   |S| = O(M·T/τ + Θ·L/ζ),   |A| = O(K·|S|),
+where A is the induced arc set and K is the number of far-wall grid nodes
+reachable within 𝒱 from a state (≈ speed-band width ÷ grid step).</pre></div>
+    <p class="why"><b>The grid nodes <em>are</em> the states/actions.</b> Old: snapping merged arrivals from
+      many speeds, and each state emitted up to <span class="m">|V|</span> arcs → bound
+      <span class="m">O(|V|·|S|)</span>. New: enumerate the reachable grid nodes directly, at most
+      <span class="m">K</span> per state → <span class="m">O(K·|S|)</span>. On Route 1,
+      <span class="m">K ≈ 8</span> vs the old <span class="m">|V| = 61</span>.</p>
+  </div>
+
+  <div class="sec-head"><h2>§4.2.2 · Enumerating the reachable states</h2><span class="tag">2 edits</span></div>
+
+  <div class="change">
+    <div class="top"><span class="num">8</span><h3>How successors are generated (prose)</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>Choosing a speed $v\in V$, the vessel holds $v$ until it first meets one of these
+two lines … terminates at the nearer. Its free coordinate is snapped … giving a
+successor (d',t'); the realised speed over the arc is v̄ = Δd/Δt …</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>Rather than iterate over a set of speeds, we enumerate the reachable grid nodes
+on these two lines directly. On the next distance line, holding any speed in 𝒱
+gives an arrival time between t+(d̄−d)/v_max and t+(d̄−d)/v_min (clipped at t̄ and
+T); we take every multiple of τ. On the next time line, the reachable distance
+lies between d+v_min·δt and d+v_max·δt; we take every multiple of ζ. Each grid
+node is a successor reached at the single speed v̄ = Δd/Δt ∈ 𝒱 … because the node
+already lies on the grid, no target-versus-realised speed gap arises. A distance
+line too close to resolve on the τ-grid is skipped, and the vessel glides past
+it to the next time line.</pre></div>
+    <p class="why"><b>The core mechanic.</b> Old: pick a speed, follow it to a line. New: enumerate the
+      distinct reachable grid nodes on the far wall (arrival <em>times</em> on a distance line, arrival
+      <em>distances</em> on a time line) and take the speed as <span class="m">Δd/Δt</span>. This removes
+      the target-vs-realised speed gap and adds the corner rule for a too-close cell boundary.</p>
+  </div>
+
+  <div class="change">
+    <div class="top"><span class="num">9</span><h3>Algorithm 1 — the build loop</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented · speed-first</div><pre>for (d,t) popped from Q:
+  d̄ ← next distance line;  t̄ ← next time line
+  for v ∈ V:                          ◄── loop over the 61-value speed set
+    δd ← (d̄−d)/v;  δt ← t̄−t
+    if δd ≤ δt: (d',t') ← (d̄, ⟨t+δd⟩_τ)        ▷ distance line binds
+    else:       (d',t') ← (⟨d+v·δt⟩_ζ, t̄)      ▷ time line binds
+    v̄ ← Δd/Δt;  add arc (d,t)→(d',t') with cost φ·Δt</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active · node-first</div><pre>for (d,t) popped from Q:
+  d̄ ← next distance line;  t̄ ← next time line;  C ← ∅
+  res ← ⟨t+(d̄−d)/v_max⟩_τ &gt; t          ◄── is the distance line τ-resolvable?
+  if res:                                        ▷ enumerate arrival TIMES on d̄
+    for k = round((t+(d̄−d)/v_max)/τ) .. round(min(t+(d̄−d)/v_min, t̄, T)/τ):
+      add (d̄, kτ) to C
+  d_cap ← d̄ if res else L                        ▷ enumerate arrival DISTANCES on t̄
+  for k = round((d+v_min·δt)/ζ) .. round(min(d+v_max·δt, d_cap)/ζ):
+      add (kζ, t̄) to C
+  for (d',t') ∈ C:
+    v̄ ← Δd/Δt;  skip if v̄ ∉ 𝒱 or unattainable;  add arc with cost φ·Δt</pre></div>
+    <p class="why"><b>The engine that produced §6’s numbers.</b> The <span class="m">for v ∈ V</span> loop is
+      replaced by direct enumeration of candidate far-wall grid nodes, with the corner rule
+      (<span class="m">d_cap = L</span> when the distance line is too close, so the vessel glides past it).
+      Input is now a <b>speed band</b> <span class="m">[v_min, v_max]</span>, not a speed set.</p>
+  </div>
+
+  <div class="sec-head"><h2>§4.2.4 · Tractability</h2><span class="tag">1 edit · numbers</span></div>
+
+  <div class="change">
+    <div class="top"><span class="num">10</span><h3>Route-1 graph size &amp; solve time</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>Route 1 (L=3,393 NM, T=280 h, M=162 subsegments, |V|=61 speeds) …
+about 1.5×10⁵ states and 9.2×10⁶ arcs, solved in roughly eight seconds.</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>Route 1 (L=3,393 NM, T=280 h, M=162 subsegments, speed band of width 6 kn) …
+about 1.3×10⁵ states and 1.2×10⁶ arcs --- the node-first enumeration emits only
+the ~8 distinct reachable far-wall nodes per state rather than one arc per speed
+--- solved in under two seconds.</pre></div>
+    <p class="why"><b>A stronger tractability claim.</b> ~8× fewer arcs
+      (<span class="m">9.2×10⁶ → 1.2×10⁶</span>) and ~5× faster
+      (<span class="m">~8 s → &lt;2 s</span>). These are the measured node-first figures from the
+      re-run.</p>
+  </div>
+
+  <div class="sec-head"><h2>§5 · Experimental design</h2><span class="tag">1 edit</span></div>
+
+  <div class="change">
+    <div class="top"><span class="num">11</span><h3>How the speed search is described</h3></div>
+    <div class="panel old"><div class="plabel"><span class="dot"></span>commented</div><pre>Throughout, the speed search uses a common grid of 61 SOG values spanning the
+mean voyage speed L/T ± 3 kn, and the arrival time T was binding in every run …</pre></div>
+    <div class="panel new"><div class="plabel"><span class="dot"></span>active</div><pre>Throughout, the speed at each decision is drawn from a common band spanning the
+mean voyage speed L/T ± 3 kn --- the interval 𝒱 of Section~\ref{sec:methods},
+enumerated node-first on the ζ,τ grid --- and the arrival time T was binding …</pre></div>
+    <p class="why">Removes the last “61 SOG values” claim so §5 matches the method (§4) and the results
+      (§6). The <span class="m">L/T ± 3 kn</span> band is retained; only the “grid of 61” framing is
+      replaced.</p>
+  </div>
+
+  <div class="note"><b>Also unchanged:</b> §4.2.3 (the forward sweep) and Algorithm 2 are
+    method-agnostic — the Bellman sweep and schedule recovery read identically whether arcs come from a
+    speed grid or from node enumeration — so they were left untouched.</div>
+
+  <footer>11 edits · §4.1 (5) · §4.2.1 (2) · §4.2.2 (2) · §4.2.4 (1) · §5 (1) &nbsp;·&nbsp;
+    old kept under \begin{comment} · commit 5014c71 · paper_full_draft.tex</footer>
+</div>
