@@ -176,10 +176,52 @@ In this paper we study the problem of controling the speed of sea vessels with t
 
 Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  The SOG of the vessel is seleceted from a bounded interval, $\mathcal{V}=[v_{min}, v_{max}]$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
 
-In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future sea conditions and each location along the planed voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer. 
+\subsection{Speed over ground}
+\label{sec:sog}
+The vessel's \emph{still-water speed} (SWS) $V_s$ is the speed it would make in calm water at a given
+power setting; the \emph{speed over ground} (SOG) $V_g$ is $V_s$ modified by the environment --- wind
+and waves reduce it, while the along-track component of the current adds to or subtracts from it.
+Following the resistance-correction model of \citet{yang2020},
+\begin{equation}
+\label{eq:sog}
+V_g \;=\; V_s - \Delta V_{\text{wind}}(V_s,w) - \Delta V_{\text{wave}}(V_s,w) + V_{c,\parallel},
+\qquad V_g \ge 0,
+\end{equation}
+where $w$ is the local sea state and $V_{c,\parallel}$ the along-track current component. For fixed
+weather $V_g$ increases monotonically with $V_s$, so the relation inverts: a target SOG implies a
+unique required SWS, $V_s=g^{-1}(V_g;w)$, obtained numerically (Section~\ref{sec:methods}); the
+required SWS rises as conditions worsen. The individual resistance terms and their coefficients are
+those of \citet{yang2020}.
+
+\subsection{Fuel and objective}
+\label{sec:objective}
+Fuel is consumed to produce the \emph{still-water} speed, not the SOG. The fuel-consumption rate
+(FCR) is a strictly convex, approximately cubic function of SWS, $\fcr(V_s)=a\,V_s^{3}$; its
+derivation and the calibrated coefficient $a$ are given in Appendix~\ref{app:fcr}. The fuel burned on
+leg $i$ (length $d_i$, held at SOG $V_{g,i}$) is the rate times the transit time,
+\begin{equation}
+\label{eq:legfuel}
+F_i \;=\; \fcr\!\big(g^{-1}(V_{g,i};w_i)\big)\,\frac{d_i}{V_{g,i}} .
+\end{equation}
+The deterministic speed-control problem is to choose the per-leg SOG that minimises total voyage fuel
+subject to the arrival deadline,
+\begin{equation}
+\label{eq:obj}
+\min_{\{V_{g,i}\in\mathcal{V}\}}\; \sum_{i=1}^{M} \fcr\!\big(g^{-1}(V_{g,i};w_i)\big)\,\frac{d_i}{V_{g,i}}
+\qquad\text{s.t.}\qquad \sum_{i=1}^{M}\frac{d_i}{V_{g,i}} \le T ,
+\end{equation}
+with a hard arrival constraint and the SOG confined to the band $\mathcal{V}=[v_{\min},v_{\max}]$.
+Because fuel depends on SWS while the plan targets SOG, holding a target SOG through varying weather
+forces the SWS to vary, and the convex FCR penalises that variation --- the mechanism the paper
+exploits (Section~\ref{sec:methods}).
+
+In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future sea conditions and each location along the planed voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer.
 
 
-\begin{comment}  % consider move to the appendix
+% ==== OLD detailed §3.1-3.4 (speed-first) — SUPERSEDED and redistributed:
+%      SOG + objective now live in the body above (§Speed over ground, §Fuel and objective);
+%      vessel table + cubic FCR now live in Appendix~\ref{app:fcr}. Kept here for reference, not rendered.
+\begin{comment}
 \subsection{Vessel and voyage}
 The vessel modelled in this study is a representative oil products tanker with the principal
 particulars in Table~\ref{tab:ship}. A voyage is
@@ -1019,7 +1061,30 @@ speed over ground under weather is the speed-correction model summarised in Sect
 \label{app:fcr-chain}
 \citet{yang2020} obtain FCR from a physical power chain based on the DTU--SDU resistance-and-propulsion
 method of \citet{kristensen2012}, which provides empirical formulae for the resistance and efficiency
-terms of container ships, bulk carriers and tankers. For a vessel of known principal particulars and
+terms of container ships, bulk carriers and tankers. The representative oil-products tanker modelled
+in this study has the principal particulars in Table~\ref{tab:ship}.
+
+\begin{table}[ht]
+\centering
+\caption{Principal particulars of the representative oil-products tanker; resistance model and
+coefficient tables from \citet{yang2020} and \citet{kristensen2012}.}
+\label{tab:ship}
+\begin{tabular}{lll}
+\toprule
+Parameter & Symbol & Value \\
+\midrule
+Length between perpendiculars & $L_{pp}$ & 200 m \\
+Beam & $B$ & 32 m \\
+Draft & --- & 12 m \\
+Displacement & $\Delta$ & 50{,}000 t \\
+Block coefficient & $C_b$ & 0.75 \\
+Installed power & --- & 10{,}000 kW \\
+Still-water speed range & $V_s$ & 11--13 kn \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For a vessel of known principal particulars and
 payload sailing in still water at SWS $V_{sw}$ (in m/s), the total resistance is
 \begin{equation}
 \label{eq:app-rt}
@@ -1060,10 +1125,12 @@ is the standard ``admiralty'' approximation and is consistent with the broader s
 
 \subsection{Calibration of the coefficient}
 \label{app:fcr-calib}
-The constant $a$ is vessel-specific. For the representative tanker of this study we use
-\begin{equation*}
-a \;=\; 0.000706 \quad [\text{mt/h per kn}^3],
-\end{equation*}
+The constant $a$ is vessel-specific. For the representative tanker of this study
+(Table~\ref{tab:ship}) we obtain the calibrated FCR
+\begin{equation}
+\label{eq:fcr}
+\fcr(V_s) \;=\; 0.000706\, V_s^{3} \quad [\text{mt/h},\; V_s \text{ in kn}],
+\end{equation}
 calibrated against the measured fuel-consumption data reported by \citet{yang2020} for a tanker of
 comparable class. \citet{yang2020} verify the fuel-consumption function against measured noon-report
 fuel and report a maximum relative error below 6.5\% and an average of 3.75\%, which we take as the
