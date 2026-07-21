@@ -146,9 +146,9 @@ modelled and solved, how weather and forecast uncertainty are handled, and how t
 are evaluated. Each axis exposes a gap that one of our contributions addresses.
 
 \subsection{Speed-optimisation models and the granularity of the speed decision}
-The fuel-consumption rate is convex, and approximately cubic, in speed \citep{Ronen2011,
-Psaraftis2023}, and this convexity is the workhorse of the field: under uniform conditions it implies
-that a constant speed is fuel-optimal \citep{Hvattum2013}, a property exploited by recursive-smoothing
+The fuel-consumption rate is convex, and approximately cubic, in speed \citep{Ronen2011}, with the
+precise speed exponent debated \citep{Psaraftis2023}; this convexity is the workhorse of the field:
+under uniform conditions it implies that a constant speed is fuel-optimal \citep{Hvattum2013}, a property exploited by recursive-smoothing
 and shortest-path formulations \citep{Norstad2011, Fagerholt2010} and by the linear and mixed-integer
 programs used for fleet and routing problems \citep{Bektas2011, Wang2012}. These models share a common
 feature: they resolve the speed decision \emph{coarsely} --- one speed per voyage leg or per planning
@@ -200,9 +200,10 @@ cadence to the forecast refresh, and show that the granularity advantage persist
 
 \subsection{Evaluation against realistic data and baselines}
 Many speed-optimisation studies are validated on constant or synthetic weather, or on a single voyage,
-and a common simplification equates still-water speed with speed over ground \citep{Cariou2011} ---
-whereas operational practice targets an arrival time, as the prevalence of virtual-arrival agreements
-attests \citep{Jia2017}. The fuel benefit of speed control is strongly weather-dependent
+and commonly treat fuel as a function of speed alone --- equating still-water speed with speed over
+ground and omitting the weather correction between them, as slow-steaming analyses typically do
+\citep{Cariou2011}. Operational practice, by contrast, targets an arrival time, as the prevalence of
+virtual-arrival agreements attests \citep{Jia2017}. The fuel benefit of speed control is strongly weather-dependent
 \citep{Taskar2020, Tezdogan2015}, so its magnitude can be assessed only on realistic, varied
 conditions; the foundational fuel model we adopt was itself validated on a limited set of noon reports
 \citep{yang2020}. Our third contribution closes this gap with an evaluation driven by real
@@ -214,8 +215,8 @@ routes.
 \begin{enumerate}
 \item \textbf{A tractable dynamic program with adaptive, per-cell speed resolution.} We formulate the
 deterministic speed-control problem so that speed may change at every boundary where the operative
-data change --- each weather-cell crossing or heading change --- rather than being held constant
-across the coarse forecast-cycle stages of prior multistage-graph formulations. This fine resolution,
+data change --- each weather-cell crossing, heading change, or six-hour time block --- rather than
+being held constant across the coarse forecast-cycle stages of prior multistage-graph formulations. This fine resolution,
 which such formulations cannot reach without a prohibitive growth of the speed-profile space, is
 obtained tractably by a single Bellman sweep over a directed acyclic graph.
 \item \textbf{Speed control under real forecast uncertainty.} We embed the program in a
