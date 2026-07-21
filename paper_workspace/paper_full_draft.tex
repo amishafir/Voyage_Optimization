@@ -47,7 +47,24 @@
 \address[tau]{Faculty of Engineering, Tel Raviv University, Tel Aviv, Israel}
 
 \begin{abstract}
-\todo{To be written.}
+Ship speed is the most immediate lever for cutting marine fuel use and greenhouse-gas emissions, but
+the convexity of fuel consumption in speed --- which makes a constant speed optimal in uniform
+conditions --- penalises a constant speed when weather varies along a voyage. This suggests that
+resolving the speed decision finely, cell by cell, should save fuel; yet state-of-the-art methods hold
+speed constant across coarse forecast-cycle stages, because the space of candidate speed profiles grows
+exponentially with the number of stages, and whether finer resolution actually pays has not been
+established. We formulate deterministic speed control as a shortest-path problem on a directed acyclic
+graph in the time--distance plane, allowing the speed to change at every weather-cell crossing and
+heading change while remaining solvable in a single polynomial-time Bellman sweep. We embed this
+program in a rolling-horizon scheme driven by real operational weather forecasts, and evaluate it with
+a data-driven voyage simulation against both a fixed-speed operational policy and a state-of-the-art
+per-block formulation, over nineteen voyages on two contrasting routes. Under perfect foresight the
+free-speed program burned less fuel than the per-block baseline on all nineteen voyages --- by up to a
+few percent of voyage fuel, several tonnes of bunker fuel per voyage --- with the saving growing with
+weather variability. The advantage persisted under realistic, imperfect-forecast operation, where
+free-speed re-planning reduced fuel on 17 of 19 voyages while the per-block planner, though it
+re-planned more often, did not. The granularity of the speed decision, not the quality of the forecast
+data, is the binding factor.
 \end{abstract}
 
 \begin{keyword}
