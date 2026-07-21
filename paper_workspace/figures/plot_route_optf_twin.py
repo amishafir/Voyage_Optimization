@@ -178,8 +178,8 @@ gl.right_labels = False
 gl.xlabel_style = {"size": 7}
 gl.ylabel_style = {"size": 7}
 
-ax.set_title("Geographic twin of the state space: each numbered point matches "
-             "state\\_space\\_optF", fontsize=9, pad=6)
+ax.set_title("Geographic twin of the state space (same two segments and points "
+             "as the time--distance figure)", fontsize=8.8, pad=6)
 
 ax.legend(handles=[
     Line2D([0], [0], color=TRACK, lw=2.2, label="route"),
@@ -192,7 +192,8 @@ ax.legend(handles=[
     Line2D([0], [0], marker="*", color=ARRC, lw=0, markersize=11, markeredgecolor="white",
            label="arrival (ETA)"),
     Patch(facecolor=TINT[0], edgecolor="#7fa3c4", alpha=0.8, label="0.5$\\degree$ weather cell"),
-], loc="lower right", fontsize=7, frameon=True, framealpha=0.95)
+], loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=3, fontsize=7,
+   frameon=True, framealpha=0.95)
 
 fig.savefig("route_optf_twin.pdf", dpi=300, bbox_inches="tight", pad_inches=0.02)
 fig.savefig("route_optf_twin.png", dpi=200, bbox_inches="tight", pad_inches=0.02)
