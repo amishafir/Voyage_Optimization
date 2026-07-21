@@ -60,7 +60,62 @@ weather routing \sep Jensen's inequality
 %% ============================================================ 1. INTRODUCTION
 \section{Introduction}
 \label{sec:intro}
-\todo{To be written.}
+Maritime shipping carries the great majority of world trade and accounts for close to 3\% of global
+greenhouse-gas emissions, and both tightening regulation and fuel cost make reducing that footprint
+urgent \citep{IMO2023, Bouman2017}. Among the operational levers available to an existing vessel on a
+fixed route, none is as immediate or as powerful as \emph{speed}: because the fuel-consumption rate
+rises steeply --- roughly with the cube of speed --- even modest speed reductions yield large fuel
+savings, a relationship understood since the earliest work on the problem \citep{Ronen2011,
+Psaraftis2013}. The operational question is therefore not \emph{whether} to optimise speed but
+\emph{how finely}: at what spatial and temporal resolution the speed should be allowed to change as the
+vessel crosses a continually varying ocean.
+
+That same cube law cuts both ways. Its convexity means that under uniform conditions a single constant
+speed is fuel-optimal, and much of the speed-optimisation literature builds on exactly this property:
+one speed per voyage leg or per planning stage, with weather treated as constant over the span
+\citep{Norstad2011, Hvattum2013}. But the ocean is not uniform. When wind, waves and current change
+along the route and over the voyage, the very convexity that rewards a constant speed under uniform
+conditions \emph{penalises} it under varying ones --- holding a single speed through changing weather
+forces the engine through inefficient excursions and, by Jensen's inequality, wastes fuel relative to a
+plan that adapts. This is precisely why a finer speed decision, one that tracks the weather cell by
+cell, should save fuel. Yet the state-of-the-art multistage-graph method of \citet{luo2024} still
+resolves speed coarsely, holding it constant across each forecast-cycle stage; the reason is structural
+rather than incidental --- the space of candidate speed profiles grows as $K^{N}$ in the number of
+stages, so refining the stages to the resolution at which the weather actually varies would inflate the
+very combinatorial cost the coarse staging exists to contain.
+
+Three questions therefore remain open. \emph{Can} per-cell speed resolution be reached tractably,
+without the exponential blow-up? \emph{Does} it pay --- does finer granularity yield a real fuel
+saving on a like-for-like comparison, something never established? And does any such advantage
+\emph{survive} realistic operation, when the plan is driven not by perfect knowledge but by imperfect
+weather forecasts refreshed periodically as the voyage unfolds?
+
+This paper answers all three. We formulate deterministic speed control as a shortest-path problem on a
+directed acyclic graph in the time--distance plane, in which the speed may change at every boundary
+where the operative data change --- each $0.5\degree$ weather-cell crossing and each heading change ---
+rather than being locked across coarse stages. This per-cell resolution, unreachable by stage-based
+formulations without prohibitive growth of the profile space, is obtained here in a single Bellman
+sweep at polynomial cost. We then embed the program in a rolling-horizon scheme driven by \emph{real}
+operational forecasts, assuming no probabilistic model linking forecast to realisation and tying the
+re-plan cadence to the forecast refresh cycle. Finally, we evaluate the method with a voyage simulation
+driven by real sea-conditions data, benchmarking it against both an operational fixed-speed policy and
+the method of \citet{luo2024}, over nineteen voyages --- consecutive departures on two contrasting
+routes, a mild passage (Persian Gulf to the Strait of Malacca) and a harsher one (the North Atlantic).
+
+The results are directional and clear. Under perfect foresight the free-speed program consumed less
+fuel than the block-locked baseline on all nineteen voyages, by up to a few percent --- several tonnes
+of bunker fuel per voyage --- and the advantage grew with weather variability, larger on the rougher
+Atlantic route than on the calm Gulf passage, exactly the signature the convexity argument predicts.
+The advantage survived realistic rolling-horizon operation against imperfect forecasts, where the
+block-locked planner re-planned more often yet gained less because it lacked the resolution to act on
+the refreshed information. The binding factor, in short, is the granularity of the speed decision, not
+the quality of the data.
+
+The remainder of the paper is organised as follows. Section~\ref{sec:related} reviews prior work and
+states our contributions; Section~\ref{sec:problem} formalises the problem; Section~\ref{sec:methods}
+develops the dynamic program; Section~\ref{sec:data} describes the data, routes and experimental
+design; Section~\ref{sec:results} reports the results; and Section~\ref{sec:discussion} and the
+conclusion interpret them and close.
 
 %% ============================================================ 2. RELATED WORK
 \section{Related work}
