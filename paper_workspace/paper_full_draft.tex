@@ -420,23 +420,42 @@ To create a finite set of states we first define two families of lines that part
 \begin{itemize}
 \item Vertical \emph{distance lines} placed at the subsegments breakpoints $d_0, d_1, \ldots, d_M$. Note that between any pair consecutive distance lines the heading of the vessel is fixed and it is in the same cell. 
 \item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiplications of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$.  The time lines are indexed $0,\ldots, \lceil T/6 \rceil= \Theta$  and we denote these times by 
-$0=t_0, t_1,\ldots, t_{\Theta}=T$. Between consecutive time lines sea conditions at each cell are fixed.
+$0=t_0, t_1,\ldots, t_{\Theta}=T$. 
 \end{itemize}
 
-% ==== OLD (finiteness from a finite speed set V) — superseded below; kept, not rendered ====
-\begin{comment}
-The recangular areas defined by the vertical and horizontal lines represents sub-spaces of the distance-time space where the optimal speed of the vessel is constant. The only points in this space where the vessel need to make a decision are the on the lines. Moreover, since the the vessel speed is selected from a finite set $V$, the set of reachable points on these lines is finite.  We define the set of states as
-\end{comment}
+
+
 % ==== NEW (speed drawn from the continuous interval 𝒱; finiteness imposed later by discretisation) ====
-The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the distance--time plane in which the optimal speed of the vessel is constant. The only points at which the vessel makes a decision lie on the lines. Since the speed is drawn from the continuous interval $\mathcal{V}=[v_{\min},v_{\max}]$, the reachable points on these lines form a continuum; we render the state set finite in Section~\ref{sec:solve} by discretising the free coordinate onto a regular grid. We define the set of states as
+The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the distance--time plane. Each point within such a sub-space  represent a location and time in which the heading of the vessel and the see conditions are assumed fixed. Threfore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a disceret dynamic program. For this end we discretized the vertical distance line to a points every fixed time interval (e.g., $\tau = 0.1$ hours.  Similarly the horizontal time lines are discretized to distance interval of fixed length(e.g., $\delta = 1$ NM), starting from the crossing of each time line with a distance line and going bacward in space.   ADD FIGURE. 
+
+
+We define the set of states as
 \begin{equation}
 	\label{eq:state-space}
-	\mathcal{S}=\bigl\{(d,t): (d,t) \text{ is on one of the distance or time lines and it is reachable from point } (0,0) \bigr\}.
+	\begin{aligned}
+		\mathcal{S}
+		={}& \biggl\{
+		(d_i-n\delta,t_j):
+		i=1,\ldots,M,\;
+		j=0,\ldots,\Theta,\;
+		n=0,\ldots,
+		\left\lfloor\frac{d_i-d_{i-1}}{\delta}\right\rfloor
+		\biggr\} \cup \\
+		&{}
+		\biggl\{
+		(d_i,t_j-n\tau):
+		i=0,\ldots,M,\;
+		j=1,\ldots,\Theta,\;
+		n=0,\ldots,
+		\left\lfloor\frac{t_j-t_{j-1}}{\tau}\right\rfloor
+		\biggr\} \cup \{(0,0)\}.
+	\end{aligned}
 \end{equation}
-% ==== OLD (fixed speed from finite V) — superseded below; kept, not rendered ====
-\begin{comment}
-where by reachable we mean that the vessel can be at  distance-time $(d,t)$ by steaming at a fixed speed from $V$ in each of the rectuglar sub-spaces along its voyage on the distance-time space.
-\end{comment}
+
+
+Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the index of of the distance line that follows distance $d$. Similary $\mathcal{T}(t) = \arg\min_{j} \{j \in \mathbb{N} : t_j > t\}$.  Now for any state $(d,t)  \in \mathcal{S}$ we define the set of neighboring states \[ \mathcal{A}(d,t)  = \biggl \{ (d_{\mathcal{D}(d)},t') : t' = t_{\mathcal{T}(t)} - n \tau, n=0,\ldots, 	\left\lfloor\frac{t_{\mathcal{T}(t)}-t_{\mathcal{T}(t)-1}}{\tau}\right\rfloor   \biggr\}  \]
+
+
 % ==== NEW (fixed speed from the continuous interval 𝒱) ====
 where by reachable we mean that the vessel can be at distance--time $(d,t)$ by steaming at some fixed speed from $\mathcal{V}$ in each rectangular sub-space along its voyage through the distance--time plane.
 
