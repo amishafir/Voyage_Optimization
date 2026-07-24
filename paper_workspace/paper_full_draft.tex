@@ -531,11 +531,11 @@ discretisation of the speed into $K$ values would let the state count grow as
 $K^{\,\text{(lines crossed)}}$, which is not tractable.
 
 We contain this by discretising the free coordinate onto a fine regular grid. Let
-$\langle x\rangle_{\zeta}:=\zeta\,\mathrm{round}(x/\zeta)$ denote $x$ rounded to the nearest multiple
-of $\zeta>0$; the time operator $\langle\cdot\rangle_{\tau}$ is defined identically with step $\tau$ in
-place of $\zeta$. When an arc terminates on a time line, its free coordinate (distance) is snapped to a
-grid of step $\zeta$; when it terminates on a distance line, its free coordinate (time) is snapped to a
-grid of step $\tau$. We use $\zeta=1$ NM and $\tau=0.1$ h. % ==== OLD (snap merges distinct-speed arrivals; arc bound in |V|) — superseded; kept, not rendered ====
+$\langle x\rangle_{\delta}:=\delta\,\mathrm{round}(x/\delta)$ denote $x$ rounded to the nearest multiple
+of $\delta>0$; the time operator $\langle\cdot\rangle_{\tau}$ is defined identically with step $\tau$ in
+place of $\delta$. When an arc terminates on a time line, its free coordinate (distance) is snapped to a
+grid of step $\delta$; when it terminates on a distance line, its free coordinate (time) is snapped to a
+grid of step $\tau$. We use $\delta=1$ NM and $\tau=0.1$ h. % ==== OLD (snap merges distinct-speed arrivals; arc bound in |V|) — superseded; kept, not rendered ====
 \begin{comment}
 Snapping merges the many near-coincident
 arrivals produced by distinct speed sequences into a single shared state, so that each distance line
@@ -550,15 +550,15 @@ where $\mathcal{A}$ is the induced arc set (each state emits at most $|V|$ arcs)
 The grid nodes on each line are then the discrete states, and from a state we enumerate directly the
 reachable grid nodes on the next line ahead (Section~\ref{sec:enumerate}) --- so no speed set is ever
 introduced. Each distance line carries at most $\lceil T/\tau\rceil$ states and each time line at most
-$\lceil L/\zeta\rceil$, giving
+$\lceil L/\delta\rceil$, giving
 \begin{equation}
 \label{eq:state-bound}
-|\mathcal{S}| \;=\; O\!\left(M\,\frac{T}{\tau} \;+\; \Theta\,\frac{L}{\zeta}\right),\qquad
+|\mathcal{S}| \;=\; O\!\left(M\,\frac{T}{\tau} \;+\; \Theta\,\frac{L}{\delta}\right),\qquad
 |\mathcal{A}| \;=\; O\!\left(K\,|\mathcal{S}|\right),
 \end{equation}
 where $\mathcal{A}$ is the induced arc set and $K$ is the number of far-wall grid nodes reachable
 within $\mathcal{V}$ from a state (bounded by the speed-band width divided by the grid step). The snap steps are
-small relative to the physical scales --- $\zeta=1$ NM against segments of tens to hundreds of NM, and
+small relative to the physical scales --- $\delta=1$ NM against segments of tens to hundreds of NM, and
 $\tau=0.1$ h against six-hour blocks --- so the induced timing error is at most half a step and is
 negligible next to the accuracy of the FCR function itself (Appendix~\ref{app:fcr}).
 
@@ -583,8 +583,8 @@ Rather than iterate over a set of speeds, we enumerate the reachable grid nodes 
 directly. On the next distance line $\overline{d}(d)$, holding any speed in $\mathcal{V}$ gives an
 arrival time between $t+(\overline{d}(d)-d)/v_{\max}$ and $t+(\overline{d}(d)-d)/v_{\min}$ (clipped at
 $\overline{t}(t)$ and $T$); we take every multiple of $\tau$ in that range as a candidate arrival. On
-the next time line $\overline{t}(t)$, the reachable distance lies between $d+v_{\min}\delta_t$ and
-$d+v_{\max}\delta_t$ with $\delta_t=\overline{t}(t)-t$; we take every multiple of $\zeta$. Each
+the next time line $\overline{t}(t)$, the reachable distance lies between $d+v_{\min}(\overline{t}(t)-t)$
+and $d+v_{\max}(\overline{t}(t)-t)$; we take every multiple of $\delta$. Each
 candidate grid node is a successor $(d',t')$, reached by holding the single speed
 $\bar v=\Delta d/\Delta t\in\mathcal{V}$ over the leg, with $\Delta d=d'-d$ and $\Delta t=t'-t$;
 because the node already lies on the grid, no target-versus-realised speed gap arises. A distance line
@@ -640,7 +640,7 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \footnotesize
 \begin{tabbing}
 xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
-\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\zeta,\tau$, FCR $\phi$\\
+\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
 \textbf{Output:} state set $\mathcal{S}$, arc set $\mathcal{A}$\\
 $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad queue $Q\leftarrow[(0,0)]$\\
 \textbf{while} $Q$ not empty \textbf{do}\\
@@ -650,7 +650,7 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \> \textbf{if} res \textbf{then} \quad{\small$\triangleright$ distance line binds: enumerate arrival \emph{times}}\\
 \>\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{t+(\overline{d}-d)/v_{\max}}{\tau}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(t+(\overline{d}-d)/v_{\min},\,\overline{t},\,T)}{\tau}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(\overline{d},\,k\tau)\}$\\
 \> $d_{\mathrm{cap}}\leftarrow \overline{d}$ \textbf{if} res \textbf{else} $L$ \quad{\small$\triangleright$ time line binds: enumerate arrival \emph{distances} (glide past a too-close line)}\\
-\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{d+v_{\min}(\overline{t}-t)}{\zeta}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(d+v_{\max}(\overline{t}-t),\,d_{\mathrm{cap}})}{\zeta}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(k\zeta,\,\overline{t})\}$\\
+\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{d+v_{\min}(\overline{t}-t)}{\delta}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(d+v_{\max}(\overline{t}-t),\,d_{\mathrm{cap}})}{\delta}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(k\delta,\,\overline{t})\}$\\
 \> \textbf{for} $(d',t')\in C$ \textbf{do}\\
 \>\> $\Delta d\leftarrow d'-d$;\quad $\Delta t\leftarrow t'-t$;\quad $\bar v\leftarrow\Delta d/\Delta t$\\
 \>\> \textbf{if} $\Delta d\le0$ \textbf{or} $\Delta t\le0$ \textbf{or} $\bar v\notin\mathcal{V}$ \textbf{or} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
@@ -839,7 +839,7 @@ duration.
 % ==== NEW (speed drawn from the band 𝒱; enumeration is node-first, §4.2) ====
 is made. Throughout, the speed at each decision is drawn from a common band spanning the mean voyage
 speed $L/T \pm 3$ kn --- the interval $\mathcal{V}$ of Section~\ref{sec:methods}, enumerated
-node-first on the $\zeta,\tau$ grid --- and the arrival time $T$ was binding in every run (zero slack)
+node-first on the $\delta,\tau$ grid --- and the arrival time $T$ was binding in every run (zero slack)
 --- so all comparisons are at equal voyage time, isolating the effect of the setting rather than the
 schedule's duration.
 
