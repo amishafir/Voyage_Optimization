@@ -453,7 +453,20 @@ We define the set of states as
 \end{equation}
 
 
-Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the index of of the distance line that follows distance $d$. Similary $\mathcal{T}(t) = \arg\min_{j} \{j \in \mathbb{N} : t_j > t\}$.  Now for any state $(d,t)  \in \mathcal{S}$ we define the set of neighboring states \[ \mathcal{A}(d,t)  = \biggl \{ (d_{\mathcal{D}(d)},t') : t' = t_{\mathcal{T}(t)} - n \tau, n=0,\ldots, 	\left\lfloor\frac{t_{\mathcal{T}(t)}-t_{\mathcal{T}(t)-1}}{\tau}\right\rfloor   \biggr\}  \]
+Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the index of the distance line that follows distance $d$. Similarly $\mathcal{T}(t) = \arg\min_{j} \{j \in \mathbb{N} : t_j > t\}$.  Now for any state $(d,t)\in\mathcal{S}$ we define its set of neighbouring states as
+\begin{equation}
+\label{eq:neighbors}
+\begin{aligned}
+\mathcal{A}(d,t) ={}&
+\biggl\{ (d_{\mathcal{D}(d)},\, t') : t' = t_{\mathcal{T}(t)} - n\tau,\;
+   n=0,\ldots,\left\lfloor\frac{t_{\mathcal{T}(t)}-t_{\mathcal{T}(t)-1}}{\tau}\right\rfloor \biggr\} \cup \\
+&\biggl\{ (d',\, t_{\mathcal{T}(t)}) : d' = d_{\mathcal{D}(d)} - n\delta,\;
+   n=0,\ldots,\left\lfloor\frac{d_{\mathcal{D}(d)}-d_{\mathcal{D}(d)-1}}{\delta}\right\rfloor \biggr\}.
+\end{aligned}
+\end{equation}
+The first set collects the neighbours reached on the next distance line $d_{\mathcal{D}(d)}$, with the
+arrival time snapped to the $\tau$-grid; the second, the neighbours reached on the next time line
+$t_{\mathcal{T}(t)}$, with the arrival distance snapped to the $\delta$-grid.
 
 
 % ==== NEW (fixed speed from the continuous interval 𝒱) ====
