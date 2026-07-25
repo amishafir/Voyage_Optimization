@@ -534,11 +534,23 @@ V^{*}(d,t)=\frac{d-\tilde d^{\star}}{t-\tilde t^{\star}},\qquad
 \subsection{Solving the Bellman equation}
 \label{sec:solve}
 
+% ==== OLD (S had to be "made finite" — written before §4.1 defined the explicit grid) — superseded; kept, not rendered ====
+\begin{comment}
 Equation~\eqref{eq:cost-to-arrive} defines the cost-to-arrive at any reachable state, but two things
 must be settled before it can be evaluated. First, the state set $\mathcal{S}$ of
 Eq.~\eqref{eq:state-space} has to be made not merely finite but of tractable size. Second, $\mathcal{S}$
 and the speed transitions between its states have to be enumerated so the recursion can be swept. We
 address discretisation first, then give the enumeration and the sweep as pseudocode.
+\end{comment}
+% ==== NEW (S and A are already defined by Eqs. 4-5; what remains is bounding, enumerating, sweeping) ====
+Equations~\eqref{eq:state-space} and~\eqref{eq:neighbors} already define the state grid $\mathcal{S}$
+and, for every state, its admissible successors $\mathcal{A}(d,t)$; the recursion of
+Eq.~\eqref{eq:cost-to-arrive} is therefore well posed on a finite graph. Three things remain before it
+can be evaluated efficiently. First, to bound the size of $\mathcal{S}$ and of the induced arc set.
+Second, to enumerate --- out of the full grid --- only the states actually \emph{reachable} from the
+origin and only the arcs whose realised speed is admissible, since these are typically a small
+fraction of the whole. Third, to sweep the recursion over the resulting graph. We bound first, then
+give the enumeration and the sweep as pseudocode.
 
 \subsubsection{Discretising the free coordinate}
 \label{sec:snap}
@@ -548,7 +560,9 @@ Any state in which the DP make a decision lies either on a distance line $d_i$ o
 number of lines is finite --- but its cardinality can grow as $|V|^{\,\text{(lines crossed)}}$, which
 is not tractable.
 \end{comment}
-% ==== NEW (continuous 𝒱 -> continuum of reachable points; K^lines blow-up of a naive speed grid) ====
+% ==== OLD (continuum motivation: 𝒱 continuous -> infinite reachable set, K^lines blow-up; the snap "contained" it) ====
+% ==== Written before §4.1 defined the grid explicitly — superseded; kept, not rendered ====
+\begin{comment}
 Any state at which the DP makes a decision lies on a distance line $d_i$ or a time line $t_j$, so one
 of its two coordinates is pinned to a breakpoint. The other, free coordinate is continuous: the speed
 is drawn from the interval $\mathcal{V}$, so from a single state the vessel can reach a continuum of
@@ -556,12 +570,22 @@ points on the next line, and over the whole voyage the reachable set is infinite
 discretisation of the speed into $K$ values would let the state count grow as
 $K^{\,\text{(lines crossed)}}$, which is not tractable.
 
-We contain this by discretising the free coordinate onto a fine regular grid. Let
+We contain this by discretising the free coordinate onto a fine regular grid.
+\end{comment}
+% ==== NEW (grid already fixed by Eq. 4; the operators below are the rounding arithmetic onto it) ====
+Every state of Eq.~\eqref{eq:state-space} lies on a distance line $d_i$ or a time line $t_j$, with its
+free coordinate placed on a regular grid --- of step $\tau$ in time on the distance lines, and of step
+$\delta$ in distance on the time lines. Had the free coordinate been left continuous, a single state
+could reach a continuum of points on the next line (the speed is drawn from the interval
+$\mathcal{V}$), and even a naive discretisation of the speed into $K$ values would let the state count
+grow as $K^{\,\text{(lines crossed)}}$; placing the grid on the \emph{lines} instead, as
+Eq.~\eqref{eq:state-space} does, is what keeps the state space polynomial. The enumeration below needs
+the corresponding rounding arithmetic: let
 $\langle x\rangle_{\delta}:=\delta\,\mathrm{round}(x/\delta)$ denote $x$ rounded to the nearest multiple
-of $\delta>0$; the time operator $\langle\cdot\rangle_{\tau}$ is defined identically with step $\tau$ in
-place of $\delta$. When an arc terminates on a time line, its free coordinate (distance) is snapped to a
-grid of step $\delta$; when it terminates on a distance line, its free coordinate (time) is snapped to a
-grid of step $\tau$. We use $\delta=1$ NM and $\tau=0.1$ h. % ==== OLD (snap merges distinct-speed arrivals; arc bound in |V|) — superseded; kept, not rendered ====
+of $\delta>0$, and let the time operator $\langle\cdot\rangle_{\tau}$ be defined identically with step
+$\tau$. An arrival on a time line has its distance rounded by $\langle\cdot\rangle_{\delta}$; an
+arrival on a distance line has its time rounded by $\langle\cdot\rangle_{\tau}$. We use $\delta=1$ NM
+and $\tau=0.1$ h.% ==== OLD (snap merges distinct-speed arrivals; arc bound in |V|) — superseded; kept, not rendered ====
 \begin{comment}
 Snapping merges the many near-coincident
 arrivals produced by distinct speed sequences into a single shared state, so that each distance line
@@ -572,11 +596,11 @@ carries at most $\lceil T/\tau\rceil$ states and each time line at most $\lceil 
 \end{equation}
 where $\mathcal{A}$ is the induced arc set (each state emits at most $|V|$ arcs).
 \end{comment}
-% ==== NEW (grid nodes ARE the discrete states/actions; arc bound in K) ====
-The grid nodes on each line are then the discrete states, and from a state we enumerate directly the
-reachable grid nodes on the next line ahead (Section~\ref{sec:enumerate}) --- so no speed set is ever
-introduced. Each distance line carries at most $\lceil T/\tau\rceil$ states and each time line at most
-$\lceil L/\delta\rceil$, giving
+% ==== NEW (bound follows directly from counting Eq. 4; arc bound in K) ====
+The size of $\mathcal{S}$ now follows by counting Eq.~\eqref{eq:state-space}: each distance line
+carries at most $\lceil T/\tau\rceil$ states and each time line at most $\lceil L/\delta\rceil$, and
+from a state we enumerate directly the reachable grid nodes on the next lines ahead
+(Section~\ref{sec:enumerate}) --- so no speed set is ever introduced. This gives
 \begin{equation}
 \label{eq:state-bound}
 |\mathcal{S}| \;=\; O\!\left(M\,\frac{T}{\tau} \;+\; \Theta\,\frac{L}{\delta}\right),\qquad
@@ -590,12 +614,20 @@ negligible next to the accuracy of the FCR function itself (Appendix~\ref{app:fc
 
 \subsubsection{Enumerating the reachable states}
 \label{sec:enumerate}
+% ==== OLD (d̄/t̄ defined from scratch — duplicated §4.1's index maps 𝒟/𝒯) — superseded; kept, not rendered ====
+\begin{comment}
 The state set and its arcs are generated by a forward closure from the origin
 (Algorithm~1). For a state $(d,t)$ let
 \begin{equation}
 \overline{d}(d)=\min\{d_i : d_i>d\},\qquad \overline{t}(t)=\min\{t_j : t_j>t\}
 \end{equation}
-be the next distance line and next time line strictly ahead. % ==== OLD (iterate over speeds v in V, hold until a line) — superseded; kept, not rendered ====
+be the next distance line and next time line strictly ahead.
+\end{comment}
+% ==== NEW (d̄/t̄ are shorthand for §4.1's index maps) ====
+The reachable states and their arcs are generated by a forward closure from the origin
+(Algorithm~1). For a state $(d,t)$ we abbreviate the next distance and time lines strictly ahead by
+$\overline{d}(d)\equiv d_{\mathcal{D}(d)}$ and $\overline{t}(t)\equiv t_{\mathcal{T}(t)}$, using the
+index maps $\mathcal{D},\mathcal{T}$ of Section~\ref{sec:states}.% ==== OLD (iterate over speeds v in V, hold until a line) — superseded; kept, not rendered ====
 \begin{comment}
 Choosing a speed $v\in V$, the vessel
 holds $v$ until it first meets one of these two lines: it reaches $\overline{d}(d)$ after
@@ -613,7 +645,10 @@ the next time line $\overline{t}(t)$, the reachable distance lies between $d+v_{
 and $d+v_{\max}(\overline{t}(t)-t)$; we take every multiple of $\delta$. Each
 candidate grid node is a successor $(d',t')$, reached by holding the single speed
 $\bar v=\Delta d/\Delta t\in\mathcal{V}$ over the leg, with $\Delta d=d'-d$ and $\Delta t=t'-t$;
-because the node already lies on the grid, no target-versus-realised speed gap arises. A distance line
+because the node already lies on the grid, no target-versus-realised speed gap arises. Together the
+two ranges enumerate exactly the neighbours $\mathcal{A}(d,t)$ of Eq.~\eqref{eq:neighbors} whose
+realised speed is admissible ($\bar v\in\mathcal{V}$) --- the same set over which the recursion of
+Eq.~\eqref{eq:cost-to-arrive} minimises. A distance line
 too close to resolve on the $\tau$-grid --- its snapped arrival collapsing back onto $t$ --- is
 skipped, and the vessel glides past it to the next time line. The leg on which a single speed is held is thus of no fixed length:
 it ends at the first boundary at which either the sea conditions change (a distance line) or a decision
@@ -626,7 +661,8 @@ block the arc traverses, evaluated at $\bar v$, with the source $(d,t)$ serving 
 of that rectangle exactly as $(\underline d,\underline t)$ does in
 Eq.~\eqref{eq:cost-to-arrive} --- times the duration, $\phi(d,t;\bar v)\,\Delta t$. Starting from
 $(0,0)$ and adding each previously-unseen successor as a new state, the closure discovers exactly the
-reachable set $\mathcal{S}$ of Eq.~\eqref{eq:state-space}; states with $d=L$ are sinks and emit no arcs.
+subset of the grid $\mathcal{S}$ of Eq.~\eqref{eq:state-space} that is reachable from the origin ---
+typically a small fraction of the full grid; states with $d=L$ are sinks and emit no arcs.
 
 % ==== OLD Algorithm 1 (speed-first: for v in V) — superseded by node-first; kept, not rendered ====
 \begin{comment}
@@ -673,9 +709,9 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t\ge T$ \textbf{then continue}\\
 \> $\overline{d}\leftarrow\min\{d_i>d\}$;\quad $\overline{t}\leftarrow\min\{t_j>t\}$;\quad $C\leftarrow\emptyset$ \quad{\small$\triangleright$ candidate successors $(d',t')$}\\
 \> $\text{res}\leftarrow\bigl[\langle t+(\overline{d}-d)/v_{\max}\rangle_\tau>t\bigr]$ \quad{\small$\triangleright$ is the next distance line resolvable on the $\tau$-grid?}\\
-\> \textbf{if} res \textbf{then} \quad{\small$\triangleright$ distance line binds: enumerate arrival \emph{times}}\\
+\> \textbf{if} res \textbf{then} \quad{\small$\triangleright$ distance line binds: enumerate arrival \emph{times} --- the first set of Eq.~\eqref{eq:neighbors}}\\
 \>\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{t+(\overline{d}-d)/v_{\max}}{\tau}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(t+(\overline{d}-d)/v_{\min},\,\overline{t},\,T)}{\tau}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(\overline{d},\,k\tau)\}$\\
-\> $d_{\mathrm{cap}}\leftarrow \overline{d}$ \textbf{if} res \textbf{else} $L$ \quad{\small$\triangleright$ time line binds: enumerate arrival \emph{distances} (glide past a too-close line)}\\
+\> $d_{\mathrm{cap}}\leftarrow \overline{d}$ \textbf{if} res \textbf{else} $L$ \quad{\small$\triangleright$ time line binds: enumerate arrival \emph{distances} --- the second set of Eq.~\eqref{eq:neighbors} (glide past a too-close line)}\\
 \> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{d+v_{\min}(\overline{t}-t)}{\delta}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(d+v_{\max}(\overline{t}-t),\,d_{\mathrm{cap}})}{\delta}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(k\delta,\,\overline{t})\}$\\
 \> \textbf{for} $(d',t')\in C$ \textbf{do}\\
 \>\> $\Delta d\leftarrow d'-d$;\quad $\Delta t\leftarrow t'-t$;\quad $\bar v\leftarrow\Delta d/\Delta t$\\
