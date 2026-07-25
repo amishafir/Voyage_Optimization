@@ -485,17 +485,24 @@ C^{*}(d,t)=\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t
   \end{cases}
 \end{equation}
 \end{comment}
-% ==== NEW (min over the continuous interval 𝒱 — exact; §4.2 approximates by the grid) ====
+% ==== OLD (min over the continuous interval 𝒱, two cases) — superseded by node-first over 𝒜; kept, not rendered ====
+\begin{comment}
 \begin{equation}
-\label{eq:cost-to-arrive}
 C^{*}(d,t)=\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
 	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
 	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
   \end{cases}
 \end{equation}
+\end{comment}
+% ==== NEW (node-first: min over the neighbour set 𝒜; realised leg speed v̄ = Δd/Δt) ====
+\begin{equation}
+\label{eq:cost-to-arrive}
+C^{*}(d,t)=\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\,:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ \bar v \,=\, (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
+\Bigl[\, C^{*}(\tilde d,\tilde t)+(t-\tilde t)\,\phi(\tilde d,\tilde t;\bar v)\,\Bigr].
+\end{equation}
 With the boundary condition 
 $$C^*(0,0) = 0.$$
-The solution of this Bellman equation is the total fuel consumption up to each point $(d,t)$ in the distance-time plan, for each reachable point we save the speed that minimized this consumption since the previous decision point $(\underline{d}, \underline{t})$. 
+The solution of this Bellman equation gives the minimum fuel to arrive at each state $(d,t)$; for each state we record the minimising predecessor and the realised leg speed $\bar v=\Delta d/\Delta t$ of the incoming arc, from which the optimal speed schedule is recovered by back-tracking to the origin.
 
 % ==== OLD (argmin over finite speed set V) — superseded by argmin over 𝒱; kept, not rendered ====
 \begin{comment}
@@ -506,13 +513,21 @@ V^{*}(d,t)=\arg\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underli
 \end{cases}
 \end{equation}
 \end{comment}
-% ==== NEW (argmin over the continuous interval 𝒱) ====
+% ==== OLD (argmin over the continuous interval 𝒱, two cases) — superseded by node-first; kept, not rendered ====
+\begin{comment}
 \begin{equation}
-\label{eq:opt-speed}
 V^{*}(d,t)=\arg\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
 	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
 	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
 \end{cases}
+\end{equation}
+\end{comment}
+% ==== NEW (node-first: realised speed of the optimal incoming leg) ====
+\begin{equation}
+\label{eq:opt-speed}
+V^{*}(d,t)=\frac{d-\tilde d^{\star}}{t-\tilde t^{\star}},\qquad
+(\tilde d^{\star},\tilde t^{\star})=\arg\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\,:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
+\Bigl[\, C^{*}(\tilde d,\tilde t)+(t-\tilde t)\,\phi\bigl(\tilde d,\tilde t;\tfrac{d-\tilde d}{t-\tilde t}\bigr)\,\Bigr].
 \end{equation}
 
 
