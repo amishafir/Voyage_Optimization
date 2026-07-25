@@ -419,14 +419,13 @@ Next we denote the FCR of the vessel when steaming at speed $v \in \mathcal{V}$ 
 To create a finite set of states we first define two families of lines that partition the time-distance plane.  ADD A FIGURE
 \begin{itemize}
 \item Vertical \emph{distance lines} placed at the subsegments breakpoints $d_0, d_1, \ldots, d_M$. Note that between any pair consecutive distance lines the heading of the vessel is fixed and it is in the same cell. 
-\item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiplications of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$.  The time lines are indexed $0,\ldots, \lceil T/6 \rceil= \Theta$  and we denote these times by 
+\item Horizontal \emph{time lines} every six hours and another one at time $T$ (when $T$ is not an integer multiple of 6) that is at time points $\{6i : i \in \mathbb{N}, 6i < T\} \cup \{T\}$.  The time lines are indexed $0,\ldots, \lceil T/6 \rceil= \Theta$  and we denote these times by 
 $0=t_0, t_1,\ldots, t_{\Theta}=T$. 
 \end{itemize}
 
 
 
-% ==== NEW (speed drawn from the continuous interval 𝒱; finiteness imposed later by discretisation) ====
-The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the distance--time plane. Each point within such a sub-space  represent a location and time in which the heading of the vessel and the see conditions are assumed fixed. Threfore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a disceret dynamic program. For this end we discretized the vertical distance line to a points every fixed time interval (e.g., $\tau = 0.1$ hours.  Similarly the horizontal time lines are discretized to distance interval of fixed length(e.g., $\delta = 1$ NM), starting from the crossing of each time line with a distance line and going bacward in space.   ADD FIGURE. 
+The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the distance--time plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 1$ NM), starting from the crossing of each time line with a distance line and going backward in space.   ADD FIGURE. 
 
 
 We define the set of states as
@@ -469,14 +468,13 @@ arrival time snapped to the $\tau$-grid; the second, the neighbours reached on t
 $t_{\mathcal{T}(t)}$, with the arrival distance snapped to the $\delta$-grid.
 
 
-% ==== NEW (fixed speed from the continuous interval 𝒱) ====
-where by reachable we mean that the vessel can be at distance--time $(d,t)$ by steaming at some fixed speed from $\mathcal{V}$ in each rectangular sub-space along its voyage through the distance--time plane.
+Between a state and a neighbour the vessel steams at a single fixed speed drawn from $\mathcal{V}$, held constant across the rectangular sub-space it traverses.
 
-We define the sub-segment of a given distance $d$ within the the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) \arg\max_i\{ t_j < t\} $.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
-When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area ion Figure X  in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
-Since in any such rectangular the sea condition and the heading of the vessel are fixed, the FCR is determined only by the vessel speed.  We denote this FCR by $\phi(d, t; v)$
+We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
+When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area in Figure~X in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
+Since in any such rectangular the sea condition and the heading of the vessel are fixed, the FCR is determined only by the vessel speed.  We denote this FCR by $\phi(d, t; v)$.
 
-The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward bellmen equation:
+The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward Bellman equation:
 
 % ==== OLD (min over finite speed set V) — superseded by min over 𝒱; kept, not rendered ====
 \begin{comment}
