@@ -80,6 +80,15 @@ Every superseded passage preserved under `\begin{comment}`.
    - `FIG: savings vs departure` (§7.3) — data already in `runs/…/results.csv`.
 3. **Whether to add** the one-sentence §5 note that Luo's lattice is likewise node-first
    (pre-empts the "did you enumerate both the same way?" reviewer question).
+3a. **𝒜(d,t) vs the glide-past rule (small formalism gap, Tal's call).** In the τ-unresolvable
+   corner (next distance line closer than v_max·τ), Algorithm 1 skips the line and emits time-line
+   successors *beyond* d_{𝒟(d)} — successors Eq. (5) does not list. §4.2.2 now scopes its claim
+   honestly ("up to this boundary rule"), and the Bellman min inherits the same caveat. Options:
+   (i) leave as a stated boundary rule (current), (ii) extend Eq. (5) with the corner case,
+   (iii) add a one-line remark after Eq. (5). Also from the same alignment sweep: arc bound now
+   |𝒜| = O(κ|𝒮|) with κ = far-wall neighbours (κ≈8), freeing K for "discrete speed levels"
+   (K^lines / Luo's K^N); orphan FCR_i(v,t) retired in favour of φ(d,t;v); preamble d_i = d_{i-1}+l_i
+   fixed; stale (d̲,t̲) cross-ref in §4.2.2 repaired (commit `12eab79`).
 4. **Full Overleaf recompile + read-through** — Overleaf copy must be synced to git HEAD first
    (it lagged twice this week; the repo is the source of truth).
 5. Next milestones after figures: internal review pass (paper-reviewer / paper-critic agents),
