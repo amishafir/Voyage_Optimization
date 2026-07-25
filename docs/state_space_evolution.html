@@ -1,0 +1,477 @@
+<title>§4 state space — the story, explained symbol by symbol</title>
+<style>
+  :root{
+    --ground:#eef1f5; --surface:#fff; --surface2:#f4f6f9;
+    --ink:#1b2430; --muted:#54626f; --faint:#8593a2; --hair:#d9e0e8;
+    --tal:#1f4e79; --tal-soft:#e6edf4;
+    --new:#1f7a5a; --new-soft:#e7f3ec;
+    --bell:#7a4bab; --bell-soft:#efe8f6;
+    --knit:#8a6115; --knit-soft:#f6efdd;
+    --old:#b0472c; --formula:#f5f8fb; --formula-ink:#233240;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;
+    --tal:#6fa8d6;--tal-soft:#152430;--new:#54b98c;--new-soft:#12231b;--bell:#b492db;--bell-soft:#1d1526;--knit:#cfa14e;--knit-soft:#241c0e;--old:#d1704f;--formula:#0e141a;--formula-ink:#c3cedb;
+  }}
+  :root[data-theme="light"]{--ground:#eef1f5;--surface:#fff;--surface2:#f4f6f9;--ink:#1b2430;--muted:#54626f;--faint:#8593a2;--hair:#d9e0e8;--tal:#1f4e79;--tal-soft:#e6edf4;--new:#1f7a5a;--new-soft:#e7f3ec;--bell:#7a4bab;--bell-soft:#efe8f6;--knit:#8a6115;--knit-soft:#f6efdd;--old:#b0472c;--formula:#f5f8fb;--formula-ink:#233240;}
+  :root[data-theme="dark"]{--ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;--tal:#6fa8d6;--tal-soft:#152430;--new:#54b98c;--new-soft:#12231b;--bell:#b492db;--bell-soft:#1d1526;--knit:#cfa14e;--knit-soft:#241c0e;--old:#d1704f;--formula:#0e141a;--formula-ink:#c3cedb;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.6}
+  .wrap{max-width:56rem;margin:0 auto;padding:2.4rem 1.4rem 5rem}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--tal);margin:0 0 .5rem}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(1.8rem,4vw,2.5rem);line-height:1.12;margin:0 0 .5rem;text-wrap:balance;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:1.05rem;max-width:44rem;margin:.2rem 0 0}
+  .lede b{color:var(--ink)}
+  h2{font-family:var(--serif);font-size:1.4rem;font-weight:600;margin:0}
+  p{margin:.6rem 0}
+
+  .picture{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:1.15rem 1.3rem;margin:1.6rem 0}
+  .picture h2{font-size:1.15rem;margin-bottom:.3rem}
+  .picture p{color:var(--muted)} .picture b{color:var(--ink)}
+  .axes{display:grid;grid-template-columns:auto 1fr;gap:.3rem .7rem;margin:.7rem 0 0;font-size:.9rem}
+  .axes .a{font-family:var(--mono);color:var(--tal);font-weight:600}
+  .axes .d{color:var(--muted)}
+
+  details.gloss{background:var(--surface);border:1px solid var(--hair);border-radius:12px;margin:1.2rem 0;overflow:hidden}
+  details.gloss>summary{cursor:pointer;padding:.9rem 1.2rem;font-family:var(--serif);font-size:1.1rem;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  details.gloss>summary::-webkit-details-marker{display:none}
+  details.gloss>summary::after{content:"▸";color:var(--faint);font-size:.9rem}
+  details.gloss[open]>summary::after{content:"▾"}
+  .glist{padding:0 1.2rem 1rem}
+  .grow{display:grid;grid-template-columns:6.5rem 1fr;gap:.35rem .8rem;padding:.4rem 0;border-top:1px solid var(--hair);align-items:baseline}
+  .grow .s{font-family:var(--serif);font-size:1.05rem;color:var(--ink);font-weight:600}
+  .grow .m{color:var(--muted);font-size:.92rem}
+  .grow .m b{color:var(--ink)}
+
+  .timeline{display:flex;flex-wrap:wrap;gap:.5rem;margin:1.4rem 0}
+  .commit{flex:1 1 10rem;background:var(--surface);border:1px solid var(--hair);border-radius:9px;padding:.5rem .65rem;border-left:3px solid var(--who)}
+  .commit .h{font-family:var(--mono);font-size:.7rem;color:var(--faint);display:flex;justify-content:space-between}
+  .commit .h b{color:var(--who)} .commit .m{font-size:.8rem;margin-top:.15rem}
+  .commit.tal{--who:var(--tal)} .commit.new{--who:var(--new)} .commit.bell{--who:var(--bell)} .commit.knit{--who:var(--knit)}
+
+  .part{margin-top:2.8rem;border-top:2px solid var(--pc);padding-top:1rem}
+  .part.p1{--pc:var(--tal)} .part.p2{--pc:var(--new)} .part.p3{--pc:var(--bell)} .part.p4{--pc:var(--knit)}
+  .part-tag{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--pc);font-weight:600}
+  .part h2{margin:.15rem 0 .3rem;font-size:1.55rem}
+  .part .by{font-size:.85rem;color:var(--faint);margin:0 0 1rem;font-family:var(--mono)}
+
+  .block{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:1.15rem 1.3rem;margin:1rem 0}
+  .block h3{font-family:var(--serif);font-size:1.15rem;font-weight:600;margin:0 0 .5rem}
+  .block p{color:var(--muted)} .block p b,.block li b{color:var(--ink)}
+  .block .n{display:inline-block;font-family:var(--mono);font-size:.74rem;font-weight:700;color:#fff;background:var(--pc);border-radius:5px;padding:.1em .5em;margin-right:.5rem;vertical-align:.12em}
+
+  .fx{background:var(--formula);border:1px solid var(--hair);border-radius:9px;padding:.9rem 1.05rem;margin:.7rem 0;overflow-x:auto;
+    font-family:var(--serif);font-size:1.06rem;color:var(--formula-ink);line-height:1.95}
+  .fx .cal{font-style:italic;font-weight:600}
+  .fx .cup{color:var(--faint);padding:0 .3em} .fx sub{font-size:.72em} .fx sup{font-size:.72em}
+  .fx .cond{color:var(--muted);font-size:.9em}
+  .lbl{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:.2rem 0 .35rem;font-weight:600}
+
+  .brk{margin:.7rem 0;border-top:1px dashed var(--hair);padding-top:.5rem}
+  .brk .bt{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:.35rem}
+  .brow{display:grid;grid-template-columns:min-content 1fr;gap:.3rem .8rem;padding:.28rem 0;align-items:baseline}
+  .brow .s{font-family:var(--serif);font-weight:600;color:var(--pc,var(--ink));white-space:nowrap;font-size:1rem}
+  .brow .m{color:var(--muted);font-size:.92rem} .brow .m b{color:var(--ink)}
+
+  .words{background:color-mix(in srgb,var(--pc,var(--tal)) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--pc,var(--tal)) 25%,var(--hair));
+    border-radius:9px;padding:.7rem .95rem;margin:.7rem 0}
+  .words .wt{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--pc,var(--tal));font-weight:700;margin-bottom:.25rem}
+  .words p{margin:.25rem 0;color:var(--ink);font-size:.96rem}
+
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin:.7rem 0}
+  @media(max-width:36rem){.ba{grid-template-columns:1fr}}
+  .ba .side{border-radius:9px;padding:.7rem .85rem;font-size:.92rem}
+  .ba .before{background:color-mix(in srgb,var(--old) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--old) 30%,var(--hair))}
+  .ba .after{background:var(--new-soft);border:1px solid color-mix(in srgb,var(--new) 30%,var(--hair))}
+  .ba .t{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;margin-bottom:.3rem}
+  .ba .before .t{color:var(--old)} .ba .after .t{color:var(--new)}
+
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin:.6rem 0}
+  th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  td.k{color:var(--muted)}
+  .tal-c{color:var(--tal);font-weight:600} .new-c{color:var(--new);font-weight:600} .bell-c{color:var(--bell);font-weight:600}
+
+  .callout{border-radius:12px;padding:1.1rem 1.3rem;margin:1.4rem 0;background:var(--tal-soft);border:1px solid var(--hair)}
+  .callout.p2{background:var(--new-soft)} .callout.p3{background:var(--bell-soft)} .callout.p4{background:var(--knit-soft)}
+  .callout h3{font-family:var(--serif);margin:0 0 .4rem;font-size:1.1rem}
+  .callout p{margin:.3rem 0;color:var(--muted)} .callout b{color:var(--ink)}
+  footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--hair);font-family:var(--mono);font-size:.76rem;color:var(--faint)}
+  code{font-family:var(--mono);font-size:.88em;background:var(--tal-soft);padding:.05em .3em;border-radius:4px}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Paper · §4 Methods · state space — a walk-through</p>
+  <h1>How the DP took shape — every symbol explained</h1>
+  <p class="lede">The story of §4's state space, in four acts: Tal replaced an abstract state set with an
+    explicit <b>grid</b>; the notation was tidied and the <b>neighbour set completed</b>; the
+    <b>Bellman equations</b> were rewritten "node-first"; and finally §4.2 — the solving machinery — was
+    <b>reconciled</b> with the new grid. Below, every symbol is spelled out, and every formula is also said
+    in <b>plain words</b>.</p>
+
+  <!-- THE PICTURE -->
+  <div class="picture">
+    <h2>First, the picture</h2>
+    <p>The whole method lives on one flat picture — the <b>time–distance plane</b>:</p>
+    <div class="axes">
+      <div class="a">→ across</div><div class="d"><b>distance</b> <i>d</i> travelled along the route (0 at the start, <i>L</i> at the destination)</div>
+      <div class="a">↓ down</div><div class="d"><b>time</b> <i>t</i> elapsed since departure (0 at the start, up to the deadline <i>T</i>)</div>
+    </div>
+    <p style="margin-top:.7rem">The ship's voyage is a line from the top-left corner (start, at distance 0,
+      time 0) down to the right edge (arrival). Its <b>steepness = speed</b>: a shallow, near-horizontal
+      stretch covers a lot of distance in little time (fast); a steep, near-vertical stretch covers little
+      distance in a lot of time (slow). The plane is ruled by <b>vertical lines</b> (cell / heading
+      boundaries in space) and <b>horizontal lines</b> (6-hour weather blocks in time). A <b>decision</b>
+      about speed is only ever made when the line is crossed. Everything below is about turning this
+      picture into a finite set of points a computer can search.</p>
+  </div>
+
+  <!-- GLOSSARY -->
+  <details class="gloss" open>
+    <summary>Notation key — every symbol used below</summary>
+    <div class="glist">
+      <div class="grow"><span class="s">d, t</span><span class="m">a <b>distance</b> (nm) and a <b>time</b> (h). A pair <b>(d,t)</b> is a single point on the plane — "the ship is d along the route, t hours in."</span></div>
+      <div class="grow"><span class="s">d<sub>0</sub>…d<sub>M</sub></span><span class="m">the <b>distance lines</b> — the vertical rulers, placed at every cell / heading boundary. <b>M</b> = how many sub-segments the route has.</span></div>
+      <div class="grow"><span class="s">t<sub>0</sub>…t<sub>Θ</sub></span><span class="m">the <b>time lines</b> — the horizontal rulers, one every 6 h plus one at the deadline. <b>Θ</b> (Theta) = how many time blocks.</span></div>
+      <div class="grow"><span class="s">δ</span><span class="m"><b>delta</b> — the distance step of the grid: <b>1 NM</b>. On a time line, candidate points are spaced 1 NM apart.</span></div>
+      <div class="grow"><span class="s">τ</span><span class="m"><b>tau</b> — the time step of the grid: <b>0.1 h</b>. On a distance line, candidate points are spaced 0.1 h apart.</span></div>
+      <div class="grow"><span class="s">𝒮</span><span class="m">script <b>S</b> — the <b>state set</b>: every grid point where a decision can be made. Finite and enumerable.</span></div>
+      <div class="grow"><span class="s">𝒟(d)</span><span class="m">the <b>index of the next distance line</b> ahead of position d (so d<sub>𝒟(d)</sub> is that line).</span></div>
+      <div class="grow"><span class="s">𝒯(t)</span><span class="m">the <b>index of the next time line</b> ahead of time t (so t<sub>𝒯(t)</sub> is that line).</span></div>
+      <div class="grow"><span class="s">𝒜(d,t)</span><span class="m">script <b>A</b> — the <b>neighbour set</b> of state (d,t): the states you can reach from it in <b>one straight leg</b>.</span></div>
+      <div class="grow"><span class="s">𝒱</span><span class="m">script <b>V</b> — the allowed <b>speed band</b> [v<sub>min</sub>, v<sub>max</sub>] the ship may travel at (e.g. mean speed ± 3 kn).</span></div>
+      <div class="grow"><span class="s">v̄</span><span class="m"><b>v-bar</b> — the <b>realised speed</b> of a leg: distance covered ÷ time taken, <b>Δd/Δt</b>. Not chosen — read off the leg.</span></div>
+      <div class="grow"><span class="s">φ(d,t;v)</span><span class="m"><b>phi</b> — the <b>fuel-burn rate</b> in the cell at (d,t) if travelling at speed v (tonnes of fuel per hour).</span></div>
+      <div class="grow"><span class="s">C*(d,t)</span><span class="m">the <b>cheapest total fuel to arrive</b> at state (d,t) from the start — the DP's answer at each point.</span></div>
+      <div class="grow"><span class="s">V*(d,t)</span><span class="m">the <b>optimal speed</b> recorded at (d,t) — used to rebuild the best plan afterwards.</span></div>
+      <div class="grow"><span class="s">(d̃,t̃)</span><span class="m">"d-tilde, t-tilde" — a <b>predecessor</b>: a candidate earlier state the ship might have come <i>from</i>.</span></div>
+      <div class="grow"><span class="s">(0,0)</span><span class="m">the <b>origin</b> — start of the voyage (Port A, distance 0, time 0).</span></div>
+      <div class="grow"><span class="s">∪ , ∈ , ⌊·⌋</span><span class="m"><b>union</b> (glue two sets together); <b>is a member of</b>; <b>floor</b> (round down to a whole number).</span></div>
+      <div class="grow"><span class="s">⟨x⟩<sub>δ</sub></span><span class="m">the <b>snap</b> (rounding) operator — x rounded to the nearest multiple of δ; ⟨·⟩<sub>τ</sub> the same with step τ. Like rounding a price to the nearest cent.</span></div>
+      <div class="grow"><span class="s">d̄(d), t̄(t)</span><span class="m">shorthand for <b>the next line ahead</b>: d̄(d) ≡ d<sub>𝒟(d)</sub>, t̄(t) ≡ t<sub>𝒯(t)</sub>. Same thing as Tal's index maps, written compactly.</span></div>
+      <div class="grow"><span class="s">K</span><span class="m">how many landing points one state can actually reach — about the <b>speed-band width ÷ grid step</b> (≈ 8 in practice).</span></div>
+      <div class="grow"><span class="s">|𝒮|, |𝒜|</span><span class="m">the <b>number of</b> states / arcs — the size of the search the computer must do.</span></div>
+    </div>
+  </details>
+
+  <div class="timeline">
+    <div class="commit tal"><div class="h"><b>c0dc083</b><span>Jul 23</span></div><div class="m">Tal — grid 𝒮 + neighbour set 𝒜(d,t)</div></div>
+    <div class="commit new"><div class="h"><b>250ef83</b><span>Jul 24</span></div><div class="m">unify notation ζ → δ</div></div>
+    <div class="commit new"><div class="h"><b>a8ae392</b><span>Jul 24</span></div><div class="m">complete 𝒜(d,t): distance case</div></div>
+    <div class="commit new"><div class="h"><b>6a793b8</b><span>Jul 25</span></div><div class="m">de-dangle + typos</div></div>
+    <div class="commit bell"><div class="h"><b>1c6bbb4</b><span>Jul 25</span></div><div class="m">Bellman equations → node-first</div></div>
+    <div class="commit knit"><div class="h"><b>72033d9</b><span>Jul 25</span></div><div class="m">§4.2 reconciled with the grid</div></div>
+  </div>
+
+  <!-- ============ PART 1 ============ -->
+  <section class="part p1">
+    <p class="part-tag">Part 1 · foundation</p>
+    <h2>Tal's rework: an explicit discrete grid</h2>
+    <p class="by">talraviv · c0dc083 · Jul 23</p>
+
+    <div class="callout">
+      <h3>The shift in one line</h3>
+      <p>The old state set was <b>abstract</b> — "all points on the lines <i>reachable</i> from the start,"
+        a continuum made finite only later. Tal replaced it with an <b>explicit grid</b>: a concrete,
+        listable set of points, plus a defined <b>neighbour set</b> for each.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">1</span>The grid</h3>
+      <p>Two families of rulers cut up the plane: <b>vertical distance lines</b> (heading &amp; weather-cell
+        fixed between them) and <b>horizontal time lines</b> (every 6 h). Decisions happen only <i>on</i> a
+        line. Tal samples each line at a fixed step:</p>
+      <p>• on a <b>distance line</b>, place a candidate point every <b>τ = 0.1 h</b> in time;<br>
+         • on a <b>time line</b>, place a candidate point every <b>δ = 1 NM</b> in distance.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">2</span>The state set 𝒮</h3>
+      <div class="lbl">Eq. (4) — glue together two grids of points, plus the start</div>
+      <div class="fx">
+        <span class="cal">𝒮</span> =
+        { (d<sub>i</sub> − nδ, t<sub>j</sub>) <span class="cond">: i=1…M, j=0…Θ, n=0…⌊(d<sub>i</sub>−d<sub>i−1</sub>)/δ⌋</span> }
+        <span class="cup">∪</span><br>
+        { (d<sub>i</sub>, t<sub>j</sub> − nτ) <span class="cond">: i=0…M, j=1…Θ, n=0…⌊(t<sub>j</sub>−t<sub>j−1</sub>)/τ⌋</span> }
+        <span class="cup">∪</span> { (0,0) }
+      </div>
+      <div class="brk"><div class="bt">reading it symbol by symbol</div>
+        <div class="brow"><span class="s">first { … }</span><span class="m">points sitting <b>on the time lines</b> t<sub>j</sub>: start at a distance line d<sub>i</sub> and step <b>back</b> in distance by multiples of δ (n = 0, 1, 2, …).</span></div>
+        <div class="brow"><span class="s">second { … }</span><span class="m">points sitting <b>on the distance lines</b> d<sub>i</sub>: start at a time line t<sub>j</sub> and step <b>back</b> in time by multiples of τ.</span></div>
+        <div class="brow"><span class="s">⌊(d<sub>i</sub>−d<sub>i−1</sub>)/δ⌋</span><span class="m">how many whole δ-steps fit inside the current cell — i.e. how far back you may step without leaving it.</span></div>
+        <div class="brow"><span class="s">∪ {(0,0)}</span><span class="m">add the start point explicitly.</span></div>
+      </div>
+      <div class="words"><div class="wt">in plain words</div>
+        <p>"List every grid point that sits on a ruler line — one family for the horizontal lines, one for the
+          vertical lines — and throw in the start. That finite list of dots is every place the ship might
+          ever have to make a speed decision."</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">3</span>The "next line" shortcuts 𝒟(d), 𝒯(t)</h3>
+      <div class="fx">
+        <span class="cal">𝒟</span>(d) = argmin<sub>i</sub> { i ∈ ℕ : d<sub>i</sub> &gt; d }
+        <span class="cond">— the index of the first distance line past d</span><br>
+        <span class="cal">𝒯</span>(t) = argmin<sub>j</sub> { j ∈ ℕ : t<sub>j</sub> &gt; t }
+        <span class="cond">— the index of the first time line past t</span>
+      </div>
+      <div class="words"><div class="wt">in plain words</div>
+        <p>"Given where you are, which ruler line comes next?" These two just name "the next wall ahead of
+          you" in space and in time, so the neighbour set can be written compactly.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">4</span>The neighbour set 𝒜(d,t) — <span class="tal-c">time case only</span></h3>
+      <div class="lbl">Eq. (5), as Tal left it — one set</div>
+      <div class="fx">
+        <span class="cal">𝒜</span>(d,t) =
+        { (d<sub>𝒟(d)</sub>, t′) <span class="cond">: t′ = t<sub>𝒯(t)</sub> − nτ, n=0…⌊(t<sub>𝒯(t)</sub>−t<sub>𝒯(t)−1</sub>)/τ⌋</span> }
+      </div>
+      <div class="brk"><div class="bt">reading it symbol by symbol</div>
+        <div class="brow"><span class="s">d<sub>𝒟(d)</sub></span><span class="m">the <b>next distance line</b> — the neighbours all sit on it (the ship travels forward to that wall).</span></div>
+        <div class="brow"><span class="s">t′ = t<sub>𝒯(t)</sub> − nτ</span><span class="m">their <b>arrival time</b>, stepping back from the next time line by multiples of τ — i.e. every τ-slot within the current 6 h block.</span></div>
+      </div>
+      <div class="words"><div class="wt">in plain words</div>
+        <p>"From here, sail forward until you hit the <b>next cell boundary</b>. You could arrive at any of the
+          0.1-hour time-slots in this block — those arrival points are your neighbours." This is the
+          <b>time-discretised</b> case (the arrival <i>time</i> is snapped to the grid). Tal did this one and
+          asked Ami to write its mirror — the distance case — which is Part 2.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ PART 2 ============ -->
+  <section class="part p2">
+    <p class="part-tag">Part 2 · the follow-up (Jul 24–25)</p>
+    <h2>Tidy the notation, complete the neighbour set</h2>
+    <p class="by">amishafir · 250ef83, a8ae392, 6a793b8</p>
+
+    <div class="block">
+      <h3><span class="n">i</span>Unify the notation: ζ → δ <span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">· 250ef83</span></h3>
+      <p>Tal named the 1-NM distance step <b>δ</b>. But the later sections (§4.2's algorithm, the arc count,
+        §5) still called the <i>same</i> step <b>ζ</b> — <b>two symbols for one thing</b>. Renamed every ζ → δ
+        so the paper speaks with one voice (τ was already shared by both).</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">ii</span>Complete 𝒜(d,t): the distance case <span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">· a8ae392</span></h3>
+      <p>Tal's neighbour set only covered legs that reach the next <i>distance</i> line. But a ship can also run
+        out of the 6-hour block <b>before</b> reaching that line — landing on the next <i>time</i> line instead.
+        That second case is the mirror image:</p>
+      <div class="lbl">Eq. (5), now — a union of both cases</div>
+      <div class="fx">
+        <span class="cal">𝒜</span>(d,t) =
+        { (d<sub>𝒟(d)</sub>, t′) <span class="cond">: t′ = t<sub>𝒯(t)</sub> − nτ, …</span> }
+        <span class="cup">∪</span><br>
+        <span class="new-c">{ (d′, t<sub>𝒯(t)</sub>) <span class="cond" style="color:inherit;opacity:.8">: d′ = d<sub>𝒟(d)</sub> − nδ, n=0…⌊(d<sub>𝒟(d)</sub>−d<sub>𝒟(d)−1</sub>)/δ⌋</span> }</span>
+      </div>
+      <div class="brk"><div class="bt">the two cases, side by side</div></div>
+      <table>
+        <thead><tr><th></th><th class="tal-c">time case (Tal)</th><th class="new-c">distance case (added)</th></tr></thead>
+        <tbody>
+          <tr><td class="k">the ship reaches…</td><td>the next <b>cell</b> boundary first</td><td>the next <b>block</b> boundary (6 h) first</td></tr>
+          <tr><td class="k">neighbour sits on</td><td>next <b>distance</b> line d<sub>𝒟(d)</sub></td><td>next <b>time</b> line t<sub>𝒯(t)</sub></td></tr>
+          <tr><td class="k">what varies</td><td>arrival <b>time</b> t′ (steps of τ)</td><td>arrival <b>distance</b> d′ (steps of δ)</td></tr>
+        </tbody>
+      </table>
+      <div class="words"><div class="wt">in plain words</div>
+        <p>"Either you cross into the next cell before the 6-hour block ends (time case), <b>or</b> the block ends
+          first and you're still inside the cell (distance case). Both kinds of landing spot are neighbours."
+          The two cases are perfectly symmetric — swap <i>distance</i> ↔ <i>time</i> and δ ↔ τ.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">iii</span>De-dangle the prose + fix typos <span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">· 6a793b8</span></h3>
+      <p>Tal's rewrite left a sentence dangling (it began "where…" after a full stop). Replaced with a clean
+        statement of how the ship moves, and swept a batch of typos in the fresh text.</p>
+      <div class="ba">
+        <div class="side before"><div class="t">before (dangling)</div>"…snapped to the δ-grid. <b>where</b> by reachable we mean the vessel can be at (d,t) by steaming at some fixed speed from 𝒱…"</div>
+        <div class="side after"><div class="t">after</div>"Between a state and a neighbour the vessel steams at a single fixed speed drawn from 𝒱, held constant across the sub-space it traverses."</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PART 3 ============ -->
+  <section class="part p3">
+    <p class="part-tag">Part 3 · the new change</p>
+    <h2>The Bellman equations, node-first</h2>
+    <p class="by">amishafir · 1c6bbb4 · Jul 25 — the change you just approved</p>
+
+    <div class="callout p3">
+      <h3>Why they had to change</h3>
+      <p>Tal made the state space <b>discrete</b> (a grid of points + neighbour sets). But the equations that
+        actually <i>compute the answer</i> still searched over a <b>continuous range of speeds</b> — mismatched.
+        The fix makes them search over the <b>discrete neighbours</b> instead, and lets the speed fall out as a
+        by-product. That is exactly what "node-first" means: <b>pick the point you land on, then read the speed
+        off it</b> — rather than picking a speed and computing where you'd land.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">1</span>Cost-to-arrive — C*(d,t)</h3>
+      <div class="lbl">the recursion that fills in the cheapest fuel at every point</div>
+      <div class="fx">
+        <span class="cal">C</span>*(d,t) = min<sub>(d̃,t̃)</sub>
+        <span class="cond">over predecessors with (d,t) ∈ 𝒜(d̃,t̃) and v̄ = (d−d̃)/(t−t̃) ∈ 𝒱</span>
+        <br>&nbsp;&nbsp;&nbsp;&nbsp; [ <span class="cal">C</span>*(d̃,t̃) &nbsp;+&nbsp; (t − t̃) · φ(d̃,t̃; v̄) ]
+        <br><span class="cond">with &nbsp; <span class="cal">C</span>*(0,0) = 0.</span>
+      </div>
+      <div class="brk"><div class="bt">reading it symbol by symbol</div>
+        <div class="brow"><span class="s">C*(d,t)</span><span class="m">the number we're solving for: the <b>cheapest total fuel</b> to get from the start to this point.</span></div>
+        <div class="brow"><span class="s">min<sub>(d̃,t̃)</sub></span><span class="m">try <b>every possible previous state</b> (d̃,t̃) we could have arrived from, and keep the <b>smallest</b> total.</span></div>
+        <div class="brow"><span class="s">(d,t) ∈ 𝒜(d̃,t̃)</span><span class="m">the rule for "could have arrived from": (d,t) must be a <b>neighbour</b> of the candidate predecessor.</span></div>
+        <div class="brow"><span class="s">v̄ = (d−d̃)/(t−t̃)</span><span class="m">the <b>speed of that leg</b> = distance gained ÷ time taken. <b>Derived, not chosen.</b></span></div>
+        <div class="brow"><span class="s">∈ 𝒱</span><span class="m">…and it only counts if that speed is <b>within the allowed band</b> (not impossibly fast or slow).</span></div>
+        <div class="brow"><span class="s">C*(d̃,t̃)</span><span class="m">the cheapest fuel to reach the <b>predecessor</b> (already computed).</span></div>
+        <div class="brow"><span class="s">(t − t̃)·φ(d̃,t̃;v̄)</span><span class="m">the <b>fuel for this one leg</b> = its <b>duration</b> × the <b>fuel-burn rate</b> in that cell at speed v̄.</span></div>
+      </div>
+      <div class="words"><div class="wt">in plain words</div>
+        <p>"The cheapest way to reach a point is: the cheapest way to reach <b>some earlier point</b>, plus the
+          fuel to travel from there to here. So look back at <b>every point you could have come from</b>, work
+          out how fast that hop was (just distance ÷ time) and what it cost, add it to the cost of getting to
+          that earlier point, and keep the <b>smallest</b> answer."</p>
+        <p>The key difference from before: we no longer <i>choose</i> a speed. We choose <b>which grid point we
+          came from</b>, and the speed is simply the slope of the straight line between them.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">2</span>Optimal speed — V*(d,t)</h3>
+      <div class="lbl">so we can rebuild the best plan afterwards</div>
+      <div class="fx">
+        <span class="cal">V</span>*(d,t) = (d − d̃<sup>★</sup>) / (t − t̃<sup>★</sup>)
+        &nbsp;&nbsp;<span class="cond">where (d̃<sup>★</sup>, t̃<sup>★</sup>) is the predecessor that won the min above</span>
+      </div>
+      <div class="brk"><div class="bt">reading it symbol by symbol</div>
+        <div class="brow"><span class="s">(d̃<sup>★</sup>,t̃<sup>★</sup>)</span><span class="m">the <b>winning predecessor</b> — the one earlier point that gave the cheapest total in step 1.</span></div>
+        <div class="brow"><span class="s">(d−d̃<sup>★</sup>)/(t−t̃<sup>★</sup>)</span><span class="m">the <b>speed of the winning leg</b> — again just distance ÷ time.</span></div>
+      </div>
+      <div class="words"><div class="wt">in plain words</div>
+        <p>"Once we know the best point to have come from, the best speed is obvious: it's just the slope of the
+          line from that point to this one." Recording it at every state lets us <b>trace the whole optimal
+          voyage backwards</b> at the end, from the destination back to the start.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">3</span>What actually changed</h3>
+      <div class="ba">
+        <div class="side before"><div class="t">before — search over speeds</div>
+          C*(d,t) = min over <b>v ∈ 𝒱</b> (a continuous range) of two hand-written cases (did the ship hit the
+          distance line or the time line first?). <b>You chose the speed; the landing point was computed.</b></div>
+        <div class="side after"><div class="t">after — search over neighbours</div>
+          C*(d,t) = min over the <b>discrete predecessors</b> in 𝒜, speed <b>v̄ = Δd/Δt derived</b>. The two hand-written
+          cases vanish — they're already the two halves of 𝒜. <b>You choose the point; the speed follows.</b></div>
+      </div>
+      <p><b>Why this is better:</b> it matches Tal's discrete grid exactly (finite, listable candidates rather
+        than a continuous range), it removes the gap between a "target" speed and the speed you actually
+        realise, and it's precisely what §4.2's arc-building algorithm already does.</p>
+      <div class="words"><div class="wt">strictly forward</div>
+        <p>Tal's grid 𝒮 (Eq. 4), the shortcuts 𝒟/𝒯, and the neighbour set 𝒜(d,t) (Eq. 5) are left
+          <b>byte-for-byte untouched</b> — only the two equations <i>after</i> them changed, and they merely
+          <b>reference</b> 𝒜. The "speed must be in 𝒱" rule was placed <i>inside</i> the new equation, precisely
+          so Tal's Eq. (5) didn't need editing.</p></div>
+    </div>
+  </section>
+
+<!-- ============ PART 4 ============ -->
+  <section class="part p4">
+    <p class="part-tag">Part 4 · the newest change</p>
+    <h2>§4.2 "Solving the Bellman equation," reconciled with the grid</h2>
+    <p class="by">amishafir · 72033d9 · Jul 25</p>
+
+    <div class="callout p4">
+      <h3>Why §4.2 needed surgery</h3>
+      <p>§4.2 was written back when §4.1 was still <i>abstract</i> — so §4.2's job, at the time, was to
+        <b>invent</b> the grid. After Parts 1–3, §4.1 already draws the grid and defines the neighbours.
+        That left §4.2 doing two bad things: <b>re-deriving</b> what §4.1 had just done, and in places
+        <b>claiming things that are no longer true</b> (its opening literally said the state set "has to be
+        made finite" — but Eq. (4) is already a finite list). Four fixes follow — none of them touches a
+        single character of §4.1.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">1</span>A new job description (the intro)</h3>
+      <div class="ba">
+        <div class="side before"><div class="t">before</div>
+          "…the state set 𝒮 of Eq. (4) <b>has to be made not merely finite but of tractable size</b>. Second,
+          𝒮 and the speed transitions between its states have to be enumerated…"</div>
+        <div class="side after"><div class="t">after</div>
+          "Eqs. (4)–(5) <b>already define</b> the state grid 𝒮 and its admissible successors 𝒜(d,t)… Three
+          things remain: <b>bound</b> the size, <b>enumerate</b> only the <i>reachable</i> states and admissible
+          arcs, and <b>sweep</b> the recursion."</div>
+      </div>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">in plain words</div>
+        <p>"The map is already drawn — §4.1 drew it. What's left for §4.2 is bookkeeping: <b>count</b> how big
+          the map is, <b>walk</b> only the part of it a real voyage can touch, and <b>solve</b> on what the walk
+          found." The old opening set §4.2 the task of <i>creating</i> the map — a job that no longer exists.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">2</span>§4.2.1: from "create the grid" to "use the grid"</h3>
+      <p>The old first paragraph argued: "speeds are continuous → infinitely many reachable points → <b>we
+        contain this</b> by discretising." That was the <i>motivation for inventing</i> the grid. Now the
+        paragraph says the grid is <b>fixed by Eq. (4)</b>, and keeps the old argument only as a one-line
+        aside explaining <i>why the grid lives on the lines</i> (any per-speed discretisation would explode as
+        K<sup>lines</sup>; per-line grids stay polynomial).</p>
+      <p>Two things in this subsection are still genuinely needed, and both were kept — just recast:</p>
+      <div class="brk"><div class="bt">what stays, and its new role</div>
+        <div class="brow" style="--pc:var(--knit)"><span class="s">⟨x⟩<sub>δ</sub>, ⟨·⟩<sub>τ</sub></span><span class="m">the <b>snap operators</b> — no longer "how the discretisation is created," now simply <b>the rounding arithmetic</b> the enumeration uses to land arrivals exactly on §4.1's grid dots (round a landing distance to the nearest 1 NM, a landing time to the nearest 0.1 h).</span></div>
+        <div class="brow" style="--pc:var(--knit)"><span class="s">|𝒮| bound</span><span class="m">now read <b>directly off Eq. (4)</b> by counting: each distance line holds at most ⌈T/τ⌉ dots, each time line at most ⌈L/δ⌉ dots → |𝒮| = O(M·T/τ + Θ·L/δ), and |𝒜| = O(K·|𝒮|).</span></div>
+      </div>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">in plain words</div>
+        <p>"How big is the search? <b>Count dots per ruler, times the number of rulers.</b> A distance line can
+          hold at most one dot per 0.1 h of the voyage; a time line at most one dot per mile of the route.
+          Multiply out and the whole thing is comfortably polynomial — no exponential blow-up anywhere."</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">3</span>§4.2.2: one name per thing, and an honest claim</h3>
+      <p><b>(a) Duplicate definition removed.</b> §4.2 used to re-define "the next line ahead" from scratch
+        (d̄(d) = min{d<sub>i</sub> &gt; d}) — the very thing Tal's 𝒟(d), 𝒯(t) already do. Now the bars are
+        declared as <b>shorthand</b>: d̄(d) ≡ d<sub>𝒟(d)</sub>, t̄(t) ≡ t<sub>𝒯(t)</sub>. One concept, one
+        definition, two spellings.</p>
+      <p><b>(b) The dots are joined out loud.</b> A new sentence states what was previously only implicit:</p>
+      <div class="fx" style="font-size:.98rem">
+        "Together the two ranges enumerate <b>exactly the neighbours 𝒜(d,t) of Eq. (5)</b> whose realised speed
+        is admissible (v̄ ∈ 𝒱) — <b>the same set over which the recursion of Eq. (cost-to-arrive)
+        minimises</b>."
+      </div>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">in plain words</div>
+        <p>"The algorithm's candidate list and the equation's candidate list are <b>literally the same set</b> —
+          the text now says so, instead of leaving the reader to check it."</p></div>
+      <p><b>(c) An overclaim corrected.</b> The old text said the forward walk "discovers exactly the … set 𝒮
+        of Eq. (4)." But Eq. (4) lists <i>every dot that could exist</i>; the walk from the start only visits
+        the dots <i>a real voyage can touch</i> — far fewer. Fixed to: "…discovers exactly the <b>subset of the
+        grid 𝒮 reachable from the origin</b> — typically a small fraction of the full grid."</p>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">why the distinction matters</div>
+        <p>It's the difference between "every square on the chessboard" and "the squares a knight starting at
+          a corner can actually reach in the moves available." A careful reviewer would have flagged the old
+          sentence; and the gap is also exactly why the enumeration is cheap in practice.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">4</span>Algorithm 1: the code points at the formula</h3>
+      <p>The algorithm's two enumeration loops now carry annotations naming which half of Eq. (5) each one
+        builds:</p>
+      <div class="brk">
+        <div class="brow" style="--pc:var(--knit)"><span class="s">loop 1</span><span class="m">"distance line binds: enumerate arrival <i>times</i> — <b>the first set of Eq. (5)</b>" (Tal's time case).</span></div>
+        <div class="brow" style="--pc:var(--knit)"><span class="s">loop 2</span><span class="m">"time line binds: enumerate arrival <i>distances</i> — <b>the second set of Eq. (5)</b>" (the added distance case).</span></div>
+      </div>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">in plain words</div>
+        <p>"The pseudocode and the formula now <b>point at each other</b>: read a loop, and it tells you exactly
+          which piece of the neighbour set it is constructing."</p></div>
+    </div>
+  </section>
+
+  <div class="callout p4">
+    <h3>Where §4 stands now — one continuous story</h3>
+    <p><b>§4.1</b> draws the grid 𝒮 and each state's neighbours 𝒜(d,t) (Tal, completed) → the <b>Bellman
+      equations</b> minimise over those neighbours, deriving the speed as Δd/Δt (node-first) → <b>§4.2</b>
+      counts the grid (the |𝒮| bound), walks only its reachable part (Algorithm 1 = the two halves of
+      Eq. 5), and sweeps the recursion over what it found (Algorithm 2). One notation (δ, τ) throughout;
+      every superseded passage preserved under <code>\begin{comment}</code>. The only remaining §4 to-dos
+      are the two <code>ADD FIGURE</code> placeholders.</p>
+  </div>
+
+  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 — paper_workspace/paper_full_draft.tex · §4.1–§4.2</footer>
+</div>
