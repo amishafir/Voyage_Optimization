@@ -396,19 +396,23 @@ trajectory from $(0,0)$ to the destination distance $(L,t)$ for some $t\leq T$, 
 %of the SOG response of Section~\ref{sec:problem}, $V_s=\Phi^{-1}(V_g;w,\psi)$, where $w$ denotes the
 %sea state and $\psi$ the heading.
 
-Three structural properties reduce this continuous-control problem to a finite one without loss of
-optimality.  First, the heading is constant in each route segment (hence in each leg). Second,
-the sea conditions are constant within each sea cell and time block. 
-Third, the FCR is convex function of the SOG (see Section~\ref{sec:problem}).
-Therefore, under optimal control the SOG remain constant as long as the vessel is in the same leg and within the same time block. 
+Three structural properties reduce this continuous-control problem, without loss of optimality, to
+one with finitely many decision epochs. First, the heading is constant in each route segment (hence
+in each leg). Second, the sea conditions are constant within each sea cell and time block.
+Third, the FCR is a convex function of the SOG (see Section~\ref{sec:problem}).
+Therefore, under optimal control the SOG remains constant as long as the vessel is in the same leg and within the same time block; the remaining continuum --- where exactly on a boundary the vessel arrives --- is handled by the grid of Section~\ref{sec:states}.
 
-As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitutde or longtide line, a new subssegment starts. Within each time blcok, the sea conditions are assumed constant throoughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (mahor) segment, the vessel changes its heading which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$, $l_i$ is the length of segment $i$ and $d_i = d_{i-1} + l_{i-1}$ with $d_0 = 0$ is the cumulative distance from the begining of the route. In particular $d_M = L$.
+As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitude or longitude line, a new subsegment starts. Within each time block, the sea conditions are assumed constant throughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (major) segment, the vessel changes its heading, which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular $d_M = L$.
 % ==== OLD (finite speed set V) — superseded by node-first (continuous 𝒱); kept, not rendered ====
 \begin{comment}
 Next we denote the FCR of the vessel when straming at speed $v \in V$ at  subsegment $i$ at time $t$ by $FCR_i(v, t)$.
 \end{comment}
-% ==== NEW (node-first, continuous interval 𝒱) ====
+% ==== OLD-2 (defined FCR_i(v,t) — orphan notation, never used again; φ(d,t;v) of §4.1 is the operative one) — kept, not rendered ====
+\begin{comment}
 Next we denote the FCR of the vessel when steaming at speed $v \in \mathcal{V}$ at subsegment~$i$ and time~$t$ by $FCR_i(v, t)$.
+\end{comment}
+% ==== NEW (forward pointer to φ instead of a second fuel-rate symbol) ====
+The FCR of the vessel steaming at speed $v \in \mathcal{V}$ therefore depends only on the subsegment and the time block it is in; Section~\ref{sec:states} makes this precise through the function $\phi(d,t;v)$.
 
 
 
@@ -604,10 +608,11 @@ from a state we enumerate directly the reachable grid nodes on the next lines ah
 \begin{equation}
 \label{eq:state-bound}
 |\mathcal{S}| \;=\; O\!\left(M\,\frac{T}{\tau} \;+\; \Theta\,\frac{L}{\delta}\right),\qquad
-|\mathcal{A}| \;=\; O\!\left(K\,|\mathcal{S}|\right),
+|\mathcal{A}| \;=\; O\!\left(\kappa\,|\mathcal{S}|\right),
 \end{equation}
-where $\mathcal{A}$ is the induced arc set and $K$ is the number of far-wall grid nodes reachable
-within $\mathcal{V}$ from a state (bounded by the speed-band width divided by the grid step). The snap steps are
+where $\mathcal{A}$ is the induced arc set and $\kappa$ is the number of far-wall grid nodes reachable
+within $\mathcal{V}$ from a state (bounded by the speed-band width divided by the grid step; $\kappa$
+is not to be confused with the $K$ discrete speed levels of the naive discretisation above). The snap steps are
 small relative to the physical scales --- $\delta=1$ NM against segments of tens to hundreds of NM, and
 $\tau=0.1$ h against six-hour blocks --- so the induced timing error is at most half a step and is
 negligible next to the accuracy of the FCR function itself (Appendix~\ref{app:fcr}).
@@ -645,20 +650,21 @@ the next time line $\overline{t}(t)$, the reachable distance lies between $d+v_{
 and $d+v_{\max}(\overline{t}(t)-t)$; we take every multiple of $\delta$. Each
 candidate grid node is a successor $(d',t')$, reached by holding the single speed
 $\bar v=\Delta d/\Delta t\in\mathcal{V}$ over the leg, with $\Delta d=d'-d$ and $\Delta t=t'-t$;
-because the node already lies on the grid, no target-versus-realised speed gap arises. Together the
-two ranges enumerate exactly the neighbours $\mathcal{A}(d,t)$ of Eq.~\eqref{eq:neighbors} whose
-realised speed is admissible ($\bar v\in\mathcal{V}$) --- the same set over which the recursion of
-Eq.~\eqref{eq:cost-to-arrive} minimises. A distance line
+because the node already lies on the grid, no target-versus-realised speed gap arises. A distance line
 too close to resolve on the $\tau$-grid --- its snapped arrival collapsing back onto $t$ --- is
-skipped, and the vessel glides past it to the next time line. The leg on which a single speed is held is thus of no fixed length:
+skipped, and the vessel glides past it to the next time line, the time-line candidates then extending
+past the skipped line as far as $v_{\max}$ allows. Up to this boundary rule, the two ranges enumerate
+exactly the neighbours $\mathcal{A}(d,t)$ of Eq.~\eqref{eq:neighbors} whose realised speed is
+admissible ($\bar v\in\mathcal{V}$) --- the same set over which the recursion of
+Eq.~\eqref{eq:cost-to-arrive} minimises. The leg on which a single speed is held is thus of no fixed length:
 it ends at the first boundary at which either the sea conditions change (a distance line) or a decision
 epoch is reached (a time line), so the control discretisation is \emph{adaptive} --- induced by the
 data rather than by a fixed step. An arc is discarded if it is degenerate ($\Delta d\le0$ or
 $\Delta t\le0$, which the snap can produce when a line is very close) or if the realised speed $\bar v$
 cannot be sustained in the arc's cell under the prevailing sea conditions, so that its fuel rate
 $\phi(d,t;\bar v)$ is undefined. Otherwise its cost is that fuel rate --- the FCR of the cell and time
-block the arc traverses, evaluated at $\bar v$, with the source $(d,t)$ serving as the lower-left corner
-of that rectangle exactly as $(\underline d,\underline t)$ does in
+block the arc traverses, evaluated at $\bar v$, with the source $(d,t)$ fixing that rectangle exactly
+as the predecessor $(\tilde d,\tilde t)$ does in
 Eq.~\eqref{eq:cost-to-arrive} --- times the duration, $\phi(d,t;\bar v)\,\Delta t$. Starting from
 $(0,0)$ and adding each previously-unseen successor as a new state, the closure discovers exactly the
 subset of the grid $\mathcal{S}$ of Eq.~\eqref{eq:state-space} that is reachable from the origin ---
@@ -782,7 +788,7 @@ arcs, and the single forward sweep of Algorithm~2 solves it in roughly eight sec
 % ==== NEW (node-first: ~1.2e6 arcs; <2 s) ====
 Route~1 ($L=3{,}393$ NM, $T=280$ h, $M=162$ subsegments, speed band of width $6$ kn)
 the closure of Algorithm~1 yields about $1.3\times10^{5}$ states and $1.2\times10^{6}$
-arcs --- the node-first enumeration emits only the $\sim\!8$ distinct reachable far-wall nodes per
+arcs --- the node-first enumeration emits only the $\kappa\approx8$ distinct reachable far-wall nodes per
 state rather than one arc per speed --- and the single forward sweep of Algorithm~2 solves it in
 under two seconds; the
 one-off arc construction, dominated by the per-arc still-water-speed inversion and FCR evaluation, is a
