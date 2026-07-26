@@ -94,6 +94,8 @@
 - **Vertical axis = time** `t`, top → bottom (`0` at top, `T` at bottom; time increases downward).
 - **Departure** = upper-left corner `(0,0)`; **voyage complete** = bottom-right corner `(L, T)`.
 - Any feasible trajectory only moves right-and-down; its steepness encodes speed. Consistent with §4.1 ("vertical distance lines / horizontal time lines") and the `combined_twin` / `state_space_optF` figures.
+- **⟶ node-first (2026-07-26): holds unchanged** — cell geometry is method-agnostic.
+
 
 **T3 — Route → segments → subsegments → distance lines (map-to-graph bridge).** `[status: verified; matches §4]`
 - The route is an ordered list of geographic waypoints. Each consecutive pair is a **segment**: a straight, constant-heading leg whose heading is the bearing from the earlier waypoint to the later one (direction fixed by the route order / start point).
@@ -101,18 +103,24 @@
 - **Two kinds of breakpoint, both become distance lines:** (a) **cell crossings** — weather changes, heading stays; (b) **waypoints** (segment ends) — heading (course ψ) changes. Walking origin → destination interleaves them.
 - **Bridge:** each breakpoint sits at a cumulative along-track distance; those distances are the vertical **distance lines** `d₀=0 < d₁ < … < d_M=L`. A subsegment is the stretch between two adjacent distance lines — one cell + one heading, so weather-in-space is fixed across it.
 - Nuance: near a cell *corner* a lat-line and a lon-line crossing land within ~1–2 NM, so two distance lines can sit almost on top of each other (real, just close — as seen in the figure).
+- **⟶ node-first (2026-07-26): holds unchanged** — orientation convention is method-agnostic.
+
 
 **T4 — Building the frame: two line families tile the plane into constant-condition rectangles.** `[status: verified; matches §4.1]`
 - **Horizontal = time lines**, one every **6 h** (the GFS weather-refresh cycle — the cadence at which weather-in-time may change), plus endpoints at `t=0` and `t=T` (ETA, even if not a multiple of 6). Set `{0,6,12,…}∪{T}`, indexed `t₀=0 … t_Θ=T`.
 - **Vertical = distance lines** (T3): (1) every segment change (heading/waypoint), (2) every 0.5° lat/lon cell crossing, plus `d₀=0` and `d_M=L`. Order of drawing the two families is irrelevant — they're independent.
 - Together they make a **rectangular grid**; each rectangle = *one cell × one 6 h block* = fixed heading + fixed weather → a single fuel-rate function `φ` for that rectangle. Weather data plugs in here: **actual** weather populates rectangles for the deterministic/ground-truth run, **predicted** for rolling-horizon.
 - **Frame ≠ nodes.** These lines are only the skeleton (`frame.py`). The nodes are the *discrete reachable points that land on the lines* — not the whole line — determined by the speed choices + the snap grid (next step).
+- **⟶ node-first (2026-07-26): holds unchanged** — the map-to-graph bridge (distance lines) is method-agnostic.
+
 
 **T5 — Movement is monotonic (right + down only); each arc stops at the first line ahead.** `[status: verified; matches §4.2.2 / Algorithm 1]`
 - Allowed moves: **right** = forward in distance, **down** = forward in time. Forbidden: **left** (back in distance), **up** (back in time). Every trajectory is right-and-down only.
 - From a point on a line, pick a speed → travel a straight line (slope = speed) down-and-right until the **first** gridline ahead: either the **next distance line to the right** `d̄(d)` (the immediately adjacent one — must stop there since conditions can change) **or** the **next time line below** `t̄(t)`.
 - **Which line you land on is set by the speed, not chosen:** faster → reach the next *distance* line first (distance line binds); slower → reach the next *time* line first (time line binds). Over the whole speed set `V`, one state fans out to successors on *both* the next distance line and the next time line. This is the `δ_d=(d̄−d)/v` vs `δ_t=t̄−t` test in Algorithm 1 (smaller δ binds).
 - Edge cases: land on `d=L` → **arrival** (sink); land on `t=T` with `d<L` → **out of time** (dead end).
+- **⟶ node-first (2026-07-26): frame holds; the node definition changed.** Nodes are no longer "landings determined by the speed choices + the snap grid" — they are the **up-front grid points of Eq. (4)** (every τ = 0.1 h along distance lines, every δ = 1 NM along time lines; ζ renamed δ). The BFS then discovers which of those grid points are reachable. Frame ≠ nodes still holds, but the lattice is now defined by 𝒮, not induced by speeds.
+
 
 **T6 — Moving between nodes: the full transition + node-spacing strategy.** `[status: verified; matches Algorithm 1 / atomic_edges]`
 - **Flow (speed-first):** on a node `(d,t)` → pick a target speed `v` from the grid `V` → travel straight (slope = v) down-and-right to the **first line ahead** (next distance line right, or next time line below — whichever comes first, T5) → that landing point is the new node.
@@ -122,6 +130,8 @@
   - `(ζ, τ)` (snap / node spacing) = the **rounding of each landing point's free coordinate**; NOT an up-front "dots every X" placement — it's applied per-landing.
 - **Why the snap is mandatory (can't skip node spacing):** the free coordinate depends on the *entire* history of speeds (e.g. `t̲ + Σ lₖ/vₖ`), so without snapping no two paths share a node → node count grows `|V|^(lines crossed)` → exponential. Snapping merges near-coincident arrivals onto shared grid points → finite, tractable graph (§4.2.1).
 - **Speed variety ≈ `min(|V|, landing-point resolution)`.** Snap-induced speed quantization scales as `δv ≈ ζ/Δt` (distance snap) or `δv ≈ v²·τ/Δd` (time snap) — so it's fine on short legs (V is the binding menu) but can approach/exceed the 0.1 kn V-step on long legs.
+- **⟶ node-first (2026-07-26): geometry holds; the fan-out mechanism inverted.** "First line ahead" and monotone right+down are unchanged. But a state no longer fans out "over the speed set V" — it fans out over the **reachable grid nodes on both walls** (the two sets of 𝒜(d,t), Eq. 5): arrival *times* on the next distance line, arrival *distances* on the next time line. Which wall a leg ends on is still set by how fast it goes — but the speed is **derived** (v̄ = Δd/Δt of the chosen node), not chosen. The δ_d-vs-δ_t test survives only inside old Algorithm 1 (commented).
+
 
 **T7 — Two kinds of "interval": between the lines (frame) vs along a line (nodes).** `[status: verified; matches §4.1 / frame.py]`
 - **Between the lines (the frame):**
@@ -129,6 +139,8 @@
   - **Distance lines** — **variable / irregular**, = one subsegment length, set by the route: a line at each 0.5° cell crossing + each waypoint. Route 1: `M=162` over 3,393 NM → ~21 NM average, ranging ~1–2 NM (cell-corner clusters) up to a full cell side (~17–30 NM). Heading-dependent (T1).
 - **Along a line (node / snap spacing, from T6):** land on a **distance line** → free coord is time → nodes on a **τ = 0.1 h** grid; land on a **time line** → free coord is distance → nodes on a **ζ = 1 NM** grid.
 - Summary: *lines* spaced by physics/geometry (6 h in time; irregular cell-driven gaps in distance); *nodes on those lines* spaced by the chosen snap (0.1 h / 1 NM).
+- **⟶ node-first (2026-07-26): SUPERSEDED in its core — this entry describes the retired speed-first flow.** (1) The menu `V` is **gone**: no target speed is picked; we enumerate the far-wall grid nodes directly and read v̄ = Δd/Δt off each — **no target-vs-realised gap** (old T18 concern dissolves). (2) `(ζ,τ)` → `(δ,τ)`, and the grid is placed **up-front on the lines** (Eq. 4) rather than applied as per-landing rounding; the snap operators ⟨·⟩ survive only as the rounding *arithmetic* inside Algorithm 1. (3) Fan-out is **κ ≈ 8** reachable far-wall nodes per state (was ~61 arcs from |V|). (4) "Speed variety ≈ min(|V|, resolution)" simplifies: the landing-point resolution **is** the speed resolution. The *why-snapping-is-mandatory* argument (|V|^lines → exponential) survives as motivation for why the grid lives on the lines.
+
 
 **T8 — Construction order: frame → lazy BFS (arcs create nodes), NOT a dense node-first pass.** `[status: verified; matches atomic_edges build]`
 - Frame (lines + snap resolution `ζ,τ`) is fixed first ✓. But nodes are **not** pre-populated across the whole lattice before arcs.
@@ -136,17 +148,23 @@
 - **Why lazy, not eager:** the full dense lattice is mostly unreachable. Route 1 dense grid ≈ 600k lattice points (≈456k distance-line + ≈160k time-line) but only ≈152k reachable (~25%); the unreachable ones are physically impossible states (e.g. 3,000 NM by hour 6, or 5 NM by hour 200). Eager-then-prune wastes ~75%.
 - Also coupled: determining reachability *is* the arc-tracing pass, so nodes-first can't be cleanly separated from arcs anyway.
 - So `(ζ,τ)` defines the **lattice** landings may snap to; the nodes that **exist** are the subset of lattice points the arcs actually hit.
+- **⟶ node-first (2026-07-26): holds with a rename** — ζ → δ (Tal's notation); the "along a line" spacing is now the grid of Eq. (4) itself (τ = 0.1 h on distance lines, δ = 1 NM on time lines), not a per-landing snap.
+
 
 **T9 — What nodes and arcs store for the Bellman sweep (cumulative vs incremental).** `[status: verified; matches bellman.py]`
 - **Node** carries: (1) `cost[node]` = minimum **cumulative** fuel to arrive (`C*`); (2) `parent_arc[node]` = the single winning incoming arc (back-pointer for path recovery).
 - **Arc** (`AtomicEdge`) carries: (1) its **source** `(src_t,src_d)` and **destination** `(dst_t,dst_d)` nodes; (2) its own **incremental** leg fuel `fuel_mt = FCR·Δt` (+ the physics it came from: realized speed, SWS, FCR, weather, heading — kept for schedule recovery). It does **not** store cumulative fuel.
 - **Cumulative lives on the node; incremental lives on the arc.** The sweep joins them via relaxation: `cost[dst] = min over incoming arcs of ( cost[src] + arc.fuel_mt )`; when an arc improves `cost[dst]`, set `parent_arc[dst] = that arc`.
 - Correction to the intuitive phrasing: the arc *references* its departure node, but the cumulative fuel is **read from that node** at relax time — it is not carried inside the arc.
+- **⟶ node-first (2026-07-26): lazy build holds; the candidates changed (and a naming collision).** BFS-from-source, arcs-discover-nodes, ~25% reachable — all still true (§4.2.2 now says the closure discovers the reachable **subset** of the grid 𝒮). But a popped node no longer emits "one arc per speed in V": it emits **one arc per reachable far-wall grid node** (κ ≈ 8, the two sets of Eq. 5). NB the phrase "NOT a dense node-first pass" in this entry's title uses "node-first" in a *different sense* (pre-populating all lattice nodes) than Tal's node-first *enumeration* — the two are compatible: we enumerate candidates node-first, and still intern them lazily.
+
 
 **T10 — Build pass vs sweep pass are separate, and run in different orders.** `[status: verified; matches atomic_edges + bellman.py]`
 - **Build (BFS, T8):** from `(0,0)` emit `|V|` arcs (61 in the paper run; 41 = frame default) → each lands on a snapped point → node is **new or "united"** with an existing node sharing the same `(t,d)` key (interning/merging). A node can collect **many** incoming arcs (paths converge) — that convergence is why a min is needed later. Discovery order is irrelevant; this only *creates the graph*.
 - **Sweep (solve):** a *separate* pass over the finished graph. It creates **no** nodes. Steps: (1) **sort all nodes lexicographically by `(t,d)`** — this is "the sweep order"; (2) process each once, relaxing its outgoing arcs (`cost[dst]=min(cost[src]+arc.fuel)`, T9).
 - **Why lex `(t,d)`, not BFS order:** to finalize a node's `C*`, all its incoming arcs (hence all predecessors) must be relaxed first. Since every arc strictly increases both `t` and `d` (T5), every predecessor is lexicographically earlier → lex sort guarantees "all predecessors before me" → **one pass suffices**. BFS discovery order does *not* guarantee this (a node can be found early via a fast arc yet have a cheaper incoming arc from a later-discovered predecessor), so `C*` can't be computed during the build.
+- **⟶ node-first (2026-07-26): holds unchanged** — cumulative-on-node / incremental-on-arc is untouched; minor note: the arc's `target_sog` now *equals* its realised speed (one speed, derived).
+
 
 **T11 — Finishing: sink selection + backtrack (fuel is already known; backward recovers the path).** `[status: verified; matches bellman.py]`
 - After the sweep every node holds its min cumulative fuel `C*` (accumulated **forward**). The last part does **not** recompute fuel — it recovers the schedule.
@@ -154,6 +172,8 @@
 - **Step B — backtrack.** Walk `parent_arc` from `s★` → its winning incoming arc → that arc's `src` → … → `(0,0)`; reverse to source→sink order. Each arc carries its realized speed (+ cell/weather/SWS), so the sequence **is** the optimal speed schedule, leg by leg. `O(#legs)`, no fuel arithmetic.
 - **Forward vs backward:** sweep computes the fuel *values* (and stores one back-pointer arc per node); backtrack reads only those pointers to reconstruct *which speeds* produced the minimum.
 - **Full chain closed:** build (T8/T10) → sweep in lex order (T10) → pick best on-time sink (A) → backtrack (B) → optimal schedule.
+- **⟶ node-first (2026-07-26): holds; one number changed** — the build emits **κ ≈ 8** arcs per popped node (was "|V| arcs (61…)"). The sweep-in-lex-(t,d) argument is untouched (arcs still strictly increase both coordinates).
+
 
 **T12 — Complexity, step by step.** `[status: verified; consistent with measured Route 1 counts]`
 - **Quantities:** `M` subsegments (distance lines = `M+1`); `Θ≈⌈T/6⌉` time lines; `K=|V|` speeds; `N_t=⌈T/τ⌉` time-slots per distance line (τ=0.1 h); `N_d=⌈L/ζ⌉` distance-slots per time line (ζ=1 NM); `P` = per-arc physics cost (SWS-inverse binary search + FCR — a big constant).
@@ -163,6 +183,8 @@
 - **Route 1 check:** `|S|≈1.5×10⁵`, `|A|≈9.2×10⁶` (matches measured 9.21M), sweep ≈8.3 s, build ≈830 s.
 - **Punchline (= Contribution 1 as complexity):** everything is **polynomial** in `M`, `Θ(≈T/6)`, `1/τ`, `1/ζ`, `K` — vs the `K^N` (exponential-in-stages) profile enumeration of naive/block methods. The snap grid `(ζ,τ)` is what converts the exponential reachable set to the polynomial `|S|`, making the single `O(K·|S|)` sweep tractable.
 - Caveat: `|S|=O(M·T/τ+Θ·L/ζ)` is the *dense* bound; the reachable set is smaller (feasible-speed cone `v_min·t ≤ d ≤ v_max·t` trims it, ~25% on Route 1) — lowers the constant, not the asymptotic form.
+- **⟶ node-first (2026-07-26): holds unchanged** — sink selection and backtrack are enumeration-agnostic.
+
 
 **T13 — HYPOTHESIS: do we have a complexity advantage over Luo? Hinges on whether Luo snaps.** `[status: UNVALIDATED — verify against Luo 2024]`
 - **Default finding (from our own framing):** *no* complexity advantage. `|S_SR| = O(M·T/τ + Θ·L/ζ)` vs `|S_Luo| = O(Θ·L/ζ)` — we're *larger* (~4× on Route 1, the extra `M·T/τ` per-cell nodes). Our edge over Luo is **fuel/resolution**, not compute. The complexity *result* we own is tractability vs naive `K^M` enumeration — an advantage over enumeration, not over Luo.
@@ -176,6 +198,8 @@
 - **Verdict:** both snap the free coordinate (Luo: distance `ζ`; us: distance `ζ` + time `τ`), both cone-restrict, both prune, both are polynomial single-pass graph solves. We are the *larger* graph (extra `M·T/τ` per-cell nodes) — more expensive, not less. **No complexity advantage. Drop that claim.**
 - **Real, defensible differences (resolution → fuel, not compute):** (i) Luo re-chooses speed once per ~6 h *segment*; we re-choose per *cell crossing* (finer speed). (ii) Luo uses **one weather value per segment** (segment-start waypoint, Eq. 22) over ~72 NM; we resolve weather **per 0.5° cell** (finer weather). NB our §5 describes the Luo baseline as "walking sub-segments" — a *stronger/fairer* Luo than their paper; keep that consistent.
 - **Runtime not comparable:** Luo reports 146 min / 220 min per voyage on a laptop, but that includes `n` rolling re-solves + per-edge ANN + NetworkX Dijkstra; our 8.3 s is a single sweep. No runtime claim either.
+- **⟶ node-first (2026-07-26): UPDATED numbers & symbols.** `K=|V|` drops out of our complexity entirely (K now means "discrete speed levels" only in the K^N contrast to block methods, §2/§4.2.4). Fan-out is **κ ≈ 8** (speed-band width ÷ grid step), so `|A| = O(κ·|S|)` (Eq. 6, was O(K·|S|)); ζ → δ throughout. **Measured Route 1 (node-first):** |S| ≈ 1.34×10⁵, |A| ≈ **1.18×10⁶** (was 9.21×10⁶ — 7.8× fewer), build ≈ 33 s (was ~200 s warm / 830 s cold), sweep ≈ 1.5 s (was 8.3 s). Punchline unchanged and stronger: polynomial in M, Θ, 1/τ, 1/δ, κ — and the per-arc physics P now multiplies a graph ~8× smaller.
+
 
 **T14 — Luo's forecast is atmospheric-only; waves come from ERA5 reanalysis (= actual).** `[status: verified against Luo 2024.pdf]`
 - Luo *is* forecast-driven (NOAA GEFS control member, 6-hourly, rolling re-optimization). **But the forecast covers only wind speed, wind direction, 2 m temperature** — footnote 4 (p.6): NOAA ensemble forecast "does not include oceanographic data such as wave height." All **wave/ocean variables come from ERA5 reanalysis** (Eq. 22, p.12), which Luo itself calls "ground truth" (§3.2) — i.e. *actual*, not available at decision time.
