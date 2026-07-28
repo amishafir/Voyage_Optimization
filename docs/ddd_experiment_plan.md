@@ -157,3 +157,27 @@ legs by golden search, sum the positive gains of one full sweep.
 - **Diagnostic:** the gains concentrate at *time-line* nodes (t = 18, 54, 60, 156 …) — where the δ-grid
   quantises distance — plus the known cell-corner clusters (R1 nodes at d≈2370, 1 NM apart). Exactly
   where E3 refinement should spend its splits.
+
+## 8. E3 RESULTS — global interval LB verdict (2026-07-28)
+
+`ddd_lb.py --mode lb` (R2 vy0, 6 refinement rounds, + Lagrangian time-price λ):
+
+- **Machinery works**: sound + monotone (LB 66.5 → 76.3 mt; 1–10 s/round; λ* ∈ [0, 0.5]).
+- **But loose**: converged only to ~38 % of F_DP. Diagnosis: the family-min arc cost lets the path
+  harvest the free coordinate's interval width per hop — the Lagrangian prices stolen *time*, but the
+  dominant leak is stolen *distance* (box-to-box positional jumps). Closing it needs the
+  positional-consistency constructions that are the real content of the DDD papers — a research
+  direction, not an afternoon.
+- **VERDICT (per plan §3 risk note):** the global LB is future work / a demonstrated direction.
+  **The paper-grade certificate is the E2 LOCAL node-slide bound (0.19–0.23 %) + E1 grid sensitivity
+  (~0.08 %)** — both rigorous as stated, both ≥ 11–16× below the SR–Luo gap.
+
+### Recommended section (revised): "Certifying local optimality of the discretised plan"
+1. §2.1: +2 sentences (DDD line + Wang–Meng ε-optimality; certificate viewpoint). Unchanged.
+2. §4.2.5 (short): the node-slide certificate — slide any decision point continuously along its
+   mandatory line, re-optimise incident legs; one equation; report the sweep bound.
+3. §6 table: E1 sensitivities + local-certificate numbers per reference voyage; punchline: "no
+   off-grid repositioning of any decision point recovers more than ~0.1 mt; a full sweep at most
+   0.2 % — an order of magnitude below the SR–Luo gap."
+4. Future-work sentence (§7/§8): adapting DDD's partial-network lower bounds to time-distance speed
+   control (global certificate) — cite Boland et al. 2017 / Marshall et al. 2021.

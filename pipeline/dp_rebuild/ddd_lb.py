@@ -229,19 +229,27 @@ class Iv:
         self.parent = None
 
     def rep(self, H, V) -> Tuple[float, float]:
-        """A representative interior source point (d, t) — fixes phi's rectangle."""
+        """A representative interior source point (d, t) — fixes phi's rectangle.
+
+        Index semantics: kind 'D' -> (.i = distance-line idx, .j = block idx);
+        kind 'T' -> (.i = time-line idx, .j = cell idx), as constructed.
+        """
         if self.kind == "D":
             return H[self.i], min(self.lo + 1e-6, (self.lo + self.hi) / 2)
-        return min(self.lo + 1e-6, (self.lo + self.hi) / 2), V[self.j]
+        return min(self.lo + 1e-6, (self.lo + self.hi) / 2), V[self.i]
 
     def box(self, H, V) -> Tuple[float, float, float, float]:
         """(d_lo, d_hi, t_lo, t_hi) closed box."""
         if self.kind == "D":
             return H[self.i], H[self.i], self.lo, self.hi
-        return self.lo, self.hi, V[self.j], V[self.j]
+        return self.lo, self.hi, V[self.i], V[self.i]
 
-def arc_cost(src_box, dst_box, phi_of_v, vmin, vmax) -> float:
-    """min over p in src, q in dst, v = dd/dt in [vmin,vmax] of phi(v)*dt."""
+def arc_cost(src_box, dst_box, phi_of_v, vmin, vmax, lam: float = 0.0) -> float:
+    """min over p in src, q in dst, v = dd/dt in [vmin,vmax] of (phi(v)+lam)*dt.
+
+    lam >= 0 is a Lagrangian price on charged time: for any lam, the resulting
+    shortest path value minus lam*T is a valid lower bound on F* (the true
+    trajectory pays fuel + lam*arrival - lam*T <= fuel)."""
     sd0, sd1, st0, st1 = src_box
     dd0, dd1, dt0, dt1 = dst_box
     d_lo = max(0.0, dd0 - sd1)
@@ -260,7 +268,7 @@ def arc_cost(src_box, dst_box, phi_of_v, vmin, vmax) -> float:
             continue
         ph = phi_of_v(v)
         if math.isfinite(ph):
-            best = min(best, ph * lo)
+            best = min(best, (ph + lam) * lo)
     return best
 
 
@@ -311,7 +319,7 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
             if j + 1 <= TH - 1 and i <= M - 1:
                 out.append(("T", j + 1, i))
         else:
-            j, i = iv.j, iv.i
+            j, i = iv.i, iv.j   # T: .i = time-line idx, .j = cell idx
             if i + 1 <= M:
                 out.append(("D", i + 1, j))
                 if j + 1 <= TH - 1:
@@ -320,7 +328,7 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
                 out.append(("T", j + 1, i))
         return [k for k in out if k in store]
 
-    def solve() -> Tuple[float, List[Iv]]:
+    def solve(lam: float = 0.0) -> Tuple[float, List[Iv]]:
         ivs: List[Iv] = [iv for lst in store.values() for iv in lst]
         for iv in ivs:
             iv.cost, iv.parent = math.inf, None
@@ -339,7 +347,7 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
             if key not in store:
                 continue
             for dst in store[key]:
-                c = arc_cost(origin_box, dst.box(H, V), phi_of_v_fn(rep0), vmin, vmax)
+                c = arc_cost(origin_box, dst.box(H, V), phi_of_v_fn(rep0), vmin, vmax, lam)
                 if c < dst.cost:
                     dst.cost, dst.parent = c, origin
         # sweep
@@ -350,7 +358,7 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
             sb = iv.box(H, V)
             for key in successors(iv):
                 for dst in store.get(key, []):
-                    c = arc_cost(sb, dst.box(H, V), fv, vmin, vmax)
+                    c = arc_cost(sb, dst.box(H, V), fv, vmin, vmax, lam)
                     if iv.cost + c < dst.cost - 1e-12:
                         dst.cost, dst.parent = iv.cost + c, iv
         # sinks: distance line M, any block (t_lo <= T by construction)
@@ -366,16 +374,47 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
             cur = cur.parent
         return best, list(reversed(path))
 
+    def lagrangian_lb() -> Tuple[float, float, List[Iv]]:
+        """max over lam >= 0 of [solve(lam) - lam*T] (golden search)."""
+        def val(lam):
+            v, pth = solve(lam)
+            return v - lam * T, pth
+        best_lam, best_v, best_p = 0.0, -math.inf, None
+        # bracket: lam in [0, 3] mt/h (marginal fuel value of an hour)
+        lams = [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0]
+        vals = []
+        for lm in lams:
+            v, pth = val(lm)
+            vals.append(v)
+            if v > best_v:
+                best_lam, best_v, best_p = lm, v, pth
+        k = vals.index(max(vals))
+        a = lams[max(0, k - 1)]; b = lams[min(len(lams) - 1, k + 1)]
+        g = (math.sqrt(5) - 1) / 2
+        c, d = b - g * (b - a), a + g * (b - a)
+        (fc, pc), (fd, pd) = val(c), val(d)
+        for _ in range(12):
+            if fc > fd:
+                b, d, fd, pd = d, c, fc, pc
+                c = b - g * (b - a); fc, pc = val(c)
+            else:
+                a, c, fc, pc = c, d, fd, pd
+                d = a + g * (b - a); fd, pd = val(d)
+        for lm, v, pth in [(c, fc, pc), (d, fd, pd)]:
+            if v > best_v:
+                best_lam, best_v, best_p = lm, v, pth
+        return best_lam, best_v, best_p
+
     t0 = time.time()
-    lb, path = solve()
+    lam, lb, path = lagrangian_lb()
     hist = [lb]
-    print(f"  LB_0 = {lb:9.3f} mt   "
+    print(f"  LB_0 = {lb:9.3f} mt  (lam*={lam:.2f})  "
           f"({(lb / f_dp * 100 if f_dp else 0):.1f}% of F_DP)   [{time.time()-t0:.0f}s]")
     for r in range(1, rounds + 1):
         # refine: bisect every interval on the LB path (if wide enough)
         n_split = 0
         for iv in path:
-            key = (iv.kind, iv.i, iv.j) if iv.kind == "D" else (iv.kind, iv.j, iv.i)
+            key = (iv.kind, iv.i, iv.j)   # matches store keys for both kinds
             lst = store.get(key)
             if lst is None or iv not in lst:
                 continue
@@ -390,9 +429,9 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
             lst.extend([a, b])
             n_split += 1
         t1 = time.time()
-        lb, path = solve()
+        lam, lb, path = lagrangian_lb()
         hist.append(lb)
-        print(f"  LB_{r} = {lb:9.3f} mt   "
+        print(f"  LB_{r} = {lb:9.3f} mt  (lam*={lam:.2f})  "
               f"({(lb / f_dp * 100 if f_dp else 0):.1f}% of F_DP)   "
               f"[split {n_split}, {time.time()-t1:.0f}s]")
         if n_split == 0:
