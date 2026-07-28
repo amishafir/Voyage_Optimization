@@ -546,14 +546,26 @@
       <p>The local certificate + iterated polish (apply every improving slide, sweep to convergence),
         run over every voyage of the study:</p>
       <div style="overflow-x:auto"><table><thead><tr><th>Voyage</th><th>F_DP (mt)</th><th>sweep bound</th><th>polish recovered</th><th>SR–Luo gap</th><th>ratio</th><th>band-viol legs</th></tr></thead><tbody><tr><td>R1 · sh 6</td><td>353.955</td><td>0.194%</td><td><b>0.204%</b></td><td>2.10%</td><td>10.3×</td><td>0</td></tr><tr><td>R1 · sh 286</td><td>355.216</td><td>0.326%</td><td><b>0.354%</b></td><td>2.59%</td><td>7.3×</td><td>0</td></tr><tr><td>R1 · sh 566</td><td>336.955</td><td>0.427%</td><td><b>0.398%</b></td><td>1.59%</td><td>4.0×</td><td>0</td></tr><tr><td>R1 · sh 846</td><td>347.988</td><td>0.213%</td><td><b>0.223%</b></td><td>1.46%</td><td>6.5×</td><td>0</td></tr><tr><td>R1 · sh 1126</td><td>336.925</td><td>0.463%</td><td><b>0.473%</b></td><td>1.16%</td><td>2.5×</td><td>1</td></tr><tr><td>R1 · sh 1406</td><td>334.558</td><td>0.386%</td><td><b>0.355%</b></td><td>2.70%</td><td>7.6×</td><td>2</td></tr><tr><td>R1 · sh 1686</td><td>345.395</td><td>0.238%</td><td><b>0.255%</b></td><td>1.96%</td><td>7.7×</td><td>1</td></tr><tr><td>R2 · sh 0</td><td>202.484</td><td>0.236%</td><td><b>0.239%</b></td><td>3.69%</td><td>15.5×</td><td>0</td></tr><tr><td>R2 · sh 168</td><td>204.786</td><td>0.187%</td><td><b>0.166%</b></td><td>2.25%</td><td>13.5×</td><td>1</td></tr><tr><td>R2 · sh 336</td><td>194.343</td><td>0.410%</td><td><b>0.467%</b></td><td>3.77%</td><td>8.1×</td><td>0</td></tr><tr><td>R2 · sh 504</td><td>205.848</td><td>0.330%</td><td><b>0.398%</b></td><td>3.00%</td><td>7.5×</td><td>0</td></tr><tr><td>R2 · sh 672</td><td>215.6</td><td>0.321%</td><td><b>0.323%</b></td><td>3.53%</td><td>10.9×</td><td>0</td></tr><tr><td>R2 · sh 840</td><td>190.307</td><td>0.243%</td><td><b>0.238%</b></td><td>3.35%</td><td>14.1×</td><td>1</td></tr><tr><td>R2 · sh 1008</td><td>226.642</td><td>0.259%</td><td><b>0.380%</b></td><td>3.08%</td><td>8.1×</td><td>0</td></tr><tr><td>R2 · sh 1176</td><td>194.69</td><td>0.263%</td><td><b>0.272%</b></td><td>1.80%</td><td>6.6×</td><td>0</td></tr><tr><td>R2 · sh 1344</td><td>194.673</td><td>0.553%</td><td><b>0.524%</b></td><td>1.21%</td><td>2.3×</td><td>1</td></tr><tr><td>R2 · sh 1512</td><td>192.714</td><td>0.820%</td><td><b>0.866%</b></td><td>2.12%</td><td>2.4×</td><td>0</td></tr><tr><td>R2 · sh 1680</td><td>198.089</td><td>0.528%</td><td><b>0.586%</b></td><td>2.65%</td><td>4.5×</td><td>0</td></tr><tr><td>R2 · sh 1848</td><td>198.329</td><td>0.481%</td><td><b>0.668%</b></td><td>2.97%</td><td>4.4×</td><td>0</td></tr><tr style='font-weight:700;background:var(--surface2,transparent)'><td>aggregate</td><td>—</td><td>—</td><td>mean R1 0.32% · R2 0.43% · max 0.87%</td><td>—</td><td>min 2.3× · mean 7.6×</td><td>7 voyages, 1–2 legs</td></tr></tbody></table></div>
-      <div class="words" style="--pc:var(--cert)"><div class="wt">what goes in the paper</div>
-        <p>A short subsection — <b>“certifying local optimality of the discretised plan”</b>: continuous
-          re-positioning of the decision points recovers 0.17–0.87 % (mean ≈ 0.4 %), while the SR–Luo
-          gap exceeds it on <b>every</b> voyage — by at least 2.3×, on average ≈ 6× ⇒ <b>the granularity
-          advantage is not grid noise</b>. And since polishing only makes SR <i>better</i>, the residual
-          grid effect favours SR, not the baseline.
-          The global DDD adaptation becomes one future-work sentence, citing Hewitt’s line as the
-          roadmap.</p></div>
+      <div class="words" style="--pc:var(--cert)"><div class="wt">now in the paper — §4.3</div>
+        <p>Continuous re-positioning of the decision points recovers 0.17–0.87 % (mean ≈ 0.4 %), while
+          the SR–Luo gap exceeds it on <b>every</b> voyage — by at least 2.3×, on average ≈ 7.6× ⇒
+          <b>the granularity advantage is not grid noise</b>. And since polishing only makes SR
+          <i>better</i>, the residual grid effect favours SR, not the baseline.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">4</span>Where it landed in the paper</h3>
+      <p>A <b>standalone subsection §4.3</b> — <i>“How much does the grid cost? A local-optimality
+        certificate”</i> — appended after §4.2, <b>purely additive</b> (78 insertions, 0 deletions;
+        commit <code>f6086fb</code>). It carries the motivation, the node-slide gain
+        (Eq.&nbsp;<i>slide</i>), the 19-voyage results table (<code>tab:certificate</code>), three
+        observations (near-local-optimality · not grid noise · conservative in the baseline’s favour),
+        and the scope note pointing the <b>global</b> certificate to the DDD line as future work.</p>
+      <p>Both new references were <b>validated before citing</b> (Boland–Hewitt–Marshall–Savelsbergh,
+        <i>Operations Research</i> 65(5):1303–1321, 2017; Marshall–Boland–Savelsbergh–Hewitt,
+        <i>Transportation Science</i> 55(1):29–51, 2021) and added to <code>refs.bib</code>. Related
+        Work (§2) was deliberately left untouched — the two drop-in sentences that would introduce the
+        certificate lineage there are <b>staged in the meeting prep (item 6), pending Tal’s OK</b>.</p>
     </div>
   </section>
 
@@ -563,9 +575,10 @@
       equations</b> minimise over those neighbours, deriving the speed as Δd/Δt (node-first) → <b>§4.2</b>
       counts the grid (the |𝒮| bound), walks only its reachable part (Algorithm 1 = the two halves of
       Eq. 5), and sweeps the recursion over what it found (Algorithm 2). One notation (δ, τ) throughout;
-      every superseded passage preserved under <code>\begin{comment}</code>. The only remaining §4 to-dos
-      are the two <code>ADD FIGURE</code> placeholders.</p>
+      every superseded passage preserved under <code>\begin{comment}</code>; and a <b>standalone §4.3</b>
+      now certifies that the grid costs at most a fraction of a percent. The only remaining §4 to-dos
+      are the two <code>ADD FIGURE</code> placeholders and the staged §2.1 sentences (prep item 6).</p>
   </div>
 
-  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 — paper_full_draft.tex §4.1–§4.2 · certificates: docs/ddd_experiment_plan.md + pipeline/dp_rebuild/ddd_lb.py</footer>
+  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 — paper_full_draft.tex §4.1–§4.2 · certificates: docs/ddd_experiment_plan.md + ddd_lb.py · paper §4.3: f6086fb</footer>
 </div>
