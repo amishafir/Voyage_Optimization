@@ -139,3 +139,21 @@ target ε is hit. Optional bonus: **repair** the LB path into a feasible schedul
 - **Feasibility audit (pre-requisite for a certificate): PASS.** Optimal schedules use speeds strictly
   inside 𝒱 with ~0.7–0.9 kn margin (R2: [9.51, 13.91] in [8.64, 14.64], 0 violations; R1:
   [10.07, 14.21] in [9.12, 15.12], 0 violations). No band-edge cheating ⇒ F_DP is a legitimate UB.
+
+## 7. E2 RESULTS — local node-slide certificate (2026-07-28)
+
+`ddd_lb.py --mode local`: slide every interior decision point continuously along its mandatory line
+(adjacent points fixed, speeds in 𝒱, φ conventions identical to the DP), re-optimise the two incident
+legs by golden search, sum the positive gains of one full sweep.
+
+| Instance | F_DP | one-sweep gain | % of F_DP | SR–Luo gap | ratio |
+|---|---|---|---|---|---|
+| R2 vy0 | 202.484 | 0.469 mt | **0.232 %** | 3.69 % | ≥ 16× |
+| R1 vy0 | 353.955 | 0.671 mt | **0.190 %** | 2.10 % | ≥ 11× |
+
+- Interpretation: **no off-grid repositioning of any single decision point can recover more than
+  ~0.07–0.11 mt**, and a full coordinate-descent sweep at most ~0.2 % (legs double-counted → the
+  pairwise-independent bound is ~half). Conservative in our favour (slide relaxations are permissive).
+- **Diagnostic:** the gains concentrate at *time-line* nodes (t = 18, 54, 60, 156 …) — where the δ-grid
+  quantises distance — plus the known cell-corner clusters (R1 nodes at d≈2370, 1 NM apart). Exactly
+  where E3 refinement should spend its splits.
