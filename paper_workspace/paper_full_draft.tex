@@ -796,6 +796,62 @@ separate preprocessing cost.
 
 
 
+
+%% ==== NEW STANDALONE SUBSECTION (2026-07-28): added after §4.2; no existing text modified ====
+\subsection{How much does the grid cost? A local-optimality certificate}
+\label{sec:certificate}
+
+The grid of Section~\ref{sec:states} restricts the decision points to discrete nodes, so the
+continuous-optimal trajectory may cross a boundary \emph{between} two nodes, at a speed the program
+never evaluates. We quantify what this restriction costs with a certificate computed directly on the
+program's own solution, in the spirit of the bracketing methods developed for time-expanded networks
+by \citet{Boland2017} and \citet{Marshall2021}, where a deliberately optimistic partial discretisation
+bounds the continuous-time optimum from below and the incumbent plan bounds it from above.
+
+Let $q_0,\dots,q_n$ be the decision points of the optimal schedule. For an interior point $q_k$,
+slide it \emph{continuously} along its mandatory line --- off the grid --- while keeping its
+neighbours fixed, the leg speeds within $\mathcal{V}$, and the fuel-rate conventions exactly those of
+the dynamic program, and re-optimise its two incident legs:
+\begin{equation}
+\label{eq:slide}
+g(q_k) \;=\; \Bigl[f(q_{k-1},q_k)+f(q_k,q_{k+1})\Bigr]
+\;-\; \min_{q' \,\in\, \ell(q_k)} \Bigl[f(q_{k-1},q')+f(q',q_{k+1})\Bigr],
+\end{equation}
+where $\ell(q_k)$ is the segment of $q_k$'s line between its neighbours and $f(\cdot,\cdot)$ is the
+leg fuel. The gain $g(q_k)$ measures exactly what the between-the-nodes freedom at $q_k$ was worth.
+Beyond the one-shot bound, we also \emph{apply} every improving slide and iterate the sweep to
+convergence (coordinate descent in the continuum), which yields a constructive measurement: the total
+fuel that continuous re-positioning of the entire plan actually recovers.
+
+\begin{table}[ht]
+\centering
+\caption{Local-optimality certificate over the nineteen evaluation voyages
+(Section~\ref{sec:protocol}). ``Recovered'' is the total gain of iterated continuous polish
+(convergence in at most 20 sweeps); the ratio compares each voyage's SR--Luo gap to its recovery.}
+\label{tab:certificate}
+\begin{tabular}{lrrrr}
+\toprule
+Route & $n$ & Recovered, mean & Recovered, max & SR--Luo gap $\div$ recovered \\
+\midrule
+1 (Malacca)  & 7  & 0.32\% & 0.47\% & \multirow{2}{*}{min $2.3\times$, mean $7.6\times$} \\
+2 (Atlantic) & 12 & 0.43\% & 0.87\% & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three observations follow. First, the plans are near-optimal in the continuum locally: no single
+decision point, moved anywhere along its line, recovers more than $\sim$0.1 mt, and full convergence
+recovers 0.17--0.87\% of voyage fuel (mean $\approx$0.4\%). Second, on \emph{every} one of the
+nineteen voyages the SR--Luo gap of Section~\ref{sec:results} exceeds the recovery --- by at least
+$2.3\times$ and on average $7.6\times$ --- so the granularity advantage reported in this paper is not
+an artefact of the grid. Third, the comparison is conservative in the baseline's favour: polishing
+improves only the free-speed plan, so any residual discretisation effect understates, rather than
+inflates, the reported advantage. The certificate is local --- it bounds continuous re-positioning of
+the decision points, not the global continuous optimum; a global certificate could be obtained by
+adapting the dynamic-discretisation lower bounds of \citet{Boland2017} and \citet{Marshall2021} to
+weather-dependent leg costs, which we leave to future work.
+%% ==== END NEW STANDALONE SUBSECTION ====
+
 %% ============================================================ 5. DATA & EXPERIMENTAL DESIGN
 \section{Data and experimental design}
 \label{sec:data}
