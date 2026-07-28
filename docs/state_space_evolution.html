@@ -157,6 +157,7 @@
       <div class="grow"><span class="s">K</span><span class="m">how many landing points one state can actually reach — about the <b>speed-band width ÷ grid step</b> (≈ 8 in practice).</span></div>
       <div class="grow"><span class="s">F*, F<sub>DP</sub></span><span class="m">the <b>true continuous optimum</b> (decision points anywhere on the lines) vs <b>our grid optimum</b>. F* ≤ F<sub>DP</sub>; the difference is "the price of the grid."</span></div>
       <div class="grow"><span class="s">UB, LB</span><span class="m"><b>upper / lower bounds</b> on F*: any real plan is a UB; a deliberately-too-optimistic relaxed model gives an LB. <b>UB − LB certifies the gap</b> without ever knowing F*.</span></div>
+      <div class="grow"><span class="s">g(q<sub>k</sub>), ℓ(q<sub>k</sub>), f(a,b)</span><span class="m">§4.3's certificate notation (Eq. 10): the <b>gain</b> from sliding decision point q<sub>k</sub>, its <b>slide domain</b> (segment of its line between plan-neighbours), and the <b>leg fuel</b> from a to b (speed derived, band-checked).</span></div>
       <div class="grow"><span class="s">|𝒮|, |𝒜|</span><span class="m">the <b>number of</b> states / arcs — the size of the search the computer must do.</span></div>
     </div>
   </details>
@@ -522,10 +523,26 @@
         mandatory line</b> — off the grid — keeping its neighbours fixed, speeds in 𝒱, weather exactly as
         the DP sees it; re-optimise its two legs (golden search). The gain says how much that one
         between-the-nodes freedom was worth.</p>
-      <div class="fx" style="font-size:.98rem">
-        gain(q) = fuel(p→q) + fuel(q→r) − min<sub>q′ on q's line</sub> [ fuel(p→q′) + fuel(q′→r) ]
-        <span class="cond">, speeds ∈ 𝒱</span>
+      <div class="lbl">the certificate equation — Eq. (10) of the paper (eq:slide, §4.3)</div>
+      <div class="fx">
+        g(q<sub>k</sub>) = [ f(q<sub>k−1</sub>, q<sub>k</sub>) + f(q<sub>k</sub>, q<sub>k+1</sub>) ]
+        − min<sub>q′ ∈ ℓ(q<sub>k</sub>)</sub> [ f(q<sub>k−1</sub>, q′) + f(q′, q<sub>k+1</sub>) ]
       </div>
+      <div class="brk"><div class="bt">reading Eq. (10) symbol by symbol</div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">q<sub>0</sub> … q<sub>n</sub></span><span class="m">the <b>decision points of the optimal schedule</b> — the chain the DP produced. q<sub>0</sub> = departure, q<sub>n</sub> = arrival; both stay fixed.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">q<sub>k</sub></span><span class="m">the <b>interior point being tested</b> — one knot of the rope, sitting on its mandatory line (a cell boundary or a 6-h line).</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">q<sub>k−1</sub>, q<sub>k+1</sub></span><span class="m">its <b>plan-neighbours</b> — the previous and next decision points, held fixed while q<sub>k</sub> is tested.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">ℓ(q<sub>k</sub>)</span><span class="m">the <b>slide domain</b>: the piece of q<sub>k</sub>'s line between its two neighbours. Continuous — it sweeps through and between all the grid dots. (Not bounded by the nearest dots!)</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">q′</span><span class="m">a <b>candidate off-grid position</b> on ℓ(q<sub>k</sub>) — "what if the decision had been made <i>here</i> instead?"</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">f(a, b)</span><span class="m"><b>leg fuel</b> from a to b: φ(a; v̄)·Δt with the speed <b>derived</b>, v̄ = Δd/Δt — and set to ∞ if v̄ leaves the band 𝒱 (an illegal leg can never win the min). Same φ conventions as the DP, so the comparison is apples-to-apples.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">min over q′</span><span class="m">a <b>1-D continuous minimisation</b> along the segment (golden-section search) — both incident legs re-optimised together, since moving q′ changes both speeds at once.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">g(q<sub>k</sub>)</span><span class="m">the <b>gain</b>: today's two-leg cost minus the best achievable with q<sub>k</sub> anywhere on its line. <b>Always ≥ 0</b> (the current position is itself a candidate). g(q<sub>k</sub>) = 0 means the grid dot was already the continuum's choice.</span></div>
+      </div>
+      <div class="words" style="--pc:var(--cert)"><div class="wt">in plain words — Eq. (10)</div>
+        <p>"Take one knot of the rope. Ask: if this knot could sit <i>anywhere</i> along its rail — not just on
+          the grid — how much fuel would the two ropes tied to it save at best? That number is g. Summing g
+          over all knots (one sweep) bounds what one round of off-grid freedom is worth; <b>applying</b> the
+          winning positions and re-sweeping to convergence measures it exactly: 0.17–0.87 %."</p></div>
       <div class="words" style="--pc:var(--cert)"><div class="wt">in plain words</div>
         <p>“Wiggle every knot of the rope, one at a time, anywhere along its rail. <b>No knot wants to move
           more than a hair</b> — the biggest single gain anywhere is ~0.1 mt, and even letting every knot
