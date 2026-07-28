@@ -93,6 +93,21 @@ Every superseded passage preserved under `\begin{comment}`.
    (it lagged twice this week; the repo is the source of truth).
 5. Next milestones after figures: internal review pass (paper-reviewer / paper-critic agents),
    then submission logistics (TR-C).
+6. **FUTURE ITEM — §2.1 Related-Work addition (post-§4.3, needs Tal's OK).** The paper now has the
+   standalone certificate subsection §4.3 (`f6086fb`: node-slide certificate, 19-voyage table —
+   recovered mean ≈0.4 %, max 0.87 %; SR–Luo gap ≥2.3× / mean 7.6× above it; Boland2017 + Marshall2021
+   validated & in refs.bib). Related Work was deliberately NOT touched. When Tal approves, add these
+   two sentences at the end of §2.1 (drop-in ready):
+
+   > *"The tension between a discretised decision network and the continuous optimum it approximates
+   > has been addressed head-on in service network design, where dynamic-discretisation methods
+   > construct partial time-expanded networks that provably bracket the continuous-time optimum
+   > \citep{Boland2017, Marshall2021}, and in liner-speed optimisation through convexity-based
+   > $\varepsilon$-optimal approximations \citep{Wang2012}. We adopt this certificate viewpoint in
+   > Section~\ref{sec:certificate}, verifying that the granularity advantage we report exceeds what
+   > continuous re-positioning of the discretised plan could recover."*
+
+   All three cite keys already resolve in refs.bib; no other §2 text changes needed.
 
 ## 5. Reference — key artifacts & files
 
