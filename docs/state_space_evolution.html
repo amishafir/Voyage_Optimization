@@ -529,7 +529,8 @@
       <div class="words" style="--pc:var(--cert)"><div class="wt">in plain words</div>
         <p>“Wiggle every knot of the rope, one at a time, anywhere along its rail. <b>No knot wants to move
           more than a hair</b> — the biggest single gain anywhere is ~0.1 mt, and even letting every knot
-          settle (iterated polish, below) recovers only ~0.2–0.4 % of the fuel.”</p></div>
+          settle (iterated polish) recovers only a fraction of a percent.” Full mechanics — and why this
+          is <b>not</b> DDD — in block ③ below.</p></div>
 
       <div class="lbl">E3 · the global interval LB (DDD proper — honest verdict)</div>
       <p>We built the real thing: intervals on the rectangle edges, each arc costed at the <b>minimum fuel
@@ -542,7 +543,43 @@
     </div>
 
     <div class="block">
-      <h3><span class="n">3</span>The numbers — all 19 voyages</h3>
+      <h3><span class="n">3</span>Inside the §4.3 certificate — and why it is <u>not</u> DDD</h3>
+      <p>The certificate’s engine is <b>iterated continuous polish</b> (coordinate descent). The exact
+        mechanics, step by step:</p>
+      <div class="brk"><div class="bt">the loop, precisely</div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">DP — once</span><span class="m">the expensive machinery (1.2M-arc graph, Bellman sweep) runs <b>one time</b>, giving the grid-optimal plan. After that the graph is discarded — all that remains is the <b>chain of ~200 decision points</b>.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">slide domain</span><span class="m">a point slides <b>between its plan-neighbours</b> p and r along its mandatory line — <i>not</i> between the nearest grid dots. The grid plays no role; the point may settle anywhere in the continuum.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">no speed search</span><span class="m">speed is never chosen — moving the point re-tunes <b>both incident legs’ speeds at once</b>, as v̄ = Δd/Δt to the fixed neighbours (node-first, carried into the continuum; v̄ ∈ 𝒱 enforced).</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">apply on the fly</span><span class="m">an improving move is applied <b>immediately</b> (Gauss–Seidel): the very next point is optimised against the <i>already-moved</i> neighbour. Forward knowledge flows within the sweep; the backward reaction (the previous point re-adjusting) waits for the <b>next</b> sweep.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">sweep, repeat</span><span class="m">each move re-opens its neighbours, so improvements <b>ripple along the chain</b>; sweeps repeat until a full pass gains &lt; 0.001 mt. Convergence is <b>guaranteed</b>: fuel falls monotonically and is bounded below — in practice 6–20 sweeps.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">fixed backbone</span><span class="m">the <b>order of lines crossed</b> (which cells, in which weather blocks) never changes — only the crossing coordinates move. A better <i>backbone</i> is invisible to this process.</span></div>
+      </div>
+      <div class="fx" style="font-size:.98rem">
+        DP (once) → chain of points → sweep, sweep, sweep … → F stops moving<br>
+        <span class="cond">F* &nbsp;≤&nbsp; F<sub>polished</sub> &nbsp;≤&nbsp; F<sub>DP</sub> — the result is a tighter
+        <b>UPPER</b> bound on the continuous optimum, never a lower bound.</span>
+      </div>
+      <div class="ba">
+        <div class="side before"><div class="t">what this is NOT — DDD</div>
+          DDD is <b>top-down and global</b>: it never starts from a solution. It builds a deliberately
+          <i>optimistic</i> sparse model whose optimum is a <b>lower bound on every possible plan at
+          once</b>, then refines where the optimism was used. That global LB is exactly what the polish
+          cannot provide (our E3 attempt stayed loose) — and is the future-work line of §4.3.</div>
+        <div class="side after"><div class="t">what this IS — local polish</div>
+          <b>Bottom-up and local</b>: start from the finished plan, let each decision point roam the
+          continuum one at a time, keep every improvement, converge. It proves the plan is
+          <b>locally optimal in the continuum</b> — no single off-grid repositioning helps — and
+          measures the continuum’s local worth: 0.17–0.87 %.</div>
+      </div>
+      <div class="words" style="--pc:var(--cert)"><div class="wt">in plain words</div>
+        <p><b>The polish perfects reality; DDD brackets possibility.</b> §4.3 does the first and cites the
+          second as its lineage — the paper says “in the <i>spirit of</i>” the bracketing methods, and
+          explicitly leaves the global certificate to future work. Never present §4.3 as an
+          implementation of DDD.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">4</span>The numbers — all 19 voyages</h3>
       <p>The local certificate + iterated polish (apply every improving slide, sweep to convergence),
         run over every voyage of the study:</p>
       <div style="overflow-x:auto"><table><thead><tr><th>Voyage</th><th>F_DP (mt)</th><th>sweep bound</th><th>polish recovered</th><th>SR–Luo gap</th><th>ratio</th><th>band-viol legs</th></tr></thead><tbody><tr><td>R1 · sh 6</td><td>353.955</td><td>0.194%</td><td><b>0.204%</b></td><td>2.10%</td><td>10.3×</td><td>0</td></tr><tr><td>R1 · sh 286</td><td>355.216</td><td>0.326%</td><td><b>0.354%</b></td><td>2.59%</td><td>7.3×</td><td>0</td></tr><tr><td>R1 · sh 566</td><td>336.955</td><td>0.427%</td><td><b>0.398%</b></td><td>1.59%</td><td>4.0×</td><td>0</td></tr><tr><td>R1 · sh 846</td><td>347.988</td><td>0.213%</td><td><b>0.223%</b></td><td>1.46%</td><td>6.5×</td><td>0</td></tr><tr><td>R1 · sh 1126</td><td>336.925</td><td>0.463%</td><td><b>0.473%</b></td><td>1.16%</td><td>2.5×</td><td>1</td></tr><tr><td>R1 · sh 1406</td><td>334.558</td><td>0.386%</td><td><b>0.355%</b></td><td>2.70%</td><td>7.6×</td><td>2</td></tr><tr><td>R1 · sh 1686</td><td>345.395</td><td>0.238%</td><td><b>0.255%</b></td><td>1.96%</td><td>7.7×</td><td>1</td></tr><tr><td>R2 · sh 0</td><td>202.484</td><td>0.236%</td><td><b>0.239%</b></td><td>3.69%</td><td>15.5×</td><td>0</td></tr><tr><td>R2 · sh 168</td><td>204.786</td><td>0.187%</td><td><b>0.166%</b></td><td>2.25%</td><td>13.5×</td><td>1</td></tr><tr><td>R2 · sh 336</td><td>194.343</td><td>0.410%</td><td><b>0.467%</b></td><td>3.77%</td><td>8.1×</td><td>0</td></tr><tr><td>R2 · sh 504</td><td>205.848</td><td>0.330%</td><td><b>0.398%</b></td><td>3.00%</td><td>7.5×</td><td>0</td></tr><tr><td>R2 · sh 672</td><td>215.6</td><td>0.321%</td><td><b>0.323%</b></td><td>3.53%</td><td>10.9×</td><td>0</td></tr><tr><td>R2 · sh 840</td><td>190.307</td><td>0.243%</td><td><b>0.238%</b></td><td>3.35%</td><td>14.1×</td><td>1</td></tr><tr><td>R2 · sh 1008</td><td>226.642</td><td>0.259%</td><td><b>0.380%</b></td><td>3.08%</td><td>8.1×</td><td>0</td></tr><tr><td>R2 · sh 1176</td><td>194.69</td><td>0.263%</td><td><b>0.272%</b></td><td>1.80%</td><td>6.6×</td><td>0</td></tr><tr><td>R2 · sh 1344</td><td>194.673</td><td>0.553%</td><td><b>0.524%</b></td><td>1.21%</td><td>2.3×</td><td>1</td></tr><tr><td>R2 · sh 1512</td><td>192.714</td><td>0.820%</td><td><b>0.866%</b></td><td>2.12%</td><td>2.4×</td><td>0</td></tr><tr><td>R2 · sh 1680</td><td>198.089</td><td>0.528%</td><td><b>0.586%</b></td><td>2.65%</td><td>4.5×</td><td>0</td></tr><tr><td>R2 · sh 1848</td><td>198.329</td><td>0.481%</td><td><b>0.668%</b></td><td>2.97%</td><td>4.4×</td><td>0</td></tr><tr style='font-weight:700;background:var(--surface2,transparent)'><td>aggregate</td><td>—</td><td>—</td><td>mean R1 0.32% · R2 0.43% · max 0.87%</td><td>—</td><td>min 2.3× · mean 7.6×</td><td>7 voyages, 1–2 legs</td></tr></tbody></table></div>
@@ -554,7 +591,7 @@
     </div>
 
     <div class="block">
-      <h3><span class="n">4</span>Where it landed in the paper</h3>
+      <h3><span class="n">5</span>Where it landed in the paper</h3>
       <p>A <b>standalone subsection §4.3</b> — <i>“How much does the grid cost? A local-optimality
         certificate”</i> — appended after §4.2, <b>purely additive</b> (78 insertions, 0 deletions;
         commit <code>f6086fb</code>). It carries the motivation, the node-slide gain
