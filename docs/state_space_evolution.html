@@ -7,6 +7,7 @@
     --new:#1f7a5a; --new-soft:#e7f3ec;
     --bell:#7a4bab; --bell-soft:#efe8f6;
     --knit:#8a6115; --knit-soft:#f6efdd;
+    --cert:#9c3554; --cert-soft:#f7e9ee;
     --old:#b0472c; --formula:#f5f8fb; --formula-ink:#233240;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -14,10 +15,10 @@
   }
   @media (prefers-color-scheme:dark){:root{
     --ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;
-    --tal:#6fa8d6;--tal-soft:#152430;--new:#54b98c;--new-soft:#12231b;--bell:#b492db;--bell-soft:#1d1526;--knit:#cfa14e;--knit-soft:#241c0e;--old:#d1704f;--formula:#0e141a;--formula-ink:#c3cedb;
+    --tal:#6fa8d6;--tal-soft:#152430;--new:#54b98c;--new-soft:#12231b;--bell:#b492db;--bell-soft:#1d1526;--knit:#cfa14e;--knit-soft:#241c0e;--cert:#d98aa4;--cert-soft:#261218;--old:#d1704f;--formula:#0e141a;--formula-ink:#c3cedb;
   }}
-  :root[data-theme="light"]{--ground:#eef1f5;--surface:#fff;--surface2:#f4f6f9;--ink:#1b2430;--muted:#54626f;--faint:#8593a2;--hair:#d9e0e8;--tal:#1f4e79;--tal-soft:#e6edf4;--new:#1f7a5a;--new-soft:#e7f3ec;--bell:#7a4bab;--bell-soft:#efe8f6;--knit:#8a6115;--knit-soft:#f6efdd;--old:#b0472c;--formula:#f5f8fb;--formula-ink:#233240;}
-  :root[data-theme="dark"]{--ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;--tal:#6fa8d6;--tal-soft:#152430;--new:#54b98c;--new-soft:#12231b;--bell:#b492db;--bell-soft:#1d1526;--knit:#cfa14e;--knit-soft:#241c0e;--old:#d1704f;--formula:#0e141a;--formula-ink:#c3cedb;}
+  :root[data-theme="light"]{--ground:#eef1f5;--surface:#fff;--surface2:#f4f6f9;--ink:#1b2430;--muted:#54626f;--faint:#8593a2;--hair:#d9e0e8;--tal:#1f4e79;--tal-soft:#e6edf4;--new:#1f7a5a;--new-soft:#e7f3ec;--bell:#7a4bab;--bell-soft:#efe8f6;--knit:#8a6115;--knit-soft:#f6efdd;--cert:#9c3554;--cert-soft:#f7e9ee;--old:#b0472c;--formula:#f5f8fb;--formula-ink:#233240;}
+  :root[data-theme="dark"]{--ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;--tal:#6fa8d6;--tal-soft:#152430;--new:#54b98c;--new-soft:#12231b;--bell:#b492db;--bell-soft:#1d1526;--knit:#cfa14e;--knit-soft:#241c0e;--cert:#d98aa4;--cert-soft:#261218;--old:#d1704f;--formula:#0e141a;--formula-ink:#c3cedb;}
   *{box-sizing:border-box}
   body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.6}
   .wrap{max-width:56rem;margin:0 auto;padding:2.4rem 1.4rem 5rem}
@@ -50,10 +51,10 @@
   .commit{flex:1 1 10rem;background:var(--surface);border:1px solid var(--hair);border-radius:9px;padding:.5rem .65rem;border-left:3px solid var(--who)}
   .commit .h{font-family:var(--mono);font-size:.7rem;color:var(--faint);display:flex;justify-content:space-between}
   .commit .h b{color:var(--who)} .commit .m{font-size:.8rem;margin-top:.15rem}
-  .commit.tal{--who:var(--tal)} .commit.new{--who:var(--new)} .commit.bell{--who:var(--bell)} .commit.knit{--who:var(--knit)}
+  .commit.tal{--who:var(--tal)} .commit.new{--who:var(--new)} .commit.bell{--who:var(--bell)} .commit.knit{--who:var(--knit)} .commit.cert{--who:var(--cert)}
 
   .part{margin-top:2.8rem;border-top:2px solid var(--pc);padding-top:1rem}
-  .part.p1{--pc:var(--tal)} .part.p2{--pc:var(--new)} .part.p3{--pc:var(--bell)} .part.p4{--pc:var(--knit)}
+  .part.p1{--pc:var(--tal)} .part.p2{--pc:var(--new)} .part.p3{--pc:var(--bell)} .part.p4{--pc:var(--knit)} .part.p5{--pc:var(--cert)}
   .part-tag{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--pc);font-weight:600}
   .part h2{margin:.15rem 0 .3rem;font-size:1.55rem}
   .part .by{font-size:.85rem;color:var(--faint);margin:0 0 1rem;font-family:var(--mono)}
@@ -96,7 +97,7 @@
   .tal-c{color:var(--tal);font-weight:600} .new-c{color:var(--new);font-weight:600} .bell-c{color:var(--bell);font-weight:600}
 
   .callout{border-radius:12px;padding:1.1rem 1.3rem;margin:1.4rem 0;background:var(--tal-soft);border:1px solid var(--hair)}
-  .callout.p2{background:var(--new-soft)} .callout.p3{background:var(--bell-soft)} .callout.p4{background:var(--knit-soft)}
+  .callout.p2{background:var(--new-soft)} .callout.p3{background:var(--bell-soft)} .callout.p4{background:var(--knit-soft)} .callout.p5{background:var(--cert-soft)}
   .callout h3{font-family:var(--serif);margin:0 0 .4rem;font-size:1.1rem}
   .callout p{margin:.3rem 0;color:var(--muted)} .callout b{color:var(--ink)}
   footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--hair);font-family:var(--mono);font-size:.76rem;color:var(--faint)}
@@ -109,7 +110,8 @@
   <p class="lede">The story of §4's state space, in four acts: Tal replaced an abstract state set with an
     explicit <b>grid</b>; the notation was tidied and the <b>neighbour set completed</b>; the
     <b>Bellman equations</b> were rewritten "node-first"; and finally §4.2 — the solving machinery — was
-    <b>reconciled</b> with the new grid. Below, every symbol is spelled out, and every formula is also said
+    <b>reconciled</b> with the new grid. A fifth part asks the question the grid leaves open — <b>is there a
+    better speed between two nodes?</b> — and answers it with certificates (Hewitt’s DDD). Below, every symbol is spelled out, and every formula is also said
     in <b>plain words</b>.</p>
 
   <!-- THE PICTURE -->
@@ -153,6 +155,8 @@
       <div class="grow"><span class="s">⟨x⟩<sub>δ</sub></span><span class="m">the <b>snap</b> (rounding) operator — x rounded to the nearest multiple of δ; ⟨·⟩<sub>τ</sub> the same with step τ. Like rounding a price to the nearest cent.</span></div>
       <div class="grow"><span class="s">d̄(d), t̄(t)</span><span class="m">shorthand for <b>the next line ahead</b>: d̄(d) ≡ d<sub>𝒟(d)</sub>, t̄(t) ≡ t<sub>𝒯(t)</sub>. Same thing as Tal's index maps, written compactly.</span></div>
       <div class="grow"><span class="s">K</span><span class="m">how many landing points one state can actually reach — about the <b>speed-band width ÷ grid step</b> (≈ 8 in practice).</span></div>
+      <div class="grow"><span class="s">F*, F<sub>DP</sub></span><span class="m">the <b>true continuous optimum</b> (decision points anywhere on the lines) vs <b>our grid optimum</b>. F* ≤ F<sub>DP</sub>; the difference is "the price of the grid."</span></div>
+      <div class="grow"><span class="s">UB, LB</span><span class="m"><b>upper / lower bounds</b> on F*: any real plan is a UB; a deliberately-too-optimistic relaxed model gives an LB. <b>UB − LB certifies the gap</b> without ever knowing F*.</span></div>
       <div class="grow"><span class="s">|𝒮|, |𝒜|</span><span class="m">the <b>number of</b> states / arcs — the size of the search the computer must do.</span></div>
     </div>
   </details>
@@ -164,6 +168,7 @@
     <div class="commit new"><div class="h"><b>6a793b8</b><span>Jul 25</span></div><div class="m">de-dangle + typos</div></div>
     <div class="commit bell"><div class="h"><b>1c6bbb4</b><span>Jul 25</span></div><div class="m">Bellman equations → node-first</div></div>
     <div class="commit knit"><div class="h"><b>72033d9</b><span>Jul 25</span></div><div class="m">§4.2 reconciled with the grid</div></div>
+    <div class="commit cert"><div class="h"><b>T25–T26</b><span>Jul 28</span></div><div class="m">DDD + the discretisation certificates</div></div>
   </div>
 
   <!-- ============ PART 1 ============ -->
@@ -463,6 +468,95 @@
     </div>
   </section>
 
+  <!-- ============ PART 5 ============ -->
+  <section class="part p5">
+    <p class="part-tag">Part 5 · the certificate question</p>
+    <h2>Is there a better speed between two nodes?</h2>
+    <p class="by">T25–T26 + experiment E1–E3 · Jul 28 · docs/ddd_experiment_plan.md</p>
+
+    <div class="callout p5">
+      <h3>The question the grid leaves open</h3>
+      <p>The DP only ever considers the grid dots. The <b>true optimum F*</b> may cross a line
+        <i>between</i> two dots, at a speed we never tried. We cannot compute F* — but we can
+        <b>bracket</b> it: our plan is an <b>upper bound</b> (F* ≤ F<sub>DP</sub> — ours is a real,
+        sailable plan), and a deliberately-too-optimistic model gives a <b>lower bound</b> (LB ≤ F*).
+        Then <b>F<sub>DP</sub> − LB certifies the gap</b>, no matter where F* hides. The question is how
+        to build a good LB.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">1</span>The method: Dynamic Discretization Discovery (DDD)</h3>
+      <p><b>Who:</b> Michael Hewitt (Editor-in-Chief of <i>Transportation Science</i>, Loyola Chicago),
+        with Natashia Boland &amp; Martin Savelsbergh — <i>Operations Research</i> 2017 (the founding
+        paper), <i>Transportation Science</i> 2021 (interval-based), and the companion study literally
+        titled <i>“The price of discretizing time.”</i></p>
+      <p><b>The problem they solve:</b> decisions live in continuous time, but the solvable model is a
+        time-expanded network on discrete nodes — the optimum may fall between the nodes. Sound
+        familiar? Their answer is an <b>iterative bracket</b>:</p>
+      <div class="brk"><div class="bt">the DDD loop, step by step</div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">① relax</span><span class="m">build a <b>small, partial</b> grid whose model is <b>provably too optimistic</b> — every arc is allowed to arrive a little <i>earlier</i> than physics permits (rounded down to an existing point). Any real plan has a cheaper-or-equal shadow in this model ⇒ its optimum is a <b>rigorous LB</b>.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">② repair</span><span class="m">take the LB solution and try to make its timings <b>real</b>. If they already are — it IS the continuous optimum. If not, the repaired schedule is a feasible <b>UB</b>.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">③ refine</span><span class="m">add <b>exactly the missing grid points</b> where the relaxation cheated — nowhere else.</span></div>
+        <div class="brow" style="--pc:var(--cert)"><span class="s">④ repeat</span><span class="m">LB rises, UB falls; converges to the <b>continuous optimum with a certificate at every step</b> — typically on &lt;1 % of the full grid.</span></div>
+      </div>
+      <div class="words" style="--pc:var(--cert)"><div class="wt">in plain words</div>
+        <p>“Don’t ask <i>is my grid fine enough?</i> Build a deliberately generous small model whose answer
+          can only be better than reality, hold it against your real plan, and <b>squeeze</b>. Where the
+          squeeze doesn’t close, that’s exactly where the grid needs another point.”</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">2</span>Applying it to our problem — three experiments</h3>
+      <p>Our 𝒮 (δ = 1 NM, τ = 0.1 h) <i>is</i> the “full expansion” DDD avoids, and F<sub>DP</sub> is the
+        feasible UB. We ran three probes (code: <code>pipeline/dp_rebuild/ddd_lb.py</code>):</p>
+
+      <div class="lbl">E1 · grid sensitivity (empirical, not a certificate)</div>
+      <p>Re-solve with the grid halved and doubled. Fuel moves by only <b>~0.07–0.08 %</b> under halving
+        (0.3–0.5 % under doubling) — but <b>non-monotonically</b>: the finer grid can come out slightly
+        <i>above</i> the paper grid, because the <i>arc</i> sets aren’t nested (glide-past corners,
+        band-edge rounding). <b>Moral:</b> extrapolating from grid refinement is unreliable here — a
+        genuine certificate is needed, which is exactly DDD’s point.</p>
+
+      <div class="lbl">E2 · the local node-slide certificate (rigorous, and ours)</div>
+      <p>Take the optimal plan. Pick any interior decision point; <b>slide it continuously along its
+        mandatory line</b> — off the grid — keeping its neighbours fixed, speeds in 𝒱, weather exactly as
+        the DP sees it; re-optimise its two legs (golden search). The gain says how much that one
+        between-the-nodes freedom was worth.</p>
+      <div class="fx" style="font-size:.98rem">
+        gain(q) = fuel(p→q) + fuel(q→r) − min<sub>q′ on q's line</sub> [ fuel(p→q′) + fuel(q′→r) ]
+        <span class="cond">, speeds ∈ 𝒱</span>
+      </div>
+      <div class="words" style="--pc:var(--cert)"><div class="wt">in plain words</div>
+        <p>“Wiggle every knot of the rope, one at a time, anywhere along its rail. <b>No knot wants to move
+          more than a hair</b> — the biggest single gain anywhere is ~0.1 mt, and even letting every knot
+          settle (iterated polish, below) recovers only ~0.2–0.4 % of the fuel.”</p></div>
+
+      <div class="lbl">E3 · the global interval LB (DDD proper — honest verdict)</div>
+      <p>We built the real thing: intervals on the rectangle edges, each arc costed at the <b>minimum fuel
+        over its whole transition family</b>, shortest path ⇒ rigorous LB; then DDD-style bisection along
+        the LB path, plus a Lagrangian price on time. It is <b>sound and monotone</b> (LB 66 → 76 mt in
+        seconds) but converged to only ~38 % of F<sub>DP</sub>: the family-min lets the relaxed vessel
+        “re-enter each box at its best corner,” harvesting free distance per hop — and pricing time
+        doesn’t stop the teleporting. Fixing that positional leak is the actual substance of the DDD
+        papers. <b>Verdict: future work</b> (and a nice research direction), not a paper claim.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">3</span>The numbers — all 19 voyages</h3>
+      <p>The local certificate + iterated polish (apply every improving slide, sweep to convergence),
+        run over every voyage of the study:</p>
+      <div style="overflow-x:auto"><table><thead><tr><th>Voyage</th><th>F_DP (mt)</th><th>sweep bound</th><th>polish recovered</th><th>SR–Luo gap</th><th>ratio</th><th>band-viol legs</th></tr></thead><tbody><tr><td>R1 · sh 6</td><td>353.955</td><td>0.194%</td><td><b>0.204%</b></td><td>2.10%</td><td>10.3×</td><td>0</td></tr><tr><td>R1 · sh 286</td><td>355.216</td><td>0.326%</td><td><b>0.354%</b></td><td>2.59%</td><td>7.3×</td><td>0</td></tr><tr><td>R1 · sh 566</td><td>336.955</td><td>0.427%</td><td><b>0.398%</b></td><td>1.59%</td><td>4.0×</td><td>0</td></tr><tr><td>R1 · sh 846</td><td>347.988</td><td>0.213%</td><td><b>0.223%</b></td><td>1.46%</td><td>6.5×</td><td>0</td></tr><tr><td>R1 · sh 1126</td><td>336.925</td><td>0.463%</td><td><b>0.473%</b></td><td>1.16%</td><td>2.5×</td><td>1</td></tr><tr><td>R1 · sh 1406</td><td>334.558</td><td>0.386%</td><td><b>0.355%</b></td><td>2.70%</td><td>7.6×</td><td>2</td></tr><tr><td>R1 · sh 1686</td><td>345.395</td><td>0.238%</td><td><b>0.255%</b></td><td>1.96%</td><td>7.7×</td><td>1</td></tr><tr><td>R2 · sh 0</td><td>202.484</td><td>0.236%</td><td><b>0.239%</b></td><td>3.69%</td><td>15.5×</td><td>0</td></tr><tr><td>R2 · sh 168</td><td>204.786</td><td>0.187%</td><td><b>0.166%</b></td><td>2.25%</td><td>13.5×</td><td>1</td></tr><tr><td>R2 · sh 336</td><td>194.343</td><td>0.410%</td><td><b>0.467%</b></td><td>3.77%</td><td>8.1×</td><td>0</td></tr><tr><td>R2 · sh 504</td><td>205.848</td><td>0.330%</td><td><b>0.398%</b></td><td>3.00%</td><td>7.5×</td><td>0</td></tr><tr><td>R2 · sh 672</td><td>215.6</td><td>0.321%</td><td><b>0.323%</b></td><td>3.53%</td><td>10.9×</td><td>0</td></tr><tr><td>R2 · sh 840</td><td>190.307</td><td>0.243%</td><td><b>0.238%</b></td><td>3.35%</td><td>14.1×</td><td>1</td></tr><tr><td>R2 · sh 1008</td><td>226.642</td><td>0.259%</td><td><b>0.380%</b></td><td>3.08%</td><td>8.1×</td><td>0</td></tr><tr><td>R2 · sh 1176</td><td>194.69</td><td>0.263%</td><td><b>0.272%</b></td><td>1.80%</td><td>6.6×</td><td>0</td></tr><tr><td>R2 · sh 1344</td><td>194.673</td><td>0.553%</td><td><b>0.524%</b></td><td>1.21%</td><td>2.3×</td><td>1</td></tr><tr><td>R2 · sh 1512</td><td>192.714</td><td>0.820%</td><td><b>0.866%</b></td><td>2.12%</td><td>2.4×</td><td>0</td></tr><tr><td>R2 · sh 1680</td><td>198.089</td><td>0.528%</td><td><b>0.586%</b></td><td>2.65%</td><td>4.5×</td><td>0</td></tr><tr><td>R2 · sh 1848</td><td>198.329</td><td>0.481%</td><td><b>0.668%</b></td><td>2.97%</td><td>4.4×</td><td>0</td></tr><tr style='font-weight:700;background:var(--surface2,transparent)'><td>aggregate</td><td>—</td><td>—</td><td>mean R1 0.32% · R2 0.43% · max 0.87%</td><td>—</td><td>min 2.3× · mean 7.6×</td><td>7 voyages, 1–2 legs</td></tr></tbody></table></div>
+      <div class="words" style="--pc:var(--cert)"><div class="wt">what goes in the paper</div>
+        <p>A short subsection — <b>“certifying local optimality of the discretised plan”</b>: continuous
+          re-positioning of the decision points recovers 0.17–0.87 % (mean ≈ 0.4 %), while the SR–Luo
+          gap exceeds it on <b>every</b> voyage — by at least 2.3×, on average ≈ 6× ⇒ <b>the granularity
+          advantage is not grid noise</b>. And since polishing only makes SR <i>better</i>, the residual
+          grid effect favours SR, not the baseline.
+          The global DDD adaptation becomes one future-work sentence, citing Hewitt’s line as the
+          roadmap.</p></div>
+    </div>
+  </section>
+
   <div class="callout p4">
     <h3>Where §4 stands now — one continuous story</h3>
     <p><b>§4.1</b> draws the grid 𝒮 and each state's neighbours 𝒜(d,t) (Tal, completed) → the <b>Bellman
@@ -473,5 +567,5 @@
       are the two <code>ADD FIGURE</code> placeholders.</p>
   </div>
 
-  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 — paper_workspace/paper_full_draft.tex · §4.1–§4.2</footer>
+  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 — paper_full_draft.tex §4.1–§4.2 · certificates: docs/ddd_experiment_plan.md + pipeline/dp_rebuild/ddd_lb.py</footer>
 </div>

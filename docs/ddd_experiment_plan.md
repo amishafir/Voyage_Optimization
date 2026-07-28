@@ -181,3 +181,26 @@ legs by golden search, sum the positive gains of one full sweep.
    0.2 % — an order of magnitude below the SR–Luo gap."
 4. Future-work sentence (§7/§8): adapting DDD's partial-network lower bounds to time-distance speed
    control (global certificate) — cite Boland et al. 2017 / Marshall et al. 2021.
+
+## 9. FINAL — 19-voyage local certificate + iterated polish (2026-07-28)
+
+`ddd_lb.py --mode batch` (golden-argmin fix; recovered = Σ applied gains; band audit):
+
+| | R1 (7 voyages) | R2 (12 voyages) | overall |
+|---|---|---|---|
+| polish recovered, mean | 0.323 % | 0.427 % | ~0.39 % |
+| polish recovered, max | 0.473 % (sh1126) | 0.866 % (sh1512) | 0.866 % |
+| sweep bound, max | 0.463 % | 0.820 % | — |
+| SR–Luo gap ÷ recovered | — | — | **min 2.3×, mean 7.6×** |
+
+- **Headline (paper-ready):** iterated continuous polish of the DP plan (every decision point free to
+  slide off-grid along its line) converges in ≤ 20 sweeps and recovers **0.17–0.87 % (mean ≈ 0.4 %)**;
+  the SR–Luo gap exceeds the recovery on **every one of the 19 voyages** (≥ 2.3×, mean ≈ 7.6×). Since
+  polishing only improves SR, the residual grid effect favours SR — the granularity advantage is not
+  grid noise.
+- **Band-violation audit (new finding):** 7 of 19 optimal schedules contain 1–2 corner legs whose
+  realised v̄ rounds marginally outside 𝒱 (the node-first range-end rounding; also the root cause of
+  E1's non-monotone refinement). Worth a one-line clamp in the enumeration eventually; effect size is
+  1–2 legs out of 85–140. Flag to Tal alongside the certificate.
+- Data: `runs/2026_07_28_local_certificate/results.csv` · full table also in
+  `docs/state_space_evolution.html` Part 5.

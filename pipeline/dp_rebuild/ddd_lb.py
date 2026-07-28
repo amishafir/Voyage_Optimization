@@ -129,27 +129,40 @@ def build_frame(route_key: str, sh_base: int):
 # ======================================================================
 
 def golden_min(f, lo: float, hi: float, iters: int = 60) -> Tuple[float, float]:
-    """Golden-section min of f on [lo,hi] with a coarse presample guard."""
+    """Golden-section min of f on [lo,hi] with a coarse presample guard.
+
+    Returns the ARGMIN PAIR (x_best, f(x_best)) over every point actually
+    evaluated — presample and golden probes alike — so a caller that APPLIES
+    the returned point (the polish sweep) is guaranteed the returned value at
+    that exact point (never a value from one point and coordinates of another).
+    """
     n = 33
     xs = [lo + (hi - lo) * k / (n - 1) for k in range(n)]
     vals = [f(x) for x in xs]
     k0 = min(range(n), key=lambda k: vals[k])
+    xb, fb = xs[k0], vals[k0]
     a = xs[max(0, k0 - 1)]
     b = xs[min(n - 1, k0 + 1)]
     g = (math.sqrt(5) - 1) / 2
     c, d = b - g * (b - a), a + g * (b - a)
     fc, fd = f(c), f(d)
+    for x, v in ((c, fc), (d, fd)):
+        if v < fb:
+            xb, fb = x, v
     for _ in range(iters):
         if fc < fd:
             b, d, fd = d, c, fc
             c = b - g * (b - a)
             fc = f(c)
+            if fc < fb:
+                xb, fb = c, fc
         else:
             a, c, fc = c, d, fd
             d = a + g * (b - a)
             fd = f(d)
-    x = (a + b) / 2
-    return x, min(f(x), vals[k0])
+            if fd < fb:
+                xb, fb = d, fd
+    return xb, fb
 
 
 def local_certificate(route_key: str, sh_base: int) -> None:
@@ -441,18 +454,153 @@ def global_lb(route_key: str, sh_base: int, rounds: int, f_dp: Optional[float]) 
               f"({(f_dp - hist[-1]) / f_dp * 100:.2f}%)")
 
 
+
+
+# ======================================================================
+# MODE 3 — batch: one-sweep bound + iterated polish, all voyages
+# ======================================================================
+
+def _slide_ranges(frame, p, q, r):
+    """Slide domain for interior point q between fixed p, r. Returns
+    (kind, lo, hi) with kind 'H' (slide time on a distance line) or
+    'V' (slide distance on a time line), or None."""
+    on_h = any(abs(q[0] - d) < 1e-6 for d in frame.h_line_distances)
+    if on_h and abs(q[0] - r[0]) > EPS and abs(q[0] - p[0]) > EPS:
+        lo, hi = p[1] + DT_FLOOR, min(r[1] - DT_FLOOR, frame.cfg.eta_h)
+        if hi - lo >= 1e-6:
+            return ("H", lo, hi)
+    if (not on_h) and abs(q[1] - r[1]) > EPS and abs(q[1] - p[1]) > EPS:
+        lo, hi = p[0] + EPS, r[0] - EPS
+        if hi - lo >= 1e-6:
+            return ("V", lo, hi)
+    return None
+
+
+def batch_certificates(rounds_polish: int = 20, out_csv: str = None) -> None:
+    import csv as _csv
+    rows = []
+    for route_key, cfg_r in ROUTES.items():
+        for sh_base in cfg_r["sh_bases"]:
+            t0 = time.time()
+            frame, args, voyage = build_frame(route_key, sh_base)
+            res = SR_main.solve(args, voyage=voyage, verbose=False)
+            F = res["total_fuel_mt"]
+            oracle = PhiOracle(frame)
+            vmin, vmax = frame.cfg.v_min, frame.cfg.v_max
+
+            def leg_fuel(p, q):
+                dd, dt = q[0] - p[0], q[1] - p[1]
+                if dd <= EPS or dt <= DT_FLOOR:
+                    return math.inf
+                v = dd / dt
+                if v < vmin - 1e-9 or v > vmax + 1e-9:
+                    return math.inf
+                return oracle.phi(p[0], p[1], v) * dt
+
+            sched = res["schedule"]
+            pts0 = [(sched[0].src_d, sched[0].src_t)] + [(e.dst_d, e.dst_t) for e in sched]
+            # audit: original legs whose realised speed rounds outside the band
+            n_viol = sum(1 for e in sched
+                         if e.sog > vmax + 1e-9 or e.sog < vmin - 1e-9)
+            worst_v = max((e.sog for e in sched), default=0.0)
+
+            # ---- one-sweep bound on the ORIGINAL schedule ----
+            sweep_gain, max_gain = 0.0, 0.0
+            for k in range(1, len(pts0) - 1):
+                p, q, r = pts0[k - 1], pts0[k], pts0[k + 1]
+                dom = _slide_ranges(frame, p, q, r)
+                base = leg_fuel(p, q) + leg_fuel(q, r)
+                if dom is None or not math.isfinite(base):
+                    continue
+                kind, lo, hi = dom
+                if kind == "H":
+                    fn = lambda tt: leg_fuel(p, (q[0], tt)) + leg_fuel((q[0], tt), r)
+                else:
+                    fn = lambda dd: leg_fuel(p, (dd, q[1])) + leg_fuel((dd, q[1]), r)
+                _, best = golden_min(fn, lo, hi, iters=40)
+                g = max(0.0, base - best)
+                sweep_gain += g
+                max_gain = max(max_gain, g)
+
+            # ---- iterated polish (Gauss-Seidel: apply moves immediately) ----
+            pts = list(pts0)
+            total_rec, sweeps = 0.0, 0
+            for s in range(rounds_polish):
+                sweeps = s + 1
+                rec = 0.0
+                for k in range(1, len(pts) - 1):
+                    p, q, r = pts[k - 1], pts[k], pts[k + 1]
+                    dom = _slide_ranges(frame, p, q, r)
+                    base = leg_fuel(p, q) + leg_fuel(q, r)
+                    if dom is None or not math.isfinite(base):
+                        continue
+                    kind, lo, hi = dom
+                    if kind == "H":
+                        fn = lambda tt: leg_fuel(p, (q[0], tt)) + leg_fuel((q[0], tt), r)
+                        x, best = golden_min(fn, lo, hi, iters=40)
+                        newq = (q[0], x)
+                    else:
+                        fn = lambda dd: leg_fuel(p, (dd, q[1])) + leg_fuel((dd, q[1]), r)
+                        x, best = golden_min(fn, lo, hi, iters=40)
+                        newq = (x, q[1])
+                    if base - best > 1e-7:
+                        pts[k] = newq
+                        rec += base - best
+                total_rec += rec
+                if rec < 1e-3:
+                    break
+            # recovered = sum of applied gains (each measured with consistent
+            # leg evaluations); legs the model rejects (e.g. original corner
+            # legs whose rounding pushed v-bar outside the band) are never
+            # touched, so their fuel is unchanged and F_pol = F - recovered.
+            F_pol = F - total_rec
+
+            row = dict(route=route_key, sh=sh_base, F_DP=round(F, 3),
+                       band_viol_legs=n_viol, worst_sog=round(worst_v, 3),
+                       sweep_bound_mt=round(sweep_gain, 4),
+                       sweep_bound_pct=round(sweep_gain / F * 100, 4),
+                       max_node_mt=round(max_gain, 4),
+                       F_polished=round(F_pol, 3),
+                       recovered_mt=round(F - F_pol, 4),
+                       recovered_pct=round((F - F_pol) / F * 100, 4),
+                       polish_sweeps=sweeps, wall_s=round(time.time() - t0, 1))
+            rows.append(row)
+            print(f"{route_key} sh={sh_base:4d}: F={F:8.3f}  sweepUB={sweep_gain:7.4f} "
+                  f"({sweep_gain/F*100:.3f}%)  polished={F_pol:8.3f} "
+                  f"recovered={F-F_pol:.4f} mt ({(F-F_pol)/F*100:.3f}%) "
+                  f"[{sweeps} sweeps, viol={n_viol}, {time.time()-t0:.0f}s]", flush=True)
+
+    if out_csv:
+        Path(out_csv).parent.mkdir(parents=True, exist_ok=True)
+        with open(out_csv, "w", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            w.writeheader()
+            w.writerows(rows)
+        print(f"\nwrote {len(rows)} rows to {out_csv}", flush=True)
+    # aggregates
+    for rk in ROUTES:
+        rr = [r for r in rows if r["route"] == rk]
+        if rr:
+            print(f"{rk}: max sweep-bound {max(r['sweep_bound_pct'] for r in rr):.3f}%  "
+                  f"max recovered {max(r['recovered_pct'] for r in rr):.3f}%  "
+                  f"mean recovered {sum(r['recovered_pct'] for r in rr)/len(rr):.3f}%", flush=True)
+
+
 # ----------------------------------------------------------------------
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="ddd_lb")
     ap.add_argument("--route", default="route2", choices=list(ROUTES))
     ap.add_argument("--sh", type=int, default=0)
-    ap.add_argument("--mode", default="local", choices=["local", "lb"])
+    ap.add_argument("--mode", default="local", choices=["local", "lb", "batch"])
+    ap.add_argument("--out_csv", default=None)
     ap.add_argument("--rounds", type=int, default=6)
     ap.add_argument("--f_dp", type=float, default=None,
                     help="known F_DP for gap reporting (else solved fresh in local mode)")
     a = ap.parse_args()
-    if a.mode == "local":
+    if a.mode == "batch":
+        batch_certificates(out_csv=a.out_csv)
+    elif a.mode == "local":
         local_certificate(a.route, a.sh)
     else:
         f_dp = a.f_dp
