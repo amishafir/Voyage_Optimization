@@ -118,3 +118,24 @@ target ε is hit. Optional bonus: **repair** the LB path into a feasible schedul
 3. **E3 refinement** + numbers table.
 4. Decision point with Tal: section in this paper vs future-work note (depends on numbers + space).
 5. If “in”: lit-validate the five refs → file to Pillar 1 → write §4.2.5 + §6 table + §2.1 sentences.
+
+---
+
+## 6. E1 RESULTS (2026-07-28) — motivates E2 rather than replacing it
+
+| Instance | 2δ,2τ | δ,τ (paper) | δ/2,τ/2 |
+|---|---|---|---|
+| R2 vy0 | 203.118 (+0.313%) | **202.484** | 202.644 (+0.079%) |
+| R1 vy0 | 355.721 (+0.499%) | **353.955** | 354.208 (+0.071%) |
+
+- **Scale:** the h→h/2 spread is ~0.07–0.08 % — ~30× smaller than the SR–Luo gap. Coarsening to 2h
+  costs 0.3–0.5 % (asymmetry consistent with O(h²) + feasible-set effects).
+- **Non-monotone refinement (important):** the fine grid came out *above* the paper grid, although its
+  node set is a superset. Cause: the **arc sets are not nested** — finer τ makes more distance lines
+  resolvable (fewer glide-past arcs) and tightens band-edge rounding. Consequence: Richardson
+  extrapolation is unreliable here ⇒ **the certified LB (E2/E3) is genuinely needed**, not decorative.
+  This is the honest narrative for the section: "grid sensitivity is ~0.1 % empirically, but
+  non-monotone; the relaxation certifies it."
+- **Feasibility audit (pre-requisite for a certificate): PASS.** Optimal schedules use speeds strictly
+  inside 𝒱 with ~0.7–0.9 kn margin (R2: [9.51, 13.91] in [8.64, 14.64], 0 violations; R1:
+  [10.07, 14.21] in [9.12, 15.12], 0 violations). No band-edge cheating ⇒ F_DP is a legitimate UB.
