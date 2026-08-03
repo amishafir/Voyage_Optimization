@@ -462,9 +462,9 @@ Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the in
 \begin{aligned}
 \mathcal{A}(d,t) ={}&
 \biggl\{ (d_{\mathcal{D}(d)},\, t') : t' = t_{\mathcal{T}(t)} - n\tau,\;
-   n=0,\ldots,\left\lfloor\frac{t_{\mathcal{T}(t)}-t_{\mathcal{T}(t)-1}}{\tau}\right\rfloor \biggr\} \cup \\
+   n=0,\ldots,\left\lfloor\frac{t_{\mathcal{T}(t)}-t}{\tau}\right\rfloor, \frac{d_{\mathcal{D}(d)}-d}{t'-t} \in \mathcal{V} \biggr\} \cup \\
 &\biggl\{ (d',\, t_{\mathcal{T}(t)}) : d' = d_{\mathcal{D}(d)} - n\delta,\;
-   n=0,\ldots,\left\lfloor\frac{d_{\mathcal{D}(d)}-d_{\mathcal{D}(d)-1}}{\delta}\right\rfloor \biggr\}.
+   n=0,\ldots,\left\lfloor\frac{d_{\mathcal{D}(d)}-d}{\delta}\right\rfloor, \frac{d'-d}{t_{\mathcal{T}(t)}-t} \in \mathcal{V}  \biggr\}.
 \end{aligned}
 \end{equation}
 The first set collects the neighbours reached on the next distance line $d_{\mathcal{D}(d)}$, with the
@@ -476,7 +476,7 @@ Between a state and a neighbour the vessel steams at a single fixed speed drawn 
 
 We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
 When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area in Figure~X in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
-Since in any such rectangular the sea condition and the heading of the vessel are fixed, the FCR is determined only by the vessel speed.  We denote this FCR by $\phi(d, t; v)$.
+Since in any such rectangular the sea condition and the heading of the vessel are fixed, the FCR is determined only by the vessel speed.  We denote this FCR by $\phi(d, t; v)$ metric ton / hour.
 
 The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward Bellman equation:
 
@@ -501,42 +501,33 @@ C^{*}(d,t)=\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \u
 % ==== NEW (node-first: min over the neighbour set 𝒜; realised leg speed v̄ = Δd/Δt) ====
 \begin{equation}
 \label{eq:cost-to-arrive}
-C^{*}(d,t)=\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\,:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ \bar v \,=\, (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
-\Bigl[\, C^{*}(\tilde d,\tilde t)+(t-\tilde t)\,\phi(\tilde d,\tilde t;\bar v)\,\Bigr].
+C^{*}(d,t)=\min_{\substack{(\tilde d,\tilde t) \in\mathcal{A}( d, t)}}   \begin{cases}     \infty & \tilde t =  t_{\Theta} , d < d_M \\
+	C^{*}(\tilde d,\tilde t)+(\tilde t- t)\,\phi(d,t; (\tilde d- d)/(\tilde t-t))  & otherwise
+\end{cases}		
 \end{equation}
 With the boundary condition 
 $$C^*(0,0) = 0.$$
-The solution of this Bellman equation gives the minimum fuel to arrive at each state $(d,t)$; for each state we record the minimising predecessor and the realised leg speed $\bar v=\Delta d/\Delta t$ of the incoming arc, from which the optimal speed schedule is recovered by back-tracking to the origin.
 
-% ==== OLD (argmin over finite speed set V) — superseded by argmin over 𝒱; kept, not rendered ====
-\begin{comment}
+We deonte the solution of (\ref{eq:cost-to-arrive}) for each  state $(d,t)$ by  $(\tilde d^{\star},\tilde t^{\star})$. The value of this soluton is 
+the minimum fuel to arrive on time at each state $(d,t)$ or infinity if it is not possible to meet the ETA. The SOG at the subsegment that starts at $(d,t)$ is 
 \begin{equation}
-V^{*}(d,t)=\arg\min_{v \in V}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
-	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
-	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
-\end{cases}
+	\label{eq:opt-speed} V^{*}(d,t)= \frac{\tilde d^{\star} - d}{\tilde t^{\star} -t}
 \end{equation}
-\end{comment}
-% ==== OLD (argmin over the continuous interval 𝒱, two cases) — superseded by node-first; kept, not rendered ====
-\begin{comment}
-\begin{equation}
-V^{*}(d,t)=\arg\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \underline{t})+(t-\underline{t})\phi(\underline{d}, \underline{t}; v) & \text{if }  \frac{d- \underline{d}}{v}  \ge t-\underline{t}, \\
-	C^*\left(\underline{d}, 	t- \frac{d -\underline{d}}{ v}\right)
-	+ \frac{d -\underline{d}}{ v}\phi(\underline{d}, \underline{t}; v) & \text{otherwise.}
-\end{cases}
-\end{equation}
-\end{comment}
+
 % ==== NEW (node-first: realised speed of the optimal incoming leg) ====
-\begin{equation}
-\label{eq:opt-speed}
-V^{*}(d,t)=\frac{d-\tilde d^{\star}}{t-\tilde t^{\star}},\qquad
-(\tilde d^{\star},\tilde t^{\star})=\arg\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\,:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
-\Bigl[\, C^{*}(\tilde d,\tilde t)+(t-\tilde t)\,\phi\bigl(\tilde d,\tilde t;\tfrac{d-\tilde d}{t-\tilde t}\bigr)\,\Bigr].
-\end{equation}
+
+%V^{*}(d,t)=\frac{d-\tilde d^{\star}}{t-\tilde t^{\star}},\qquad
+%(\tilde d^{\star},\tilde t^{\star})=\arg\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\,:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
+%\Bigl[\, C^{*}(\tilde d,\tilde t)+(t-\tilde t)\,\phi\bigl(\tilde d,\tilde t;\tfrac{d-\tilde d}{t-\tilde t}\bigr)\,\Bigr].
+
 
 
 \subsection{Solving the Bellman equation}
 \label{sec:solve}
+
+
+for each state we record the minimising predecessor and the realised leg speed $\bar v= (\tilde d- d)/(\tilde t-t)$ of the incoming arc, from which the optimal speed schedule is recovered by back-tracking to the origin.
+
 
 % ==== OLD (S had to be "made finite" — written before §4.1 defined the explicit grid) — superseded; kept, not rendered ====
 \begin{comment}
@@ -709,11 +700,12 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \begin{tabbing}
 xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 \textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
-\textbf{Output:} state set $\mathcal{S}$, arc set $\mathcal{A}$\\
+\textbf{Output:}  Speed schedule and total fuel consumption \\
+%state set $\mathcal{S}$, arc set $\mathcal{A}$\\
 $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad queue $Q\leftarrow[(0,0)]$\\
 \textbf{while} $Q$ not empty \textbf{do}\\
-\> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t\ge T$ \textbf{then continue}\\
-\> $\overline{d}\leftarrow\min\{d_i>d\}$;\quad $\overline{t}\leftarrow\min\{t_j>t\}$;\quad $C\leftarrow\emptyset$ \quad{\small$\triangleright$ candidate successors $(d',t')$}\\
+\> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t= T$ \textbf{then continue}\\
+\> $\tilde d \leftarrow \mathcal{D}(d)$;\quad $\tilde t \leftarrow \mathcal{T}(t)$\quad $C\leftarrow\emptyset$ \quad{\small$\triangleright$ candidate successors $(d',t')$}\\
 \> $\text{res}\leftarrow\bigl[\langle t+(\overline{d}-d)/v_{\max}\rangle_\tau>t\bigr]$ \quad{\small$\triangleright$ is the next distance line resolvable on the $\tau$-grid?}\\
 \> \textbf{if} res \textbf{then} \quad{\small$\triangleright$ distance line binds: enumerate arrival \emph{times} --- the first set of Eq.~\eqref{eq:neighbors}}\\
 \>\> \textbf{for} $k=\mathrm{round}\!\bigl(\tfrac{t+(\overline{d}-d)/v_{\max}}{\tau}\bigr)\ \textbf{to}\ \mathrm{round}\!\bigl(\tfrac{\min(t+(\overline{d}-d)/v_{\min},\,\overline{t},\,T)}{\tau}\bigr)$ \textbf{do} $C\leftarrow C\cup\{(\overline{d},\,k\tau)\}$\\
