@@ -13,6 +13,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{hyperref}
 \usepackage{multirow}
 \usepackage{siunitx}
@@ -431,22 +432,6 @@ $0=t_0, t_1,\ldots, t_{\Theta}=T$.
 
 The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the distance--time plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 1$ NM), starting from the crossing of each time line with a distance line and going backward in space
 (Figure~\ref{fig:state-neighbours}).
-% ==== "ADD FIGURE." placeholder realised 2026-08-04; float placed here, after the discretisation paragraph ====
-\begin{figure}[t]
-\centering
-\includegraphics[width=.82\textwidth]{figures/state_neighbours.pdf}
-\caption{One state of the dynamic program and its candidate successors (values illustrative). From
-the state $(d,t)$, every admissible speed leads to one of two walls: the next distance line
-$d_{\mathcal{D}(d)}$, where the sea conditions change, or the next time line $t_{\mathcal{T}(t)}$,
-where the forecast is refreshed. The speed cone $[v_{\min},v_{\max}]$ intersects the walls in two
-windows, and the grid picks out the nodes inside them --- arrival times spaced $\tau$ on the
-distance wall, arrival distances spaced $\delta$ on the time wall: the two families of
-Eq.~\eqref{eq:neighbors}. The fast edge of the cone crosses the distance wall before the block ends
-(capping the second family), the slow edge runs out of the block first (clipping the first), and
-each surviving node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here
-$\kappa=8$ candidates in total.}
-\label{fig:state-neighbours}
-\end{figure}
 
 
 We define the set of states as
@@ -492,6 +477,22 @@ $t_{\mathcal{T}(t)}$, with the arrival distance snapped to the $\delta$-grid.
 Between a state and a neighbour the vessel steams at a single fixed speed drawn from $\mathcal{V}$, held constant across the rectangular sub-space it traverses.
 
 We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
+% ==== fig:state-neighbours placed here (2026-08-04, Ami): before the "When the vessel is at point" paragraph; [H] pins it ====
+\begin{figure}[H]
+\centering
+\includegraphics[width=.82\textwidth]{figures/state_neighbours.pdf}
+\caption{One state of the dynamic program and its candidate successors (values illustrative). From
+the state $(d,t)$, every admissible speed leads to one of two walls: the next distance line
+$d_{\mathcal{D}(d)}$, where the sea conditions change, or the next time line $t_{\mathcal{T}(t)}$,
+where the forecast is refreshed. The speed cone $[v_{\min},v_{\max}]$ intersects the walls in two
+windows, and the grid picks out the nodes inside them --- arrival times spaced $\tau$ on the
+distance wall, arrival distances spaced $\delta$ on the time wall: the two families of
+Eq.~\eqref{eq:neighbors}. The fast edge of the cone crosses the distance wall before the block ends
+(capping the second family), the slow edge runs out of the block first (clipping the first), and
+each surviving node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here
+$\kappa=8$ candidates in total.}
+\label{fig:state-neighbours}
+\end{figure}
 When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area in Figure~X in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
 Since in any such rectangular the sea condition and the heading of the vessel are fixed, the FCR is determined only by the vessel speed.  We denote this FCR by $\phi(d, t; v)$ metric ton / hour.
 
