@@ -1,0 +1,453 @@
+<title>The §3–§4 audit, explained — why every change is needed</title>
+<style>
+  :root{
+    --ground:#eef1f5; --surface:#fff; --surface2:#f4f6f9;
+    --ink:#1b2430; --muted:#54626f; --faint:#8593a2; --hair:#d9e0e8;
+    --bug:#a8332e; --bug-soft:#f8e9e8;
+    --col:#7a4bab; --col-soft:#efe8f6;
+    --pre:#8a6115; --pre-soft:#f6efdd;
+    --ok:#1f7a5a; --ok-soft:#e7f3ec;
+    --tal:#1f4e79; --tal-soft:#e6edf4;
+    --formula:#f5f8fb; --formula-ink:#233240;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;
+    --bug:#e07a70;--bug-soft:#2a1514;--col:#b492db;--col-soft:#1d1526;--pre:#cfa14e;--pre-soft:#241c0e;
+    --ok:#54b98c;--ok-soft:#12231b;--tal:#6fa8d6;--tal-soft:#152430;--formula:#0e141a;--formula-ink:#c3cedb;
+  }}
+  :root[data-theme="light"]{--ground:#eef1f5;--surface:#fff;--surface2:#f4f6f9;--ink:#1b2430;--muted:#54626f;--faint:#8593a2;--hair:#d9e0e8;--bug:#a8332e;--bug-soft:#f8e9e8;--col:#7a4bab;--col-soft:#efe8f6;--pre:#8a6115;--pre-soft:#f6efdd;--ok:#1f7a5a;--ok-soft:#e7f3ec;--tal:#1f4e79;--tal-soft:#e6edf4;--formula:#f5f8fb;--formula-ink:#233240;}
+  :root[data-theme="dark"]{--ground:#0f1418;--surface:#161d25;--surface2:#121820;--ink:#dae2ec;--muted:#9aa8b6;--faint:#66737f;--hair:#26303b;--bug:#e07a70;--bug-soft:#2a1514;--col:#b492db;--col-soft:#1d1526;--pre:#cfa14e;--pre-soft:#241c0e;--ok:#54b98c;--ok-soft:#12231b;--tal:#6fa8d6;--tal-soft:#152430;--formula:#0e141a;--formula-ink:#c3cedb;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.6}
+  .wrap{max-width:56rem;margin:0 auto;padding:2.4rem 1.4rem 5rem}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--tal);margin:0 0 .5rem}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(1.8rem,4vw,2.4rem);line-height:1.12;margin:0 0 .5rem;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:1.03rem;max-width:46rem;margin:.2rem 0 0}
+  .lede b{color:var(--ink)}
+  h2{font-family:var(--serif);font-size:1.5rem;font-weight:600;margin:.15rem 0 .3rem}
+  p{margin:.6rem 0}
+
+  .strip{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.4rem 0}
+  .pill{flex:1 1 10rem;background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:.6rem .8rem;border-left:4px solid var(--c)}
+  .pill .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--c);font-weight:700}
+  .pill .v{font-size:.9rem;color:var(--muted)} .pill .v b{color:var(--ink)}
+  .pill.bug{--c:var(--bug)} .pill.col{--c:var(--col)} .pill.pre{--c:var(--pre)} .pill.ok{--c:var(--ok)}
+
+  .sect{margin-top:2.6rem;border-top:2px solid var(--c);padding-top:1rem}
+  .sect.bug{--c:var(--bug)} .sect.col{--c:var(--col)} .sect.pre{--c:var(--pre)}
+  .sect-tag{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--c);font-weight:600;margin:0}
+
+  .item{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:1.1rem 1.3rem;margin:1rem 0;border-left:4px solid var(--c)}
+  .item h3{font-family:var(--serif);font-size:1.12rem;font-weight:600;margin:0 0 .25rem}
+  .item h3 .id{display:inline-block;font-family:var(--mono);font-size:.72rem;font-weight:700;color:#fff;background:var(--c);border-radius:5px;padding:.12em .5em;margin-right:.55rem;vertical-align:.14em}
+  .who{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 .5rem}
+  .who b{color:var(--tal)} .who .done{color:var(--ok);font-weight:700}
+  .item p{color:var(--muted);font-size:.95rem} .item b{color:var(--ink)}
+
+  .now{background:var(--formula);border:1px solid var(--hair);border-radius:9px;padding:.7rem .95rem;margin:.6rem 0;overflow-x:auto;font-family:var(--serif);font-size:1rem;color:var(--formula-ink);line-height:1.85}
+  .now .t,.why .t,.fix .t{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:.3rem}
+  .now .t{color:var(--faint)}
+  .why{background:color-mix(in srgb,var(--c) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--c) 28%,var(--hair));border-radius:9px;padding:.7rem .95rem;margin:.6rem 0}
+  .why .t{color:var(--c)} .why p{margin:.25rem 0;color:var(--ink);font-size:.95rem}
+  .fix{background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 30%,var(--hair));border-radius:9px;padding:.6rem .95rem;margin:.6rem 0}
+  .fix .t{color:var(--ok)} .fix p{margin:.2rem 0;font-size:.94rem;color:var(--ink)}
+  .cond{color:var(--muted);font-size:.9em}
+  sub{font-size:.72em} sup{font-size:.72em}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin:.6rem 0}
+  th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  td.k{color:var(--muted)}
+  code{font-family:var(--mono);font-size:.88em;background:var(--tal-soft);padding:.05em .3em;border-radius:4px}
+  footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--hair);font-family:var(--mono);font-size:.76rem;color:var(--faint)}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Meeting prep 2026-08-05 · §1B · the audit, item by item</p>
+  <h1>Why every change is needed</h1>
+  <p class="lede">The Aug-4 consistency sweep of §3–§4 logged <b>22 items</b>. This page walks each one:
+    <b>what the paper says today → why that is a problem</b> (with a concrete "watch it break" example
+    wherever there is one) <b>→ the proposed fix</b>. Owner tags: <b>[T]</b> = inside Tal's text or
+    equations (his to bless), <b>[A]</b> = Ami's text. Three items are already <b>resolved</b> by the
+    flat-§4.2 rewrite; the rest wait for the meeting.</p>
+
+  <div class="strip">
+    <div class="pill bug"><div class="k">A · math bugs</div><div class="v"><b>5</b> — the text computes the wrong thing as written</div></div>
+    <div class="pill col"><div class="k">B · symbol collisions</div><div class="v"><b>7</b> — one letter, two meanings</div></div>
+    <div class="pill pre"><div class="k">C · precision</div><div class="v"><b>10</b> — imprecise, stale, or undefined</div></div>
+    <div class="pill ok"><div class="k">status</div><div class="v"><b>3 resolved</b> (A4 · B7 · C2) · 1 design question (C1) · 18 pending Aug 5</div></div>
+  </div>
+
+  <!-- ============ SECTION A ============ -->
+  <section class="sect bug">
+    <p class="sect-tag">Section A · five math bugs</p>
+    <h2>The text computes the wrong thing as written</h2>
+    <p>These are not stylistic. A careful reviewer — or a reader re-implementing the method — gets a
+      <b>different algorithm</b> than the one we actually ran.</p>
+
+    <div class="item" style="--c:var(--bug)">
+      <h3><span class="id">A1</span>Eq. (6)'s ∞ case tests the wrong point</h3>
+      <p class="who">owner: <b>[T]</b> — inside Tal's Aug-3 equation · pending</p>
+      <div class="now"><div class="t">what it says today</div>
+        C*(d,t) = min … { <b>∞</b> &nbsp;<span class="cond">if t̃ = t<sub>Θ</sub> , <u>d</u> &lt; d<sub>M</sub></span> ; … }
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>The ∞ case is meant to kill <b>dead-end legs</b>: those that land on the final time line
+          <i>without finishing the voyage</i>. But the condition tests <b>d — the source</b>. Every state
+          that has successors satisfies d &lt; d<sub>M</sub> (only the destination doesn't, and it emits no
+          arcs). So the condition is <b>always true</b>, and the case fires for <i>every</i> leg that
+          touches the final time line.</p>
+        <p><b>Watch it break:</b> T = 280 h. The vessel stands at (3,380 NM, 276 h) and a candidate leg
+          arrives <b>exactly at (L, 280)</b> — destination, on the deadline, perfectly legal. The equation
+          as written prices this leg <b>∞</b> and declares the voyage impossible on that path. The
+          algorithm (line 11 seeds C*(L, t) = 0 for every t ≤ T, including t = T) and the code both accept
+          it. <b>Equation and algorithm currently disagree</b> about which voyages are feasible.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>One tilde: <b>d̃ &lt; d<sub>M</sub></b> — test the
+        <i>successor</i>. "If the leg lands on the last time line <i>short of the destination</i>, it is a
+        dead end."</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--bug)">
+      <h3><span class="id">A2</span>The cell-lookup maps pick the rectangle <i>behind</i> the ship</h3>
+      <p class="who">owner: <b>[T]</b> — §4.1 definitions · pending</p>
+      <div class="now"><div class="t">what it says today</div>
+        i(d) = argmax<sub>i</sub>{ d<sub>i</sub> <u>&lt;</u> d } , &nbsp; j(t) = argmax<sub>j</sub>{ t<sub>j</sub> <u>&lt;</u> t }
+        <span class="cond">&nbsp;(strict) — then φ(d,t;v) uses the rectangle of (d̲, t̲) = (d<sub>i(d)</sub>, t<sub>j(t)</sub>)</span>
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>The map is supposed to answer "<b>which weather cell and which forecast block does this point's
+          outgoing leg live in?</b>" With a <i>strict</i> inequality, a point sitting <b>exactly on a
+          line</b> — and <b>every DP state sits on a line by construction</b> — selects the region
+          <i>before</i> the line, i.e. behind the ship, while the leg being priced travels <i>ahead</i>.</p>
+        <p><b>Watch it break:</b> a state at t = 6.0 h exactly (a block boundary). The leg that starts
+          there sails in <b>block 1</b> (6–12 h, the new forecast). But {t<sub>j</sub> &lt; 6.0} picks
+          t<sub>0</sub> = 0, so φ prices the leg with <b>block 0's weather — the forecast that just
+          expired</b>. Same story in distance: a state on a cell boundary prices its leg with the cell it
+          is <i>leaving</i>. Since all states live on lines, this misprices legs systematically — the code
+          does the right thing; the definition doesn't.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Weak inequalities: <b>d<sub>i</sub> ≤ d</b> and
+        <b>t<sub>j</sub> ≤ t</b>. A point on a boundary then belongs to the rectangle <i>ahead</i> — the
+        one its leg actually traverses.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--bug)">
+      <h3><span class="id">A3</span>The solution-prose still speaks "to-arrive"</h3>
+      <p class="who">owner: <b>[T]</b> — §4.1 prose after Eq. (6) · pending</p>
+      <div class="now"><div class="t">what it says today</div>
+        "The value of this solution is <b>the minimum fuel to arrive on time at each state</b> (d,t) …
+        The SOG at the <b>subsegment</b> that starts at (d,t) is …"
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>The sentence describes the <b>old</b> quantity. Under the cost-to-go flip, C*(d,t) is the fuel
+          <b>from (d,t) to the destination</b> — not the fuel to reach (d,t). A reader who takes the
+          sentence literally cannot reconcile it with the equation right above it: under the "arrive at"
+          reading, C*(0,0) would be trivially 0 — yet the paper reads the <i>answer</i> there. The two
+          statements contradict on the same half-page.</p>
+        <p>Second, smaller: the thing that starts at (d,t) is a <b>leg</b> (an arc of adaptive length), not
+          a <i>subsegment</i> (a fixed piece of the route between cell boundaries). Using the reserved word
+          blurs two defined objects.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>"…the minimum fuel required to <b>complete the voyage
+        from</b> (d,t) while meeting the ETA, or ∞ if the ETA cannot be met from there. The SOG of the
+        <b>leg</b> that starts at (d,t) is …"</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--bug)">
+      <h3><span class="id">A4</span>The soft-ETA remark charged a fee no one can incur</h3>
+      <p class="who">owner: [A] — §4.2 · <span class="done">✔ RESOLVED in the flat rewrite</span></p>
+      <div class="now"><div class="t">what it said</div>
+        "Replacing the ∞ case with a lateness charge <b>λ(t̃ − T)</b> turns the hard deadline into a soft
+        one…"
+      </div>
+      <div class="why"><div class="t">why the change was needed</div>
+        <p>On the grid, <b>no arc ever lands past T</b> — the time lines stop there, so t̃ ≤ T always,
+          and the "charge" λ(t̃ − T) is <b>never positive</b>. The remark promised a soft deadline while
+          describing a model in which lateness cannot even be expressed. A reviewer testing the throwaway
+          remark finds it does nothing — worse than not saying it.</p>
+      </div>
+      <div class="fix"><div class="t">the fix (applied)</div><p>"<b>Extending the time lines beyond T</b>
+        and replacing the ∞ case with a lateness charge <b>λ·max(0, t̃ − T)</b>…" — first make late
+        arrivals representable, then price them.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--bug)">
+      <h3><span class="id">A5</span>"…the following <i>forward</i> Bellman equation"</h3>
+      <p class="who">owner: <b>[T]</b> — §4.1, the sentence introducing Eq. (6) · pending</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>One stale word, but it points the reader in exactly the wrong direction: the recursion that
+          follows is a <b>cost-to-go</b>, evaluated <b>backwards</b> from the destination. "Forward" was
+          correct for the old to-arrive version and survived the flip. Whoever trusts the adjective will
+          try to sweep the recursion forward — and it cannot be (a state's value needs its
+          <i>successors</i>, which forward order hasn't visited yet).</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Drop the adjective (or write "backward"): "…can be
+        formulated as the following Bellman equation."</p></div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION B ============ -->
+  <section class="sect col">
+    <p class="sect-tag">Section B · seven symbol collisions</p>
+    <h2>One letter, two meanings</h2>
+    <p>None of these makes the math false — they make it <b>ambiguous</b>. The damage is to the reader,
+      who must guess which meaning is live at each occurrence; reviewers flag these mercilessly.</p>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B1</span>𝒜 is both the neighbour set and the arc accumulator</h3>
+      <p class="who">owner: <b>[T/A]</b> — one token of Tal's Algorithm-1 line 1 · pending</p>
+      <div class="now"><div class="t">the two meanings, four lines apart</div>
+        line 4: &nbsp;C ← <b>𝒜(d,t)</b> of Eq. (5) <span class="cond">— the neighbour <i>function</i>: a set of states</span><br>
+        line 7: &nbsp;<b>𝒜</b> ← 𝒜 ∪ {(d,t)→(d̃,t̃)…} <span class="cond">— the arc <i>set being built</i>: a set of edges</span>
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>A careful reader of the box hits line 7 and asks: "are we inserting <i>arcs</i> into the
+          <i>neighbour set</i> we just queried on line 4?" The two objects even have different types
+          (states vs edges). The ambiguity leaks into Eq. (9), where |𝒜| means the arc count, and into
+          the prose "(𝒮,𝒜) is acyclic". Every occurrence forces the reader to disambiguate from
+          context.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Rename the accumulator to <b>ℰ</b> (edges): lines 1,
+        7, 13; |𝒜| → |ℰ| in Eq. (9); "(𝒮,ℰ)" in the sweep prose. Eq. (5)'s 𝒜(d,t) — Tal's — stays
+        untouched.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B2</span>g is both the SOG-inversion map and the slide gain</h3>
+      <p class="who">owner: [A] — §4.3 · pending</p>
+      <div class="now"><div class="t">the two meanings</div>
+        §3: &nbsp;V<sub>s</sub> = <b>g<sup>−1</sup></b>(V<sub>g</sub>; w) <span class="cond">— the physics map SOG → required SWS</span><br>
+        §4.3: &nbsp;<b>g</b>(q<sub>k</sub>) = […] − min […] <span class="cond">— Eq. (10): the fuel gain from sliding point q<sub>k</sub></span>
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>Both live in the same Methods section, and §4.3's legs are priced <i>through</i> the §3 physics —
+          so both g's are genuinely in scope at once. "g(q<sub>k</sub>)" invites the misreading "the
+          SOG-map applied to the point q<sub>k</sub>", which is a perfectly plausible object in this
+          paper.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Rename the gain to <b>γ(q<sub>k</sub>)</b> in Eq. (10)
+        and its surrounding text (and in tab:certificate's caption if referenced). The physics keeps
+        g<sup>−1</sup>.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B3</span>d<sub>i</sub> is a leg <i>length</i> in §3 and a cumulative <i>breakpoint</i> in §4</h3>
+      <p class="who">owner: [A] — §3 (eq:legfuel, eq:obj) · pending</p>
+      <div class="now"><div class="t">the two meanings</div>
+        §3: &nbsp;F<sub>i</sub> = FCR(…)·<b>d<sub>i</sub></b>/V<sub>g,i</sub> <span class="cond">— d<sub>i</sub> = the length of leg i</span><br>
+        §4: &nbsp;<b>d<sub>i</sub></b> = d<sub>i−1</sub> + l<sub>i</sub>, d<sub>M</sub> = L <span class="cond">— d<sub>i</sub> = distance from departure to breakpoint i</span>
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>These are the paper's two most-used distance symbols and they <b>contradict across a section
+          boundary</b>. A reader who carries §4's (correct, grid-defining) meaning back into §3's objective
+          gets Σ d<sub>i</sub>/V<sub>g,i</sub> = a sum of <i>cumulative</i> distances over speeds — a
+          meaningless "travel time" that grows quadratically with route position. §4 also already reserves
+          <b>l<sub>i</sub></b> for exactly the length concept §3 wants.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>§3 switches to <b>l<sub>i</sub></b>:
+        F<sub>i</sub> = FCR(·)·l<sub>i</sub>/V<sub>g,i</sub>, constraint Σ l<sub>i</sub>/V<sub>g,i</sub> ≤ T.
+        One symbol, one meaning, both sections agree.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B4</span>M is used in §3 before anything defines it</h3>
+      <p class="who">owner: [A] — §3, eq:obj · pending</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>The objective sums i = 1…<b>M</b>, but M (the number of subsegments/legs) is only defined a
+          section later, in §4's preprocessing paragraph. The very first display equation of the
+          formulation contains an unbound symbol — the kind of thing a referee circles on page one.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>One clause before eq:obj: "…the voyage divides into
+        <b>M</b> such legs (Section 4 makes the decomposition precise); leg i has length
+        l<sub>i</sub>…"</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B5</span>n means three different counts</h3>
+      <p class="who">owner: [A] — tab:certificate header · pending</p>
+      <div class="now"><div class="t">the three meanings</div>
+        Eqs. (4)–(5): &nbsp;n = the <b>grid-offset counter</b> (0, 1, 2, … steps back from a line)<br>
+        §4.3 text: &nbsp;q<sub>0</sub> … q<sub><b>n</b></sub> = the <b>decision points</b> of a schedule (~200)<br>
+        tab:certificate: &nbsp;column "<b>n</b>" = 7 and 12 — the <b>number of voyages</b> per route
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>The dangerous pair is the last two: table and text sit in the <i>same subsection</i>. A reader
+          who just met "q<sub>0</sub>…q<sub>n</sub>" naturally reads the table's n = 7 as "seven decision
+          points per schedule" — wildly wrong (there are ~200), and it silently corrupts their reading of
+          the recovered-percentage columns.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Rename the table column to <b>"Voyages"</b>. The two
+        remaining n's live in different subsections with clear local scope — acceptable.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B6</span>L — the paper's most important constant — is never defined</h3>
+      <p class="who">owner: <b>[T/A]</b> — §4 intro, first use · pending</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>L first appears silently inside "d ∈ [0, L]" and later as "d<sub>M</sub> = L". Its meaning
+          (total route length, NM) is guessable — which is exactly why it was never caught. But "the reader
+          can guess" is not a definition, and L appears in the size bound, the tractability numbers, the
+          algorithm's termination test, and the boundary condition.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Three words at first use: "…along-track distance
+        d ∈ [0, L] (<b>L the total route length</b>, NM)…"</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--col)">
+      <h3><span class="id">B7</span>κ appeared before its definition — and meant two things</h3>
+      <p class="who">owner: [A] — §4.2 · <span class="done">✔ RESOLVED in the flat rewrite</span></p>
+      <div class="why"><div class="t">why the change was needed</div>
+        <p>The walkthrough said "a state typically has <b>κ ≈ 8</b> candidates" pages before κ was defined
+          — and when the definition arrived, it defined κ as an <b>upper bound</b> ("at most κ arcs"), not
+          a typical count. Same letter, undefined at first use, then subtly different semantics.</p>
+      </div>
+      <div class="fix"><div class="t">the fix (applied)</div><p>First mention now says "<b>about eight</b>
+        such candidates (the count is bounded at the end of this section)"; κ enters exactly once, at the
+        bound that defines it.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION C ============ -->
+  <section class="sect pre">
+    <p class="sect-tag">Section C · ten precision items</p>
+    <h2>Imprecise, stale, or undefined</h2>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C1</span>Two different grids: anchored (Eq. 4) vs absolute (the snap operator)</h3>
+      <p class="who">owner: <b>[T]</b> — a design question for the meeting, <b>not</b> a unilateral fix</p>
+      <div class="now"><div class="t">the two definitions</div>
+        Eq. (4): &nbsp;grid points at <b>d<sub>i</sub> − nδ</b> <span class="cond">— anchored at each line crossing, stepping backward</span><br>
+        §4.2: &nbsp;⟨x⟩<sub>δ</sub> := δ·round(x/δ) <span class="cond">— absolute multiples of δ, anchored at zero</span>
+      </div>
+      <div class="why"><div class="t">why this needs a decision</div>
+        <p>The distance-line positions d<sub>i</sub> are cumulative route distances — <b>generally not whole
+          numbers of NM</b>. So the two grids genuinely differ. <b>Example:</b> d<sub>i</sub> = 137.4 NM,
+          δ = 1. Eq. (4)'s points on the time line: 137.4, 136.4, 135.4, … The snap operator's points:
+          137, 136, 135, … Every point differs by 0.4 NM. Which set is 𝒮? The equation says one thing,
+          the enumeration arithmetic (and the code, which works on integer NM) says the other. (Time is
+          safe: the t<sub>j</sub> are multiples of 0.1 h, so the two coincide — this is a
+          distance-axis-only question.)</p>
+      </div>
+      <div class="fix"><div class="t">the two candidate resolutions</div>
+        <p>(i) state that the d<sub>i</sub> are <b>pre-snapped to the δ-grid</b> in preprocessing (then
+          anchored = absolute and nothing else changes), or (ii) define the snap <b>relative to the
+          anchor</b>. Tal's call — it is his grid construction.</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C2</span>"every τ-multiple" — the words said absolute, the grid is anchored</h3>
+      <p class="who">owner: [A] — §4.2 prose · <span class="done">✔ RESOLVED in the flat rewrite</span></p>
+      <div class="why"><div class="t">why the change was needed</div>
+        <p>Same subtlety as C1, but in prose: "every τ-multiple in the range" describes absolute multiples,
+          while Eq. (4) anchors points at the crossings. The words now say "<b>every τ-spaced grid
+          point</b>" — agnostic about the anchor, correct under either C1 resolution.</p>
+      </div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C3</span>argmin of a membership predicate</h3>
+      <p class="who">owner: <b>[T]</b> — §4.1 · pending</p>
+      <div class="now"><div class="t">what it says today</div>
+        𝒟(d) = argmin<sub>i</sub> { i ∈ ℕ : d<sub>i</sub> &gt; d }
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>{ i : d<sub>i</sub> &gt; d } is a <i>set of indices</i>, not a function to minimise — "argmin of
+          a set" is nonstandard notation that makes formally-minded reviewers stumble on an otherwise
+          trivial definition. The intended object is simply the smallest element.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p><b>𝒟(d) = min{ i : d<sub>i</sub> &gt; d }</b> — same
+        for 𝒯(t), i(d), j(t) (the latter two with ≤ per A2).</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C4</span>"held constant across the rectangular sub-space" — but glide legs cross two</h3>
+      <p class="who">owner: <b>[T]</b> — §4.1 · pending (ties to standing prep item 3a)</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>The sentence promises every leg lives inside <b>one</b> rectangle. The glide rule — needed when
+          a distance wall is closer than v<sub>max</sub>τ — deliberately lets a leg <b>pass through a
+          skipped wall</b>, crossing two cells while φ is evaluated only at the source. §4.2 states this
+          honestly ("up to this boundary rule"); §4.1's sentence doesn't carry the caveat, so the two
+          sections make different promises about the same legs.</p>
+      </div>
+      <div class="fix"><div class="t">the fix</div><p>Add the same qualifier used in §4.2 (or resolve item
+        3a by extending Eq. (5) with the corner case — Tal's standing decision).</p></div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C5</span>"…in Figure X…"</h3>
+      <p class="who">owner: <b>[T]</b> — §4.1 · pending</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>A literal "Figure~X" in the compiled text — a stale placeholder that will survive into a
+          submitted PDF unless converted into the same <code>\todo{FIG…}</code> form as the other three
+          figure placeholders (which are greppable and impossible to miss).</p>
+      </div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C6</span>Equation numbers (8) and (9) swapped — information only</h3>
+      <p class="who">no .tex action needed</p>
+      <div class="why"><div class="t">why it is logged</div>
+        <p>The flat restructure moved eq:opt-fuel above eq:state-bound, so their printed numbers traded
+          places: <b>F* = C*(0,0) is now (8)</b>, the size bound <b>(9)</b>. All in-text references use
+          <code>\eqref</code> so nothing broke — but anyone (including us) quoting "Eq. (8)" from memory
+          or from older notes now means a different equation. Eq. (10), the §4.3 certificate, is
+          unaffected.</p>
+      </div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C7</span>L vs d<sub>M</sub>, T vs t<sub>Θ</sub> — two names each</h3>
+      <p class="who">owner: [A] — largely moot after the flat rewrite (prose/box use L, T consistently)</p>
+      <div class="why"><div class="t">why it is logged</div>
+        <p>Legal — the Input line states d<sub>M</sub> = L and t<sub>Θ</sub> = T — but every mixed use
+          makes the reader carry the equivalence in working memory. Convention adopted: <b>prose and
+          algorithm say L, T</b>; Tal's Eq. (6) keeps d<sub>M</sub>, t<sub>Θ</sub> (his notation, his
+          call).</p>
+      </div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C8</span>v<sub>min</sub> typeset two ways</h3>
+      <p class="who">owner: [A/T] — §3 · pending</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>One spot writes <code>v_{min}</code> (italic "min" — reads as v·m·i·n subscript), the rest
+          <code>v_{\min}</code> (upright operator). Cosmetic, but it is the paper's most-used pair of
+          symbols, and the inconsistency is visible on the same page.</p>
+      </div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C9</span>§3's opening block needs a typo pass (~20)</h3>
+      <p class="who">owner: <b>[T]</b> — his original §3 prose · pending, forward-only</p>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>controling · fule · utlizing · determinstic · stocastic · consuption · asspect · berifely ·
+          seleceted · "will satisfying" · "and and" · Beufor · refred · direciton · continuesly ·
+          discterized · vessle · "a increasing" · "during to voyage" · "defined by a set by sequence".
+          None changes the math; all of them, on page one of the formulation, change how carefully a
+          referee reads the rest.</p>
+      </div>
+    </div>
+
+    <div class="item" style="--c:var(--pre)">
+      <h3><span class="id">C10</span>φ is never formally tied to §3's physics</h3>
+      <p class="who">owner: [A] — one sentence after Tal's φ definition · pending</p>
+      <div class="now"><div class="t">the missing identity</div>
+        φ(d,t;v) &nbsp;=&nbsp; FCR( g<sup>−1</sup>(v; w(d,t)) )
+        <span class="cond">— "the burn rate at SOG v is the cubic FCR of the still-water speed that
+        achieves v in this cell's weather"</span>
+      </div>
+      <div class="why"><div class="t">why the change is needed</div>
+        <p>§3 builds the physics chain SOG → required SWS → FCR; §4 introduces φ(d,t;v) as "the FCR at
+          speed v in this rectangle" — and never says they are the <b>same function</b>. The link is
+          obvious to us and invisible to a first-time reader; without it, §4's optimisation could be
+          running on any burn model whatsoever. One identity closes the §3→§4 seam.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>source: docs/meeting_prep_2026_08_05.md §1B (commit ccf7224) · paper_workspace/paper_full_draft.tex §3–§4 ·
+    companion walkthrough: docs/state_space_evolution.html (Parts 6–7) · status as of Aug 4: 3 resolved, 1 design question, 18 pending the Aug 5 meeting</footer>
+</div>

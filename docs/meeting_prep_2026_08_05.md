@@ -80,6 +80,10 @@ Symbol-by-symbol consistency sweep of the active text (comments excluded), §3 t
 **Nothing has been changed in the .tex** — items below await the go-ahead; Tal-zone items need his
 eyes (proposed fix ready for each). Zones: **[T]** = Tal's text/equations, **[A]** = Ami's text.
 
+**Teaching version (why each change is needed, with watch-it-break examples):**
+[`docs/audit_explained.html`](audit_explained.html) ·
+https://claude.ai/code/artifact/31d3aef0-0e53-469b-b002-bf6f7b241672
+
 ### A. Math bugs (wrong as written)
 
 | # | Where | Problem | Proposed fix |
