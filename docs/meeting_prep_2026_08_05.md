@@ -31,10 +31,32 @@ mid-flight pass, same pattern as Jul 23:
 | e | §4.1 | typos: "We deonte", "soluton", roman "otherwise" | mechanical |
 | f | §4.2.2 | cross-ref stale again: "…exactly as the predecessor (d̃,t̃) does" — in the new equation the rectangle is fixed by **(d,t) itself** | mechanical |
 
-Eq numbering unchanged (eq:slide still (10) → §4.3 refs safe). Ami's offer: complete the pass
-forward-only (a, c–f mechanical; b = flip §4.2.3/Alg 2 to the backward sweep: reverse topological
-order, `C*[s] = min over out-arcs of c + C*[s′]`, extraction `F* = C*(0,0)`). **Decision: Tal
-finishes b, or Ami does.**
+Eq numbering unchanged (eq:slide still (10) → §4.3 refs safe).
+
+**STATUS UPDATE (Aug 4, done with Ami's sign-off): all six items closed, forward-only.** Per Tal's
+instruction ("consolidate the pseudocode into one: building the graph via the enumeration is exactly
+the calculation the backpropagation needs; end with one–two lines extracting the optimum"),
+Algorithm 1 is now a **single three-stage box**:
+
+- **Stage 1 — forward closure** (Tal's Input/Output/init/while/pop lines verbatim): discover
+  reachable states, price every arc `(t̃−t)·φ(d,t;v̄)`; candidates = 𝒜(d,t) of Eq. (5) directly
+  (v̄∈𝒱 now lives inside the equation → the explicit guard is gone), glide rule kept as an
+  annotated boundary rule.
+- **Stage 2 — backpropagation**: `C* ← ∞`, `C*(L,·) ← 0`, one pass in *reverse* lex (t,d) order
+  (valid: every arc increases both coordinates); Eq. (6)'s ∞ case realised by initialization —
+  dead-end states inherit ∞, no separate test. Records the minimising successor (d̃*,t̃*).
+- **Stage 3 — extraction (the "one or two lines")**: `F* ← C*(0,0)`; walk forward emitting
+  V*(d,t) of Eq. (7).
+
+Consequences: (a) boundary condition now `C*(d_M,·)=0`, answer read at `C*(0,0)` ✔; (b) §4.2.3
+retitled "The backward sweep and schedule extraction", prose flipped, **Algorithm 2 absorbed**
+(archived under comment), `eq:opt-fuel` = `F* = C*(0,0)`, soft-ETA remark recast as λ·lateness on
+Eq. (6)'s ∞ case ✔; (c) recovery sentence → successor/outgoing/forward-walk ✔; (d) dangling d̄/t̄
+gone — the merged box references Eq. (5) instead of re-deriving it, so Tal's `d̃←𝒟(d)` index-vs-
+coordinate wrinkle dissolved with the line ✔; (e) typos fixed (denote/solution/\text{otherwise}) ✔;
+(f) §4.2.2 "as the predecessor does" → "as it does" ✔. Every superseded passage under
+`\begin{comment}`; compiles clean (tectonic). **For Tal: eyeball the consolidated box + the flipped
+§4.2.3 — his Aug-3 lines are carried verbatim.**
 
 Also from `c4f513c`: new `pipeline/dp_cpp/src/MODE_C_PORT_SPEC.md` (394 lines) — **ask Tal what he
 wants driven from it** (C++ Mode C port work items?).

@@ -502,13 +502,18 @@ C^{*}(d,t)=\min_{v \in \mathcal{V}}  \begin{cases}  C^*(d-v(t-\underline{t}), \u
 \begin{equation}
 \label{eq:cost-to-arrive}
 C^{*}(d,t)=\min_{\substack{(\tilde d,\tilde t) \in\mathcal{A}( d, t)}}   \begin{cases}     \infty & \tilde t =  t_{\Theta} , d < d_M \\
-	C^{*}(\tilde d,\tilde t)+(\tilde t- t)\,\phi(d,t; (\tilde d- d)/(\tilde t-t))  & otherwise
+	C^{*}(\tilde d,\tilde t)+(\tilde t- t)\,\phi(d,t; (\tilde d- d)/(\tilde t-t))  & \text{otherwise}
 \end{cases}		
 \end{equation}
-With the boundary condition 
-$$C^*(0,0) = 0.$$
+% ==== OLD (boundary anchored at the origin — a to-arrive convention, predates the cost-to-go flip) — superseded; kept, not rendered ====
+%With the boundary condition
+%$$C^*(0,0) = 0.$$
+% ==== NEW (cost-to-go: zero at the destination; the answer is read at the origin) ====
+With the boundary condition
+$$C^*(d_M,t) = 0 \quad \text{for every reachable } (d_M,t) \text{ with } t\le T,$$
+so that $C^{*}(0,0)$ is the minimum total voyage fuel.
 
-We deonte the solution of (\ref{eq:cost-to-arrive}) for each  state $(d,t)$ by  $(\tilde d^{\star},\tilde t^{\star})$. The value of this soluton is 
+We denote the solution of (\ref{eq:cost-to-arrive}) for each  state $(d,t)$ by  $(\tilde d^{\star},\tilde t^{\star})$. The value of this solution is
 the minimum fuel to arrive on time at each state $(d,t)$ or infinity if it is not possible to meet the ETA. The SOG at the subsegment that starts at $(d,t)$ is 
 \begin{equation}
 	\label{eq:opt-speed} V^{*}(d,t)= \frac{\tilde d^{\star} - d}{\tilde t^{\star} -t}
@@ -526,7 +531,10 @@ the minimum fuel to arrive on time at each state $(d,t)$ or infinity if it is no
 \label{sec:solve}
 
 
-for each state we record the minimising predecessor and the realised leg speed $\bar v= (\tilde d- d)/(\tilde t-t)$ of the incoming arc, from which the optimal speed schedule is recovered by back-tracking to the origin.
+% ==== OLD (predecessor / incoming / back-tracking — wording predates the cost-to-go flip; its own formula was already outgoing) — superseded; kept, not rendered ====
+%for each state we record the minimising predecessor and the realised leg speed $\bar v= (\tilde d- d)/(\tilde t-t)$ of the incoming arc, from which the optimal speed schedule is recovered by back-tracking to the origin.
+% ==== NEW (cost-to-go: record the minimising successor; recover the schedule by walking forward from the origin) ====
+For each state we record the minimising successor $(\tilde d^{\star},\tilde t^{\star})$ and the realised leg speed $\bar v=(\tilde d^{\star}- d)/(\tilde t^{\star}-t)$ of the outgoing arc, from which the optimal speed schedule is recovered by walking forward from the origin.
 
 
 % ==== OLD (S had to be "made finite" — written before §4.1 defined the explicit grid) — superseded; kept, not rendered ====
@@ -545,7 +553,11 @@ can be evaluated efficiently. First, to bound the size of $\mathcal{S}$ and of t
 Second, to enumerate --- out of the full grid --- only the states actually \emph{reachable} from the
 origin and only the arcs whose realised speed is admissible, since these are typically a small
 fraction of the whole. Third, to sweep the recursion over the resulting graph. We bound first, then
-give the enumeration and the sweep as pseudocode.
+% ==== OLD ("the enumeration and the sweep as pseudocode" — two boxes) — superseded by the consolidated Algorithm 1; kept, not rendered ====
+%give the enumeration and the sweep as pseudocode.
+% ==== NEW (one pseudocode: closure + backpropagation + extraction) ====
+give the enumeration, the backward sweep, and the schedule extraction as a single pseudocode
+(Algorithm~1).
 
 \subsubsection{Discretising the free coordinate}
 \label{sec:snap}
@@ -655,7 +667,9 @@ $\Delta t\le0$, which the snap can produce when a line is very close) or if the 
 cannot be sustained in the arc's cell under the prevailing sea conditions, so that its fuel rate
 $\phi(d,t;\bar v)$ is undefined. Otherwise its cost is that fuel rate --- the FCR of the cell and time
 block the arc traverses, evaluated at $\bar v$, with the source $(d,t)$ fixing that rectangle exactly
-as the predecessor $(\tilde d,\tilde t)$ does in
+% ==== OLD ("as the predecessor (d̃,t̃) does" — stale after the cost-to-go flip: the rectangle is now fixed by (d,t) itself in Eq. 6) ====
+%as the predecessor $(\tilde d,\tilde t)$ does in
+as it does in
 Eq.~\eqref{eq:cost-to-arrive} --- times the duration, $\phi(d,t;\bar v)\,\Delta t$. Starting from
 $(0,0)$ and adding each previously-unseen successor as a new state, the closure discovers exactly the
 subset of the grid $\mathcal{S}$ of Eq.~\eqref{eq:state-space} that is reachable from the origin ---
@@ -691,7 +705,10 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \end{minipage}}
 \end{center}
 \end{comment}
-% ==== NEW Algorithm 1 (node-first: enumerate reachable far-wall grid nodes) ====
+% ==== OLD Algorithm 1 (node-first, build-only: explicit k-loops; the sweep lived in a separate Algorithm 2) ====
+% ==== superseded 2026-08-04 by the consolidated Algorithm 1 below (one pseudocode: the closure prices the arcs,
+% ==== the backpropagation evaluates Eq. 6, two closing lines extract the optimum); kept, not rendered ====
+\begin{comment}
 \begin{center}
 \fbox{\begin{minipage}{0.95\textwidth}
 \textbf{Algorithm~1: Enumerate reachable states and build the arc set (node-first)}\\[-6pt]
@@ -721,9 +738,49 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 \end{tabbing}
 \end{minipage}}
 \end{center}
+\end{comment}
+% ==== NEW Algorithm 1 (consolidated, cost-to-go): Stage 1 forward closure = states + priced arcs;
+% ==== Stage 2 backpropagation = Eq. 6 once per state; Stage 3 = two-line extraction ====
+\begin{center}
+\fbox{\begin{minipage}{0.95\textwidth}
+\textbf{Algorithm~1: Build the reachable graph, backpropagate, and extract the optimal schedule}\\[-6pt]
+\rule{\linewidth}{0.4pt}
+\footnotesize
+\begin{tabbing}
+xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
+\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
+\textbf{Output:}  Speed schedule and total fuel consumption \\
+{\small$\triangleright$ \emph{Stage 1 --- forward closure: discover the reachable states and price every arc}}\\
+$\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad queue $Q\leftarrow[(0,0)]$\\
+\textbf{while} $Q$ not empty \textbf{do}\\
+\> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t= T$ \textbf{then continue}\\
+\> $C\leftarrow\mathcal{A}(d,t)$ of Eq.~\eqref{eq:neighbors} \quad{\small$\triangleright$ arrival times on $d_{\mathcal{D}(d)}$, arrival distances on $t_{\mathcal{T}(t)}$; $\bar v\in\mathcal{V}$ built in}\\
+\>\> {\small$\triangleright$ if $d_{\mathcal{D}(d)}$ is unresolvable on the $\tau$-grid ($\langle t+(d_{\mathcal{D}(d)}-d)/v_{\max}\rangle_\tau=t$), skip it: the time-line}\\
+\>\> {\small\phantom{$\triangleright$ }candidates extend past it as far as $v_{\max}$ allows (glide rule, Section~\ref{sec:enumerate})}\\
+\> \textbf{for} $(\tilde d,\tilde t)\in C$ \textbf{do}\\
+\>\> $\bar v\leftarrow(\tilde d-d)/(\tilde t-t)$;\quad \textbf{if} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
+\>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(\tilde d,\tilde t)\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,(\tilde t-t)\,\bigr\}$\\
+\>\> \textbf{if} $(\tilde d,\tilde t)\notin\mathcal{S}$ \textbf{then} $\mathcal{S}\leftarrow\mathcal{S}\cup\{(\tilde d,\tilde t)\}$;\ $\mathrm{push}(Q,(\tilde d,\tilde t))$\\
+\> \textbf{end for}\\
+\textbf{end while}\\
+{\small$\triangleright$ \emph{Stage 2 --- backpropagation: Eq.~\eqref{eq:cost-to-arrive} evaluated once per state, every successor already valued}}\\
+$C^{*}(s)\leftarrow+\infty$ for all $s\in\mathcal{S}$;\quad $C^{*}(L,t)\leftarrow0$ for every $(L,t)\in\mathcal{S}$\\
+\textbf{for} each $(d,t)\in\mathcal{S}$ in \emph{reverse} lexicographic $(t,d)$ order \textbf{do}\\
+\> $C^{*}(d,t)\leftarrow\displaystyle\min_{(d,t)\to(\tilde d,\tilde t)\,\in\,\mathcal{A}}\bigl[\phi(d,t;\bar v)\,(\tilde t-t)+C^{*}(\tilde d,\tilde t)\bigr]$;\quad record the minimiser $(\tilde d^{\star},\tilde t^{\star})$\\
+\textbf{end for}\\
+{\small$\triangleright$ \emph{Stage 3 --- extraction}}\\
+$F^{\star}\leftarrow C^{*}(0,0)$;\quad walk $(0,0)\to(\tilde d^{\star},\tilde t^{\star})\to\cdots$ until $d=L$, emitting $V^{*}(d,t)$ of Eq.~\eqref{eq:opt-speed}\\
+\textbf{return} $F^{\star}$ and the speed schedule
+\end{tabbing}
+\end{minipage}}
+\end{center}
 
-\subsubsection{The forward sweep}
+% ==== OLD title "The forward sweep" — superseded: the recursion is now cost-to-go, swept backward ====
+\subsubsection{The backward sweep and schedule extraction}
 \label{sec:sweep}
+% ==== OLD (to-arrive: forward lex sweep, relax out-arcs, best on-time sink, back-tracking; separate Algorithm 2) ====
+% ==== superseded 2026-08-04 by the cost-to-go reading (Stages 2-3 of Algorithm 1); kept, not rendered ====
+\begin{comment}
 Every arc strictly increases both coordinates ($\Delta d>0$ and $\Delta t>0$), so the graph
 $(\mathcal{S},\mathcal{A})$ is acyclic and the lexicographic order on $(t,d)$ is a valid topological
 order. The forward Bellman recursion~\eqref{eq:cost-to-arrive} is therefore evaluated exactly once per
@@ -732,12 +789,11 @@ label-correcting iteration. Relaxing the arcs out of each state $s$ in turn --- 
 reached by an arc $s\!\to\!s'$ --- leaves $C^{*}(\cdot)$ holding the minimum fuel-to-arrive at every
 reachable state; the optimal voyage fuel $F^{\star}$ is the least $C^{*}$ over the on-time sinks,
 \begin{equation}
-\label{eq:opt-fuel}
 F^{\star} \;=\; \min\bigl\{\,C^{*}(L,t) \;:\; t\le T\,\bigr\},
 \end{equation}
 a hard arrival constraint. The optimal speed schedule is recovered by following, from the chosen sink
 back to $(0,0)$, the predecessor and speed $V^{*}(\cdot)$ recorded at each relaxation
-(Eq.~\eqref{eq:opt-speed}). Replacing~\eqref{eq:opt-fuel} with
+(Eq.~\eqref{eq:opt-speed}). Replacing the extraction with
 $\min_{t}\{C^{*}(L,t)+\lambda\max(0,t-T)\}$ turns the hard deadline into a soft one that prices each
 hour of late arrival at $\lambda$ units of fuel and recovers the hard constraint as
 $\lambda\to\infty$; all results in this paper use the hard constraint.
@@ -765,6 +821,30 @@ walk $\mathrm{pred}(\cdot)$ from $s^{\star}$ to $(0,0)$, collecting the recorded
 \end{tabbing}
 \end{minipage}}
 \end{center}
+\end{comment}
+% ==== NEW (cost-to-go: reverse-topological sweep = Stage 2 of Algorithm 1; extraction at the origin = Stage 3) ====
+Every arc strictly increases both coordinates ($\Delta d>0$ and $\Delta t>0$), so the graph
+$(\mathcal{S},\mathcal{A})$ is acyclic and the \emph{reverse} lexicographic order on $(t,d)$ is a
+valid order for the cost-to-go recursion: when a state is processed, every successor it can reach has
+already been valued. Equation~\eqref{eq:cost-to-arrive} is therefore evaluated exactly once per state
+in a single backward sweep --- Stage~2 of Algorithm~1 --- with no priority queue or label-correcting
+iteration. The sweep is seeded at the destination, $C^{*}(L,t)=0$ for every reachable $(L,t)$ with
+$t\le T$; a state whose every continuation runs out of time before reaching $L$ has no valued
+successor and inherits $C^{*}=\infty$, which realises the $\infty$ case of
+Eq.~\eqref{eq:cost-to-arrive} without a separate test. After the sweep, $C^{*}(d,t)$ holds the
+minimum fuel-to-go from every reachable state, and the optimal voyage fuel is read directly at the
+origin,
+\begin{equation}
+\label{eq:opt-fuel}
+F^{\star} \;=\; C^{*}(0,0),
+\end{equation}
+a hard arrival constraint ($F^{\star}=\infty$ exactly when the ETA cannot be met at all). The optimal
+speed schedule is recovered by walking \emph{forward} from $(0,0)$, following the recorded minimising
+successor $(\tilde d^{\star},\tilde t^{\star})$ at each state and emitting the outgoing speed
+$V^{*}(\cdot)$ of Eq.~\eqref{eq:opt-speed} --- Stage~3 of Algorithm~1. Replacing the $\infty$ case of
+Eq.~\eqref{eq:cost-to-arrive} with a lateness charge $\lambda\,(\tilde t-T)$ turns the hard deadline
+into a soft one that prices each hour of late arrival at $\lambda$ units of fuel and recovers the
+hard constraint as $\lambda\to\infty$; all results in this paper use the hard constraint.
 
 \subsubsection{Tractability}
 \label{sec:tractability}
@@ -781,7 +861,9 @@ arcs, and the single forward sweep of Algorithm~2 solves it in roughly eight sec
 Route~1 ($L=3{,}393$ NM, $T=280$ h, $M=162$ subsegments, speed band of width $6$ kn)
 the closure of Algorithm~1 yields about $1.3\times10^{5}$ states and $1.2\times10^{6}$
 arcs --- the node-first enumeration emits only the $\kappa\approx8$ distinct reachable far-wall nodes per
-state rather than one arc per speed --- and the single forward sweep of Algorithm~2 solves it in
+% ==== OLD ("the single forward sweep of Algorithm~2") — Algorithm 2 absorbed into Algorithm 1 (Stage 2) ====
+%state rather than one arc per speed --- and the single forward sweep of Algorithm~2 solves it in
+state rather than one arc per speed --- and the single backward sweep (Stage~2 of Algorithm~1) solves it in
 under two seconds; the
 one-off arc construction, dominated by the per-arc still-water-speed inversion and FCR evaluation, is a
 separate preprocessing cost.
