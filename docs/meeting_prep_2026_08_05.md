@@ -58,6 +58,19 @@ coordinate wrinkle dissolved with the line ✔; (e) typos fixed (denote/solution
 `\begin{comment}`; compiles clean (tectonic). **For Tal: eyeball the consolidated box + the flipped
 §4.2.3 — his Aug-3 lines are carried verbatim.**
 
+**FOLLOW-UP (Aug 4, same day): §4.2 restructured as a stage-mirrored walkthrough.** §4.1 untouched
+(all equations stay there). New §4.2 reading order: intro ("what remains is computational" + the
+guiding invariant *the pseudocode introduces no new mathematics — only the order of evaluation*) →
+the **line-numbered box up front** (lines 1–16, stage banners cross-ref the subsections) → §4.2.1
+"Stage 1: building the reachable graph" (walks one popped state through its two walls; snap
+arithmetic + glide rule + arc pricing folded in; new FIG placeholder: one state, two walls, κ
+candidates — realises one of §4.1's ADD FIGURE items) → §4.2.2 "Stage 2: backpropagating the
+fuel-to-go" → §4.2.3 "Stage 3: reading off the plan" (eq:opt-fuel lives here) → §4.2.4 Tractability
+(Eq. 8 moved here, where it's used). Each stage opens with the reader's question: *which decisions
+exist / what does each cost to the destination / which do we take*. Former "Discretising" +
+"Enumerating" subsections archived under comment; labels preserved (sec:snap, sec:enumerate on
+Stage 1; new sec:extract).
+
 Also from `c4f513c`: new `pipeline/dp_cpp/src/MODE_C_PORT_SPEC.md` (394 lines) — **ask Tal what he
 wants driven from it** (C++ Mode C port work items?).
 
