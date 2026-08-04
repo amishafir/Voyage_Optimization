@@ -139,7 +139,11 @@ out fully priced, expensive physics paid once per arc); solving then costs a sin
 Reading order: claim intro → line-numbered box (Stage 1/2/3 banners kept as visual chunking, section
 cross-refs dropped) → single-pass walkthrough (one popped state, two walls, micro-example + FIG
 placeholder) → boundary details → pricing → backward sweep → extraction → cost (Eq. 8/9 + Route-1
-numbers). Old headings/openings archived; labels sec:snap/enumerate/sweep/extract/tractability
+numbers). **FIG realised (Aug 4):** `figures/state_neighbours.pdf` (`plot_state_neighbours.py`) now
+in §4.2 as `fig:state-neighbours` — one state, two walls, speed cone, the two Eq.-(5) families
+(τ-dots on the distance wall, δ-squares on the time wall), clip + cap illustrated, κ=8. One §4
+figure placeholder down; remaining: the two §4.1 ADD FIGUREs, §5 forecast-error, §7.3
+savings-vs-departure. Old headings/openings archived; labels sec:snap/enumerate/sweep/extract/tractability
 stacked under sec:solve so no \ref dangles.
 
 ## 2. NEW SINCE LAST PREP — §4.3: the discretisation certificate (Tal to review & bless)

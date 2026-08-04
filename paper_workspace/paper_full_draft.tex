@@ -669,9 +669,24 @@ construction, and because the node already sits on the grid, no target-versus-re
 % ==== OLD ("typically has κ≈8 such candidates" — audit item B7: κ was used before its definition) ====
 %arises. For our grid a state typically has $\kappa\approx8$ such candidates.
 arises. For our grid a state typically has about eight such candidates (the count is bounded at the
-end of this section). \todo{FIG: a single state $(d,t)$, its two walls
-$d_{\mathcal{D}(d)}$ and $t_{\mathcal{T}(t)}$, the admissible speed cone $[v_{\min},v_{\max}]$, and
-the $\kappa$ candidate grid nodes it selects on the walls --- the two families of Eq.~(5)}
+end of this section); Figure~\ref{fig:state-neighbours} shows one state and its candidate set.
+% ==== FIG placeholder realised 2026-08-04 (figures/plot_state_neighbours.py) ====
+%\todo{FIG: a single state $(d,t)$, its two walls $d_{\mathcal{D}(d)}$ and $t_{\mathcal{T}(t)}$, ...}
+\begin{figure}[t]
+\centering
+\includegraphics[width=.82\textwidth]{figures/state_neighbours.pdf}
+\caption{One state of the dynamic program and its candidate successors (values illustrative). From
+the state $(d,t)$, every admissible speed leads to one of two walls: the next distance line
+$d_{\mathcal{D}(d)}$, where the sea conditions change, or the next time line $t_{\mathcal{T}(t)}$,
+where the forecast is refreshed. The speed cone $[v_{\min},v_{\max}]$ intersects the walls in two
+windows, and the grid picks out the nodes inside them --- arrival times spaced $\tau$ on the
+distance wall, arrival distances spaced $\delta$ on the time wall: the two families of
+Eq.~\eqref{eq:neighbors}. The fast edge of the cone crosses the distance wall before the block ends
+(capping the second family), the slow edge runs out of the block first (clipping the first), and
+each surviving node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here
+$\kappa=8$ candidates in total.}
+\label{fig:state-neighbours}
+\end{figure}
 
 Three boundary details complete the enumeration. First, the range endpoints above are placed on the
 grid by rounding: $\langle x\rangle_{\delta}:=\delta\,\mathrm{round}(x/\delta)$ snaps a distance to
