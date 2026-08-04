@@ -54,7 +54,13 @@
   .commit.tal{--who:var(--tal)} .commit.new{--who:var(--new)} .commit.bell{--who:var(--bell)} .commit.knit{--who:var(--knit)} .commit.cert{--who:var(--cert)}
 
   .part{margin-top:2.8rem;border-top:2px solid var(--pc);padding-top:1rem}
-  .part.p1{--pc:var(--tal)} .part.p2{--pc:var(--new)} .part.p3{--pc:var(--bell)} .part.p4{--pc:var(--knit)} .part.p5{--pc:var(--cert)}
+  .part.p1{--pc:var(--tal)} .part.p2{--pc:var(--new)} .part.p3{--pc:var(--bell)} .part.p4{--pc:var(--knit)} .part.p5{--pc:var(--cert)} .part.p6{--pc:var(--bell)} .part.p7{--pc:var(--knit)}
+  .flipnote{border-radius:9px;padding:.6rem .9rem;margin:.8rem 0;background:var(--bell-soft);border:1px dashed color-mix(in srgb,var(--bell) 45%,var(--hair));font-size:.92rem;color:var(--muted)}
+  .flipnote b{color:var(--bell)}
+  .algo{background:var(--formula);border:1px solid var(--hair);border-radius:9px;padding:.85rem 1rem;margin:.7rem 0;overflow-x:auto;font-family:var(--mono);font-size:.82rem;line-height:1.75;color:var(--formula-ink);white-space:pre}
+  .algo .ln{color:var(--faint);display:inline-block;width:1.6em;text-align:right;margin-right:.7em}
+  .algo .st{color:var(--knit);font-weight:700}
+  .algo .kw{font-weight:700}
   .part-tag{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--pc);font-weight:600}
   .part h2{margin:.15rem 0 .3rem;font-size:1.55rem}
   .part .by{font-size:.85rem;color:var(--faint);margin:0 0 1rem;font-family:var(--mono)}
@@ -107,12 +113,14 @@
 <div class="wrap">
   <p class="eyebrow">Paper · §4 Methods · state space — a walk-through</p>
   <h1>How the DP took shape — every symbol explained</h1>
-  <p class="lede">The story of §4's state space, in four acts: Tal replaced an abstract state set with an
+  <p class="lede">The story of §4's state space, now in seven acts: Tal replaced an abstract state set with an
     explicit <b>grid</b>; the notation was tidied and the <b>neighbour set completed</b>; the
-    <b>Bellman equations</b> were rewritten "node-first"; and finally §4.2 — the solving machinery — was
-    <b>reconciled</b> with the new grid. A fifth part asks the question the grid leaves open — <b>is there a
-    better speed between two nodes?</b> — and answers it with certificates (Hewitt’s DDD). Below, every symbol is spelled out, and every formula is also said
-    in <b>plain words</b>.</p>
+    <b>Bellman equations</b> were rewritten "node-first"; §4.2 — the solving machinery — was
+    <b>reconciled</b> with the new grid; a certificate answered <b>is there a better speed between two
+    nodes?</b> (Hewitt's DDD). Then, in August: Tal <b>flipped the recursion to cost-to-go</b> (Part 6),
+    and the pseudocode was <b>consolidated into one algorithm</b> inside a single, flat §4.2 — plus a
+    full <b>notation audit</b> (Part 7). Every symbol spelled out, every formula also said in
+    <b>plain words</b>.</p>
 
   <!-- THE PICTURE -->
   <div class="picture">
@@ -147,14 +155,14 @@
       <div class="grow"><span class="s">𝒱</span><span class="m">script <b>V</b> — the allowed <b>speed band</b> [v<sub>min</sub>, v<sub>max</sub>] the ship may travel at (e.g. mean speed ± 3 kn).</span></div>
       <div class="grow"><span class="s">v̄</span><span class="m"><b>v-bar</b> — the <b>realised speed</b> of a leg: distance covered ÷ time taken, <b>Δd/Δt</b>. Not chosen — read off the leg.</span></div>
       <div class="grow"><span class="s">φ(d,t;v)</span><span class="m"><b>phi</b> — the <b>fuel-burn rate</b> in the cell at (d,t) if travelling at speed v (tonnes of fuel per hour).</span></div>
-      <div class="grow"><span class="s">C*(d,t)</span><span class="m">the <b>cheapest total fuel to arrive</b> at state (d,t) from the start — the DP's answer at each point.</span></div>
-      <div class="grow"><span class="s">V*(d,t)</span><span class="m">the <b>optimal speed</b> recorded at (d,t) — used to rebuild the best plan afterwards.</span></div>
-      <div class="grow"><span class="s">(d̃,t̃)</span><span class="m">"d-tilde, t-tilde" — a <b>predecessor</b>: a candidate earlier state the ship might have come <i>from</i>.</span></div>
+      <div class="grow"><span class="s">C*(d,t)</span><span class="m">the <b>cheapest fuel to finish the voyage from</b> state (d,t) — the "fuel-to-go." <i>(Since Aug 3 — before Tal's flip it meant fuel-to-arrive.)</i> The whole answer sits at the origin: <b>F* = C*(0,0)</b>; the boundary is <b>C*(L,·) = 0</b> at the destination.</span></div>
+      <div class="grow"><span class="s">V*(d,t)</span><span class="m">the <b>optimal outgoing speed</b> of the leg that <i>starts</i> at (d,t) — a full <b>policy</b>: stand at any state and it tells you what to do next.</span></div>
+      <div class="grow"><span class="s">(d̃,t̃)</span><span class="m">"d-tilde, t-tilde" — a <b>successor</b>: a candidate next state, drawn from 𝒜(d,t). <i>(Before the flip these were predecessors.)</i> The winner of the min is <b>(d̃★,t̃★)</b>.</span></div>
       <div class="grow"><span class="s">(0,0)</span><span class="m">the <b>origin</b> — start of the voyage (Port A, distance 0, time 0).</span></div>
       <div class="grow"><span class="s">∪ , ∈ , ⌊·⌋</span><span class="m"><b>union</b> (glue two sets together); <b>is a member of</b>; <b>floor</b> (round down to a whole number).</span></div>
       <div class="grow"><span class="s">⟨x⟩<sub>δ</sub></span><span class="m">the <b>snap</b> (rounding) operator — x rounded to the nearest multiple of δ; ⟨·⟩<sub>τ</sub> the same with step τ. Like rounding a price to the nearest cent.</span></div>
-      <div class="grow"><span class="s">d̄(d), t̄(t)</span><span class="m">shorthand for <b>the next line ahead</b>: d̄(d) ≡ d<sub>𝒟(d)</sub>, t̄(t) ≡ t<sub>𝒯(t)</sub>. Same thing as Tal's index maps, written compactly.</span></div>
-      <div class="grow"><span class="s">K</span><span class="m">how many landing points one state can actually reach — about the <b>speed-band width ÷ grid step</b> (≈ 8 in practice).</span></div>
+      <div class="grow"><span class="s">d̄(d), t̄(t)</span><span class="m">retired shorthand for the next line ahead (≡ d<sub>𝒟(d)</sub>, t<sub>𝒯(t)</sub>). The flat §4.2 rewrite uses <b>d<sub>𝒟(d)</sub>, t<sub>𝒯(t)</sub> directly</b> — one spelling per concept.</span></div>
+      <div class="grow"><span class="s">κ</span><span class="m"><b>kappa</b> — how many landing points one state can actually reach: about the <b>speed-band width ÷ grid step</b> (≈ 8 in practice). Bounds the arc count: |𝒜| = O(κ·|𝒮|). Not to be confused with <b>K</b>, reserved for "K discrete speed levels" in the naive/Luo formulations.</span></div>
       <div class="grow"><span class="s">F*, F<sub>DP</sub></span><span class="m">the <b>true continuous optimum</b> (decision points anywhere on the lines) vs <b>our grid optimum</b>. F* ≤ F<sub>DP</sub>; the difference is "the price of the grid."</span></div>
       <div class="grow"><span class="s">UB, LB</span><span class="m"><b>upper / lower bounds</b> on F*: any real plan is a UB; a deliberately-too-optimistic relaxed model gives an LB. <b>UB − LB certifies the gap</b> without ever knowing F*.</span></div>
       <div class="grow"><span class="s">g(q<sub>k</sub>), ℓ(q<sub>k</sub>), f(a,b)</span><span class="m">§4.3's certificate notation (Eq. 10): the <b>gain</b> from sliding decision point q<sub>k</sub>, its <b>slide domain</b> (segment of its line between plan-neighbours), and the <b>leg fuel</b> from a to b (speed derived, band-checked).</span></div>
@@ -170,6 +178,10 @@
     <div class="commit bell"><div class="h"><b>1c6bbb4</b><span>Jul 25</span></div><div class="m">Bellman equations → node-first</div></div>
     <div class="commit knit"><div class="h"><b>72033d9</b><span>Jul 25</span></div><div class="m">§4.2 reconciled with the grid</div></div>
     <div class="commit cert"><div class="h"><b>T25–T26</b><span>Jul 28</span></div><div class="m">DDD + the discretisation certificates</div></div>
+    <div class="commit tal"><div class="h"><b>c4f513c</b><span>Aug 3</span></div><div class="m">Tal — Bellman flipped to cost-to-go</div></div>
+    <div class="commit bell"><div class="h"><b>8b4cbaa</b><span>Aug 4</span></div><div class="m">Algorithm 1+2 consolidated (3 stages)</div></div>
+    <div class="commit knit"><div class="h"><b>d2419e5</b><span>Aug 4</span></div><div class="m">§4.2 flattened — one section, one claim</div></div>
+    <div class="commit new"><div class="h"><b>ccf7224</b><span>Aug 4</span></div><div class="m">notation &amp; math audit — 22 items</div></div>
   </div>
 
   <!-- ============ PART 1 ============ -->
@@ -301,9 +313,14 @@
 
   <!-- ============ PART 3 ============ -->
   <section class="part p3">
-    <p class="part-tag">Part 3 · the new change</p>
+    <p class="part-tag">Part 3 · Jul 25 — direction later flipped (see Part 6)</p>
     <h2>The Bellman equations, node-first</h2>
-    <p class="by">amishafir · 1c6bbb4 · Jul 25 — the change you just approved</p>
+    <p class="by">amishafir · 1c6bbb4 · Jul 25</p>
+    <div class="flipnote">⟳ <b>Historical note (Aug 3):</b> the equations below minimise over
+      <i>predecessors</i> — "cheapest fuel to <i>reach</i> this point." Tal has since flipped the
+      recursion to <b>cost-to-go</b> — minimise over <i>successors</i>, "cheapest fuel to <i>finish</i>
+      from this point." The <b>node-first principle survives unchanged</b> (pick the landing node, derive
+      the speed); only the direction reversed. Current form: <b>Part 6</b>.</div>
 
     <div class="callout p3">
       <h3>Why they had to change</h3>
@@ -381,9 +398,14 @@
 
 <!-- ============ PART 4 ============ -->
   <section class="part p4">
-    <p class="part-tag">Part 4 · the newest change</p>
+    <p class="part-tag">Part 4 · Jul 25 — structure later flattened (see Part 7)</p>
     <h2>§4.2 "Solving the Bellman equation," reconciled with the grid</h2>
     <p class="by">amishafir · 72033d9 · Jul 25</p>
+    <div class="flipnote" style="background:var(--knit-soft);border-color:color-mix(in srgb,var(--knit) 45%,var(--hair))">⟳
+      <b style="color:var(--knit)">Historical note (Aug 4):</b> the reconciliation below kept §4.2's four
+      subsections and two algorithms. Both are now gone — Algorithm 2 was <b>absorbed into a single
+      three-stage Algorithm 1</b>, and §4.2 was <b>flattened to one section</b> built around one claim.
+      Current form: <b>Part 7</b>.</div>
 
     <div class="callout p4">
       <h3>Why §4.2 needed surgery</h3>
@@ -623,16 +645,172 @@
     </div>
   </section>
 
+  <!-- ============ PART 6 ============ -->
+  <section class="part p6">
+    <p class="part-tag">Part 6 · Tal's flip (Aug 3)</p>
+    <h2>The Bellman equation turns around: cost-to-go</h2>
+    <p class="by">talraviv · c4f513c · Aug 3 — plus Ami's completion of the pass, 8b4cbaa · Aug 4</p>
+
+    <div class="callout p3">
+      <h3>The shift in one line</h3>
+      <p>Same node-first idea, opposite direction. Part 3's recursion asked "what is the cheapest way to
+        <b>reach</b> this point?" and looked <i>backwards</i> at predecessors. Tal's version asks "what is
+        the cheapest way to <b>finish the voyage from</b> this point?" and looks <i>forwards</i> at
+        successors. Three things get nicer at once: the min ranges over <b>𝒜(d,t) itself</b> (Tal's own
+        Eq. 5 — no awkward "states whose neighbour I am"), <b>V*(d,t) becomes the outgoing speed</b> — a
+        genuine control policy — and the final answer sits at the start: <b>F* = C*(0,0)</b>.</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">1</span>The recursion, as it now stands in the paper — Eq. (6)</h3>
+      <div class="lbl">cost-to-go: min over successors, two cases</div>
+      <div class="fx">
+        <span class="cal">C</span>*(d,t) = min<sub>(d̃,t̃) ∈ 𝒜(d,t)</sub>
+        <br>&nbsp;&nbsp;&nbsp;&nbsp; { &nbsp;<b>∞</b> <span class="cond">if t̃ = t<sub>Θ</sub> , d &lt; d<sub>M</sub></span>
+        <br>&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; <span class="cal">C</span>*(d̃,t̃) + (t̃ − t) · φ(d,t; (d̃−d)/(t̃−t)) <span class="cond">otherwise</span> }
+        <br><span class="cond">boundary: <span class="cal">C</span>*(d<sub>M</sub>, t) = 0 for every reachable (d<sub>M</sub>,t), t ≤ T &nbsp;⇒&nbsp; F* = C*(0,0)</span>
+      </div>
+      <div class="brk"><div class="bt">reading it symbol by symbol</div>
+        <div class="brow" style="--pc:var(--bell)"><span class="s">min over 𝒜(d,t)</span><span class="m">try every <b>successor</b> — every grid node reachable from here in one leg (Tal's Eq. 5, which now carries the <b>v̄ ∈ 𝒱 condition inside it</b>, and measures its ranges from the current point).</span></div>
+        <div class="brow" style="--pc:var(--bell)"><span class="s">∞ case</span><span class="m">"if that leg lands on the <b>final time line</b> without the voyage being done — dead end, price it infinite." The deadline is enforced <i>inside</i> the recursion. <b>Audit flag A1:</b> as written the condition says d &lt; d<sub>M</sub> (the <i>source</i>), which is true for every non-sink state — it would also kill a perfectly legal arrival <i>at</i> (L,T). The intended condition is <b>d̃ &lt; d<sub>M</sub></b> (the successor). One tilde; flagged for Tal.</span></div>
+        <div class="brow" style="--pc:var(--bell)"><span class="s">(t̃−t)·φ(d,t;·)</span><span class="m">the <b>fuel of the outgoing leg</b>: duration × burn rate. The rate is evaluated at the <b>source</b> (d,t) — the source fixes which cell and which weather block the leg lives in. Matches the code exactly.</span></div>
+        <div class="brow" style="--pc:var(--bell)"><span class="s">(d̃−d)/(t̃−t)</span><span class="m">the leg speed — still <b>derived, never chosen</b>. Node-first survived the flip untouched.</span></div>
+        <div class="brow" style="--pc:var(--bell)"><span class="s">C*(d<sub>M</sub>,·) = 0</span><span class="m">the <b>seed</b>: standing at the destination costs nothing more. (Replaced the old C*(0,0)=0, which anchored the <i>to-arrive</i> version.)</span></div>
+      </div>
+      <div class="words" style="--pc:var(--bell)"><div class="wt">in plain words</div>
+        <p>"The value of a point is: the cheapest way to finish the voyage from any point you can jump to
+          next, plus the fuel of that jump. Plan the voyage <b>from the finish backwards</b> — and then the
+          number written at the start point <i>is</i> the answer."</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">2</span>The optimal speed is now a policy — Eq. (7)</h3>
+      <div class="fx">
+        <span class="cal">V</span>*(d,t) = (d̃<sup>★</sup> − d) / (t̃<sup>★</sup> − t)
+        &nbsp;&nbsp;<span class="cond">where (d̃<sup>★</sup>, t̃<sup>★</sup>) is the successor that won the min</span>
+      </div>
+      <div class="words" style="--pc:var(--bell)"><div class="wt">in plain words</div>
+        <p>"Stand at <i>any</i> grid point and V* tells you what to do <b>next</b> — the slope of the best
+          outgoing leg. Because every state carries one, the DP hands back a <b>full policy</b>, not just one
+          path: recover the plan by <b>walking forward</b> from (0,0), successor to successor." (The old
+          version recorded the <i>incoming</i> leg and back-tracked from the destination.)</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">3</span>To-arrive vs cost-to-go, side by side</h3>
+      <table>
+        <thead><tr><th></th><th>Part 3 (Jul 25) — to-arrive</th><th class="bell-c">Part 6 (Aug 3) — cost-to-go</th></tr></thead>
+        <tbody>
+          <tr><td class="k">C*(d,t) means</td><td>cheapest fuel to <b>reach</b> (d,t)</td><td>cheapest fuel to <b>finish from</b> (d,t)</td></tr>
+          <tr><td class="k">min ranges over</td><td>predecessors: (d,t) ∈ 𝒜(d̃,t̃)</td><td><b>successors: (d̃,t̃) ∈ 𝒜(d,t)</b> — Eq. 5 verbatim</td></tr>
+          <tr><td class="k">φ evaluated at</td><td>the predecessor (d̃,t̃)</td><td><b>the source (d,t)</b> — the point itself fixes the rectangle</td></tr>
+          <tr><td class="k">boundary</td><td>C*(0,0) = 0</td><td><b>C*(d<sub>M</sub>,·) = 0</b></td></tr>
+          <tr><td class="k">answer read at</td><td>best on-time sink: min C*(L,t)</td><td><b>the origin: F* = C*(0,0)</b></td></tr>
+          <tr><td class="k">V*(d,t) is</td><td>the incoming leg's speed</td><td><b>the outgoing leg's speed — a policy</b></td></tr>
+          <tr><td class="k">plan recovery</td><td>back-track from the sink</td><td><b>walk forward from (0,0)</b></td></tr>
+          <tr><td class="k">deadline enforced</td><td>at extraction (choose t ≤ T sink)</td><td><b>inside the recursion</b> (the ∞ case)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ PART 7 ============ -->
+  <section class="part p7">
+    <p class="part-tag">Part 7 · one algorithm, one section (Aug 4)</p>
+    <h2>Build + discretise + price in one pass; solve with one sweep</h2>
+    <p class="by">amishafir, per Tal's direction · 8b4cbaa, b2eb485, d2419e5, ccf7224 · Aug 4</p>
+
+    <div class="callout p4">
+      <h3>Tal's instruction, near-verbatim</h3>
+      <p>"Consolidate the pseudocode into one: <b>building the graph using the enumeration is actually
+        calculating what's needed for the backpropagation</b>. We want one pseudocode that does the
+        creation of the nodes + all the calculation, and at the end — one or two lines finding the
+        optimum."</p>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">1</span>The consolidated Algorithm 1 — sixteen numbered lines, three stages</h3>
+<div class="algo"><span class="st">      Input:</span>  lines d₀…d_M=L, t₀…t_Θ=T · band [v_min,v_max] · snaps δ,τ · FCR φ
+<span class="st">      Output:</span> speed schedule and total fuel consumption
+<span class="st">▷ Stage 1 — forward closure: discover the reachable states and price every arc</span>
+<span class="ln">1</span>𝒮←{(0,0)};  𝒜←∅;  queue Q←[(0,0)]
+<span class="ln">2</span><span class="kw">while</span> Q not empty <span class="kw">do</span>
+<span class="ln">3</span>  (d,t)←pop(Q);  <span class="kw">if</span> d=L <span class="kw">or</span> t=T <span class="kw">then continue</span>
+<span class="ln">4</span>  C ← 𝒜(d,t) of Eq.(5)      ▷ v̄∈𝒱 built in; glide rule if the wall is τ-unresolvable
+<span class="ln">5</span>  <span class="kw">for</span> (d̃,t̃) ∈ C <span class="kw">do</span>
+<span class="ln">6</span>    v̄←(d̃−d)/(t̃−t);  <span class="kw">if</span> v̄ unattainable at (d,t) <span class="kw">then continue</span>
+<span class="ln">7</span>    𝒜 ← 𝒜 ∪ {(d,t)→(d̃,t̃) with speed v̄, cost φ(d,t;v̄)·(t̃−t)}
+<span class="ln">8</span>    <span class="kw">if</span> (d̃,t̃)∉𝒮 <span class="kw">then</span> 𝒮←𝒮∪{(d̃,t̃)}; push(Q,(d̃,t̃))
+<span class="ln">9</span>  <span class="kw">end for</span>
+<span class="ln">10</span><span class="kw">end while</span>
+<span class="st">▷ Stage 2 — backpropagation: Eq.(6) once per state, every successor already valued</span>
+<span class="ln">11</span>C*(s)←+∞ ∀s∈𝒮;  C*(L,t)←0 for every (L,t)∈𝒮
+<span class="ln">12</span><span class="kw">for</span> each (d,t)∈𝒮 in reverse lexicographic (t,d) order <span class="kw">do</span>
+<span class="ln">13</span>  C*(d,t) ← min over arcs [ φ(d,t;v̄)·(t̃−t) + C*(d̃,t̃) ];  record (d̃★,t̃★)
+<span class="ln">14</span><span class="kw">end for</span>
+<span class="st">▷ Stage 3 — extraction</span>
+<span class="ln">15</span>F* ← C*(0,0);  walk (0,0)→(d̃★,t̃★)→⋯ until d=L, emitting V*(d,t)
+<span class="ln">16</span><span class="kw">return</span> F* and the speed schedule</div>
+      <div class="brk"><div class="bt">why each stage is what it is</div>
+        <div class="brow" style="--pc:var(--knit)"><span class="s">Stage 1 = 3-in-1</span><span class="m"><b>Discovering</b> the reachable states, <b>discretising</b> them, and <b>pricing</b> every arc are one step, not three. Each node Eq. (5) emits arrives <i>already on the grid</i> (no post-hoc snapping), <i>already carrying its speed</i> v̄ = Δd/Δt, and <i>already priced</i> — φ evaluated on the spot. When the loop empties, the graph is <b>fully priced</b>; the expensive physics (one still-water-speed inversion + FCR per arc) has been <b>paid exactly once per arc</b>.</span></div>
+        <div class="brow" style="--pc:var(--knit)"><span class="s">Stage 2 = 1 sweep</span><span class="m">Cost-to-go needs successors valued <i>before</i> their sources — so sweep in <b>reverse</b> lexicographic (t,d) order. Valid because every arc strictly increases both coordinates (DAG). Seed C*(L,·)=0; dead ends <b>inherit ∞ from the initialisation</b> — the ∞ case of Eq. (6) needs no test. One min per state; no priority queue, no iteration.</span></div>
+        <div class="brow" style="--pc:var(--knit)"><span class="s">Stage 3 = 2 lines</span><span class="m">Exactly what Tal asked for: <b>F* = C*(0,0)</b>, then walk forward reading V* at each stop. Algorithm 2 no longer exists — its job dissolved into Stages 2–3.</span></div>
+      </div>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">in plain words</div>
+        <p>"The forward pass lays the pipes <i>and</i> fills them; the backward pass just reads the meters,
+          back-to-front; the last two lines print the bill and the route."</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">2</span>§4.2 flattened: one section, one claim</h3>
+      <p>No more 4.2.1–4.2.4. The section now opens with the claim (<i>"not three steps but one … the
+        graph is not merely built — it is fully priced"</i>), shows the numbered box, then walks it in
+        continuous prose: <b>one popped state</b> through its two walls (micro-example + a new FIG
+        placeholder: state, walls, speed cone, ≈8 candidate nodes) → three boundary details (snap
+        rounding, glide rule, unattainable speeds) → pricing → <b>the backward sweep</b> → <b>extraction</b>
+        (F* = C*(0,0), Eq. 8) → <b>the cost</b>: |𝒮| = O(M·T/τ + Θ·L/δ), |𝒜| = O(κ|𝒮|) (Eq. 9), and on
+        Route 1: 1.3×10⁵ states, 1.2×10⁶ arcs, sweep &lt; 2 s. The retired subsection labels are stacked
+        under §4.2 so no cross-reference dangles; every superseded passage is archived under
+        <code>\begin{comment}</code>.</p>
+      <div class="words" style="--pc:var(--knit)"><div class="wt">note the number swap</div>
+        <p>The restructure swapped two equation numbers: <b>eq:opt-fuel is now (8)</b> and <b>the size bound
+          is (9)</b>. Eq. (10) — the §4.3 certificate — is unchanged, so Part 5 stays accurate.</p></div>
+    </div>
+
+    <div class="block">
+      <h3><span class="n">3</span>The audit — 22 items, the headline five</h3>
+      <p>A symbol-by-symbol consistency sweep of §3–§4 (meeting prep §1B) found <b>5 math bugs, 7 symbol
+        collisions, 10 precision items</b>. The ones that matter most:</p>
+      <table>
+        <thead><tr><th>#</th><th>what</th><th>why it's wrong</th><th>fix</th></tr></thead>
+        <tbody>
+          <tr><td class="k">A1</td><td>Eq. (6) ∞ case reads <b>d</b> &lt; d<sub>M</sub></td><td>true for every source ⇒ kills legal arrival at (L,T)</td><td><b>d̃</b> &lt; d<sub>M</sub> — one tilde <i>(Tal)</i></td></tr>
+          <tr><td class="k">A2</td><td>cell maps use strict <b>&lt;</b></td><td>every state sits ON a line ⇒ φ picks the cell <b>behind</b> the ship, leg travels ahead</td><td>&lt; → ≤ in i(d), j(t) <i>(Tal)</i></td></tr>
+          <tr><td class="k">A3</td><td>"minimum fuel to <b>arrive</b> on time at each state"</td><td>to-arrive wording surviving inside the cost-to-go text</td><td>"…to complete the voyage from (d,t)" <i>(Tal)</i></td></tr>
+          <tr><td class="k">B1</td><td>𝒜 = neighbour set <i>and</i> arc accumulator</td><td>two objects, one letter, same page</td><td>arc set → ℰ <i>(one token of Tal's line 1)</i></td></tr>
+          <tr><td class="k">C1</td><td>snap ⟨x⟩<sub>δ</sub> is <b>absolute</b> rounding; Eq. (4)'s grid is <b>anchored</b> at the crossings</td><td>d<sub>i</sub> aren't δ-multiples ⇒ two different grids</td><td><b>question for Tal</b>, not a unilateral fix</td></tr>
+        </tbody>
+      </table>
+      <p>Three items (the vacuous soft-ETA remark, κ-before-definition, "τ-multiple" wording) were already
+        <b>resolved by the flat rewrite</b>; the rest — including a §3 typo pass, the g / d<sub>i</sub> / M / n
+        collisions and the L-never-defined nit — are queued for the <b>Aug 5 meeting</b>, each with its
+        proposed one-line fix.</p>
+    </div>
+  </section>
+
   <div class="callout p4">
     <h3>Where §4 stands now — one continuous story</h3>
-    <p><b>§4.1</b> draws the grid 𝒮 and each state's neighbours 𝒜(d,t) (Tal, completed) → the <b>Bellman
-      equations</b> minimise over those neighbours, deriving the speed as Δd/Δt (node-first) → <b>§4.2</b>
-      counts the grid (the |𝒮| bound), walks only its reachable part (Algorithm 1 = the two halves of
-      Eq. 5), and sweeps the recursion over what it found (Algorithm 2). One notation (δ, τ) throughout;
-      every superseded passage preserved under <code>\begin{comment}</code>; and a <b>standalone §4.3</b>
-      now certifies that the grid costs at most a fraction of a percent. The only remaining §4 to-dos
-      are the two <code>ADD FIGURE</code> placeholders and the staged §2.1 sentences (prep item 6).</p>
+    <p><b>§4.1</b> draws the grid 𝒮, each state's successors 𝒜(d,t) (v̄ ∈ 𝒱 built in), and the
+      <b>cost-to-go Bellman equation</b>: C*(d,t) = cheapest fuel to finish from here, min over
+      successors, speed derived as Δd/Δt, seeded C*(L,·)=0, answer F* = C*(0,0), V* = the outgoing
+      speed — a full policy → <b>§4.2</b> is now one flat section around one claim: <b>discover +
+      discretise + price in a single forward pass</b> (the graph comes out fully priced, physics paid
+      once per arc), then <b>one backward sweep</b> (one min per state, reverse lex order), then two
+      extraction lines — all in a single 16-line Algorithm 1 → <b>§4.3</b> certifies the grid costs at
+      most a fraction of a percent. One notation throughout; every superseded passage preserved under
+      <code>\begin{comment}</code>. Remaining §4 to-dos: the figures (incl. the new one-state /
+      two-walls FIG), the audit items pending the Aug 5 meeting, and the staged §2.1 sentences.</p>
   </div>
 
-  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 — paper_full_draft.tex §4.1–§4.2 · certificates: docs/ddd_experiment_plan.md + ddd_lb.py · paper §4.3: f6086fb</footer>
+  <footer>source: git c0dc083 · 250ef83 · a8ae392 · 6a793b8 · 1c6bbb4 · 72033d9 · f6086fb (§4.3) · c4f513c (cost-to-go) · 8b4cbaa (consolidated Alg. 1) · b2eb485 · d2419e5 (flat §4.2) · ccf7224 (audit) — paper_full_draft.tex §4 · certificates: docs/ddd_experiment_plan.md + ddd_lb.py · audit: docs/meeting_prep_2026_08_05.md §1B</footer>
 </div>
