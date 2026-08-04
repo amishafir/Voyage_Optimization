@@ -529,6 +529,8 @@ the minimum fuel to arrive on time at each state $(d,t)$ or infinity if it is no
 
 \subsection{Solving the Bellman equation}
 \label{sec:solve}
+% ==== labels of the former subsections (removed in the 2026-08-04 flat rewrite) kept so no \ref dangles ====
+\label{sec:snap}\label{sec:enumerate}\label{sec:sweep}\label{sec:extract}\label{sec:tractability}
 
 
 % ==== OLD (predecessor / incoming / back-tracking — wording predates the cost-to-go flip; its own formula was already outgoing) — superseded; kept, not rendered ====
@@ -558,7 +560,8 @@ fraction of the whole. Third, to sweep the recursion over the resulting graph. W
 give the enumeration, the backward sweep, and the schedule extraction as a single pseudocode
 (Algorithm~1).
 \end{comment}
-% ==== NEW (2026-08-04 restructure: box first, then a walkthrough whose subsections mirror the three stages) ====
+% ==== OLD intro (subsection-roadmap version, referenced §4.2.1-4.2.3) — superseded by the flat rewrite (2026-08-04); kept, not rendered ====
+\begin{comment}
 Section~\ref{sec:states} supplies every mathematical object the solution requires: the state grid
 $\mathcal{S}$ (Eq.~\eqref{eq:state-space}), the successor set $\mathcal{A}(d,t)$ of each state
 (Eq.~\eqref{eq:neighbors}), the fuel-to-go recursion that couples them
@@ -579,6 +582,27 @@ unroll the speed schedule by walking forward along the recorded successors. The 
 introduces no new mathematics --- every line evaluates an object already defined in
 Section~\ref{sec:states}; what the algorithm adds is the \emph{order} of evaluation. Line numbers
 are referenced throughout the walkthrough below.
+\end{comment}
+% ==== NEW (2026-08-04 flat rewrite: one section, one claim — build+discretise+price in a single pass, then one backward sweep) ====
+Section~\ref{sec:states} supplies every mathematical object the solution requires: the state grid
+$\mathcal{S}$ (Eq.~\eqref{eq:state-space}), the successor set $\mathcal{A}(d,t)$ of each state
+(Eq.~\eqref{eq:neighbors}), the fuel-to-go recursion that couples them
+(Eq.~\eqref{eq:cost-to-arrive}) with its boundary condition, and the optimal outgoing speed
+(Eq.~\eqref{eq:opt-speed}). What remains is computational, and it is organised around one design
+decision. Discovering the reachable states, placing them on the discrete grid, and computing the FCR
+price of every arc are not three steps but \emph{one}: a single forward pass (lines~1--10 of
+Algorithm~1) enumerates, from each state, only the grid nodes actually reachable within
+$\mathcal{V}$ --- and each node it emits arrives already discretised, already carrying its leg speed
+$\bar v=(\tilde d-d)/(\tilde t-t)$, and already priced at $\phi(d,t;\bar v)\,(\tilde t-t)$, the fuel
+term of Eq.~\eqref{eq:cost-to-arrive}. This is the optimised graph construction: when the pass ends,
+the graph is not merely built --- it is fully priced, and the expensive physics (one
+still-water-speed inversion and FCR evaluation per arc) has been paid exactly once per arc. Solving
+the problem then costs a single \emph{backward} sweep (lines~11--14): one evaluation of
+Eq.~\eqref{eq:cost-to-arrive} per state, in an order that guarantees every successor is already
+valued, yielding the optimal outgoing speed of \emph{every} reachable state --- a full policy, not
+one path. Two closing lines (15--16) read the optimal fuel at the origin and unroll the speed
+schedule. The pseudocode introduces no new mathematics --- every line evaluates an object already
+defined in Section~\ref{sec:states}; the walkthrough below follows its line numbers.
 
 % ==== Algorithm 1 box (moved up from after the enumeration prose, 2026-08-04 restructure: box first, walkthrough after) ====
 \begin{center}
@@ -590,25 +614,25 @@ are referenced throughout the walkthrough below.
 xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 \textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
 \textbf{Output:}  Speed schedule and total fuel consumption \\
-{\small$\triangleright$ \emph{Stage 1 --- forward closure: discover the reachable states and price every arc (Section~\ref{sec:enumerate})}}\\
+{\small$\triangleright$ \emph{Stage 1 --- forward closure: discover the reachable states and price every arc}}\\
 {\scriptsize 1}\> $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad queue $Q\leftarrow[(0,0)]$\\
 {\scriptsize 2}\> \textbf{while} $Q$ not empty \textbf{do}\\
 {\scriptsize 3}\>\> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t= T$ \textbf{then continue}\\
 {\scriptsize 4}\>\> $C\leftarrow\mathcal{A}(d,t)$ of Eq.~\eqref{eq:neighbors} \quad{\small$\triangleright$ arrival times on $d_{\mathcal{D}(d)}$, arrival distances on $t_{\mathcal{T}(t)}$; $\bar v\in\mathcal{V}$ built in}\\
 \>\>\> {\small$\triangleright$ if $d_{\mathcal{D}(d)}$ is unresolvable on the $\tau$-grid ($\langle t+(d_{\mathcal{D}(d)}-d)/v_{\max}\rangle_\tau=t$), skip it: the time-line}\\
-\>\>\> {\small\phantom{$\triangleright$ }candidates extend past it as far as $v_{\max}$ allows (glide rule, Section~\ref{sec:enumerate})}\\
+\>\>\> {\small\phantom{$\triangleright$ }candidates extend past it as far as $v_{\max}$ allows (glide rule, see below)}\\
 {\scriptsize 5}\>\> \textbf{for} $(\tilde d,\tilde t)\in C$ \textbf{do}\\
 {\scriptsize 6}\>\>\> $\bar v\leftarrow(\tilde d-d)/(\tilde t-t)$;\quad \textbf{if} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
 {\scriptsize 7}\>\>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(\tilde d,\tilde t)\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,(\tilde t-t)\,\bigr\}$\\
 {\scriptsize 8}\>\>\> \textbf{if} $(\tilde d,\tilde t)\notin\mathcal{S}$ \textbf{then} $\mathcal{S}\leftarrow\mathcal{S}\cup\{(\tilde d,\tilde t)\}$;\ $\mathrm{push}(Q,(\tilde d,\tilde t))$\\
 {\scriptsize 9}\>\> \textbf{end for}\\
 {\scriptsize 10}\> \textbf{end while}\\
-{\small$\triangleright$ \emph{Stage 2 --- backpropagation: Eq.~\eqref{eq:cost-to-arrive} evaluated once per state, every successor already valued (Section~\ref{sec:sweep})}}\\
+{\small$\triangleright$ \emph{Stage 2 --- backpropagation: Eq.~\eqref{eq:cost-to-arrive} evaluated once per state, every successor already valued}}\\
 {\scriptsize 11}\> $C^{*}(s)\leftarrow+\infty$ for all $s\in\mathcal{S}$;\quad $C^{*}(L,t)\leftarrow0$ for every $(L,t)\in\mathcal{S}$\\
 {\scriptsize 12}\> \textbf{for} each $(d,t)\in\mathcal{S}$ in \emph{reverse} lexicographic $(t,d)$ order \textbf{do}\\
 {\scriptsize 13}\>\> $C^{*}(d,t)\leftarrow\displaystyle\min_{(d,t)\to(\tilde d,\tilde t)\,\in\,\mathcal{A}}\bigl[\phi(d,t;\bar v)\,(\tilde t-t)+C^{*}(\tilde d,\tilde t)\bigr]$;\quad record the minimiser $(\tilde d^{\star},\tilde t^{\star})$\\
 {\scriptsize 14}\> \textbf{end for}\\
-{\small$\triangleright$ \emph{Stage 3 --- extraction (Section~\ref{sec:extract})}}\\
+{\small$\triangleright$ \emph{Stage 3 --- extraction}}\\
 {\scriptsize 15}\> $F^{\star}\leftarrow C^{*}(0,0)$;\quad walk $(0,0)\to(\tilde d^{\star},\tilde t^{\star})\to\cdots$ until $d=L$, emitting $V^{*}(d,t)$ of Eq.~\eqref{eq:opt-speed}\\
 {\scriptsize 16}\> \textbf{return} $F^{\star}$ and the speed schedule
 \end{tabbing}
@@ -618,26 +642,34 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 % ==== OLD heading "Discretising the free coordinate" — its content folded into Stage 1 below (snap arithmetic)
 % ==== and into Tractability (Eq. 8 size bound); 2026-08-04 restructure ====
 %\subsubsection{Discretising the free coordinate}
-\subsubsection{Stage 1: building the reachable graph}
-\label{sec:enumerate}
-\label{sec:snap}
+% ==== OLD heading (2026-08-04 flat rewrite: §4.2 carries no subsections; labels moved under \subsection) ====
+%\subsubsection{Stage 1: building the reachable graph}
+%\label{sec:enumerate}
+%\label{sec:snap}
 % ==== NEW (2026-08-04 restructure: walk one popped state through lines 1-10; absorbs the former
 % ==== "Discretising" and "Enumerating" subsections — their superseded text is archived below) ====
-Stage~1 (lines 1--10) answers the first question: \emph{which decisions exist?} Consider a state
+% ==== OLD opening ("Stage 1 ... answers the first question") — reworked for the flat flow ====
+%Stage~1 (lines 1--10) answers the first question: \emph{which decisions exist?} Consider a state
+To see the single pass at work (lines 1--10), consider a state
 $(d,t)$ as the loop pops it (line~3): the vessel is $d$~NM from departure at elapsed time $t$,
 somewhere inside a weather cell and a forecast block. Ahead of it stand two walls: the next distance
 line $d_{\mathcal{D}(d)}$, where the sea conditions change, and the next time line
 $t_{\mathcal{T}(t)}$, where the forecast is refreshed (the index maps $\mathcal{D},\mathcal{T}$ of
 Section~\ref{sec:states}). Whatever admissible speed the vessel holds, its next decision point lies
 on one of these two walls, and the grid picks out the nodes it can land on (line~4): on the distance
-wall, every $\tau$-multiple between the earliest arrival $t+(d_{\mathcal{D}(d)}-d)/v_{\max}$ and the
-latest arrival $t+(d_{\mathcal{D}(d)}-d)/v_{\min}$, clipped at the time wall and at $T$; on the time
-wall, every $\delta$-multiple between the shortest advance $d+v_{\min}(t_{\mathcal{T}(t)}-t)$ and the
-longest $d+v_{\max}(t_{\mathcal{T}(t)}-t)$. These are exactly the two families of
-Eq.~\eqref{eq:neighbors}. No speed set is ever introduced: each candidate node fixes its own leg
-speed $\bar v=(\tilde d-d)/(\tilde t-t)$ (line~6), admissible by construction, and because the node
-already sits on the grid, no target-versus-realised speed gap arises. For our grid a state typically
-has $\kappa\approx8$ such candidates. \todo{FIG: a single state $(d,t)$, its two walls
+% ==== OLD ("every τ-multiple"/"every δ-multiple" — audit item C2: the grid is anchored at the crossings, not at absolute multiples) ====
+%wall, every $\tau$-multiple between the earliest arrival ... every $\delta$-multiple between ...
+wall, every $\tau$-spaced grid point between the earliest arrival $t+(d_{\mathcal{D}(d)}-d)/v_{\max}$
+and the latest arrival $t+(d_{\mathcal{D}(d)}-d)/v_{\min}$, clipped at the time wall and at $T$; on
+the time wall, every $\delta$-spaced grid point between the shortest advance
+$d+v_{\min}(t_{\mathcal{T}(t)}-t)$ and the longest $d+v_{\max}(t_{\mathcal{T}(t)}-t)$. These are
+exactly the two families of Eq.~\eqref{eq:neighbors}. No speed set is ever introduced: each
+candidate node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ (line~6), admissible by
+construction, and because the node already sits on the grid, no target-versus-realised speed gap
+% ==== OLD ("typically has κ≈8 such candidates" — audit item B7: κ was used before its definition) ====
+%arises. For our grid a state typically has $\kappa\approx8$ such candidates.
+arises. For our grid a state typically has about eight such candidates (the count is bounded at the
+end of this section). \todo{FIG: a single state $(d,t)$, its two walls
 $d_{\mathcal{D}(d)}$ and $t_{\mathcal{T}(t)}$, the admissible speed cone $[v_{\min},v_{\max}]$, and
 the $\kappa$ candidate grid nodes it selects on the walls --- the two families of Eq.~(5)}
 
@@ -857,8 +889,9 @@ $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad qu
 % ==== OLD title "The forward sweep" — superseded: the recursion is now cost-to-go, swept backward ====
 % ==== OLD title "The backward sweep and schedule extraction" — split into Stage 2 / Stage 3 (2026-08-04 restructure) ====
 %\subsubsection{The backward sweep and schedule extraction}
-\subsubsection{Stage 2: backpropagating the fuel-to-go}
-\label{sec:sweep}
+% ==== OLD heading (2026-08-04 flat rewrite) ====
+%\subsubsection{Stage 2: backpropagating the fuel-to-go}
+%\label{sec:sweep}
 % ==== OLD (to-arrive: forward lex sweep, relax out-arcs, best on-time sink, back-tracking; separate Algorithm 2) ====
 % ==== superseded 2026-08-04 by the cost-to-go reading (Stages 2-3 of Algorithm 1); kept, not rendered ====
 \begin{comment}
@@ -928,8 +961,11 @@ into a soft one that prices each hour of late arrival at $\lambda$ units of fuel
 hard constraint as $\lambda\to\infty$; all results in this paper use the hard constraint.
 \end{comment}
 % ==== NEW (2026-08-04 restructure: Stage 2 walkthrough, lines 11-14) ====
-Stage~2 (lines 11--14) answers the second question: \emph{what does each decision cost from there to
-the destination?} Every arc strictly increases both coordinates, so the graph
+% ==== OLD opening ("Stage 2 ... answers the second question") — reworked for the flat flow ====
+%Stage~2 (lines 11--14) answers the second question: \emph{what does each decision cost from there to
+%the destination?} Every arc strictly increases both coordinates, so the graph
+The backward sweep (lines 11--14) then computes what each decision costs from there to the
+destination. Every arc strictly increases both coordinates, so the graph
 $(\mathcal{S},\mathcal{A})$ is acyclic and the \emph{reverse} lexicographic order on $(t,d)$
 (line~12) is a valid order for the cost-to-go recursion: when a state comes up for evaluation, every
 successor it can reach lies later in forward order, hence has already been valued.
@@ -942,12 +978,13 @@ $C^{*}=\infty$ from the initialisation, which realises the $\infty$ case of
 Eq.~\eqref{eq:cost-to-arrive} without a separate test. Alongside each value, line~13 records the
 minimising successor $(\tilde d^{\star},\tilde t^{\star})$ --- the thread Stage~3 will pull.
 
-\subsubsection{Stage 3: reading off the plan}
-\label{sec:extract}
-% ==== NEW (2026-08-04 restructure: Stage 3 walkthrough, lines 15-16) ====
-Stage~3 (lines 15--16) answers the last question: \emph{which decisions do we take?} After the
-sweep, $C^{*}(d,t)$ holds the minimum fuel-to-go from every reachable state, so the optimal voyage
-fuel is read directly at the origin (line~15),
+% ==== OLD heading (2026-08-04 flat rewrite) ====
+%\subsubsection{Stage 3: reading off the plan}
+%\label{sec:extract}
+% ==== OLD opening ("Stage 3 ... answers the last question") — reworked for the flat flow ====
+%Stage~3 (lines 15--16) answers the last question: \emph{which decisions do we take?} After the sweep,
+Extraction (lines 15--16) is then a formality. $C^{*}(d,t)$ holds the minimum fuel-to-go from every
+reachable state, so the optimal voyage fuel is read directly at the origin (line~15),
 \begin{equation}
 \label{eq:opt-fuel}
 F^{\star} \;=\; C^{*}(0,0),
@@ -955,15 +992,20 @@ F^{\star} \;=\; C^{*}(0,0),
 a hard arrival constraint ($F^{\star}=\infty$ exactly when the ETA cannot be met at all). The
 schedule follows by walking \emph{forward} from $(0,0)$ along the recorded minimising successors,
 emitting at each state the outgoing speed $V^{*}(\cdot)$ of Eq.~\eqref{eq:opt-speed}; the walk
-terminates at $d=L$ (line~16). Replacing the $\infty$ case of Eq.~\eqref{eq:cost-to-arrive} with a
-lateness charge $\lambda\,(\tilde t-T)$ turns the hard deadline into a soft one that prices each
-hour of late arrival at $\lambda$ units of fuel and recovers the hard constraint as
-$\lambda\to\infty$; all results in this paper use the hard constraint.
+terminates at $d=L$ (line~16).
+% ==== OLD soft-ETA remark ("lateness charge λ(t̃−T)" — audit item A4: vacuous, t̃≤T on the grid) ====
+%Replacing the $\infty$ case of Eq.~\eqref{eq:cost-to-arrive} with a lateness charge $\lambda\,(\tilde t-T)$ turns the hard deadline into a soft one ...
+Extending the time lines beyond $T$ and replacing the $\infty$ case of
+Eq.~\eqref{eq:cost-to-arrive} with a lateness charge $\lambda\max(0,\tilde t-T)$ turns the hard
+deadline into a soft one that prices each hour of late arrival at $\lambda$ units of fuel and
+recovers the hard constraint as $\lambda\to\infty$; all results in this paper use the hard
+constraint.
 
-\subsubsection{Tractability}
-\label{sec:tractability}
+% ==== OLD heading (2026-08-04 flat rewrite) ====
+%\subsubsection{Tractability}
+%\label{sec:tractability}
 % ==== Eq. 8 moved here from the former §4.2.1 (2026-08-04 restructure): the bound is stated where it is used ====
-How large a graph can Stage~1 hand to Stage~2? Counting Eq.~\eqref{eq:state-space}, each distance
+Finally, what does all this cost? Counting Eq.~\eqref{eq:state-space}, each distance
 line carries at most $\lceil T/\tau\rceil$ states and each time line at most $\lceil L/\delta\rceil$,
 and each state emits at most $\kappa$ arcs --- the far-wall grid nodes reachable within
 $\mathcal{V}$, bounded by the speed-band width divided by the grid step ($\kappa$ is not to be

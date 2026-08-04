@@ -117,9 +117,26 @@ eyes (proposed fix ready for each). Zones: **[T]** = Tal's text/equations, **[A]
 | C9 **[T]** | §3 opening block | ~20 typos (controling, fule, utlizing, determinstic, stocastic, consuption, berifely, seleceted, "will satisfying", "and and", Beufor, …) | typo pass, forward-only |
 | C10 **[A]** | §3→§4 seam | φ(d,t;v)=FCR(g⁻¹(v;w(d,t))) implied but never written | one sentence after Tal's φ definition |
 
-**Proposed split (awaiting go-ahead):** apply A4, B2–B5, B7, C2, C7, C8, C10 directly (Ami text);
-apply A1–A3, A5, B1, B6, C3–C5, C9 with old-under-comment + this table as Tal's review checklist;
-C1 is a design question for the meeting, not a unilateral fix.
+**Proposed split (awaiting go-ahead):** apply B2–B5, C8, C10 directly (Ami text); apply A1–A3, A5,
+B1, B6, C3–C5, C9 with old-under-comment + this table as Tal's review checklist; C1 is a design
+question for the meeting, not a unilateral fix.
+
+**Status update (Aug 4, later):** **A4, B7, C2 are RESOLVED** — they fell inside the sentences
+rewritten by the flat-§4.2 pass below (soft-ETA now "extend time lines beyond T, charge
+λ·max(0,t̃−T)"; κ removed from first mention; "τ/δ-spaced grid point" wording). C7 largely moot
+(prose/box consistently L,T; Tal's Eq. (6) untouched). All other items still pending.
+
+**FLAT §4.2 REWRITE (Aug 4, same day, Ami's direction):** §4.2 is now ONE section — no
+4.2.1–4.2.4. The prose is built around the single claim, stated in the opening paragraph and
+quantified at the end: *discovering the reachable states, placing them on the grid, and pricing
+every arc with its FCR happen in one forward pass — the optimised graph construction (graph comes
+out fully priced, expensive physics paid once per arc); solving then costs a single backward sweep
+(one evaluation of Eq. (6) per state) yielding the optimal speed of every state — a full policy.*
+Reading order: claim intro → line-numbered box (Stage 1/2/3 banners kept as visual chunking, section
+cross-refs dropped) → single-pass walkthrough (one popped state, two walls, micro-example + FIG
+placeholder) → boundary details → pricing → backward sweep → extraction → cost (Eq. 8/9 + Route-1
+numbers). Old headings/openings archived; labels sec:snap/enumerate/sweep/extract/tractability
+stacked under sec:solve so no \ref dangles.
 
 ## 2. NEW SINCE LAST PREP — §4.3: the discretisation certificate (Tal to review & bless)
 
