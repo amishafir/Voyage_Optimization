@@ -74,6 +74,53 @@ Stage 1; new sec:extract).
 Also from `c4f513c`: new `pipeline/dp_cpp/src/MODE_C_PORT_SPEC.md` (394 lines) — **ask Tal what he
 wants driven from it** (C++ Mode C port work items?).
 
+## 1B. Full notation & math audit of §3–§4 (Aug 4) — 22 items, none applied yet
+
+Symbol-by-symbol consistency sweep of the active text (comments excluded), §3 through §4.3.
+**Nothing has been changed in the .tex** — items below await the go-ahead; Tal-zone items need his
+eyes (proposed fix ready for each). Zones: **[T]** = Tal's text/equations, **[A]** = Ami's text.
+
+### A. Math bugs (wrong as written)
+
+| # | Where | Problem | Proposed fix |
+|---|---|---|---|
+| A1 **[T]** | Eq. (6), ∞ case | condition is `t̃=t_Θ, d<d_M` — true for **every** non-sink source, so every arc onto the final time line prices to ∞, **including a legal on-time arrival at (L,T)**. Algorithm + code treat (L,T) as feasible; the equation doesn't. | `d < d_M` → `d̃ < d_M` (one tilde) |
+| A2 **[T]** | §4.1 cell maps | `i(d)=argmax{d_i < d}` (strict), φ uses rectangle of (d̲,t̲) — but every DP state sits ON a line, so a state at d=d_i selects the cell **behind** the vessel while the leg is priced **ahead** | `<` → `≤` in i(d) and j(t) |
+| A3 **[T]** | §4.1 solution prose | "value … is the minimum fuel **to arrive on time at each state**" — to-arrive semantics, contradicts the cost-to-go flip; also "SOG at the **subsegment** that starts at (d,t)" — the object is a *leg* | "minimum fuel to complete the voyage from (d,t) while meeting the ETA, or ∞ if the ETA cannot be met from there"; subsegment → leg |
+| A4 **[A]** | §4.2.3 soft-ETA remark | "replace the ∞ case with a lateness charge λ(t̃−T)" — vacuous: t̃≤T on the grid, charge never positive | "extend the time lines beyond T and charge λ·(t̃−T)₊", or revert to sink-side wording |
+| A5 **[T]** | §4.1, above Eq. (6) | "formulated as the following **forward** Bellman equation" — stale after the flip | drop "forward" (or "backward") |
+
+### B. Symbol collisions
+
+| # | Where | Problem | Proposed fix |
+|---|---|---|---|
+| B1 **[T/A]** | Alg. 1 lines 1/7/13, Eq. (9), Stage-2 prose | **𝒜 double duty**: Eq. (5) neighbour set 𝒜(d,t) vs arc-set accumulator 𝒜 | rename arc set → ℰ everywhere (touches one token of Tal's init line) |
+| B2 **[A]** | §3 vs §4.3 | `g⁻¹(V_g;w)` = SWS inversion vs `g(q_k)` = slide gain | gain → γ(q_k) in Eq. (10) + text |
+| B3 **[A]** | §3 eq:legfuel/eq:obj | d_i = **leg length** in §3 vs d_i = **cumulative breakpoint** in §4 | §3 → l_i |
+| B4 **[A]** | §3 eq:obj | M used before it is defined (only §4 defines it) | one clause at first use: "the voyage divides into M such legs" |
+| B5 **[A]** | tab:certificate | column "n" = #voyages, colliding with grid-n (Eqs. 4–5) and q_0..q_n (§4.3) | column header → "Voyages" |
+| B6 **[T/A]** | §4 intro | L first used (`d∈[0,L]`) but never defined | add "(L the total route length, NM)" |
+| B7 **[A]** | Stage 1 vs §4.2.4 | κ used before definition; "typically κ≈8" (typical) vs "at most κ" (bound) | Stage 1: "typically about eight"; §4.2.4 owns κ |
+
+### C. Precision / cosmetics
+
+| # | Where | Problem | Proposed fix |
+|---|---|---|---|
+| C1 **[T — question, not a fix]** | Eq. (4) vs Stage 1 snap | Eq. (4) anchors grid points at line crossings going **backward** (d_i−nδ; d_i not δ-multiples) while ⟨x⟩_δ:=δ·round(x/δ) is **absolute** rounding — two different grids (τ case coincides since t_j are 0.1-multiples; T edge-case aside) | **ask Tal**: state d_i pre-snapped to the δ-grid, or define the snap anchored |
+| C2 **[A]** | Stage 1 prose | "every τ-multiple / δ-multiple" — should be "τ-spaced grid points" (anchored per Eq. 4) | reword |
+| C3 **[T]** | §4.1 | `𝒟(d)=argmin_i{i∈ℕ: d_i>d}` — argmin of a membership predicate | `min{i : d_i>d}` (also 𝒯, i(d), j(t)) |
+| C4 **[T]** | §4.1 | "held constant across the rectangular sub-space it traverses" (singular) — overclaims under the glide rule (leg crosses two cells) | add the same caveat as §4.2.1 / tie to standing item 3a |
+| C5 **[T]** | §4.1 | stale "Figure~X" placeholder | → \todo{FIG…} like the others |
+| C6 | (info) | restructure swapped equation numbers: eq:opt-fuel now (8), eq:state-bound now (9); eq:slide still (10) → §4.3 refs safe; all refs are \eqref | no .tex action; prep item 1's "(8)=state-bound" note superseded by this row |
+| C7 **[A]** | box/prose vs Eq. (6) | L vs d_M and T vs t_Θ mixed (legal — Input line states d_M=L, t_Θ=T) | harmonize prose/box to L, T; leave Tal's Eq. (6) as is |
+| C8 **[A/T]** | §3 | `v_{min}` (italic sub) vs `v_{\min}` | normalize to \min |
+| C9 **[T]** | §3 opening block | ~20 typos (controling, fule, utlizing, determinstic, stocastic, consuption, berifely, seleceted, "will satisfying", "and and", Beufor, …) | typo pass, forward-only |
+| C10 **[A]** | §3→§4 seam | φ(d,t;v)=FCR(g⁻¹(v;w(d,t))) implied but never written | one sentence after Tal's φ definition |
+
+**Proposed split (awaiting go-ahead):** apply A4, B2–B5, B7, C2, C7, C8, C10 directly (Ami text);
+apply A1–A3, A5, B1, B6, C3–C5, C9 with old-under-comment + this table as Tal's review checklist;
+C1 is a design question for the meeting, not a unilateral fix.
+
 ## 2. NEW SINCE LAST PREP — §4.3: the discretisation certificate (Tal to review & bless)
 
 Full story: `docs/ddd_experiment_plan.md` + running log T25–T26 + walkthrough HTML Part 5.
