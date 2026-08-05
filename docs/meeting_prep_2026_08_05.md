@@ -48,20 +48,26 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    price — and what guarantee each actually gives. Design discussion later; relates to §4.3's
    future-work line and the backbone-DDD sketch.
 
-   **Tal's LB idea (from the meeting): travel to the optimal next node, but pay a "lower" speed
-   price.** Keep the geometry honest — the vessel really moves to the chosen grid node (no
-   positional credit, unlike E3's box-corner teleport) — and discount only the *rate*: charge the
-   arc as if sailed at a slightly lower speed than the realised v̄. Sketch of why it's a valid LB:
-   the snap places the true continuous crossing within ±δ/2, ±τ/2 of the node, so the cheapest
-   speed consistent with the arc's rounding interval, e.g. v̄⁻ = (d̃−d−δ/2)/(t̃−t+τ/2), satisfies
-   v̄⁻ ≤ (true speed of any trajectory this arc represents); FCR increasing in speed ⇒
-   φ(d,t;v̄⁻)·Δt underestimates every represented leg ⇒ DP over discounted arcs = global lower
-   bound. Bonus: the LB–UB gap is then bounded by the FCR slope × the speed discount (≈ half a
-   grid step over the leg duration) — a quantifiable, per-arc-tight certificate, implementable
-   inside the current arc-pricing path (`arc_cost` primitive of item 5 with a `lb=True` flag).
-   To check in the design session: interaction with the glide rule, with [0, v_max] (v̄⁻ floor at
-   0), and whether the discounted DP's optimal path differs from the nominal one (it may — the
-   bound holds regardless).
+   **Tal's LB idea (from the meeting, node-first formulation — no snapping involved): travel to
+   the chosen node, but pay the speed price of the ADJACENT SLOWER predefined node.** In
+   node-first there is no rounding interval — every arc's speed is exact. The relaxation: the arc
+   (d,t)→(d̃,t̃) still moves the vessel to (d̃,t̃) (geometry honest, no positional credit — unlike
+   E3's box-corner teleport), but its fuel is charged at the speed of the *neighbouring, one-step-
+   slower* candidate on the same wall: on the distance wall, arrival one τ later —
+   v̄⁻ = (d̃−d)/(t̃+τ−t); on the time wall, advance one δ shorter — v̄⁻ = (d̃−δ−d)/(t̃−t).
+   **Why it is a valid LB of the continuous optimum:** a continuous trajectory crosses each wall
+   somewhere *between* two adjacent grid nodes; map that crossing to the adjacent FASTER node
+   (arrival no later ⇒ ETA feasibility preserved), and the mapped arc's discounted price — the
+   slower neighbour's speed — under-runs the true crossing speed, which lies between the two.
+   FCR increasing in speed ⇒ every leg undercharged ⇒ the relaxed DP's optimum ≤ F*(continuous).
+   **Gap control:** the discount is exactly one grid step per leg (τ or δ over the leg duration),
+   so LB tightens automatically with the grid — unlike E3, whose looseness was structural.
+   **Implementation:** same arc-pricing path — `arc_cost(…, lb=True)` on item 5's primitive
+   prices the neighbour's slope instead of the arc's own; one extra DP run per voyage.
+   To check in the design session: the slowest candidate in each window (its slower neighbour
+   falls outside — clip at the wall / at v=0 under the new [0, v_max] band), glide-rule arcs
+   (two-cell legs), and that the relaxed DP may select a different path (fine — the bound holds
+   regardless).
 7. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
