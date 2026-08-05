@@ -146,6 +146,35 @@ figure placeholder down; remaining: the two §4.1 ADD FIGUREs, §5 forecast-erro
 savings-vs-departure. Old headings/openings archived; labels sec:snap/enumerate/sweep/extract/tractability
 stacked under sec:solve so no \ref dangles.
 
+## 1C. PROPOSED ADDITION — the Bellman equation as a shortest-path problem (drop-in ready, Tal's zone)
+
+Suggestion (Ami, Aug 5): right after Eqs. (6)–(7), give the reader the graph reading — the whole
+optimisation is a **shortest-path problem** on a DAG. It names the object every OR reader already
+knows, makes the ∞ case and the single-sweep solvability obvious, and echoes Luo 2024 (who solve
+their multistage graph with Dijkstra) — sharpening the contrast: same problem class, different
+graph, and ours needs no Dijkstra. Placement is inside Tal's §4.1 → **his call**; text ready:
+
+> ```latex
+> Equations~\eqref{eq:cost-to-arrive}--\eqref{eq:opt-speed} admit a compact graph reading: the
+> states of $\mathcal{S}$ are the vertices of a directed acyclic graph whose arcs are the
+> admissible legs, $(d,t)\to(\tilde d,\tilde t)$ for $(\tilde d,\tilde t)\in\mathcal{A}(d,t)$,
+> each weighted by its leg fuel $(\tilde t-t)\,\phi(d,t;(\tilde d-d)/(\tilde t-t))$. Minimising
+> the voyage fuel subject to the ETA is then a \emph{shortest-path problem} on this graph:
+> $C^{*}(d,t)$ is the shortest distance from $(d,t)$ to the set of destination vertices
+> $\{(d_M,t):t\le T\}$, the $\infty$ case marks vertices from which no destination vertex is
+> reachable, and the optimal speed schedule \emph{is} the shortest path from $(0,0)$ --- each of
+> its arcs read as a leg speed via Eq.~\eqref{eq:opt-speed}. Because every arc strictly increases
+> both coordinates, the graph is acyclic, so the shortest path is found by the single backward
+> sweep of Algorithm~1, with no need for a label-setting method such as Dijkstra's.
+> ```
+
+Notes: (i) purely additive — no existing sentence changes; (ii) "shortest distance = fuel" makes
+arc weight vs edge length explicit; (iii) if Tal wants the Luo echo in the same breath, one more
+sentence: "Luo (2024) solves an analogous multistage graph with Dijkstra's algorithm; the
+time--distance DAG makes even that unnecessary." (iv) interacts with audit item A1 — the ∞
+sentence above states the *intended* semantics (successor-side), so A1's tilde fix should land
+with it.
+
 ## 2. NEW SINCE LAST PREP — §4.3: the discretisation certificate (Tal to review & bless)
 
 Full story: `docs/ddd_experiment_plan.md` + running log T25–T26 + walkthrough HTML Part 5.
