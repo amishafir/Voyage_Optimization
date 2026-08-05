@@ -36,7 +36,18 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
      (source fixes the cell/block).
    Everything else (streaming solver of item 4, RH, certificate code) should call these two.
    Design session later; ties into item 4's builder+solver fusion and the [0, v_max] change.
-6. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
+6. **OPEN ISSUE (raised in meeting): how to implement a LOWER BOUND in our current
+   implementation.** How does the discretised DP certify distance to the continuous optimum
+   from below? Known starting points: the §4.3 node-slide polish gives only a tighter UPPER
+   bound; the E3 interval-LB prototype (`ddd_lb.py --mode lb`) is sound but loose (~38% of
+   F_DP — positional-credit leak); DDD-style refinement is the literature answer
+   (Boland2017/Marshall2021) but doesn't port off-the-shelf (continuous move menu,
+   geometry-dependent costs). To think through: what LB is achievable *inside the current
+   grid/streaming implementation* — e.g., per-rectangle fuel-rate underestimation
+   (min-φ over the cell × exact time), grid-refinement bracketing, or a Lagrangian/λ time
+   price — and what guarantee each actually gives. Design discussion later; relates to §4.3's
+   future-work line and the backbone-DDD sketch.
+7. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
    the pseudocode** + the 𝒱 = [0, v_max] band. Wait for his push; his lines lead, forward-only,
