@@ -11,8 +11,9 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    it in the draft himself.** Zero speed becomes admissible — waiting/drifting is now a legal
    control.
 2. **In progress (live): the pseudocode** — being reworked with Tal.
-3. **APPROVED: the shortest-path paragraph (item 1C) goes in BEFORE the Bellman equation** —
-   apply immediately after Tal's push (his region; don't collide with his live edit).
+3. **APPROVED (corrected): the shortest-path paragraph (item 1C) goes at the end of §4.1,
+   BEFORE the "Solving the Bellman equation" subsection** — a bridge into §4.2. Apply
+   immediately after Tal's push (his region; don't collide with his live edit).
 4. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
@@ -179,27 +180,27 @@ figure placeholder down; remaining: the two §4.1 ADD FIGUREs, §5 forecast-erro
 savings-vs-departure. Old headings/openings archived; labels sec:snap/enumerate/sweep/extract/tractability
 stacked under sec:solve so no \ref dangles.
 
-## 1C. APPROVED IN MEETING — shortest-path paragraph, placed BEFORE the Bellman equation
+## 1C. APPROVED IN MEETING — shortest-path paragraph, placed BEFORE §4.2 "Solving the Bellman equation"
 
-**Decision (Aug 5 meeting): add it — placement is BEFORE Eq. (6)** (introduce the graph reading
-first, then the Bellman equation computes those shortest distances). **Apply right after Tal's
-push lands** (he is editing the same region live — do not touch §4.1 before then). Text re-worded
-for the before-the-equation position:
+**Decision (Aug 5 meeting, corrected): add it — placement is at the END of §4.1, immediately
+BEFORE the \subsection{Solving the Bellman equation}** — a bridge: the equations just stated get
+their graph reading, and §4.2 then opens as "how to compute these shortest distances". **Apply
+right after Tal's push lands** (he is editing the same region live — do not touch §4 before
+then). Text for the bridge position:
 
 > ```latex
-> Minimising the total voyage fuel can be read as a \emph{shortest-path problem} on the graph
-> that the states and their successor sets define: the states of $\mathcal{S}$ are the vertices
-> of a directed acyclic graph, and each admissible leg $(d,t)\to(\tilde d,\tilde t)$ with
-> $(\tilde d,\tilde t)\in\mathcal{A}(d,t)$ is an arc weighted by its leg fuel,
-> $(\tilde t-t)\,\phi(d,t;(\tilde d-d)/(\tilde t-t))$. The minimum fuel-to-go from a state is
-> then the shortest distance from its vertex to the set of destination vertices
-> $\{(d_M,t):t\le T\}$, and the optimal speed schedule \emph{is} the shortest path from $(0,0)$.
-> Because every arc strictly increases both coordinates, the graph is acyclic, so these
-> distances follow from a single backward sweep --- no label-setting method such as Dijkstra's
-> is required. The following Bellman equation computes exactly these shortest distances:
+> Equations~\eqref{eq:cost-to-arrive}--\eqref{eq:opt-speed} admit a compact graph reading:
+> the states of $\mathcal{S}$ are the vertices of a directed acyclic graph, and each admissible
+> leg $(d,t)\to(\tilde d,\tilde t)$ with $(\tilde d,\tilde t)\in\mathcal{A}(d,t)$ is an arc
+> weighted by its leg fuel, $(\tilde t-t)\,\phi(d,t;(\tilde d-d)/(\tilde t-t))$. Minimising the
+> voyage fuel subject to the ETA is then a \emph{shortest-path problem} on this graph:
+> $C^{*}(d,t)$ is the shortest distance from $(d,t)$ to the set of destination vertices
+> $\{(d_M,t):t\le T\}$, and the optimal speed schedule \emph{is} the shortest path from $(0,0)$
+> --- each of its arcs read as a leg speed via Eq.~\eqref{eq:opt-speed}. Because every arc
+> strictly increases both coordinates, the graph is acyclic, so the shortest path requires no
+> label-setting method such as Dijkstra's; the next section computes it with a single backward
+> sweep.
 > ```
-
-(Original after-the-equations draft kept below for reference.)
 
 > ```latex
 > Equations~\eqref{eq:cost-to-arrive}--\eqref{eq:opt-speed} admit a compact graph reading: the
