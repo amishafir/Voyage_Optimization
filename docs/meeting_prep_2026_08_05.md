@@ -11,6 +11,12 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    it in the draft himself.** Zero speed becomes admissible — waiting/drifting is now a legal
    control.
 2. **In progress (live): the pseudocode** — being reworked with Tal.
+3. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
+   the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
+   backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
+   the pseudocode** + the 𝒱 = [0, v_max] band. Wait for his push; his lines lead, forward-only,
+   old-under-comment. The Zoom voice-note transcript (Hebrew) will be read + translated + logged
+   here once Zoom completes it.
 
 **Ripple list to sweep once Tal's edit lands** (do NOT touch before his push):
 - **Eq. (5)**: with v_min = 0 the family-1 window loses its slow-side clip (latest arrival
