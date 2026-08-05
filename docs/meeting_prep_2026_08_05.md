@@ -14,7 +14,18 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
 3. **APPROVED (corrected): the shortest-path paragraph (item 1C) goes at the end of §4.1,
    BEFORE the "Solving the Bellman equation" subsection** — a bridge into §4.2. Apply
    immediately after Tal's push (his region; don't collide with his live edit).
-4. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
+4. **DECISION: don't save all arcs — only the selected one.** Code check (Aug 5): today the
+   Python builder (`atomic_edges.py`) materialises ~1.2M `Edge` records (each with Weather/SWS/
+   FCR/fuel) and `bellman.py` copies them again into `_outgoing[]` adjacency lists; only
+   `parent_arc[]` (the winner per node) is already selected-arc-only. Fix fuses builder+solver
+   under cost-to-go: reverse sweep, enumerate Eq.-(5) candidates on the fly, price once per arc
+   at its source, keep only (C*, chosen successor) per state — arcs never stored. Memory
+   O(|arcs|) → O(|states|) (~10×; × replans in RH). Open choice: light states-only Stage 1 vs
+   sweeping the full grid (~6×10⁵ pts, kills the closure/queue entirely). Side effect: audit
+   item **B1 dissolves** (no arc accumulator to name). Validation: must reproduce the frozen
+   reference values (19-voyage F_DP, backward-compat table). Same change mirrors to
+   `dp_cpp/src/atomic_edges.cpp` (`vector<Edge>`).
+5. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
    the pseudocode** + the 𝒱 = [0, v_max] band. Wait for his push; his lines lead, forward-only,
