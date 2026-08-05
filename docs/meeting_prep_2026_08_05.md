@@ -68,7 +68,24 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    falls outside — clip at the wall / at v=0 under the new [0, v_max] band), glide-rule arcs
    (two-cell legs), and that the relaxed DP may select a different path (fine — the bound holds
    regardless).
-7. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
+7. **TAL'S FIRST PUSH LANDED (`8c083dd`, Aug 5 17:35) — analysis; HOLDING for his next push.**
+   What it contains: (a) §3 band 𝒱 = [0, v_max] + "legs"→"sub-segments"; (b) Eq. (5) gains a
+   `t < T` condition in both families (final-time-line states get 𝒜 = ∅); (c) **Algorithm 1
+   rewritten: forward/to-arrive, one fused pass** — C*(0,0)=0 seed, priority queue popping
+   lex-min (t,d), relax C*(d̃,t̃) ← C*(d,t)+φ(d,t;v̄)Δt, record pred(); extraction backtracks
+   pred from (D,T); no arc set stored (= meeting decisions 4 + "one pseudocode"). The unique
+   sink (D,T) works because v=0 lets the vessel wait after early arrival.
+   **Direction clash:** Eq. (6) is still cost-to-go (successors, C*(d_M,·)=0, answer at origin)
+   while the new algorithm is to-arrive (origin seed, answer at (D,T)) — mirrored version of the
+   Aug-3 fallout; also the §4.2 intro's "single backward sweep" claim and the approved 1C
+   paragraph's closing line depend on which direction wins.
+   **Slips in the fresh lines (for Tal, same class as before):** line 9 pushes (d,t) — must be
+   (d̃,t̃), else the queue never grows; (D,T) uses undefined D (→ L/d_M); Input line still says
+   band [v_min,v_max]; title "Belman's"; line 12 stray "not empty"; waiting arcs at/near d=L need
+   𝒜 to emit v̄=0 self-arcs (interacts with C1 anchoring) and φ(d,t;0) must be defined.
+   **DECISION (Ami): wait for Tal's next push before touching anything** — walkthrough rewrite,
+   1C paragraph, and Eq.-(6) reconciliation all queue behind it.
+8. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
    the pseudocode** + the 𝒱 = [0, v_max] band. Wait for his push; his lines lead, forward-only,
