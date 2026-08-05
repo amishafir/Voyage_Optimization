@@ -15,8 +15,8 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
    the pseudocode** + the 𝒱 = [0, v_max] band. Wait for his push; his lines lead, forward-only,
-   old-under-comment. The Zoom voice-note transcript (Hebrew) will be read + translated + logged
-   here once Zoom completes it.
+   old-under-comment. ~~Zoom voice-note transcript to be read + logged~~ — **won't materialise**
+   (per Ami); this running log is the record of the meeting's decisions.
 
 **Ripple list to sweep once Tal's edit lands** (do NOT touch before his push):
 - **Eq. (5)**: with v_min = 0 the family-1 window loses its slow-side clip (latest arrival
