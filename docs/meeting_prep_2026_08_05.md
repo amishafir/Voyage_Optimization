@@ -47,6 +47,21 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    (min-φ over the cell × exact time), grid-refinement bracketing, or a Lagrangian/λ time
    price — and what guarantee each actually gives. Design discussion later; relates to §4.3's
    future-work line and the backbone-DDD sketch.
+
+   **Tal's LB idea (from the meeting): travel to the optimal next node, but pay a "lower" speed
+   price.** Keep the geometry honest — the vessel really moves to the chosen grid node (no
+   positional credit, unlike E3's box-corner teleport) — and discount only the *rate*: charge the
+   arc as if sailed at a slightly lower speed than the realised v̄. Sketch of why it's a valid LB:
+   the snap places the true continuous crossing within ±δ/2, ±τ/2 of the node, so the cheapest
+   speed consistent with the arc's rounding interval, e.g. v̄⁻ = (d̃−d−δ/2)/(t̃−t+τ/2), satisfies
+   v̄⁻ ≤ (true speed of any trajectory this arc represents); FCR increasing in speed ⇒
+   φ(d,t;v̄⁻)·Δt underestimates every represented leg ⇒ DP over discounted arcs = global lower
+   bound. Bonus: the LB–UB gap is then bounded by the FCR slope × the speed discount (≈ half a
+   grid step over the leg duration) — a quantifiable, per-arc-tight certificate, implementable
+   inside the current arc-pricing path (`arc_cost` primitive of item 5 with a `lb=True` flag).
+   To check in the design session: interaction with the glide rule, with [0, v_max] (v̄⁻ floor at
+   0), and whether the discounted DP's optimal path differs from the nominal one (it may — the
+   bound holds regardless).
 7. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
