@@ -248,7 +248,7 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement.    The voyage can be divided into legs during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such leg.  The SOG of the vessel is seleceted from a bounded interval, $\mathcal{V}=[v_{min}, v_{max}]$ knots ($NM/h$). Therefore, a solution can be described by a list of such legs and the SOG in each one of them.
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement. The SOG of the vessel is seleceted from the set, $\mathcal{V}=[0, v_{max}]$ knots ($NM/h$).   The voyage can be divided into sub-segments during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such sub-segment.  Therefore, a solution can be described by a list of sub-segments and the SOG in each one of them.
 
 \subsection{Speed over ground}
 \label{sec:sog}
@@ -463,9 +463,9 @@ Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the in
 \label{eq:neighbors}
 \begin{aligned}
 \mathcal{A}(d,t) ={}&
-\biggl\{ (d_{\mathcal{D}(d)},\, t') : t' = t_{\mathcal{T}(t)} - n\tau,\;
+\biggl\{ (d_{\mathcal{D}(d)},\, t') : t' = t_{\mathcal{T}(t)} - n\tau,  t < T,
    n=0,\ldots,\left\lfloor\frac{t_{\mathcal{T}(t)}-t}{\tau}\right\rfloor, \frac{d_{\mathcal{D}(d)}-d}{t'-t} \in \mathcal{V} \biggr\} \cup \\
-&\biggl\{ (d',\, t_{\mathcal{T}(t)}) : d' = d_{\mathcal{D}(d)} - n\delta,\;
+&\biggl\{ (d',\, t_{\mathcal{T}(t)}) : d' = d_{\mathcal{D}(d)} - n\delta,t < T,
    n=0,\ldots,\left\lfloor\frac{d_{\mathcal{D}(d)}-d}{\delta}\right\rfloor, \frac{d'-d}{t_{\mathcal{T}(t)}-t} \in \mathcal{V}  \biggr\}.
 \end{aligned}
 \end{equation}
@@ -625,34 +625,32 @@ defined in Section~\ref{sec:states}; the walkthrough below follows its line numb
 % ==== Algorithm 1 box (moved up from after the enumeration prose, 2026-08-04 restructure: box first, walkthrough after) ====
 \begin{center}
 \fbox{\begin{minipage}{0.95\textwidth}
-\textbf{Algorithm~1: Build the reachable graph, backpropagate, and extract the optimal schedule}\\[-6pt]
+\textbf{Algorithm~1: Solve the Belman's equations}\\[-6pt]
 \rule{\linewidth}{0.4pt}
 \footnotesize
 \begin{tabbing}
 xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 \textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
 \textbf{Output:}  Speed schedule and total fuel consumption \\
-{\small$\triangleright$ \emph{Stage 1 --- forward closure: discover the reachable states and price every arc}}\\
-{\scriptsize 1}\> $\mathcal{S}\leftarrow\{(0,0)\}$;\quad $\mathcal{A}\leftarrow\emptyset$;\quad queue $Q\leftarrow[(0,0)]$\\
-{\scriptsize 2}\> \textbf{while} $Q$ not empty \textbf{do}\\
-{\scriptsize 3}\>\> $(d,t)\leftarrow \mathrm{pop}(Q)$;\quad \textbf{if} $d=L$ \textbf{or} $t= T$ \textbf{then continue}\\
-{\scriptsize 4}\>\> $C\leftarrow\mathcal{A}(d,t)$ of Eq.~\eqref{eq:neighbors} \quad{\small$\triangleright$ arrival times on $d_{\mathcal{D}(d)}$, arrival distances on $t_{\mathcal{T}(t)}$; $\bar v\in\mathcal{V}$ built in}\\
-\>\>\> {\small$\triangleright$ if $d_{\mathcal{D}(d)}$ is unresolvable on the $\tau$-grid ($\langle t+(d_{\mathcal{D}(d)}-d)/v_{\max}\rangle_\tau=t$), skip it: the time-line}\\
-\>\>\> {\small\phantom{$\triangleright$ }candidates extend past it as far as $v_{\max}$ allows (glide rule, see below)}\\
-{\scriptsize 5}\>\> \textbf{for} $(\tilde d,\tilde t)\in C$ \textbf{do}\\
-{\scriptsize 6}\>\>\> $\bar v\leftarrow(\tilde d-d)/(\tilde t-t)$;\quad \textbf{if} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
-{\scriptsize 7}\>\>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(\tilde d,\tilde t)\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,(\tilde t-t)\,\bigr\}$\\
-{\scriptsize 8}\>\>\> \textbf{if} $(\tilde d,\tilde t)\notin\mathcal{S}$ \textbf{then} $\mathcal{S}\leftarrow\mathcal{S}\cup\{(\tilde d,\tilde t)\}$;\ $\mathrm{push}(Q,(\tilde d,\tilde t))$\\
-{\scriptsize 9}\>\> \textbf{end for}\\
-{\scriptsize 10}\> \textbf{end while}\\
-{\small$\triangleright$ \emph{Stage 2 --- backpropagation: Eq.~\eqref{eq:cost-to-arrive} evaluated once per state, every successor already valued}}\\
-{\scriptsize 11}\> $C^{*}(s)\leftarrow+\infty$ for all $s\in\mathcal{S}$;\quad $C^{*}(L,t)\leftarrow0$ for every $(L,t)\in\mathcal{S}$\\
-{\scriptsize 12}\> \textbf{for} each $(d,t)\in\mathcal{S}$ in \emph{reverse} lexicographic $(t,d)$ order \textbf{do}\\
-{\scriptsize 13}\>\> $C^{*}(d,t)\leftarrow\displaystyle\min_{(d,t)\to(\tilde d,\tilde t)\,\in\,\mathcal{A}}\bigl[\phi(d,t;\bar v)\,(\tilde t-t)+C^{*}(\tilde d,\tilde t)\bigr]$;\quad record the minimiser $(\tilde d^{\star},\tilde t^{\star})$\\
-{\scriptsize 14}\> \textbf{end for}\\
-{\small$\triangleright$ \emph{Stage 3 --- extraction}}\\
-{\scriptsize 15}\> $F^{\star}\leftarrow C^{*}(0,0)$;\quad walk $(0,0)\to(\tilde d^{\star},\tilde t^{\star})\to\cdots$ until $d=L$, emitting $V^{*}(d,t)$ of Eq.~\eqref{eq:opt-speed}\\
-{\scriptsize 16}\> \textbf{return} $F^{\star}$ and the speed schedule
+{\small$\triangleright$ \emph{Stage 1 --- forward closure: discover all reachable states and calculate their values}}\\
+{\scriptsize 1}\> $C^*(0,0) \leftarrow 0$; \quad $C^*(d,t) \leftarrow \infty$ \, for all $(d,t) \ne (0,0)$;\\
+{\scriptsize 2}\>  Define priority queue $Q\leftarrow[(0,0)]$\\
+{\scriptsize 3}\> \textbf{while} $Q$ not empty \textbf{do}\\
+{\scriptsize 4}\>\> $(d,t)\leftarrow \mathrm{pop}(Q)$ with minimal $t$ and minimal $d$ lexicograpgically;\\ 
+{\scriptsize 5}\>\> \textbf{for} $(\tilde d,\tilde t)\in \mathcal{A}(d,t)$ \textbf{do}    \quad{\small$\triangleright$ scan all reachable states, see \eqref{eq:neighbors}} \\
+%{\scriptsize 6}\>\>\> $\bar v\leftarrow(\tilde d-d)/(\tilde t-t)$;\quad \textbf{if} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
+%{\scriptsize 7}\>\>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(\tilde d,\tilde t)\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,(\tilde t-t)\,\bigr\}$\\
+{\scriptsize 6}\>\>\> \textbf{if} $C^*(d,t)+ \phi(d,t;(\tilde d-d)/(\tilde t-t))\,(\tilde t-t)< C^{*}(\tilde d,\tilde t)$ \textbf{then} \\
+{\scriptsize 7}\>\>\>\> $C^{*}(\tilde d,\tilde t) \leftarrow C^*(d,t)+ \phi(d,t;(\tilde d-d)/(\tilde t-t))\,(\tilde t-t)$; \\
+{\scriptsize 8}\>\>\>\> $pred(\tilde d,\tilde t) \leftarrow (d,t)$; \\
+{\scriptsize 9}\>\>\> \textbf{if} $(d,t) \notin Q$ then $push(Q,(d,t))$; \\
+{\small$\triangleright$ \emph{Stage 2 --- extraction}}\\
+{\scriptsize 10}\> $curr \leftarrow (D,T)$; \\ 
+{\scriptsize 11}\> $J^{\star} \leftarrow [curr]$; \\
+{\scriptsize 12}\> \textbf{while} $curr \ne (0,0)$ not empty \textbf{do}\\
+{\scriptsize 13}\>\> $curr \leftarrow pred(curr)$ ;\\
+ {\scriptsize 14}\>\> $J^{\star} \leftarrow [curr] + J^{\star}$; \\
+{\scriptsize 15}\> \textbf{return}  $J^{\star}$ (optimal journey) 
 \end{tabbing}
 \end{minipage}}
 \end{center}
