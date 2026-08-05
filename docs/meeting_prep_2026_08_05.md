@@ -25,7 +25,18 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    item **B1 dissolves** (no arc accumulator to name). Validation: must reproduce the frozen
    reference values (19-voyage F_DP, backward-compat table). Same change mirrors to
    `dp_cpp/src/atomic_edges.cpp` (`vector<Edge>`).
-5. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
+5. **TO DESIGN LATER — code cleaning: paper-notation-faithful primitives.** The two central
+   objects of the formulation must exist in the code as clean, named, single-home constructs
+   mirroring the paper 1:1:
+   - **`A(d, t)`** — the successor enumeration of Eq. (5) as one function (candidates on the two
+     walls, v̄∈𝒱 built in, glide rule inside), instead of enumeration logic spread across
+     `atomic_edges.py` builder internals;
+   - **`arc_cost(d, t, d̃, t̃)`** = (t̃−t)·φ(d,t;(d̃−d)/(t̃−t)) — the leg-fuel expression as one
+     function (derived speed → SWS inverse → FCR → ×Δt), one home for the pricing convention
+     (source fixes the cell/block).
+   Everything else (streaming solver of item 4, RH, certificate code) should call these two.
+   Design session later; ties into item 4's builder+solver fusion and the [0, v_max] change.
+6. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of
    the pseudocode** + the 𝒱 = [0, v_max] band. Wait for his push; his lines lead, forward-only,
