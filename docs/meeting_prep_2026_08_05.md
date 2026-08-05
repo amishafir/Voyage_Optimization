@@ -5,6 +5,31 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
 
 ---
 
+## 0. LIVE MEETING NOTES — Aug 5 (running log)
+
+1. **DECISION: the speed interval becomes 𝒱 = [0, v_max]** (was [v_min, v_max]). **Tal is changing
+   it in the draft himself.** Zero speed becomes admissible — waiting/drifting is now a legal
+   control.
+2. **In progress (live): the pseudocode** — being reworked with Tal.
+
+**Ripple list to sweep once Tal's edit lands** (do NOT touch before his push):
+- **Eq. (5)**: with v_min = 0 the family-1 window loses its slow-side clip (latest arrival
+  (d̃−d)/v_min → ∞ ⇒ always clipped by the time wall / T), and family-2's shortest advance becomes
+  d + 0·Δt = d ⇒ **Δd = 0 candidates (v̄ = 0) become legal** — the "degenerate arc" discard
+  (Δd ≤ 0) and the v̄∈𝒱 filter no longer exclude waiting arcs.
+- **Algorithm 1 / flat §4.2 prose**: κ grows (band width/δ,τ); "about eight candidates" and the
+  |𝒜| numbers need re-measurement; unattainable-speed discard unchanged.
+- **Physics**: φ(d,t;0) must be defined (FCR at zero speed — hotel load? zero? affects whether
+  waiting is free or costed).
+- **fig:state-neighbours**: cone opens to the vertical (v_min edge becomes the "stay put" line) —
+  regenerate after the .tex settles.
+- **Luo comparison (§5)**: Luo keeps v_min = 8; band alignment note must say how we handle the
+  asymmetry (run Luo at [0,18]-equivalent? note the difference?).
+- **Audit interactions**: B-items unaffected; A1/A2 unchanged; C-item "v_{min} typesetting" (C8)
+  may become moot if v_min disappears from §3.
+- **Code**: dp_rebuild / C++ enumeration read v_min from config — experiments re-run needed once
+  the paper's 𝒱 changes are final.
+
 ## 1. TOP OF AGENDA — Tal's Aug 3 pass: the cost-to-go flip (finish it together)
 
 Tal's `c4f513c` ("update Bellman formulation…") made two good structural changes to §4.1 and left a
