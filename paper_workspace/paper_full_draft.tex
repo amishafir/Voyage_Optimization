@@ -749,18 +749,34 @@ construction, and because the node already sits on the grid, no target-versus-re
 %arises. For our grid a state typically has $\kappa\approx8$ such candidates.
 %arises. For our grid a state typically has about eight such candidates (the count is bounded at the
 %end of this section); Figure~\ref{fig:state-neighbours} shows one state and its candidate set.
+% ==== OLD ("shows one state and its candidate set" — single-image phrasing; the figure became a two-panel pair) — superseded 2026-08-07 ====
+%arises. The number of such candidates per state is small and band-limited (it is bounded at the
+%end of this section); Figure~\ref{fig:state-neighbours} shows one state and its candidate set.
 arises. The number of such candidates per state is small and band-limited (it is bounded at the
-end of this section); Figure~\ref{fig:state-neighbours} shows one state and its candidate set.
+end of this section); Figure~\ref{fig:state-neighbours} shows one such state and its candidate set
+for each of the two cases of the grid --- a state on a distance line (panel~a) and a state on a
+time line (panel~b).
 % ==== FIG realised 2026-08-04 (figures/plot_state_neighbours.py); float moved to §4.1, at the
 % ==== "ADD FIGURE." spot after the discretisation paragraph — the reference above still points to it ====
 %\todo{FIG: a single state $(d,t)$, its two walls $d_{\mathcal{D}(d)}$ and $t_{\mathcal{T}(t)}$, ...}
 
-Three boundary details complete the enumeration. First, the range endpoints above are placed on the
-grid by rounding: $\langle x\rangle_{\delta}:=\delta\,\mathrm{round}(x/\delta)$ snaps a distance to
-the nearest multiple of $\delta$, and $\langle\cdot\rangle_{\tau}$ does the same for time; we use
-$\delta=1$~NM and $\tau=0.1$~h, steps small against the physical scales --- segments of tens to
-hundreds of NM, six-hour forecast blocks --- so the induced timing error is at most half a step
-(Section~\ref{sec:certificate} measures the cost of the grid directly). Second, a distance wall
+% ==== OLD ("induced timing error is at most half a step" — speed-first relic: under node-first BOTH leg endpoints
+% ==== are predefined grid nodes of Eq. 4, so the leg speed is exact and no arrival is ever rounded) — superseded 2026-08-07 ====
+%Three boundary details complete the enumeration. First, the range endpoints above are placed on the
+%grid by rounding: $\langle x\rangle_{\delta}:=\delta\,\mathrm{round}(x/\delta)$ snaps a distance to
+%the nearest multiple of $\delta$, and $\langle\cdot\rangle_{\tau}$ does the same for time; we use
+%$\delta=1$~NM and $\tau=0.1$~h, steps small against the physical scales --- segments of tens to
+%hundreds of NM, six-hour forecast blocks --- so the induced timing error is at most half a step
+%(Section~\ref{sec:certificate} measures the cost of the grid directly). Second, a distance wall
+Three boundary details complete the enumeration. First, the window endpoints above are located on
+the grid by rounding arithmetic: $\langle x\rangle_{\delta}:=\delta\,\mathrm{round}(x/\delta)$
+rounds a distance to the nearest multiple of $\delta$, and $\langle\cdot\rangle_{\tau}$ does the
+same for time; we use $\delta=1$~NM and $\tau=0.1$~h. These operators serve only that endpoint
+arithmetic and the resolvability test below --- they never move an arrival: both endpoints of every
+leg are grid nodes of Eq.~\eqref{eq:state-space}, known exactly, so the leg speed
+$\bar v=(\tilde d-d)/(\tilde t-t)$ is exact between them and no rounding error enters a leg. The
+only discretisation effect is that decisions are restricted to grid nodes; the cost of that
+restriction is measured directly in Section~\ref{sec:certificate}. Second, a distance wall
 closer than $v_{\max}\tau$ cannot be resolved on the time grid --- every snapped arrival collapses
 back onto $t$ --- so the wall is skipped and the vessel glides past it, the time-wall candidates then
 extending beyond the skipped line as far as $v_{\max}$ allows (the glide rule). Third, a candidate

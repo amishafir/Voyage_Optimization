@@ -48,7 +48,11 @@ rectangle *behind* the vessel), C1 (**anchored vs absolute** δ-grid — design 
 (argmin-of-a-set notation), C4 (glide overclaim: "held constant across the rectangular sub-space"
 vs two-cell glide legs — standing item 3a), C5 ("Figure X" → can now point at
 `fig:state-neighbours`), C9 (§3 typo pass — the new band paragraph kept "seleceted",
-"will satisfying", "and and").
+"will satisfying", "and and"), **C11 (new, Aug 7)**: the sentence after Eq. (5) says arrivals are
+"**snapped** to the τ-grid / δ-grid" — under node-first nothing is snapped post hoc; the
+candidates are *drawn from* the grid and the leg speed between two known nodes is exact. Suggest
+"drawn from the τ-grid / δ-grid". (Ami's §4.2 prose was corrected on the same point on Aug 7 —
+the "half-a-step timing error" relic is gone; Eq.-(5)'s sentence is Tal's to fix.)
 
 **Ami's zone [A], quick batch (~30 min, waiting for go-ahead):** B1 (arc set vs 𝒜(d,t) in Eq. 9 —
 naming decision: ℰ?), B2 (§4.3 gain g→γ, collides with §3's g⁻¹), B3 (§3 d_i = leg length →
