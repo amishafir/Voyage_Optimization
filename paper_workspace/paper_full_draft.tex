@@ -792,8 +792,10 @@ same for time; we use $\delta=1$~NM and $\tau=0.1$~h. These operators serve only
 arithmetic and the resolvability test below --- they never move an arrival: both endpoints of every
 leg are grid nodes of Eq.~\eqref{eq:state-space}, known exactly, so the leg speed
 $\bar v=(\tilde d-d)/(\tilde t-t)$ is exact between them and no rounding error enters a leg. The
-only discretisation effect is that decisions are restricted to grid nodes; the cost of that
-restriction is measured directly in Section~\ref{sec:certificate}. Second, a distance wall
+% ==== OLD ("measured directly in Section 4.3") — §4.3 removed from the render 2026-08-07, pending the LB strategy ====
+%only discretisation effect is that decisions are restricted to grid nodes; the cost of that
+%restriction is measured directly in Section~\ref{sec:certificate}. Second, a distance wall
+only discretisation effect is that decisions are restricted to grid nodes. Second, a distance wall
 closer than $v_{\max}\tau$ cannot be resolved on the time grid --- every snapped arrival collapses
 back onto $t$ --- so the wall is skipped and the vessel glides past it, the time-wall candidates then
 extending beyond the skipped line as far as $v_{\max}$ allows (the glide rule). Third, a candidate
@@ -1204,6 +1206,12 @@ evaluation.
 
 
 %% ==== NEW STANDALONE SUBSECTION (2026-07-28): added after §4.2; no existing text modified ====
+%% ==== REMOVED FROM THE RENDERED PAPER 2026-08-07 (Ami): to be RE-WRITTEN once the lower-bound
+%% ==== analysis strategy is established (see docs/lb_neighbour_price_plan.md and meeting prep
+%% ==== 2026-08-10 §4.3 — the neighbour-price LB prototype is sound but not yet paper-tight).
+%% ==== Content preserved below, not rendered. Labels sec:certificate / eq:slide / tab:certificate
+%% ==== go inactive with it; the single outside reference (§4.2 snap paragraph) was rewired. ====
+\begin{comment}
 \subsection{How much does the grid cost? A local-optimality certificate}
 \label{sec:certificate}
 
@@ -1256,7 +1264,8 @@ inflates, the reported advantage. The certificate is local --- it bounds continu
 the decision points, not the global continuous optimum; a global certificate could be obtained by
 adapting the dynamic-discretisation lower bounds of \citet{Boland2017} and \citet{Marshall2021} to
 weather-dependent leg costs, which we leave to future work.
-%% ==== END NEW STANDALONE SUBSECTION ====
+\end{comment}
+%% ==== END NEW STANDALONE SUBSECTION (removed from render 2026-08-07, pending the LB strategy) ====
 
 %% ============================================================ 5. DATA & EXPERIMENTAL DESIGN
 \section{Data and experimental design}

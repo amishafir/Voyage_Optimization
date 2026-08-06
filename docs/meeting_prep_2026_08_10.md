@@ -101,10 +101,17 @@ the pre-Aug-5 band"), and κ are all still pre-band-change. **Blocked on: φ(d,t
 2 above). Note Luo keeps v_min = 8.0 — the §5 band-alignment note must say how the comparison
 handles the asymmetry.
 
-## 6. Carryovers (from Jul-27 / Aug-5, unchanged)
+## 6. Carryovers (from Jul-27 / Aug-5, updated Aug 7)
 
-- **§4.3 blessing** + the **§2.1 two drop-in sentences** (Jul-27 prep item 6) — awaiting Tal.
-- **Certificate as method?** (keep as §4.3 measurement vs report "SR + polish").
+- **§4.3 REMOVED from the rendered paper (Aug 7, Ami's decision)** — to be **re-written once the
+  lower-bound analysis strategy is established** (the neighbour-price LB prototype is sound but
+  16–18 % loose at the current grid; see `docs/lb_neighbour_price_plan.md`). Content preserved
+  under `\begin{comment}` in place; labels sec:certificate / eq:slide / tab:certificate inactive;
+  the one outside reference (§4.2 snap paragraph) rewired. Consequences: the **§2.1 two drop-in
+  sentences are ON HOLD** (they referenced sec:certificate), the "§4.3 blessing" ask to Tal is
+  superseded, and the "certificate as method?" question folds into the future LB-strategy design.
+  The polish machinery (`ddd_lb.py`) and the 19-voyage results remain valid inputs for the
+  rewrite.
 - Figures remaining: §5 forecast-error, §7.3 savings-vs-departure, fused-voyage placement.
 - One-sentence §5 note that Luo's lattice is likewise node-first.
 - Overleaf sync discipline (repo = source of truth; **pull before compiling** — bit us again Aug 4
