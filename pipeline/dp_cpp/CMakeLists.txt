@@ -26,6 +26,7 @@ set(SR_SOURCES
     src/frame.cpp
     src/atomic_edges.cpp
     src/bellman.cpp
+    src/streaming.cpp
     src/SR_main.cpp
 )
 
@@ -76,6 +77,7 @@ set(RUN_RH_SOURCES
     src/frame.cpp
     src/atomic_edges.cpp
     src/bellman.cpp
+    src/streaming.cpp
     src/SR_main.cpp
     src/luo_main.cpp
     src/run_rh.cpp

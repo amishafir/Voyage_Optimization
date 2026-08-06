@@ -21,6 +21,10 @@ struct SRArgs {
     std::optional<double> tau_h;
     int sample_hour = 0;   // departure-time anchor (Phase 1; unused in Phase 0)
     bool node_first = false;  // node-first arc enumeration (T20) vs the SOG grid
+    // Engine selection (streaming refactor Phase 4). Unset -> streaming for
+    // node-first, legacy for the SOG grid (mirrors the Python default).
+    // "legacy" | "streaming"; an explicit value always wins.
+    std::optional<std::string> engine;
 };
 
 struct SRResult {

@@ -31,6 +31,19 @@ struct AtomicEdge {
 // d_start              → absolute distance (nm) the (sub-)voyage begins at;
 //                        the BFS source is (0, d_start). Distances stay ABSOLUTE
 //                        so geo/weather lookups remain geographically correct.
+// Per-source enumerator (streaming refactor Phase 4: exposed for the
+// streaming engine — previously a static helper of the BFS builder).
+// Resolves the source's weather (with NaN walkback) once, then emits the
+// node-first A(d,t) candidates priced on the spot (or the legacy SOG grid
+// when node_first = false). Returns {} at the sink or when no valid
+// weather exists.
+std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
+                                      const Frame& frame,
+                                      int forecast_hour,
+                                      int override_sample_hour,
+                                      const TimeKey& time_key,
+                                      bool node_first = false);
+
 std::pair<std::vector<Node>, std::vector<AtomicEdge>>
 build_atomic_edges(const Frame& frame,
                    int forecast_hour        = -1,

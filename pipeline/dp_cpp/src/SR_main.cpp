@@ -1,6 +1,7 @@
 #include "SR_main.hpp"
 #include "atomic_edges.hpp"
 #include "bellman.hpp"
+#include "streaming.hpp"
 #include "frame.hpp"
 #include "nodes.hpp"
 #include "route.hpp"
@@ -97,7 +98,44 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     Frame frame = make_frame(route, voyage, wps, &base_cfg, args.sample_hour);
     if (verbose) summarize_frame(frame);
 
-    // ---- Build atomic-edge graph ----
+    // ---- Engine selection (streaming refactor Phase 4) ----
+    // Unset -> streaming for node-first, legacy for the SOG grid; an
+    // explicit --engine always wins. Mirrors the Python default.
+    const bool use_streaming =
+        args.engine ? (*args.engine == "streaming") : args.node_first;
+
+    SRResult out;
+    out.eta_h           = frame.cfg.eta_h;
+    out.route_length_nm = frame.cfg.length_nm;
+    out.waypoints       = std::move(wps);
+    out.sample_hour     = args.sample_hour;
+    out.d_start         = d_start;
+
+    if (use_streaming) {
+        // One-pass fused engine: discovery + pricing + valuation together;
+        // only (C*, pred) stored, the arc set never materialised.
+        if (verbose) print_header("dp_SR — streaming pass (build+solve fused)");
+        auto t0 = std::chrono::steady_clock::now();
+        StreamingResult sres = solve_streaming(frame, frame.cfg.eta_h,
+                                               time_key, d_start,
+                                               args.node_first);
+        double pass_t = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - t0).count();
+        out.total_fuel_mt = sres.total_fuel_mt;
+        out.voyage_time_h = sres.voyage_time_h;
+        out.n_nodes       = sres.n_states;
+        out.n_edges       = sres.n_edges_evaluated;
+        out.build_s       = 0.0;
+        out.solve_s       = pass_t;
+        // The winning path doubles as the edge store: schedule = iota.
+        out.schedule.resize(sres.path.size());
+        for (std::size_t i = 0; i < sres.path.size(); ++i)
+            out.schedule[i] = static_cast<int>(i);
+        out.edges = std::move(sres.path);
+        return out;
+    }
+
+    // ---- Legacy two-phase engine ----
     if (verbose) print_header("dp_SR — build atomic-edge graph");
     auto t0 = std::chrono::steady_clock::now();
     // override_sample_hour = -1 → time-varying weather using the file's
@@ -123,20 +161,14 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     double solve_t = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
 
-    SRResult out;
     out.total_fuel_mt = res.total_fuel_mt;
     out.voyage_time_h = res.voyage_time_h;
-    out.eta_h         = frame.cfg.eta_h;
-    out.route_length_nm = frame.cfg.length_nm;
     out.n_nodes       = nodes.size();
     out.n_edges       = edges.size();
     out.build_s       = build_t;
     out.solve_s       = solve_t;
     out.schedule      = std::move(res.schedule);
     out.edges         = std::move(edges);
-    out.waypoints     = std::move(wps);
-    out.sample_hour   = args.sample_hour;
-    out.d_start       = d_start;
     return out;
 }
 
@@ -166,6 +198,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--tau_h")     args.tau_h     = std::stod(need_next());
         else if (arg == "--sample_hour") args.sample_hour = std::stoi(need_next());
         else if (arg == "--node_first") args.node_first  = true;
+        else if (arg == "--engine")    args.engine    = need_next();
         else if (arg == "--smoke")     smoke          = true;
         else if (arg == "--csv")       write_csv      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
@@ -205,6 +238,7 @@ int main(int argc, char* argv[]) {
     // ---- Summary ----
     print_header("dp_SR — SUMMARY");
     printf("  Total fuel:  %.3f mt\n", r.total_fuel_mt);
+    printf("  Total fuel (full): %.17g mt\n", r.total_fuel_mt);
     printf("  Voyage time: %.3f h  (ETA = %.1f h)\n", r.voyage_time_h, r.eta_h);
     printf("  Graph: %zu nodes, %zu atomic edges\n", r.n_nodes, r.n_edges);
     printf("  Build: %.1f s  Solve: %.2f s\n\n", r.build_s, r.solve_s);

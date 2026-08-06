@@ -26,12 +26,14 @@ static LineType line_type_at(double t, double d, const Frame& frame) {
 //     with walkback to the most recent valid sample if the cell is NaN at the
 //     requested sample_hour. This handles 6 h cadence and failed collection
 //     cycles (e.g. sh=12 with 100 % NaN rows).
-static std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
-                                               const Frame& frame,
-                                               int forecast_hour,
-                                               int override_sample_hour,
-                                               const TimeKey& time_key,
-                                               bool node_first = false) {
+// non-static since the streaming refactor (Phase 4): the streaming engine
+// calls this directly. Declared in atomic_edges.hpp (default arg lives there).
+std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
+                                      const Frame& frame,
+                                      int forecast_hour,
+                                      int override_sample_hour,
+                                      const TimeKey& time_key,
+                                      bool node_first) {
     if (std::abs(src_d - frame.cfg.length_nm) < 1e-9) return {};
 
     const auto& sh_list = frame.voyage->sample_hours();
