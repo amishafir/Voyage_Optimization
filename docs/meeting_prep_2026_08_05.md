@@ -83,8 +83,26 @@ writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main
    (d̃,t̃), else the queue never grows; (D,T) uses undefined D (→ L/d_M); Input line still says
    band [v_min,v_max]; title "Belman's"; line 12 stray "not empty"; waiting arcs at/near d=L need
    𝒜 to emit v̄=0 self-arcs (interacts with C1 anchoring) and φ(d,t;0) must be defined.
-   **DECISION (Ami): wait for Tal's next push before touching anything** — walkthrough rewrite,
-   1C paragraph, and Eq.-(6) reconciliation all queue behind it.
+   ~~**DECISION (Ami): wait for Tal's next push before touching anything**~~ **RESOLVED (Aug 6):
+   Tal's "failed" push had actually succeeded — the file he emailed is byte-identical to
+   `8c083dd`. The plan executed on top of it:**
+   - **1C shortest-path paragraph inserted** at the end of §4.1, before §4.2 — *direction-neutral
+     wording* (vertices/arcs/weights, shortest path from (0,0), DAG ⇒ one forward pass; the C*
+     sentence dropped to avoid clashing with the unresolved Eq.-(6) direction).
+   - **§4.2 walkthrough rewritten to Tal's forward algorithm**: intro = "not four steps but one"
+     (discover + discretise + price + VALUE in a single pass; only (C*, pred) stored; lex pop
+     order ⇒ labels final at pop); windows reworded for 𝒱=[0,v_max] (slow side open, waiting arc
+     on the time wall); pricing¶ = "pricing and solving are the same act"; extraction¶ = unique
+     terminal state (L,T) via waiting, **eq:opt-fuel flipped to F\*=C\*(L,T)**, backtrack J\*;
+     Tractability = "one pass" wording, numbers marked as measured under the pre-Aug-5 band.
+   - **fig:state-neighbours regenerated for [0,v_max]**: vertical waiting edge, family 2 spans
+     the whole stretch, **κ=16** (caption updated).
+   - **Still open (Tal's zone):** Eq. (6) direction (cost-to-go) vs everything else (to-arrive) —
+     §4.2 now consistently to-arrive; §4.1's Eq. (6), boundary condition, V*, and solution prose
+     remain to-go. Plus the box slips from the analysis above (line-9 push target, undefined D,
+     stale Input band, "Belman's"). The walkthrough HTML (Parts 6–7) is now one revision behind
+     again.
+   - Experiments/code re-runs under 𝒱=[0,v_max] pending (items 4–6 designs).
 8. **NEXT TASK (after the meeting, once Tal pushes): rewrite the section after the pseudocode** —
    the flat-§4.2 walkthrough prose (single-pass construction → boundary details → pricing →
    backward sweep → extraction → tractability) must be rewritten to match **Tal's new version of

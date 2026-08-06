@@ -32,13 +32,12 @@ from matplotlib.lines import Line2D
 d0, t0 = 10.0, 0.4          # the popped state (on the distance line d = 10)
 DW = 30.0                   # next distance wall  d_D(d)
 TW = 2.4                    # next time wall      t_T(t)
-VMAX, VMIN = 20.0, 8.0      # admissible speed band (NM/h) -- cone edges
+VMAX, VMIN = 20.0, 0.0      # admissible band V = [0, v_max] (2026-08-05 decision): waiting allowed
 TAU, DELTA = 0.2, 2.0       # grid steps on the walls (tau on DW, delta on TW)
 
 t_fast = t0 + (DW - d0) / VMAX          # v_max hits the distance wall (1.4)
-t_slow = t0 + (DW - d0) / VMIN          # v_min would hit it at 2.9 > TW
-d_slow = d0 + VMIN * (TW - t0)          # v_min hits the time wall at 26
-d_fast = d0 + VMAX * (TW - t0)          # v_max "hits" it at 50 -> capped at DW
+d_slow = d0 + VMIN * (TW - t0)          # v = 0: no advance -- the slow edge is vertical (d_slow = d0)
+d_fast = d0 + VMAX * (TW - t0)          # v_max "hits" the time wall at 50 -> capped at DW
 
 # family 1: arrival times on the distance wall, anchored at TW stepping back
 fam1_t, n = [], 0
@@ -84,16 +83,14 @@ while dd > d0 - 6:
         ax.scatter([dd], [TW], s=10, color=FAINT, zorder=2)
     dd -= DELTA
 
-# the admissible speed cone
+# the admissible speed cone (slow edge vertical: v = 0, the vessel may wait in place)
 cone = Polygon([(d0, t0), (DW, t_fast), (DW, TW), (d_slow, TW)],
                closed=True, facecolor="#fff3e0", edgecolor="none",
                alpha=0.85, zorder=1.2)
 ax.add_patch(cone)
 ax.plot([d0, DW], [t0, t_fast], color=ORANGE, lw=1.8, zorder=3)          # v_max edge
-ax.plot([d0, d_slow], [t0, TW], color=ORANGE, lw=1.8, zorder=3)          # v_min edge
-# dotted continuations showing why each window is clipped/capped
-ax.plot([d_slow, d_slow + 1.6], [TW, TW + 1.6 / VMIN],
-        color=ORANGE, lw=1.0, ls=(0, (2, 3)), alpha=0.55, zorder=2.5)    # v_min past the block
+ax.plot([d0, d_slow], [t0, TW], color=ORANGE, lw=1.8, zorder=3)          # v = 0 edge (vertical)
+# dotted continuation showing why the fast window is capped at the wall
 ax.plot([DW, DW + 3.0], [t_fast, t_fast + 3.0 / VMAX],
         color=ORANGE, lw=1.0, ls=(0, (2, 3)), alpha=0.55, zorder=2.5)    # v_max past the wall
 
@@ -124,12 +121,13 @@ ax.annotate(r"$t_{\mathcal{T}(t)}$ — next time line (forecast refreshes)",
             (d0 - 5.2, TW), xytext=(0, 8), textcoords="offset points",
             fontsize=8.5, color="#607080", style="italic")
 
-# cone-edge labels (v_max above its ray, v_min below its ray — outside the cone)
+# cone-edge labels (v_max above its ray; the vertical edge is v = 0 — waiting)
 ax.annotate(r"$v_{\max}$", (d0 + (DW - d0) * 0.55, t0 + (DW - d0) * 0.55 / VMAX),
             xytext=(0, 10), textcoords="offset points", fontsize=9.5, color=ORANGE,
             ha="center")
-ax.annotate(r"$v_{\min}$", (d0 + (d_slow - d0) * 0.60, t0 + (d_slow - d0) * 0.60 / VMIN),
-            xytext=(-16, -12), textcoords="offset points", fontsize=9.5, color=ORANGE)
+ax.annotate(r"$\bar v = 0$ (wait)", (d0, 1.02),
+            xytext=(-8, 0), textcoords="offset points", fontsize=9.5, color=ORANGE,
+            rotation=90, va="center", ha="right")
 
 # derived-speed line — top band, no arrow (applies to every candidate)
 ax.text(15.5, 0.09,
@@ -144,9 +142,8 @@ ax.annotate("$v_{\\max}$ crosses the wall before the block ends\n"
             fontsize=7.8, color="#8a6d3b", ha="center",
             arrowprops=dict(arrowstyle="-", color="#8a6d3b", lw=0.7,
                             connectionstyle="arc3,rad=-0.18"))
-ax.annotate("$v_{\\min}$ leaves the block before reaching the wall\n"
-            "→ family 1 clipped at the time wall",
-            (d_slow, TW), xytext=(12.0, 1.92), textcoords="data",
+ax.annotate("slow speeds (down to waiting in place) leave the\nblock first → family 1 clipped at the time wall",
+            (d0 + 0.4, TW - 0.05), xytext=(13.6, 1.78), textcoords="data",
             fontsize=7.8, color="#8a6d3b", ha="center",
             arrowprops=dict(arrowstyle="-", color="#8a6d3b", lw=0.7,
                             connectionstyle="arc3,rad=0.15"))
