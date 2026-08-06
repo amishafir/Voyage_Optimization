@@ -1,5 +1,8 @@
 # Meeting Prep — Tuesday 2026-08-05 (Ami ↔ Tal)
 
+> **⇒ Open issues migrated to [meeting_prep_2026_08_10.md](meeting_prep_2026_08_10.md) (next
+> Monday). This file is the closed record of the Aug-5 meeting and its same-week follow-ups.**
+
 Continues from [meeting_prep_2026_07_27.md](meeting_prep_2026_07_27.md). Repo HEAD at time of
 writing: `c4f513c` (Tal, Aug 3). Everything below is committed & pushed on `main`.
 
