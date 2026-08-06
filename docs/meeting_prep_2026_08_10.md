@@ -38,8 +38,58 @@ paragraph was worded direction-neutral — both survive either choice.
 
 Also to confirm with Tal: the unique terminal state `(D,T)` relies on **waiting arcs** — Eq. (5)
 must actually emit v̄=0 self-advancing arcs near/at `d = L` (𝒟(L) is an empty min — formalism gap),
-and **φ(d,t;0) must be defined** (is waiting free, or hotel load?). The φ(·;0) decision also
-**blocks the re-runs** (item 5).
+and ~~φ(d,t;0) must be defined~~ **φ(d,t;0) DECIDED — see section 2A below**.
+
+## 2A. DECIDED (Aug 7, Ami): φ(d,t;0) = 0 — waiting is FREE. Change inventory (designed, not yet applied)
+
+**The decision:** waiting burns no fuel. It makes Tal's extraction argument exact — arrive early,
+wait to T for free, so C\*(L,T) = min over all sinks and **(L,T) is the unique terminal state** —
+at the price of one conscious modeling statement: the DP may wait out storms mid-ocean at zero
+cost.
+
+**The subtle consequence to state in the paper:** φ(·;0)=0 creates a **discontinuity at v=0 in
+adverse weather** (as v→0⁺, station-keeping against the current needs positive SWS ⇒ φ(v)→φ₀>0,
+while φ(0)≡0). So in adverse cells, mixing free waiting with faster sailing can beat constant slow
+creeping — the DP finds this automatically (convex envelope through the origin), but §4's
+structural claim "SOG constant within a rectangle" needs the caveat **"constant except possibly
+mixed with waiting"**. In calm/following weather φ is continuous through 0 and the claim survives.
+
+**Paper changes — Tal's zones [T]:**
+1. Eq. (5): emit the **waiting candidate (d, t_𝒯(t)) unconditionally** — family 2 only yields
+   d′=d when the cell width is δ-aligned (interacts with C1 anchoring).
+2. Waiting at d = d_M: 𝒟(L) is an empty min ⇒ 𝒜(L,t) undefined — needs a d=d_M clause or a
+   prose convention.
+3. One sentence at the φ definition: "By convention φ(d,t;0)=0 — waiting burns no fuel."
+4. §4 structural-property 3: the constant-SOG caveat above.
+5. **Open (blocks re-runs):** what is **v_max** now (mean+3? vessel cap?), and the **Luo band
+   policy** (keep Luo at its own 8–18? run at [0,v_max] where a v=0 block = waiting?).
+
+**Paper changes — Ami's zones [A], ready on go-ahead:** §4.2 extraction paragraph gets the
+explicit "waiting is free ⇒ C\*(L,T)=min over sinks ⇒ unique terminal state" justification;
+intro's "continues to the deadline at zero speed" + "at zero cost"; figure captions note the
+vertical cone edge is itself a candidate (the free wait); Tractability numbers pending
+re-measurement.
+
+**Code changes (Python then C++ mirror; gates per the streaming-refactor pattern):**
+- K1 `neighbour_candidates`/C++ node-first block: emit the wait candidate (src_d, next_v) at
+  every state (currently killed by the d′>d+ε guard); guard the family-1 t_slow = Δd/v_min
+  division at v_min=0 (window clips at wall/T only).
+- K2 `price_candidate`/C++ pricing: special-case Δd=0 → sog=sws=fcr=fuel=0. **The φ(·;0)=0
+  convention lives here, in the arc_cost primitive — one home.**
+- K3 band defaults: v_min=0 in GraphConfig (both languages); `--min_speed` kept as override so
+  the frozen 19-voyage goldens stay reproducible.
+- K4 extraction: NO code change — min-over-sinks best_sink ≡ (L,T)-unique-sink under free
+  waiting (equivalence noted; no waiting-at-L arcs materialised).
+- K5 streaming invariant survives (waiting arcs still have Δt>0; pop order stays topological).
+- K6 new goldens `*_v0.json` minted after the change; old goldens retained.
+- K7 `lb_bound`: v⁻ clips at 0; slowest-candidate discount hits φ(0)=0 ⇒ bound loosens further
+  (already an open question in the LB plan).
+- K8 RH band centring (`v_min = mean−3` in both sr_solves) → 0; interacts with the v_max
+  convention (item 5 above).
+
+**Sequence:** [A]-zone paper edits + K1–K6 implementable now behind config; the re-runs (section
+5) additionally wait on the two [T] open points (v_max convention, Luo band policy) and Tal's
+blessing of the Eq.-(5) waiting candidate.
 
 ## 3. Audit remainder (from prep-08-05 §1B; A4/B7/C2/C7 already resolved)
 
@@ -97,11 +147,52 @@ Items 1–3 interlock and land best as one refactor, after φ(·;0) and the Eq.-
 ## 5. THE BIG ONE — re-run everything under 𝒱 = [0, v_max]
 
 All §5–§7 results, the §4.3 certificate table, the Tractability numbers (marked "measured under
-the pre-Aug-5 band"), and κ are all still pre-band-change. **Blocked on: φ(d,t;0) definition** (item
-2 above). Note Luo keeps v_min = 8.0 — the §5 band-alignment note must say how the comparison
+the pre-Aug-5 band"), and κ are all still pre-band-change. ~~Blocked on: φ(d,t;0) definition~~
+**φ(·;0)=0 DECIDED (section 2A)** — remaining blockers: the **v_max convention** and the **Luo
+band policy** (section 2A item 5), plus Tal's blessing of the Eq.-(5) waiting candidate. Note Luo
+keeps v_min = 8.0 in the original article — the §5 band-alignment note must say how the comparison
 handles the asymmetry.
 
-## 6. Carryovers (from Jul-27 / Aug-5, updated Aug 7)
+## 6. NEW (Aug 7) — experiment capacity of the collected data
+
+Audit of the local HDF5 files (`pipeline/data/`, the **Jun-1** snapshot) to answer "how many
+voyages can we actually run?".
+
+**Coverage.** Both files span `sample_hour` 6/0 → **2052** on the 6h NWP cycle — **85.5 days**,
+342 (exp_b) / 343 (exp_d) cycles. Forecast cycles missing: **19** (exp_b) / **8** (exp_d), sharing
+two outages (`sh 540`, `sh 732–756`). Forecast horizon **−26 → +160 h**, hourly.
+
+| Design | route1 (Malacca, ETA 280 h) | route2 (Atlantic, ETA 168 h) | total |
+|---|---|---|---|
+| **Non-overlapping chain** (N+1 departs when N arrives) | 7 | 12 | **19** |
+| departures every 72 h | 25 | 27 | 52 |
+| departures every 24 h | 74 | 79 | 153 |
+| every 6h grid point (max) | 295 | 315 | 610 |
+| …with a forecast cycle present at departure | 276 | 307 | 583 |
+
+**The frozen 19-voyage golden set IS the complete non-overlapping enumeration of the local data** —
+`run_chain_sweep.ROUTES` steps by ETA and stops at 1966 / 2016, both just under 2052. No headroom
+left at that design. Anything above 19 buys n at the cost of independence (daily route1 departures
+overlap 91 % of their weather window ⇒ effective n barely above 7; would need block bootstrap /
+cluster-robust errors, not more rows).
+
+**Two structural limits (properties of the collection, not the solver):**
+- **Forecast horizon 160 h < route1 ETA 280 h** — no single cycle covers a Malacca voyage; the
+  deterministic-at-departure plan is blind for its last ~120 h. Route2 is 8 h short. Unchanged by
+  fresh data. *Worth a sentence in the §5 band-alignment / Mode-C note.*
+- **Compute, not data, bounds the RH sweeps** — deterministic is cheap (~30 s/voyage route1,
+  ~12 s route2 ⇒ full 19-set ≈ 25 min); RH is 46 replans/voyage (route1) / 28 (route2), and the
+  cold-cache run took **8.9 h**. At 8.25 GB peak RSS vs 48 GB local, ~4 concurrent, not 12.
+
+**THE LEVER — pull fresh data.** Shlomo2/Edison are at `sample_hour` **3648** (152 days, **+78 %**),
+both collectors green (0 failed waypoints, 478 s/cycle). That takes the independent-voyage count
+**19 → 34** (route1 **13**, route2 **21**) with no design change and no independence compromise,
+and it grows by one route2 voyage/week, one route1/~12 days.
+**Decision for Monday:** re-freeze the goldens on the fresh pull (34 voyages) before the §5
+re-runs, or keep the 19-voyage set for continuity and pull afterwards? (Download ≈ 740 MB over
+VPN.) Note the bigger n also feeds the LB-strategy rewrite tracked in §7.
+
+## 7. Carryovers (from Jul-27 / Aug-5, updated Aug 7)
 
 - **§4.3 REMOVED from the rendered paper (Aug 7, Ami's decision)** — to be **re-written once the
   lower-bound analysis strategy is established** (the neighbour-price LB prototype is sound but
@@ -119,7 +210,7 @@ handles the asymmetry.
 - `pipeline/dp_cpp/src/MODE_C_PORT_SPEC.md` — what does Tal want driven from it?
 - Next milestones: internal review pass (paper-reviewer / paper-critic) → TR-C submission.
 
-## 7. Docs debt (Ami, no decisions needed)
+## 8. Docs debt (Ami, no decisions needed)
 
 - `docs/state_space_evolution.html` Parts 6–7 still describe the backward-sweep version → add
   Part 8 (Tal's forward algorithm + flat §4.2 + the two-panel figure).
