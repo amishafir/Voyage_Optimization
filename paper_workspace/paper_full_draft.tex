@@ -723,9 +723,22 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 % ==== OLD opening ("Stage 1 ... answers the first question") — reworked for the flat flow ====
 %Stage~1 (lines 1--10) answers the first question: \emph{which decisions exist?} Consider a state
 % ==== line refs updated 2026-08-06 to Tal's Aug-5 box ====
-To see the single pass at work (lines 1--9), consider a state
-$(d,t)$ as the loop pops it (line~4) --- popped in lexicographic $(t,d)$ order, so every state that
-could have improved it has already been processed and its value $C^{*}(d,t)$ is final. The vessel
+% ==== OLD (opening jumped straight to the pop of line 4; lines 1-3 were never anchored) — superseded 2026-08-07,
+% ==== walkthrough deepened so the box reads top to bottom through the prose ====
+%To see the single pass at work (lines 1--9), consider a state
+%$(d,t)$ as the loop pops it (line~4) --- popped in lexicographic $(t,d)$ order, so every state that
+%could have improved it has already been processed and its value $C^{*}(d,t)$ is final. The vessel
+%is $d$~NM from departure at elapsed time $t$,
+To see the single pass at work (lines 1--9), read the box from the top. Line~1 sets the labels:
+$C^{*}(0,0)=0$ and $C^{*}(d,t)=\infty$ everywhere else --- at any moment of the run, the label
+$C^{*}(d,t)$ reads as \emph{the cheapest way found so far to reach $(d,t)$}, with $\infty$ standing
+for ``no way found yet''. Line~2 seeds the queue with the origin, the one state whose label is
+already final, and line~3 keeps the loop alive while any state awaits expansion. The pop rule of
+line~4 is what makes a single pass suffice: the loop always expands the lexicographically
+$(t,d)$-smallest queued state, and because every leg strictly increases time, any state that could
+still improve $(d,t)$ lies strictly earlier in that order and has already been popped and expanded
+--- so when $(d,t)$'s turn comes, no improvement to it remains anywhere in the queue and its label
+is final. Now consider a state $(d,t)$ at the moment it is popped. The vessel
 is $d$~NM from departure at elapsed time $t$,
 somewhere inside a weather cell and a forecast block. Ahead of it stand two walls: the next distance
 line $d_{\mathcal{D}(d)}$, where the sea conditions change, and the next time line
@@ -742,7 +755,11 @@ down to the time wall (a slow enough speed arrives arbitrarily late, so only the
 the window); on the time wall, every $\delta$-spaced grid point between no advance at all
 ($\bar v=0$ --- with $\mathcal{V}=[0,v_{\max}]$ the vessel may wait) and the longest advance
 $d+v_{\max}(t_{\mathcal{T}(t)}-t)$. These are
-exactly the two families of Eq.~\eqref{eq:neighbors}. No speed set is ever introduced: each
+% ==== OLD (families sentence without the live-evaluation reading of line 5) — superseded 2026-08-07 (line-by-line deepening) ====
+%exactly the two families of Eq.~\eqref{eq:neighbors}. No speed set is ever introduced: each
+exactly the two families of Eq.~\eqref{eq:neighbors}: the \textbf{for} of line~5 is that equation
+evaluated live --- the candidates enumerated as they are needed, never stored. No speed set is ever
+introduced: each
 candidate node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$, admissible by
 construction, and because the node already sits on the grid, no target-versus-realised speed gap
 % ==== OLD ("typically has κ≈8 such candidates" — audit item B7; count changed again with the [0,v_max] band) ====
@@ -797,11 +814,22 @@ the closure discovers exactly the subset of the grid $\mathcal{S}$ that is reach
 states that reach the final time line short of $L$ are dead ends whose treatment falls to Stage~2.
 \end{comment}
 % ==== NEW (2026-08-06: pricing and valuation are the same act; only (C*, pred) is kept) ====
+% ==== OLD (lines 6-8 anchored as one undifferentiated block) — superseded 2026-08-07 (line-by-line deepening:
+% ==== relax test, label update, and predecessor record each read separately) ====
+%Each surviving candidate is priced on the spot, at $\phi(d,t;\bar v)\,(\tilde t-t)$ --- the FCR of
+%the cell and forecast block that the source $(d,t)$ fixes, evaluated at the leg speed, times the
+%leg duration, exactly the summand of Eq.~\eqref{eq:cost-to-arrive} --- and immediately used: if
+%reaching $(\tilde d,\tilde t)$ through $(d,t)$ beats that state's current value, the value and the
+%predecessor are updated (lines~6--8) and the improved state joins the queue (line~9). Pricing and
 Each surviving candidate is priced on the spot, at $\phi(d,t;\bar v)\,(\tilde t-t)$ --- the FCR of
 the cell and forecast block that the source $(d,t)$ fixes, evaluated at the leg speed, times the
-leg duration, exactly the summand of Eq.~\eqref{eq:cost-to-arrive} --- and immediately used: if
-reaching $(\tilde d,\tilde t)$ through $(d,t)$ beats that state's current value, the value and the
-predecessor are updated (lines~6--8) and the improved state joins the queue (line~9). Pricing and
+leg duration, exactly the summand of Eq.~\eqref{eq:cost-to-arrive} --- and immediately used. The
+test of line~6 asks, in words: \emph{is reaching $(\tilde d,\tilde t)$ through $(d,t)$ cheaper
+than the best way found so far?} --- the leg price is computed right here, once, at the only moment
+the leg is ever looked at. If the answer is yes, line~7 overwrites the label
+$C^{*}(\tilde d,\tilde t)$ with the cheaper value, line~8 records $(d,t)$ as the winning
+predecessor --- the one memory the design decision above grants each state --- and the improved
+state joins the queue (line~9). Pricing and
 solving are the same act; no arc outlives the loop iteration that created it, and the only record
 kept per state is the pair $\bigl(C^{*},\,pred\bigr)$. A leg constructed this way has no fixed
 length: it ends at the first boundary where either the sea conditions change or a decision epoch is
@@ -1116,9 +1144,16 @@ is unique. The optimal voyage fuel is read there,
 \label{eq:opt-fuel}
 F^{\star} \;=\; C^{*}(L,T),
 \end{equation}
-a hard arrival constraint ($F^{\star}=\infty$ exactly when the ETA cannot be met at all), and the
-optimal journey $J^{\star}$ is recovered by backtracking the recorded predecessors from $(L,T)$ to
-the origin (lines~12--14); the SOG of each leg is the slope between its consecutive points.
+% ==== OLD (extraction anchored only as the block "lines 12-14") — superseded 2026-08-07 (line-by-line deepening) ====
+%a hard arrival constraint ($F^{\star}=\infty$ exactly when the ETA cannot be met at all), and the
+%optimal journey $J^{\star}$ is recovered by backtracking the recorded predecessors from $(L,T)$ to
+%the origin (lines~12--14); the SOG of each leg is the slope between its consecutive points.
+a hard arrival constraint ($F^{\star}=\infty$ exactly when the ETA cannot be met at all). The walk
+then starts at the terminal state (line~10) and opens the journey $J^{\star}$ with it (line~11);
+each turn of the loop (line~12) steps to the recorded predecessor of the current state (line~13)
+and prepends it to $J^{\star}$ (line~14), so the journey grows backward until the origin is
+reached, and line~15 returns $J^{\star}$ --- the optimal journey as an ordered list of grid nodes,
+the SOG of each leg being the slope between its consecutive points.
 Extending the time lines beyond $T$ and pricing each hour of late arrival at $\lambda$ units of
 fuel turns the hard deadline into a soft one and recovers the hard constraint as
 $\lambda\to\infty$; all results in this paper use the hard constraint.
