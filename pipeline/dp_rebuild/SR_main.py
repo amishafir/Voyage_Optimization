@@ -102,6 +102,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--node_first", action="store_true",
                     help="Use node-first arc enumeration (Tal, T20) instead of the "
                          "speed grid — distinct far-wall grid nodes, corner-handled.")
+    ap.add_argument("--engine", choices=["legacy", "streaming"], default="legacy",
+                    help="legacy = two-phase build->solve (stores the full arc set); "
+                         "streaming = one-pass fused engine (stores only (C*, pred) "
+                         "per state; node-first only). Bit-exact by design.")
     return ap.parse_args()
 
 
@@ -171,36 +175,55 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
     t0 = time.time()
     if node_first is None:
         node_first = bool(getattr(args, "node_first", False))
-    nodes, edges = build_atomic_edges(frame,
-                                      forecast_hour=None,
-                                      override_sample_hour=None,
-                                      verbose=False,
-                                      time_key=time_key,
-                                      d_start=d_start,
-                                      node_first=node_first)
-    build_t = time.time() - t0
-    if verbose:
-        print(f"Build time: {build_t:.2f} s")
-        summarize_atomic_edges(nodes, edges)
+    engine = getattr(args, "engine", "legacy") or "legacy"
+    if engine == "streaming":
+        # One-pass fused engine (streaming refactor Phase 2): discovery,
+        # pricing and valuation in the same pass; only (C*, pred) stored.
+        from streaming import solve_streaming
+        res, stats = solve_streaming(frame, eta=cfg.eta_h,
+                                     time_key=time_key, d_start=d_start,
+                                     node_first=node_first)
+        build_t = 0.0
+        solve_t = time.time() - t0
+        n_nodes, n_edges = stats.n_nodes, stats.n_edges_evaluated
+        if verbose:
+            _print_header("dp_SR — SUMMARY (streaming)")
+            print(f"  Total fuel:  {res.total_fuel_mt:.3f} mt")
+            print(f"  Voyage time: {res.voyage_time_h:.3f} h  (ETA = {cfg.eta_h:.1f} h)")
+            print(f"  Visited: {n_nodes} states, {n_edges} candidate legs")
+            print(f"  Pass: {solve_t:.1f} s")
+    else:
+        nodes, edges = build_atomic_edges(frame,
+                                          forecast_hour=None,
+                                          override_sample_hour=None,
+                                          verbose=False,
+                                          time_key=time_key,
+                                          d_start=d_start,
+                                          node_first=node_first)
+        build_t = time.time() - t0
+        if verbose:
+            print(f"Build time: {build_t:.2f} s")
+            summarize_atomic_edges(nodes, edges)
 
-    t0 = time.time()
-    solver = BellmanSolver(nodes, edges)
-    solver.solve()
-    res = solver.result(eta_mode="hard", eta=cfg.eta_h)
-    solve_t = time.time() - t0
+        t0 = time.time()
+        solver = BellmanSolver(nodes, edges)
+        solver.solve()
+        res = solver.result(eta_mode="hard", eta=cfg.eta_h)
+        solve_t = time.time() - t0
+        n_nodes, n_edges = len(nodes), len(edges)
 
-    if verbose:
-        _print_header("dp_SR — SUMMARY")
-        print(f"  Total fuel:  {res.total_fuel_mt:.3f} mt")
-        print(f"  Voyage time: {res.voyage_time_h:.3f} h  (ETA = {cfg.eta_h:.1f} h)")
-        print(f"  Graph: {len(nodes)} nodes, {len(edges)} atomic edges")
-        print(f"  Build: {build_t:.1f} s  Solve: {solve_t:.2f} s")
+        if verbose:
+            _print_header("dp_SR — SUMMARY")
+            print(f"  Total fuel:  {res.total_fuel_mt:.3f} mt")
+            print(f"  Voyage time: {res.voyage_time_h:.3f} h  (ETA = {cfg.eta_h:.1f} h)")
+            print(f"  Graph: {len(nodes)} nodes, {len(edges)} atomic edges")
+            print(f"  Build: {build_t:.1f} s  Solve: {solve_t:.2f} s")
 
     return {
         "total_fuel_mt": res.total_fuel_mt,
         "voyage_time_h": res.voyage_time_h,
-        "n_nodes": len(nodes),
-        "n_edges": len(edges),
+        "n_nodes": n_nodes,
+        "n_edges": n_edges,
         "build_s": build_t,
         "solve_s": solve_t,
         "schedule": res.schedule,
