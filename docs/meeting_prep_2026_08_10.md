@@ -72,6 +72,24 @@ defined at first use), C8 (v_max typesetting consistency), C10 (one sentence:
 
 Items 1–3 interlock and land best as one refactor, after φ(·;0) and the Eq.-(6) direction settle.
 
+**STATUS (Aug 7):**
+- **Items 1+2 UNDERWAY — Python side green.** Design doc `docs/refactor_streaming_design.md`
+  (approved). Phase 0: `regression_freeze.py` + goldens committed (quick + full 19-voyage sets;
+  quick reproduces the July-16 sweep exactly). Phase 1: `neighbour_candidates()` (= A(d,t)) and
+  `price_candidate()` (= arc_cost) extracted verbatim in `atomic_edges.py` — **bit-exact**.
+  Phase 2: `streaming.py` one-pass fused engine behind `SR_main --engine streaming` —
+  **bit-exact on the quick set** (fuel, schedule sha256, arc counts identical); full 19-voyage
+  gate running. Remaining: flip default (Phase 3), C++ mirror (Phase 4), PhiOracle cleanup
+  (Phase 5).
+- **Memory finding:** the ~6–8 GB footprint is dominated by the **VoyageWeather/frame cache**,
+  not the arc set (single-voyage RSS: legacy 6.21 GB vs streaming 6.03 GB). The arc-set saving
+  matters mainly for RH (× replans) and C++; the weather-cache footprint is a **separate
+  investigation** — add to the design-later list.
+- **Item 3 (lower bound) STARTED in parallel** — background agent prototyping
+  `pipeline/dp_rebuild/lb_bound.py` (neighbour-price relaxation on the current band, quick-set
+  voyages, sanity vs goldens + bracket vs the §4.3 polish); plan/results to land in
+  `docs/lb_neighbour_price_plan.md` + `runs/2026_08_07_lb_neighbour_price/`.
+
 ## 5. THE BIG ONE — re-run everything under 𝒱 = [0, v_max]
 
 All §5–§7 results, the §4.3 certificate table, the Tractability numbers (marked "measured under
