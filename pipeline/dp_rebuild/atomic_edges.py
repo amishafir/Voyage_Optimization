@@ -91,6 +91,85 @@ class AtomicEdge:
 _SWS_MAX_FEASIBLE = 25.0
 
 
+# ----------------------------------------------------------------------
+# Paper-faithful primitives (streaming refactor, Phase 1 — design doc
+# docs/refactor_streaming_design.md). These are verbatim extractions from
+# _emit_from_src's node-first branch: `neighbour_candidates` is A(d,t) of
+# Eq. (5) (two walls, band-limited windows, glide rule); `price_candidate`
+# is the arc cost (t~-t)*phi(d,t; v_bar) with the derived leg speed
+# (SWS inverse -> FCR -> x duration). One home for each convention.
+# ----------------------------------------------------------------------
+
+def neighbour_candidates(src_t: float, src_d: float, frame: Frame,
+                         next_v: Optional[float], next_h: Optional[float],
+                         ) -> Set[Tuple[float, float]]:
+    """A(d, t): the candidate grid nodes (dst_t, dst_d) reachable from
+    (src_t, src_d) on the two walls ahead — Eq. (5) of the paper.
+
+    Family 1 (distance wall d_D(d)): tau-spaced arrival times, clipped at
+    the time wall and at T; skipped entirely when the wall is unresolvable
+    on the tau grid, in which case family 2 extends past it (glide rule).
+    Family 2 (time wall t_T(t)): zeta-spaced arrival distances between the
+    band's slowest and fastest advance, capped at the distance wall.
+    """
+    vmin, vmax = frame.cfg.v_min, frame.cfg.v_max
+    zeta, tau, T = frame.cfg.zeta_nm, frame.cfg.tau_h, frame.cfg.eta_h
+    L = frame.cfg.length_nm
+    eps = 1e-9
+    cand: Set[Tuple[float, float]] = set()
+    dd = (next_h - src_d) if next_h is not None else None
+    resolvable_d = (next_h is not None and dd is not None and dd > eps
+                    and frame.snap_h_dst_t(src_t + dd / vmax) > src_t + eps)
+    if resolvable_d:                                     # distance line binds
+        t_fast = src_t + dd / vmax
+        t_slow = src_t + dd / vmin
+        t_hi = min(t_slow, next_v if next_v is not None else T, T)
+        for k in range(round(t_fast / tau), round(t_hi / tau) + 1):
+            dst_t = round(k * tau, 9)
+            if src_t + eps < dst_t <= T + eps:
+                cand.add((dst_t, round(next_h, 9)))
+    if next_v is not None:                               # time line binds
+        dt = next_v - src_t
+        if dt > eps:
+            d_slow = src_d + vmin * dt
+            d_fast = src_d + vmax * dt
+            d_cap = next_h if resolvable_d else L        # glide past a too-close line
+            d_hi = min(d_fast, d_cap, L)
+            for k in range(round(d_slow / zeta), round(d_hi / zeta) + 1):
+                dst_d = round(k * zeta, 9)
+                if src_d + eps < dst_d <= L + eps:
+                    cand.add((round(next_v, 9), dst_d))
+    return cand
+
+
+def price_candidate(src_t: float, src_d: float, dst_t: float, dst_d: float,
+                    weather, weather_dict: dict, heading: float,
+                    next_v: Optional[float]) -> Optional[AtomicEdge]:
+    """arc_cost: price the leg (src -> dst) at its derived speed
+    v_bar = dd/dt — SWS inverse under the source's weather and heading,
+    FCR at that SWS, times the leg duration. Returns None for degenerate
+    or engine-infeasible legs (NaN / SWS above the feasible bound)."""
+    eps = 1e-9
+    ddt, ddd = dst_t - src_t, dst_d - src_d
+    if ddt <= eps or ddd <= eps:
+        return None
+    realized_sog = ddd / ddt
+    sws = calculate_sws_from_sog(target_sog=realized_sog, weather=weather_dict,
+                                 ship_heading_deg=heading, ship_parameters=None)
+    if sws != sws or sws > _SWS_MAX_FEASIBLE:
+        return None
+    fcr = calculate_fuel_consumption_rate(sws)
+    fuel = fcr * ddt
+    if isnan(fuel):
+        return None
+    crosses_v = (next_v is not None and abs(dst_t - next_v) < eps)
+    return AtomicEdge(
+        src_t=src_t, src_d=src_d, dst_t=dst_t, dst_d=dst_d,
+        sog=realized_sog, target_sog=realized_sog, weather=weather,
+        heading_deg=heading, sws=sws, fcr_mt_per_h=fcr, fuel_mt=fuel,
+        crosses_v_line=crosses_v)
+
+
 def _emit_from_src(
     src_t: float,
     src_d: float,
@@ -193,54 +272,16 @@ def _emit_from_src(
     if node_first:
         # Node-first (Tal, T20): emit the DISTINCT reachable far-wall grid nodes
         # between v_min and v_max, SOG = dd/dt per node — no SOG grid, no
-        # target-vs-realised gap. Corner handling: if the next distance line is
-        # too close to resolve on the tau grid, skip it and glide to the time
-        # line (mirrors the speed-first h_too_close fallback). Reuses the weather
-        # resolved above, so time_key / d_start (RH) work unchanged.
-        vmin, vmax = frame.cfg.v_min, frame.cfg.v_max
-        zeta, tau, T = frame.cfg.zeta_nm, frame.cfg.tau_h, frame.cfg.eta_h
-        cand: Set[Tuple[float, float]] = set()
-        dd = (next_h - src_d) if next_h is not None else None
-        resolvable_d = (next_h is not None and dd is not None and dd > eps
-                        and frame.snap_h_dst_t(src_t + dd / vmax) > src_t + eps)
-        if resolvable_d:                                     # distance line binds
-            t_fast = src_t + dd / vmax
-            t_slow = src_t + dd / vmin
-            t_hi = min(t_slow, next_v if next_v is not None else T, T)
-            for k in range(round(t_fast / tau), round(t_hi / tau) + 1):
-                dst_t = round(k * tau, 9)
-                if src_t + eps < dst_t <= T + eps:
-                    cand.add((dst_t, round(next_h, 9)))
-        if next_v is not None:                               # time line binds
-            dt = next_v - src_t
-            if dt > eps:
-                d_slow = src_d + vmin * dt
-                d_fast = src_d + vmax * dt
-                d_cap = next_h if resolvable_d else L        # glide past a too-close line
-                d_hi = min(d_fast, d_cap, L)
-                for k in range(round(d_slow / zeta), round(d_hi / zeta) + 1):
-                    dst_d = round(k * zeta, 9)
-                    if src_d + eps < dst_d <= L + eps:
-                        cand.add((round(next_v, 9), dst_d))
-        for dst_t, dst_d in cand:
-            ddt, ddd = dst_t - src_t, dst_d - src_d
-            if ddt <= eps or ddd <= eps:
-                continue
-            realized_sog = ddd / ddt
-            sws = calculate_sws_from_sog(target_sog=realized_sog, weather=weather_dict,
-                                         ship_heading_deg=heading, ship_parameters=None)
-            if sws != sws or sws > _SWS_MAX_FEASIBLE:
-                continue
-            fcr = calculate_fuel_consumption_rate(sws)
-            fuel = fcr * ddt
-            if isnan(fuel):
-                continue
-            crosses_v = (next_v is not None and abs(dst_t - next_v) < eps)
-            edges.append(AtomicEdge(
-                src_t=src_t, src_d=src_d, dst_t=dst_t, dst_d=dst_d,
-                sog=realized_sog, target_sog=realized_sog, weather=weather,
-                heading_deg=heading, sws=sws, fcr_mt_per_h=fcr, fuel_mt=fuel,
-                crosses_v_line=crosses_v))
+        # target-vs-realised gap. Composition of the two paper primitives:
+        # A(d,t) candidates (incl. the glide rule), each priced on the spot.
+        # Reuses the weather resolved above, so time_key / d_start (RH) work
+        # unchanged. (Streaming refactor Phase 1 — logic verbatim, extracted.)
+        for dst_t, dst_d in neighbour_candidates(src_t, src_d, frame,
+                                                 next_v, next_h):
+            edge = price_candidate(src_t, src_d, dst_t, dst_d,
+                                   weather, weather_dict, heading, next_v)
+            if edge is not None:
+                edges.append(edge)
         return edges
 
     for target_sog in frame.sog_grid():

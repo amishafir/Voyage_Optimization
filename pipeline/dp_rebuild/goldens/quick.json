@@ -1,0 +1,36 @@
+{
+  "set": "quick",
+  "commit": "6f35f31",
+  "engine": "legacy",
+  "peak_rss_mb": 7640.3,
+  "voyages": [
+    {
+      "route": "route1",
+      "sh_base": 6,
+      "engine": "legacy",
+      "total_fuel_mt": "353.95517201251994",
+      "voyage_time_h": "280.0",
+      "n_nodes": 133963,
+      "n_edges": 1179189,
+      "schedule_sha256": "7d3acb73bdddd8d6d9f533df7e043838175979650aee55e3e51afdd4a83759f7",
+      "n_legs": 139,
+      "build_s": 28.74,
+      "solve_s": 1.415,
+      "wall_s": 30.27
+    },
+    {
+      "route": "route2",
+      "sh_base": 0,
+      "engine": "legacy",
+      "total_fuel_mt": "202.48415966493758",
+      "voyage_time_h": "168.0",
+      "n_nodes": 61599,
+      "n_edges": 468617,
+      "schedule_sha256": "1ba818402db717cceffb0974317ad490d8eb0733d708a95b1df8284a33cc034a",
+      "n_legs": 85,
+      "build_s": 12.04,
+      "solve_s": 0.857,
+      "wall_s": 12.94
+    }
+  ]
+}
