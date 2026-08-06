@@ -478,23 +478,34 @@ Between a state and a neighbour the vessel steams at a single fixed speed drawn 
 
 We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
 % ==== fig:state-neighbours placed here (2026-08-04, Ami): before the "When the vessel is at point" paragraph; [H] pins it ====
+% ==== 2026-08-06: two-panel version (a: state on a distance line, b: state on a time line), one joint caption.
+% ==== Previous single-panel captions in git history. ====
 \begin{figure}[H]
 \centering
-\includegraphics[width=.82\textwidth]{figures/state_neighbours.pdf}
-% ==== caption updated 2026-08-06 for V = [0, v_max] (waiting admissible); old κ=8 version in git history ====
-\caption{One state of the dynamic program and its candidate successors (values illustrative). The
-state $(d,t)$ sits on a distance line --- the boundary it has just crossed --- in the interior of a
-forecast block. Every admissible speed leads to one of two walls: the next distance line
-$d_{\mathcal{D}(d)}$, where the sea conditions change, or the next time line $t_{\mathcal{T}(t)}$,
-where the forecast is refreshed. The speed cone $\mathcal{V}=[0,v_{\max}]$ intersects the walls in
-two windows --- its slow edge is vertical, $\bar v=0$: the vessel may wait in place --- and the
-grid picks out the nodes inside them: arrival times spaced $\tau$ on the distance wall, arrival
-distances spaced $\delta$ on the time wall, the two families of Eq.~\eqref{eq:neighbors}. The fast
-edge of the cone crosses the distance wall before the block ends (capping the second family);
-every slower speed, down to waiting, runs out of the block first (clipping the first family at the
-time wall). Each surviving node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here
-$\kappa=13$ candidates in total. (The mirror case --- a state sitting on a \emph{time} line --- is
-constructed identically.)}
+\begin{minipage}[t]{0.492\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/state_neighbours.pdf}\par\vspace{2pt}
+{\small (a) a state on a \emph{distance} line}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.492\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/state_neighbours_hline.pdf}\par\vspace{2pt}
+{\small (b) a state on a \emph{time} line}
+\end{minipage}
+\caption{A state of the dynamic program and its candidate successors (values illustrative), for the
+two cases of the grid: (a) the state sits on a \emph{distance} line --- the boundary it has just
+crossed --- in the interior of a forecast block; (b) the state sits on a \emph{time} line --- a
+decision epoch --- in the interior of a cell. In both cases every admissible speed leads to one of
+two walls: the next distance line $d_{\mathcal{D}(d)}$, where the sea conditions change, or the
+next time line $t_{\mathcal{T}(t)}$, where the forecast is refreshed. The speed cone
+$\mathcal{V}=[0,v_{\max}]$ --- its slow edge vertical, $\bar v=0$: the vessel may wait in place ---
+intersects the walls in two windows, and the grid picks out the nodes inside them: arrival times
+spaced $\tau$ on the distance wall (circles) and arrival distances spaced $\delta$ on the time wall
+(squares), the two families of Eq.~\eqref{eq:neighbors}. The fast edge of the cone crosses the
+distance wall before the block ends, capping the second family; every slower speed, down to
+waiting, runs out of the block first, clipping the first family at the time wall. Each surviving
+node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here $\kappa=13$ and
+$\kappa=17$ candidates, respectively.}
 \label{fig:state-neighbours}
 \end{figure}
 When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area in Figure~X in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.
