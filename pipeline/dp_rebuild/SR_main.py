@@ -102,10 +102,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--node_first", action="store_true",
                     help="Use node-first arc enumeration (Tal, T20) instead of the "
                          "speed grid — distinct far-wall grid nodes, corner-handled.")
-    ap.add_argument("--engine", choices=["legacy", "streaming"], default="legacy",
+    ap.add_argument("--engine", choices=["legacy", "streaming"], default=None,
                     help="legacy = two-phase build->solve (stores the full arc set); "
                          "streaming = one-pass fused engine (stores only (C*, pred) "
-                         "per state; node-first only). Bit-exact by design.")
+                         "per state; node-first only). Bit-exact by design. "
+                         "Default: streaming for node-first, legacy for the speed grid.")
     return ap.parse_args()
 
 
@@ -175,7 +176,12 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
     t0 = time.time()
     if node_first is None:
         node_first = bool(getattr(args, "node_first", False))
-    engine = getattr(args, "engine", "legacy") or "legacy"
+    # Phase 3 (streaming refactor): streaming is the default engine for
+    # node-first solves; the speed-first grid stays on legacy. An explicit
+    # --engine always wins.
+    engine = getattr(args, "engine", None)
+    if engine is None:
+        engine = "streaming" if node_first else "legacy"
     if engine == "streaming":
         # One-pass fused engine (streaming refactor Phase 2): discovery,
         # pricing and valuation in the same pass; only (C*, pred) stored.
