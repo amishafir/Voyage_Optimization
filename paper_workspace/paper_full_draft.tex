@@ -482,8 +482,9 @@ We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \
 \centering
 \includegraphics[width=.82\textwidth]{figures/state_neighbours.pdf}
 % ==== caption updated 2026-08-06 for V = [0, v_max] (waiting admissible); old κ=8 version in git history ====
-\caption{One state of the dynamic program and its candidate successors (values illustrative). From
-the state $(d,t)$, every admissible speed leads to one of two walls: the next distance line
+\caption{One state of the dynamic program and its candidate successors (values illustrative). The
+state $(d,t)$ sits on a distance line --- the boundary it has just crossed --- in the interior of a
+forecast block. Every admissible speed leads to one of two walls: the next distance line
 $d_{\mathcal{D}(d)}$, where the sea conditions change, or the next time line $t_{\mathcal{T}(t)}$,
 where the forecast is refreshed. The speed cone $\mathcal{V}=[0,v_{\max}]$ intersects the walls in
 two windows --- its slow edge is vertical, $\bar v=0$: the vessel may wait in place --- and the
@@ -492,7 +493,8 @@ distances spaced $\delta$ on the time wall, the two families of Eq.~\eqref{eq:ne
 edge of the cone crosses the distance wall before the block ends (capping the second family);
 every slower speed, down to waiting, runs out of the block first (clipping the first family at the
 time wall). Each surviving node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here
-$\kappa=16$ candidates in total.}
+$\kappa=13$ candidates in total. (The mirror case --- a state sitting on a \emph{time} line --- is
+constructed identically.)}
 \label{fig:state-neighbours}
 \end{figure}
 When the vessel is at point $(d,t)$ on the distance-time space it is subject to the fixed sea conditions of the rectangular area in Figure~X in which points $(d,t)$ and $(\underline{d},\underline{t})$ are located.

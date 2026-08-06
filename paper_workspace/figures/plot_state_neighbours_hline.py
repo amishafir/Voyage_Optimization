@@ -31,7 +31,7 @@ from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
 
 # --- geometry (illustrative) -------------------------------------------------
-d0, t0 = 10.0, 0.0          # the popped state: ON the time line t = 0, d interior to a cell
+d0, t0 = 12.0, 0.0          # the popped state: ON the time line t = 0, d interior to a cell
 DPREV = 4.0                 # previous distance line (the cell the state is inside)
 DW = 30.0                   # next distance wall  d_D(d)
 TW = 2.4                    # next time wall      t_T(t)
@@ -69,9 +69,13 @@ fig, ax = plt.subplots(figsize=(7.4, 5.0))
 ax.axhspan(0.0, TW, color="#f4f7fa", zorder=0)
 
 # time lines (horizontal, dashed) and distance lines (vertical)
-for t in (0.0, TW):
-    ax.axhline(t, color=TIMEC, lw=0.9, ls=(0, (4, 3)), zorder=1)
-ax.axvline(DPREV, color="#aab7c2", lw=1.0, ls=(0, (1, 3)), zorder=1)
+ax.axhline(0.0, color="#5b6b7a", lw=1.6, ls=(0, (4, 3)), alpha=0.75, zorder=1)
+ax.text(d0 - 9.5, 0.14, "the state lives on this time line",
+        fontsize=7.6, color="#5b6b7a", ha="left")
+ax.axhline(TW, color=TIMEC, lw=0.9, ls=(0, (4, 3)), zorder=1)
+ax.axvline(DPREV, color=NAVY, lw=1.4, alpha=0.4, zorder=1)
+ax.text(DPREV - 0.45, 0.42, "previous distance line", fontsize=7.2,
+        color=NAVY, alpha=0.7, rotation=90, va="top", ha="right")
 ax.axvline(DW, color=NAVY, lw=2.2, zorder=1.6)
 
 # faint grid dots on the walls OUTSIDE the reachable windows
@@ -113,8 +117,8 @@ ax.scatter(fam2_only, [TW] * len(fam2_only), s=46, color=GREEN, zorder=4,
 
 # the state itself
 ax.scatter([d0], [t0], s=90, color="#c62828", zorder=5, edgecolor="white", lw=1.0)
-ax.annotate(r"$(d,t)$ — on a time line", (d0, t0), xytext=(-8, 10), textcoords="offset points",
-            fontsize=10.5, color="#c62828", ha="right")
+ax.annotate(r"$(d,t)$ — on a time line", (d0, t0), xytext=(0, 12), textcoords="offset points",
+            fontsize=10.5, color="#c62828", ha="center")
 
 # wall labels
 ax.annotate(r"$d_{\mathcal{D}(d)}$ — next distance line" "\n(sea conditions change)",
@@ -125,10 +129,10 @@ ax.annotate(r"$t_{\mathcal{T}(t)}$ — next time line (forecast refreshes)",
             fontsize=8.5, color="#607080", style="italic")
 
 # cone-edge labels (v_max above its ray; the vertical edge is v = 0 — waiting)
-ax.annotate(r"$v_{\max}$", (d0 + (DW - d0) * 0.80, t0 + (DW - d0) * 0.80 / VMAX),
+ax.annotate(r"$v_{\max}$", (d0 + (DW - d0) * 0.58, t0 + (DW - d0) * 0.58 / VMAX),
             xytext=(0, 10), textcoords="offset points", fontsize=9.5, color=ORANGE,
             ha="center")
-ax.annotate(r"$\bar v = 0$ (wait)", (d0, 0.72),
+ax.annotate(r"$\bar v = 0$ (wait)", (d0, 1.30),
             xytext=(-8, 0), textcoords="offset points", fontsize=9.5, color=ORANGE,
             rotation=90, va="center", ha="right")
 
@@ -141,7 +145,7 @@ ax.text(15.5, -0.22,
 # clip/cap notes — in the empty regions outside the cone
 ax.annotate("$v_{\\max}$ crosses the wall before the block ends\n"
             "→ family 2 capped at the distance wall",
-            (DW + 0.9, t_fast + 0.12), xytext=(21.0, 0.28), textcoords="data",
+            (DW + 0.9, t_fast + 0.12), xytext=(23.5, 0.92), textcoords="data",
             fontsize=7.8, color="#8a6d3b", ha="center",
             arrowprops=dict(arrowstyle="-", color="#8a6d3b", lw=0.7,
                             connectionstyle="arc3,rad=-0.18"))
@@ -157,7 +161,7 @@ ax.text(DW + 1.0, (t_fast + TW) / 2 + 0.05,
         rf"$\kappa = {ktotal}$" "\ncandidates", fontsize=10.5, color="#33475b",
         va="center", ha="left")
 
-ax.set_xlim(d0 - 6.5, DW + 6.5)
+ax.set_xlim(d0 - 10.0, DW + 6.5)
 ax.set_ylim(TW + 0.5, -0.42)           # time increases downward
 ax.set_xlabel("along-track distance  d  (NM)")
 ax.set_ylabel("elapsed time  t  (h)")

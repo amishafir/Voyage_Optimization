@@ -29,7 +29,7 @@ from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
 
 # --- geometry (illustrative) -------------------------------------------------
-d0, t0 = 10.0, 0.4          # the popped state (on the distance line d = 10)
+d0, t0 = 10.0, 1.0          # the popped state: ON the distance line d = 10, mid-block (clearly interior)
 DW = 30.0                   # next distance wall  d_D(d)
 TW = 2.4                    # next time wall      t_T(t)
 VMAX, VMIN = 20.0, 0.0      # admissible band V = [0, v_max] (2026-08-05 decision): waiting allowed
@@ -68,7 +68,9 @@ ax.axhspan(0.0, TW, color="#f4f7fa", zorder=0)
 # time lines (horizontal, dashed) and distance lines (vertical)
 for t in (0.0, TW):
     ax.axhline(t, color=TIMEC, lw=0.9, ls=(0, (4, 3)), zorder=1)
-ax.axvline(d0, color="#aab7c2", lw=1.0, ls=(0, (1, 3)), zorder=1)
+ax.axvline(d0, color=NAVY, lw=1.6, alpha=0.5, zorder=1)
+ax.text(d0 + 0.5, 0.14, "the state lives on this distance line (just crossed)",
+        fontsize=7.6, color=NAVY, alpha=0.85, ha="left")
 ax.axvline(DW, color=NAVY, lw=2.2, zorder=1.6)
 
 # faint grid dots on the walls OUTSIDE the reachable windows
@@ -110,8 +112,10 @@ ax.scatter(fam2_only, [TW] * len(fam2_only), s=46, color=GREEN, zorder=4,
 
 # the state itself
 ax.scatter([d0], [t0], s=90, color="#c62828", zorder=5, edgecolor="white", lw=1.0)
-ax.annotate(r"$(d,t)$", (d0, t0), xytext=(-34, 9), textcoords="offset points",
-            fontsize=11, color="#c62828")
+ax.annotate(r"$(d,t)$ — on a distance line", (d0 + 0.35, t0 - 0.04), xytext=(16.0, 0.66), textcoords="data",
+            fontsize=10.5, color="#c62828", ha="center",
+            arrowprops=dict(arrowstyle="-", color="#c62828", lw=0.7,
+                            connectionstyle="arc3,rad=-0.2"))
 
 # wall labels
 ax.annotate(r"$d_{\mathcal{D}(d)}$ — next distance line" "\n(sea conditions change)",
@@ -122,15 +126,15 @@ ax.annotate(r"$t_{\mathcal{T}(t)}$ — next time line (forecast refreshes)",
             fontsize=8.5, color="#607080", style="italic")
 
 # cone-edge labels (v_max above its ray; the vertical edge is v = 0 — waiting)
-ax.annotate(r"$v_{\max}$", (d0 + (DW - d0) * 0.55, t0 + (DW - d0) * 0.55 / VMAX),
+ax.annotate(r"$v_{\max}$", (d0 + (DW - d0) * 0.62, t0 + (DW - d0) * 0.62 / VMAX),
             xytext=(0, 10), textcoords="offset points", fontsize=9.5, color=ORANGE,
             ha="center")
-ax.annotate(r"$\bar v = 0$ (wait)", (d0, 1.02),
+ax.annotate(r"$\bar v = 0$ (wait)", (d0, 2.16),
             xytext=(-8, 0), textcoords="offset points", fontsize=9.5, color=ORANGE,
             rotation=90, va="center", ha="right")
 
 # derived-speed line — top band, no arrow (applies to every candidate)
-ax.text(15.5, 0.09,
+ax.text(19.0, 0.32,
         r"each candidate fixes its own leg speed  "
         r"$\bar v = (\tilde d - d)\,/\,(\tilde t - t) \in \mathcal{V}$ — derived, not chosen",
         fontsize=8.2, color="#33475b", ha="center", style="italic")
@@ -138,12 +142,12 @@ ax.text(15.5, 0.09,
 # clip/cap notes — in the empty regions outside the cone
 ax.annotate("$v_{\\max}$ crosses the wall before the block ends\n"
             "→ family 2 capped at the distance wall",
-            (DW + 0.9, t_fast + 0.12), xytext=(22.6, 0.52), textcoords="data",
+            (DW + 0.9, t_fast + 0.12), xytext=(21.0, 1.42), textcoords="data",
             fontsize=7.8, color="#8a6d3b", ha="center",
             arrowprops=dict(arrowstyle="-", color="#8a6d3b", lw=0.7,
                             connectionstyle="arc3,rad=-0.18"))
 ax.annotate("slow speeds (down to waiting in place) leave the\nblock first → family 1 clipped at the time wall",
-            (d0 + 0.4, TW - 0.05), xytext=(13.6, 1.78), textcoords="data",
+            (d0 + 0.4, TW - 0.05), xytext=(13.5, 2.02), textcoords="data",
             fontsize=7.8, color="#8a6d3b", ha="center",
             arrowprops=dict(arrowstyle="-", color="#8a6d3b", lw=0.7,
                             connectionstyle="arc3,rad=0.15"))
