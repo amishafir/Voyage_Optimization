@@ -117,7 +117,8 @@ def _key(t: float, d: float) -> Tuple[float, float]:
     return (round(t, _KEY_PRECISION), round(d, _KEY_PRECISION))
 
 
-def build_frame(route_key: str, sh_base: int):
+def build_frame(route_key: str, sh_base: int,
+                tau_h: float = None, zeta_nm: float = None):
     """Frame construction identical to SR_main.solve / ddd_lb.build_frame
     (route yaml + eta override + windows re-synth + mean-SOG +/- 3 band)."""
     rc = ROUTES[route_key]
@@ -133,6 +134,10 @@ def build_frame(route_key: str, sh_base: int):
         route = synthesize_multi_window(route, window_h=6.0)
     mean_sog = cfg.length_nm / cfg.eta_h
     cfg.v_min, cfg.v_max = mean_sog - 3.0, mean_sog + 3.0
+    if tau_h is not None:
+        cfg.tau_h = tau_h          # refinement study: finer pricing grid
+    if zeta_nm is not None:
+        cfg.zeta_nm = zeta_nm
     voyage = VoyageWeather(h5_path)
     frame = make_frame(route, voyage, wps, cfg=cfg, base_sample_hour=sh_base)
     return frame
@@ -313,13 +318,19 @@ def main() -> int:
     ap.add_argument("--sh_base", type=int, required=True)
     ap.add_argument("--out_dir", default=None,
                     help="also write <route>_sh<sh>.json to this directory")
+    ap.add_argument("--tau_h", type=float, default=None,
+                    help="override the time grid step (refinement study)")
+    ap.add_argument("--zeta_nm", type=float, default=None,
+                    help="override the distance grid step (refinement study)")
+    ap.add_argument("--tag", default="",
+                    help="suffix for the output JSON filename")
     a = ap.parse_args()
 
     rc = ROUTES[a.route]
     print(f"lb_bound — neighbour-price LB   {a.route} ({rc['label']})  "
           f"sh_base={a.sh_base}  eta={rc['eta']:.0f} h", flush=True)
 
-    frame = build_frame(a.route, a.sh_base)
+    frame = build_frame(a.route, a.sh_base, tau_h=a.tau_h, zeta_nm=a.zeta_nm)
     print(f"frame: L={frame.cfg.length_nm:.3f} nm  "
           f"band=[{frame.cfg.v_min:.3f}, {frame.cfg.v_max:.3f}] kn  "
           f"tau={frame.cfg.tau_h} h  zeta={frame.cfg.zeta_nm} nm  "
@@ -387,7 +398,7 @@ def main() -> int:
             "n_nodes": res["n_nodes"], "wall_s": round(res["wall_s"], 1),
             "stats": s, "polish_reference": pol,
         }
-        out_path = out_dir / f"{a.route}_sh{a.sh_base}.json"
+        out_path = out_dir / f"{a.route}_sh{a.sh_base}{a.tag}.json"
         out_path.write_text(json.dumps(payload, indent=2) + "\n")
         print(f"\nwrote {out_path}")
     return 0
