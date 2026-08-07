@@ -54,6 +54,19 @@ creeping — the DP finds this automatically (convex envelope through the origin
 structural claim "SOG constant within a rectangle" needs the caveat **"constant except possibly
 mixed with waiting"**. In calm/following weather φ is continuous through 0 and the claim survives.
 
+**Physics nuance (Ami's question, Aug 7): "SOG=0 still needs the engine because of currents —
+correct?" Yes.** True station-keeping (position held) forces SWS = losses − V_c∥: strictly
+positive against a head current (fuel > 0), and *unrepresentable* in a strong following current
+(reverse thrust; g⁻¹(0;w) has no solution). Engine-off drifting IS free but does not hold
+position. So φ(·;0)=0 is an **idealized free pause** — neither station-keeping nor drifting. It
+is physically exact only **at the destination** (moored, engine off) — which is where the
+convention does its load-bearing work (unique terminal state (L,T)). Mid-ocean, time-varying
+weather will let the DP "park for free" ahead of a storm block — an idealization to state
+explicitly. Two variants for Monday: **(a)** keep φ(·;0)=0 everywhere, declared as an
+idealization (simplest; storm-parking becomes a discussion point); **(b)** waiting free **only at
+d = d_M** (physically clean, keeps the unique-sink extraction, removes storm-parking; Eq. (5)'s
+waiting candidate then restricted to the destination).
+
 **Paper changes — Tal's zones [T]:**
 1. Eq. (5): emit the **waiting candidate (d, t_𝒯(t)) unconditionally** — family 2 only yields
    d′=d when the cell width is δ-aligned (interacts with C1 anchoring).
