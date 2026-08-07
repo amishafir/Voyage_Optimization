@@ -221,7 +221,19 @@ Items 1–3 interlock and land best as one refactor, after φ(·;0) and the Eq.-
   not the arc set (single-voyage RSS: legacy 6.21 GB vs streaming 6.03 GB). The arc-set saving
   matters mainly for RH (× replans) and C++; the weather-cache footprint is a **separate
   investigation** — add to the design-later list.
-- **Item 3 (lower bound) STARTED in parallel** — background agent prototyping
+- **Item 3 (lower bound): TWO iterations done.** Iteration 1 (`lb_bound.py`): sound,
+  golden-anchored, but 16–18 % loose (intrinsic one-step discount + path-switch slack — see
+  `docs/lb_neighbour_price_plan.md`). **Iteration 2 (grid-refinement study,
+  `runs/2026_08_08_lb_refinement/`): the gap halves per grid halving (O(step) confirmed), and the
+  finest level is itself a rigorous bound — the DP is provably within ~4 % of the continuous
+  optimum (R1 4.18 %, R2 3.72 %), 4× better, minutes of compute.** Slack dies superlinearly (Q4
+  matters less at fine grids). Richardson extrapolation invalid for now: F_DP(grid) drifts with
+  refinement because the τ-dependent wall-feasibility filter returns dropped walls (non-nested
+  grids — E1's mechanism caught red-handed). **Iteration 3 designed**: freeze the wall set across
+  levels ⇒ valid extrapolation; also h/8 ⇒ ≈2 % certified. **§4.3 rewrite implication: a
+  two-sided story exists today** — 0.2–0.4 % from above (polish), ~4 % certified from below,
+  lower side linear in the step. Originally started as:
+  **Item 3 (lower bound) STARTED in parallel** — background agent prototyping
   `pipeline/dp_rebuild/lb_bound.py` (neighbour-price relaxation on the current band, quick-set
   voyages, sanity vs goldens + bracket vs the §4.3 polish); plan/results to land in
   `docs/lb_neighbour_price_plan.md` + `runs/2026_08_07_lb_neighbour_price/`.
