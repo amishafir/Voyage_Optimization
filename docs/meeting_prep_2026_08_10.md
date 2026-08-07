@@ -127,6 +127,52 @@ optima use the full ETA; RH/delay scenarios may differ.
 5) additionally wait on the two [T] open points (v_max convention, Luo band policy) and Tal's
 blessing of the Eq.-(5) waiting candidate.
 
+## 2B. MEETING SUMMARY — SOG = 0: the decisions, and the paper/equation change list
+
+### 1. Decisions regarding SOG = 0 (chronology → final state)
+
+| # | Decision | Who/when | Status |
+|---|---|---|---|
+| 1 | Band 𝒱 = [0, v_max] — waiting becomes a legal control | Tal, Aug-5 meeting | in the draft (§3) |
+| 2 | φ(d,t;0) = 0 — waiting free | Ami, Aug 7 | superseded by #4 |
+| 3 | Physics check: SOG = 0 **requires the engine** in any along-track current (SWS = losses − V_c∥; unrepresentable in strong following current). φ=0 is an *idealized pause* — physically exact only at the destination (moored) | discussion, Aug 7 | recorded |
+| 4 | **Variant (c) — RECOMMENDED**: mid-ocean waiting priced at the **station-keeping cost** (symmetric thrust, declared assumption); **free only at d = d_M** | Ami, Aug 7 | prototyped, awaiting Tal's ratification |
+| 5 | **Empirical verdict (E-B, Aug 8)**: the optimizer **never waits — not even for free**; variants (a)/(c)/no-waiting give identical fuel to the last digit on both quick-set voyages. The φ(·;0) choice is a *formal* one only | test, Aug 8 | `runs/2026_08_08_variant_c_test/` |
+| 6 | Code: prototype live behind `SR_main --wait_arcs {off,free,hold}`, default off (goldens intact); hold-pricing has one home (`price_candidate`) | Aug 8 | merged |
+
+**For Tal to ratify Monday:** variant (c) as the paper's convention (or (a) if he prefers the
+simpler sentence — the results are identical either way); the **v_max convention** (mean+3?
+vessel cap?); the **Luo band policy**. Plus the engineering prerequisite: the **ETA-feasibility
+arc cut** before any full re-run (open band = ~14× arcs / ~13× runtime otherwise).
+
+### 2. Changes needed in the equations and the paper (under variant (c))
+
+**Tal's zones [T]:**
+1. **Eq. (5)**: add the waiting candidate **(d, t_𝒯(t)) unconditionally** (family 2 yields d′=d
+   only when the cell width happens to be δ-aligned).
+2. **Eq. (5) / prose, d = d_M**: 𝒟(L) is an empty min ⇒ 𝒜(L,t) undefined — a destination clause
+   or prose convention for waiting at the port.
+3. **φ definition (§4.1)**: one added sentence — mid-ocean φ(d,t;0) = FCR(|hold thrust|) with the
+   symmetric-thrust assumption declared; waiting at d = d_M free (moored). *(Under (a) instead:
+   "By convention φ(d,t;0)=0.")*
+4. **§4 structural property 3**: under (c), **no caveat needed** (φ continuous through v=0);
+   *(under (a): add "constant except possibly mixed with waiting")*. Optional footnote: V-shaped
+   φ in following currents, zero at the drift speed.
+5. **Algorithm 1 Input line**: band → [0, v_max] (already on the slips list, §2).
+6. Interacts with the still-open **Eq. (6) direction** (§1) — none of the above depends on it.
+
+**Ami's zones [A] (ready on go-ahead):**
+7. §4.2 extraction paragraph: the justification "waiting at the destination is free (moored), so
+   C\*(L,T) = min over all sinks — the terminal state is unique; mid-ocean waiting is priced at
+   the station-keeping rate".
+8. §4.2 intro: "continues to the deadline at zero speed" → "…at no cost (moored)".
+9. Walkthrough window sentence: "the vessel may wait" → "+ priced at the station-keeping rate".
+10. Figure captions (both panels): the vertical cone edge is itself a candidate — the wait leg.
+11. Tractability: κ and the state/arc counts re-measured under [0, v_max] (after the
+    ETA-feasibility cut); numbers currently marked pre-band-change.
+12. §5: band statement + the Luo asymmetry note; §6–§7: full re-run numbers (blocked on the
+    ratifications above).
+
 ## 3. Audit remainder (from prep-08-05 §1B; A4/B7/C2/C7 already resolved)
 
 **Tal's zone [T]:** A2 (cell maps `<` → `≤`: on-line states currently price the leg with the
