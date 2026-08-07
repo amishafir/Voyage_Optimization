@@ -62,10 +62,21 @@ position. So φ(·;0)=0 is an **idealized free pause** — neither station-keepi
 is physically exact only **at the destination** (moored, engine off) — which is where the
 convention does its load-bearing work (unique terminal state (L,T)). Mid-ocean, time-varying
 weather will let the DP "park for free" ahead of a storm block — an idealization to state
-explicitly. Two variants for Monday: **(a)** keep φ(·;0)=0 everywhere, declared as an
+explicitly. Three variants for Monday: **(a)** keep φ(·;0)=0 everywhere, declared as an
 idealization (simplest; storm-parking becomes a discussion point); **(b)** waiting free **only at
 d = d_M** (physically clean, keeps the unique-sink extraction, removes storm-parking; Eq. (5)'s
-waiting candidate then restricted to the destination).
+waiting candidate then restricted to the destination); **(c) — RECOMMENDED (Aug 7 discussion,
+Ami's proposal): price mid-ocean waiting at the station-keeping cost, symmetric thrust, free only
+at d = d_M.** φ(d,t;0) = FCR(|SWS needed to hold position|), with "same cost forward and
+backward" declared as an assumption (the resistance model has no validity at SOG≈0/astern, and
+real props deliver ~30–50% thrust astern — one honest sentence in the paper). What it buys:
+continuity of φ through v=0 on the head-current side ⇒ **the constant-SOG-per-rectangle claim
+survives with NO caveat**; storm-parking stays available but honestly priced (holding against a
+2-kn current ≈ 0.05 mt/h vs ~1.2 mt/h sailing — cheap, not free); free-at-destination keeps the
+(L,T) unique-sink extraction exact. Known quirk: in following currents φ(v) is V-shaped with its
+zero at the drift speed (going slower than drift = braking) — physically sensible, worth knowing.
+Implementation: K2 becomes "solve hold-thrust magnitude → FCR" instead of "return 0" — still one
+home in arc_cost; K1 unchanged.
 
 **Paper changes — Tal's zones [T]:**
 1. Eq. (5): emit the **waiting candidate (d, t_𝒯(t)) unconditionally** — family 2 only yields
