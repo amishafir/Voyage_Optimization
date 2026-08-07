@@ -1,6 +1,8 @@
 # Meeting Prep — Monday 2026-08-10 (Ami ↔ Tal)
 
-Continues from [meeting_prep_2026_08_05.md](meeting_prep_2026_08_05.md). Repo HEAD at time of
+Continues from [meeting_prep_2026_08_05.md](meeting_prep_2026_08_05.md).
+**Lean question card for the meeting:** [`docs/monday_questions_2026_08_10.html`](monday_questions_2026_08_10.html) ·
+https://claude.ai/code/artifact/d290de53-5404-432f-8a0f-1f937e475b3a Repo HEAD at time of
 writing: `b807a71`. All items below are OPEN; everything closed since the Aug-5 meeting is listed
 briefly at the bottom for context.
 

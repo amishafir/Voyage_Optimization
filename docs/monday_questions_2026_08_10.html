@@ -1,0 +1,114 @@
+<title>Monday 2026-08-10 — open questions for Tal</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#fff; --ink:#1b2430; --muted:#54626f; --hair:#d9e0e8;
+    --acc:#1f4e79; --hot:#a8332e; --ok:#1f7a5a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style",Palatino,Georgia,serif;
+  }
+  @media (prefers-color-scheme:dark){:root{--bg:#0f1418;--card:#161d25;--ink:#dae2ec;--muted:#9aa8b6;--hair:#26303b;--acc:#6fa8d6;--hot:#e07a70;--ok:#54b98c;}}
+  :root[data-theme="light"]{--bg:#eef1f5;--card:#fff;--ink:#1b2430;--muted:#54626f;--hair:#d9e0e8;--acc:#1f4e79;--hot:#e07a70;--ok:#1f7a5a;}
+  :root[data-theme="dark"]{--bg:#0f1418;--card:#161d25;--ink:#dae2ec;--muted:#9aa8b6;--hair:#26303b;--acc:#6fa8d6;--hot:#e07a70;--ok:#54b98c;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.55}
+  .wrap{max-width:46rem;margin:0 auto;padding:2.2rem 1.2rem 4rem}
+  h1{font-family:var(--serif);font-size:1.7rem;font-weight:600;margin:0 0 .2rem}
+  .sub{color:var(--muted);font-size:.92rem;margin:0 0 1.6rem}
+  .q{background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--acc);border-radius:10px;padding:.9rem 1.1rem;margin:.8rem 0}
+  .q.hot{border-left-color:var(--hot)}
+  .q h2{font-size:1.02rem;font-weight:650;margin:0 0 .3rem}
+  .q h2 .n{font-family:var(--mono);font-size:.72rem;color:#fff;background:var(--acc);border-radius:5px;padding:.1em .45em;margin-right:.5rem;vertical-align:.1em}
+  .q.hot h2 .n{background:var(--hot)}
+  .q p{margin:.25rem 0;font-size:.92rem;color:var(--muted)}
+  .q b{color:var(--ink)}
+  .rec{color:var(--ok);font-weight:600}
+  .opts{margin:.3rem 0 0;padding-left:1.2rem;font-size:.92rem;color:var(--muted)}
+  .opts li{margin:.15rem 0}
+  code{font-family:var(--mono);font-size:.85em;background:color-mix(in srgb,var(--acc) 12%,transparent);padding:.05em .3em;border-radius:4px}
+  .grp{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:1.6rem 0 .2rem}
+  footer{margin-top:2.2rem;border-top:1px solid var(--hair);padding-top:.7rem;font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+</style>
+
+<div class="wrap">
+  <h1>Open questions — Monday, Aug 10</h1>
+  <p class="sub">Ami ↔ Tal · six decisions, three ratifications, one review batch.
+    Full detail: <code>docs/meeting_prep_2026_08_10.md</code>.</p>
+
+  <p class="grp">The two structural decisions</p>
+
+  <div class="q hot">
+    <h2><span class="n">1</span>Which direction is Eq. (6)?</h2>
+    <p>Your Algorithm 1 (Aug 5) is <b>forward / to-arrive</b> (seed C*(0,0)=0, backtrack from the
+      end). §4.1 still carries the <b>cost-to-go</b> Eq. (6) from Aug 3. One choice resolves a
+      cluster: if the equation flips back to-arrive, your "minimum fuel to arrive" prose and
+      "forward Bellman" wording become correct as-is and the ∞-case tilde issue disappears; if it
+      stays cost-to-go, the algorithm must flip to a backward sweep instead. §4.2's walkthrough
+      and the shortest-path paragraph survive either choice.</p>
+  </div>
+
+  <div class="q hot">
+    <h2><span class="n">2</span>SOG = 0: ratify the waiting model</h2>
+    <p>Band is now 𝒱 = [0, v<sub>max</sub>], so waiting needs a price. Evidence in hand: the
+      optimizer <b>never waits — not even for free</b> (both test voyages, all pricing modes,
+      identical fuel to the last digit) ⇒ the choice is purely formal.</p>
+    <ul class="opts">
+      <li><span class="rec">(c) recommended:</span> mid-ocean waiting at the <b>station-keeping
+        cost</b> (symmetric thrust, declared assumption); <b>free only at the destination</b>
+        (moored). Keeps φ continuous through v=0 (no constant-SOG caveat) and the (L,T)
+        unique-sink extraction exact.</li>
+      <li>(a) simpler: φ(·;0)=0 everywhere, declared as an idealization.</li>
+    </ul>
+    <p>Also needs: Eq. (5) must <b>emit the waiting candidate (d, t<sub>𝒯(t)</sub>)
+      unconditionally</b>, and a d = d<sub>M</sub> convention (𝒟(L) is an empty min).</p>
+  </div>
+
+  <p class="grp">Two conventions that block the re-runs</p>
+
+  <div class="q">
+    <h2><span class="n">3</span>What is v<sub>max</sub> now?</h2>
+    <p>Under [0, v<sub>max</sub>]: still mean+3? A vessel cap? This also drives the RH band
+      centring per re-plan.</p>
+  </div>
+
+  <div class="q">
+    <h2><span class="n">4</span>Luo band policy</h2>
+    <p>Luo 2024 uses [8, 18] kn. Do we run our Luo baseline at its own band, or at
+      [0, v<sub>max</sub>] (where a v=0 block = waiting)? The §5 band-alignment note must state
+      the choice.</p>
+  </div>
+
+  <p class="grp">The lower bound — §4.3's future</p>
+
+  <div class="q">
+    <h2><span class="n">5</span>Adopt the two-sided §4.3 story now, or after iteration 3?</h2>
+    <p>Your neighbour-price LB works: gap halves per grid halving (O(step) confirmed), and the
+      refined level <b>certifies the DP within ~4% of the continuous optimum</b> (R1 4.18%,
+      R2 3.72%) — versus 0.2–0.4% from above via the polish. Extrapolating to a sharper F̂* is
+      currently blocked: the τ-dependent wall-feasibility filter returns dropped walls under
+      refinement (non-nested grids — E1's non-monotonicity mechanism, caught). <b>Iteration 3 =
+      freeze the wall set ⇒ valid extrapolation</b> (~35 min of compute). Write §4.3 now with
+      "0.4% above / 4% below / linear-in-step", or wait for the extrapolated version?</p>
+  </div>
+
+  <p class="grp">Reviews & housekeeping</p>
+
+  <div class="q">
+    <h2><span class="n">6</span>Audit batch in your text (typo-level, fixes proposed)</h2>
+    <p>A2 (cell maps <code>&lt;</code>→<code>≤</code>: on-line states price the rectangle
+      <i>behind</i> the vessel) · C1 (<b>anchored vs absolute δ-grid</b> — design question, now
+      with the iteration-2 evidence) · C3 (argmin-of-a-set) · C4 (glide vs "one rectangle") ·
+      C5 ("Figure X" → the new two-panel figure) · C9 (§3 typo pass) · C11 ("snapped to the
+      grid" → "drawn from the grid"). Plus five slips in the new Algorithm 1 box (push target,
+      undefined D, stale band, "Belman's", stray words).</p>
+  </div>
+
+  <div class="q">
+    <h2><span class="n">7</span>Quick calls</h2>
+    <p><b>MODE_C_PORT_SPEC.md</b> — what should be driven from it? · <b>Figures</b> remaining:
+      §5 forecast-error, §7.3 savings-vs-departure, fused-voyage placement · <b>Overleaf</b>:
+      pull-before-compile as the hard rule? · Next milestone: internal review pass → TR-C.</p>
+  </div>
+
+  <footer>repo HEAD 83586c9 · code status: streaming refactor Phases 0–4 green (bit-exact,
+    Python + C++) · waiting-arc prototype merged behind --wait_arcs · LB iterations 1–2 done</footer>
+</div>
