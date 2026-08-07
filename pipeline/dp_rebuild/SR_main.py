@@ -102,6 +102,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--node_first", action="store_true",
                     help="Use node-first arc enumeration (Tal, T20) instead of the "
                          "speed grid — distinct far-wall grid nodes, corner-handled.")
+    ap.add_argument("--wait_arcs", choices=["off", "free", "hold"], default="off",
+                    help="Waiting-arc prototype (meeting prep 2A): off = current "
+                         "behavior; free = variant (a), phi(.;0)=0; hold = variant "
+                         "(c), station-keeping price, symmetric thrust.")
     ap.add_argument("--engine", choices=["legacy", "streaming"], default=None,
                     help="legacy = two-phase build->solve (stores the full arc set); "
                          "streaming = one-pass fused engine (stores only (C*, pred) "
@@ -188,7 +192,8 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         from streaming import solve_streaming
         res, stats = solve_streaming(frame, eta=cfg.eta_h,
                                      time_key=time_key, d_start=d_start,
-                                     node_first=node_first)
+                                     node_first=node_first,
+                                     wait_mode=getattr(args, "wait_arcs", "off"))
         build_t = 0.0
         solve_t = time.time() - t0
         n_nodes, n_edges = stats.n_nodes, stats.n_edges_evaluated
@@ -205,7 +210,8 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
                                           verbose=False,
                                           time_key=time_key,
                                           d_start=d_start,
-                                          node_first=node_first)
+                                          node_first=node_first,
+                                          wait_mode=getattr(args, "wait_arcs", "off"))
         build_t = time.time() - t0
         if verbose:
             print(f"Build time: {build_t:.2f} s")

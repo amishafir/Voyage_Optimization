@@ -44,6 +44,7 @@ if str(_PIPELINE_ROOT) not in sys.path:
 
 from shared.physics import (  # noqa: E402
     calculate_fuel_consumption_rate,
+    calculate_speed_over_ground,
     calculate_sws_from_sog,
 )
 
@@ -102,6 +103,7 @@ _SWS_MAX_FEASIBLE = 25.0
 
 def neighbour_candidates(src_t: float, src_d: float, frame: Frame,
                          next_v: Optional[float], next_h: Optional[float],
+                         wait_arcs: bool = False,
                          ) -> Set[Tuple[float, float]]:
     """A(d, t): the candidate grid nodes (dst_t, dst_d) reachable from
     (src_t, src_d) on the two walls ahead — Eq. (5) of the paper.
@@ -122,7 +124,9 @@ def neighbour_candidates(src_t: float, src_d: float, frame: Frame,
                     and frame.snap_h_dst_t(src_t + dd / vmax) > src_t + eps)
     if resolvable_d:                                     # distance line binds
         t_fast = src_t + dd / vmax
-        t_slow = src_t + dd / vmin
+        # v_min = 0 (band [0, v_max]): the slow side of the window is open —
+        # only the time wall and T clip it. (Float /0 raises in Python.)
+        t_slow = (src_t + dd / vmin) if vmin > eps else float("inf")
         t_hi = min(t_slow, next_v if next_v is not None else T, T)
         for k in range(round(t_fast / tau), round(t_hi / tau) + 1):
             dst_t = round(k * tau, 9)
@@ -139,18 +143,79 @@ def neighbour_candidates(src_t: float, src_d: float, frame: Frame,
                 dst_d = round(k * zeta, 9)
                 if src_d + eps < dst_d <= L + eps:
                     cand.add((round(next_v, 9), dst_d))
+    if wait_arcs and next_v is not None and next_v - src_t > eps:
+        # variant-a/c prototype (meeting prep 2A): the waiting candidate
+        # (d, t_T(t)) — emitted unconditionally, not only when the cell
+        # width happens to be delta-aligned.
+        cand.add((round(next_v, 9), round(src_d, 9)))
     return cand
+
+
+def _hold_thrust_kn(weather_dict: dict, heading_deg: float) -> float:
+    """Variant-c prototype: thrust magnitude (kn of SWS-equivalent) needed to
+    hold SOG = 0 under the symmetric-thrust convention (meeting prep 2A(c)).
+    Head-dominated weather: bisect the forward physics for SOG(s) = 0.
+    Following-dominated (engine-off drift moves forward): braking magnitude
+    = the drift SOG, priced like ahead thrust (declared assumption).
+    NOTE: duplicates the weather-dict conversion of calculate_sws_from_sog —
+    prototype-scoped; fold into the one-home inversion if variant c lands."""
+    from math import radians
+    wind_dir = radians(weather_dict.get("wind_direction_10m_deg", 0.0))
+    bf = int(weather_dict.get("beaufort_number", 3))
+    wave = weather_dict.get("wave_height_m", 1.0)
+    cur_kn = weather_dict.get("ocean_current_velocity_kmh", 0.0) / 1.852
+    cur_dir = radians(weather_dict.get("ocean_current_direction_deg", 0.0))
+    hdg = radians(heading_deg)
+
+    def sog_at(sws: float) -> float:
+        return calculate_speed_over_ground(
+            ship_speed=sws, ocean_current=cur_kn, current_direction=cur_dir,
+            ship_heading=hdg, wind_direction=wind_dir, beaufort_scale=bf,
+            wave_height=wave, ship_parameters=None)
+
+    drift = sog_at(0.0)
+    if drift >= 0.0:
+        return drift
+    lo, hi = 0.0, 30.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if sog_at(mid) < 0.0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
 
 
 def price_candidate(src_t: float, src_d: float, dst_t: float, dst_d: float,
                     weather, weather_dict: dict, heading: float,
-                    next_v: Optional[float]) -> Optional[AtomicEdge]:
+                    next_v: Optional[float],
+                    wait_mode: str = "off") -> Optional[AtomicEdge]:
     """arc_cost: price the leg (src -> dst) at its derived speed
     v_bar = dd/dt — SWS inverse under the source's weather and heading,
     FCR at that SWS, times the leg duration. Returns None for degenerate
     or engine-infeasible legs (NaN / SWS above the feasible bound)."""
     eps = 1e-9
     ddt, ddd = dst_t - src_t, dst_d - src_d
+    if wait_mode != "off" and ddt > eps and abs(ddd) <= eps:
+        # Waiting leg (v_bar = 0). The phi(d,t;0) convention lives HERE,
+        # in the arc-cost primitive — one home (meeting prep 2A):
+        #   free: variant (a) — engine off, position idealised as held;
+        #   hold: variant (c) — station-keeping price, symmetric thrust.
+        if wait_mode == "free":
+            sws0, fcr0 = 0.0, 0.0
+        else:  # "hold"
+            sws0 = _hold_thrust_kn(weather_dict, heading)
+            if sws0 != sws0 or sws0 > _SWS_MAX_FEASIBLE:
+                return None
+            fcr0 = calculate_fuel_consumption_rate(sws0)
+        fuel0 = fcr0 * ddt
+        if isnan(fuel0):
+            return None
+        return AtomicEdge(
+            src_t=src_t, src_d=src_d, dst_t=dst_t, dst_d=dst_d,
+            sog=0.0, target_sog=0.0, weather=weather,
+            heading_deg=heading, sws=sws0, fcr_mt_per_h=fcr0, fuel_mt=fuel0,
+            crosses_v_line=(next_v is not None and abs(dst_t - next_v) < eps))
     if ddt <= eps or ddd <= eps:
         return None
     realized_sog = ddd / ddt
@@ -179,6 +244,7 @@ def _emit_from_src(
     perturber=None,
     time_key=None,
     node_first: bool = False,
+    wait_mode: str = "off",
 ) -> List[AtomicEdge]:
     """Enumerate every atomic edge out of (src_t, src_d).
 
@@ -277,9 +343,11 @@ def _emit_from_src(
         # Reuses the weather resolved above, so time_key / d_start (RH) work
         # unchanged. (Streaming refactor Phase 1 — logic verbatim, extracted.)
         for dst_t, dst_d in neighbour_candidates(src_t, src_d, frame,
-                                                 next_v, next_h):
+                                                 next_v, next_h,
+                                                 wait_arcs=(wait_mode != "off")):
             edge = price_candidate(src_t, src_d, dst_t, dst_d,
-                                   weather, weather_dict, heading, next_v)
+                                   weather, weather_dict, heading, next_v,
+                                   wait_mode=wait_mode)
             if edge is not None:
                 edges.append(edge)
         return edges
@@ -388,6 +456,7 @@ def build_atomic_edges(
     time_key=None,
     d_start: float = 0.0,
     node_first: bool = False,
+    wait_mode: str = "off",
 ) -> Tuple[List[Node], List[AtomicEdge]]:
     """Build the atomic-edge graph by BFS from the source.
 
@@ -456,6 +525,7 @@ def build_atomic_edges(
             perturber=perturber,
             time_key=time_key,
             node_first=node_first,
+            wait_mode=wait_mode,
         )
         for e in out:
             edges.append(e)

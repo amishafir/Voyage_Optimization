@@ -67,6 +67,7 @@ def solve_streaming(
     forecast_hour: Optional[int] = None,
     override_sample_hour: Optional[int] = None,
     perturber=None,
+    wait_mode: str = "off",
 ) -> Tuple[BellmanResult, StreamingStats]:
     """Solve the DP in a single streaming pass. Returns (result, stats);
     ``stats.n_edges_evaluated`` must equal the legacy ``len(edges)`` — the
@@ -99,7 +100,8 @@ def solve_streaming(
                                 override_sample_hour=override_sample_hour,
                                 perturber=perturber,
                                 time_key=time_key,
-                                node_first=True):
+                                node_first=True,
+                                wait_mode=wait_mode):
             stats.n_edges_evaluated += 1
             dk = _key(e.dst_t, e.dst_d)
             if dk in popped:
