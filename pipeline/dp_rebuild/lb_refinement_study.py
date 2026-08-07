@@ -53,6 +53,10 @@ def main() -> None:
         rows = []
         for tag, h, tau, zeta in LEVELS:
             r = run_level(route, sh, tag, tau, zeta)
+            # lb_bound stores some floats as full-precision strings — convert.
+            for k in ("F_DP", "LB", "disc_dp_path"):
+                if k in r and r[k] is not None:
+                    r[k] = float(r[k])
             row = {
                 "h": h, "tau_h": tau, "zeta_nm": zeta,
                 "F_DP_grid": r["F_DP"], "LB": r["LB"],

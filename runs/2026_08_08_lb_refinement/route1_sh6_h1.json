@@ -1,0 +1,32 @@
+{
+  "route": "route1",
+  "sh_base": 6,
+  "eta_h": 280.0,
+  "F_DP": "353.95517201251994",
+  "LB": "295.6579639142041",
+  "gap_mt": 58.29720809831582,
+  "gap_pct": 16.47022355030138,
+  "golden_check": true,
+  "lb_strictly_below": true,
+  "F_DP_time_h": 280.0,
+  "LB_time_h": 280.0,
+  "disc_dp_path": 312.92235530815753,
+  "dp_n_legs": 139,
+  "dp_mean_leg_h": 2.014,
+  "n_nodes": 133963,
+  "wall_s": 47.9,
+  "stats": {
+    "n_edges": 1179189,
+    "n_family1": 876604,
+    "n_family2": 319858,
+    "n_corner": 17273,
+    "n_glide": 55336,
+    "n_clipped_vmin": 201698,
+    "n_unclassified": 0,
+    "n_phys_fallback": 0
+  },
+  "polish_reference": {
+    "F_polished": 353.231,
+    "recovered_pct": 0.2045
+  }
+}

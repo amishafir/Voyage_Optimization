@@ -149,3 +149,36 @@ python3 lb_bound.py --route route2 --sh_base 0 --out_dir ../../runs/2026_08_07_l
 
 (~50 s / ~20 s; run sequentially. Golden references: `pipeline/dp_rebuild/goldens/quick.json`;
 polish references: `runs/2026_07_28_local_certificate/results.csv`.)
+
+## 9. Iteration 2 (2026-08-08): grid-refinement study — results
+
+Driver: `lb_refinement_study.py`; data: `runs/2026_08_08_lb_refinement/`. Three pricing-grid
+levels (paper, /2, /4), both quick voyages, current band.
+
+| h | R1 LB (gap) | R1 intrinsic/slack | R2 LB (gap) |
+|---|---|---|---|
+| 1 | 295.66 (16.47 %) | 41.0 / 17.3 | 166.80 (17.62 %) |
+| 1/2 | 324.41 (8.41 %) | 22.7 / 7.1 | 186.39 (8.02 %) |
+| 1/4 | **340.11 (4.18 %)** | 12.4 / 2.4 | **194.88 (3.72 %)** |
+
+**Findings.**
+1. **O(step) confirmed**: the gap halves per halving on both routes.
+2. **Certified bound improves 4×**: the mapping argument is grid-agnostic, so the finest level is
+   a rigorous LB on F* — the DP is provably within ~4 % of the continuous optimum (was 16–18 %),
+   at ~16× compute (minutes).
+3. **Slack dies superlinearly** (×2.4–2.9 per halving vs ×2 for the intrinsic term) → Q4's
+   per-wall discount matters less at fine grids; the intrinsic discount dominates the residual.
+4. **Richardson extrapolation INVALID as computed** — intercepts land above F_DP. Root cause:
+   F_DP(grid) itself drifts upward with refinement (R1 353.96 → 354.94) because the H-line
+   feasibility filter depends on τ: finer τ shrinks the slow-side deadzones and returns
+   previously-dropped walls ⇒ grids are NOT nested (the E1 non-monotonicity mechanism, caught
+   red-handed).
+
+**Iteration 3 (designed, not run): freeze the wall set** at the paper grid's walls across
+refinement levels ⇒ nested grids ⇒ monotone F_DP(h) ⇒ the linear extrapolation becomes valid.
+Also cheap: one more level (h/8) would certify ≈2 %.
+
+**Paper implication for the §4.3 rewrite:** a defensible two-sided story exists TODAY —
+"within 0.2–0.4 % from above (polish), provably within ~4 % from below (refined neighbour-price
+LB), with the lower side tightening linearly in the grid step" — extrapolation upgrade pending
+iteration 3.
