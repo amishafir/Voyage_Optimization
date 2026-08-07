@@ -216,6 +216,11 @@ def h_line_distances_from_geo(
             return False
         import math as _m
         k_min = max(1, int(_m.ceil(G / (cfg.v_max * cfg.tau_h) - 1e-9)))
+        if cfg.v_min <= 1e-9:
+            # band [0, v_max] (meeting prep 2A): arbitrarily slow crossings
+            # are admissible, so every positive gap has a feasible k — the
+            # slow-side deadzones disappear.
+            return True
         k_max = int(_m.floor(G / (cfg.v_min * cfg.tau_h) + 1e-9))
         return k_min <= k_max
 

@@ -111,6 +111,18 @@ re-measurement.
 - K8 RH band centring (`v_min = mean−3` in both sr_solves) → 0; interacts with the v_max
   convention (item 5 above).
 
+**E-B TEST RESULTS (Aug 8, `runs/2026_08_08_variant_c_test/`, prototype behind
+`--wait_arcs {off,free,hold}`, gate E-A bit-exact):** on both quick-set voyages, **the optimizer
+never waits — not even for free** (0 wait legs in all configs; the 571k waiting arcs were
+generated and priced, they just never win: with a hard ETA, slow-steaming beats wait-then-sail on
+our weather). Variants (a) and (c) give **identical fuel to the last digit**; the band change
+itself is a fuel non-event (R2 identical; R1 +0.017 mt = the regained deadzone H-line, not the
+band). **⇒ the φ(·;0) choice is empirically free on this data — decide on formal grounds, where
+(c) stays the recommendation.** Engineering finding: the open band inflates arcs ~14× / runtime
+~13× for nothing — an **ETA-feasibility arc cut** (prune candidates from which the destination is
+unreachable at v_max) is required before the full 19-voyage re-run. Caveats: 2 voyages; both
+optima use the full ETA; RH/delay scenarios may differ.
+
 **Sequence:** [A]-zone paper edits + K1–K6 implementable now behind config; the re-runs (section
 5) additionally wait on the two [T] open points (v_max convention, Luo band policy) and Tal's
 blessing of the Eq.-(5) waiting candidate.
