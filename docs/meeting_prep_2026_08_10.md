@@ -1,6 +1,9 @@
 # Meeting Prep — Monday 2026-08-10 (Ami ↔ Tal)
 
 Continues from [meeting_prep_2026_08_05.md](meeting_prep_2026_08_05.md).
+**Meeting summary (accomplished + attention points):**
+[`docs/meeting_summary_2026_08_10.html`](meeting_summary_2026_08_10.html) ·
+https://claude.ai/code/artifact/1e76aeac-0c53-4578-914e-fdc2fb9c8fd8
 **Lean question card for the meeting:** [`docs/monday_questions_2026_08_10.html`](monday_questions_2026_08_10.html) ·
 https://claude.ai/code/artifact/d290de53-5404-432f-8a0f-1f937e475b3a Repo HEAD at time of
 writing: `b807a71`. All items below are OPEN; everything closed since the Aug-5 meeting is listed

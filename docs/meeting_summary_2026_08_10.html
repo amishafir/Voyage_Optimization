@@ -1,0 +1,148 @@
+<title>Aug 5 → Aug 10 — what happened, and what needs Tal</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#fff; --ink:#1b2430; --muted:#54626f; --hair:#d9e0e8;
+    --acc:#1f4e79; --hot:#a8332e; --ok:#1f7a5a; --gold:#8a6115;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style",Palatino,Georgia,serif;
+  }
+  @media (prefers-color-scheme:dark){:root{--bg:#0f1418;--card:#161d25;--ink:#dae2ec;--muted:#9aa8b6;--hair:#26303b;--acc:#6fa8d6;--hot:#e07a70;--ok:#54b98c;--gold:#cfa14e;}}
+  :root[data-theme="light"]{--bg:#eef1f5;--card:#fff;--ink:#1b2430;--muted:#54626f;--hair:#d9e0e8;--acc:#1f4e79;--hot:#a8332e;--ok:#1f7a5a;--gold:#8a6115;}
+  :root[data-theme="dark"]{--bg:#0f1418;--card:#161d25;--ink:#dae2ec;--muted:#9aa8b6;--hair:#26303b;--acc:#6fa8d6;--hot:#e07a70;--ok:#54b98c;--gold:#cfa14e;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.55}
+  .wrap{max-width:48rem;margin:0 auto;padding:2.2rem 1.2rem 4rem}
+  h1{font-family:var(--serif);font-size:1.65rem;font-weight:600;margin:0 0 .2rem}
+  .sub{color:var(--muted);font-size:.92rem;margin:0 0 1.4rem}
+  h2{font-family:var(--serif);font-size:1.2rem;font-weight:650;margin:1.6rem 0 .4rem;padding-top:.9rem;border-top:2px solid var(--acc)}
+  h2.att{border-top-color:var(--hot)}
+  .blk{background:var(--card);border:1px solid var(--hair);border-radius:10px;padding:.75rem 1.05rem;margin:.55rem 0}
+  .blk h3{font-size:.95rem;font-weight:650;margin:0 0 .25rem;color:var(--acc)}
+  ul{margin:.2rem 0 .2rem;padding-left:1.15rem}
+  li{margin:.22rem 0;font-size:.92rem;color:var(--muted)}
+  li b{color:var(--ink)} .ok{color:var(--ok);font-weight:650} .rec{color:var(--ok);font-weight:600}
+  .att .blk{border-left:4px solid var(--hot)}
+  .att h3{color:var(--hot)}
+  code{font-family:var(--mono);font-size:.85em;background:color-mix(in srgb,var(--acc) 12%,transparent);padding:.05em .3em;border-radius:4px}
+  footer{margin-top:2rem;border-top:1px solid var(--hair);padding-top:.7rem;font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+  a{color:var(--acc)}
+</style>
+
+<div class="wrap">
+  <h1>Since the Aug-5 meeting</h1>
+  <p class="sub">Ami ↔ Tal · Monday, Aug 10 · everything below is committed &amp; pushed on
+    <code>main</code> · decision detail: the <a
+    href="monday_questions_2026_08_10.html">question card</a> / <code>meeting_prep_2026_08_10.md</code></p>
+
+  <h2>Accomplished</h2>
+
+  <div class="blk">
+    <h3>Paper — §4 aligned to your Aug-5 push</h3>
+    <ul>
+      <li><b>§4.2 rewritten around your consolidated Algorithm 1</b>: one flat section, one claim
+        — discovery, discretisation, pricing and valuation are <b>one forward pass</b>; only
+        (C*, pred) stored; extraction backtracks from (L,T).</li>
+      <li><b>Every pseudocode line (1–15) anchored</b> in the prose — a reader can trace the box
+        top-to-bottom, incl. a one-sentence plain-words proof of why the lex-min pop makes labels
+        final.</li>
+      <li>The approved <b>shortest-path bridge paragraph</b> is in (end of §4.1,
+        direction-neutral wording).</li>
+      <li><b>Snap wording corrected</b>: both leg endpoints are predefined grid nodes, so
+        v̄ = (d̃−d)/(t̃−t) is <b>exact</b> — the "half-a-step timing error" relic is gone.</li>
+      <li><b>Figure = a two-panel pair</b>: (a) a state on a distance line (κ=13), (b) on a time
+        line (κ=17), one joint caption, placed before the "When the vessel…" paragraph.</li>
+      <li><b>§4.3 removed from the render</b> (archived in place) — to be rewritten once the LB
+        strategy is settled (see below: a two-sided version is now possible).</li>
+    </ul>
+  </div>
+
+  <div class="blk">
+    <h3>Code — your two decisions delivered, bit-exact</h3>
+    <ul>
+      <li><b>"Don't save arcs" refactor: Phases 0–4 complete, Python + C++.</b> Streaming engine
+        (lex-min pop, per-source enumeration, immediate relaxation, only (C*, pred) kept) is the
+        default for node-first. <span class="ok">Gates: full 19-voyage set bit-exact; C++ = its
+        legacy engine to the last digit; schedule CSVs byte-identical; RH smoke exact.</span></li>
+      <li><b>Clean primitives</b>: <code>A(d,t)</code> (Eq. 5) and <code>arc_cost</code> (the leg
+        price) are single-home functions — solver, RH and the LB all call the same two.</li>
+      <li>Golden regression harness committed (<code>regression_freeze.py</code> + quick/full
+        goldens matching the July-16 sweep exactly).</li>
+    </ul>
+  </div>
+
+  <div class="blk">
+    <h3>SOG = 0 — modeled, prototyped, tested</h3>
+    <ul>
+      <li>Physics worked through: true station-keeping needs the engine in any current; φ(·;0)=0
+        is an idealized pause, exact only at the destination. <b>Variant (c)</b> formulated:
+        station-keeping price mid-ocean (symmetric thrust, declared), free at d = d_M.</li>
+      <li>Prototype merged behind <code>--wait_arcs {off,free,hold}</code> (default off — goldens
+        untouched).</li>
+      <li><b>E-B test: the optimizer never waits — not even for free.</b> All variants identical
+        to the last digit on both test voyages ⇒ the φ(·;0) choice is purely formal.</li>
+      <li>Engineering: the open band inflates the graph ~14× — an <b>ETA-feasibility arc cut</b>
+        is required before the full re-run.</li>
+    </ul>
+  </div>
+
+  <div class="blk">
+    <h3>Lower bound — your neighbour-price idea, two iterations</h3>
+    <ul>
+      <li><b>Iteration 1</b>: implemented on the production enumerator, golden-validated exactly.
+        Gap 16–18%, decomposed: ~11.5% intrinsic one-step discount + ~5–6% path-switch slack.</li>
+      <li><b>Iteration 2 (refinement study)</b>: the gap <b>halves per grid halving</b> — O(step)
+        confirmed; the refined level <b>certifies the DP within ~4% of the continuous optimum</b>
+        (R1 4.18%, R2 3.72%); slack dies superlinearly.</li>
+      <li>Bonus diagnosis: refining τ returns previously-dropped walls (non-nested grids) —
+        <b>E1's non-monotonicity mechanism caught red-handed</b>; iteration 3 (freeze the wall
+        set) would make extrapolation valid.</li>
+    </ul>
+  </div>
+
+  <div class="blk">
+    <h3>Quality &amp; docs</h3>
+    <ul>
+      <li><b>22-item notation/math audit of §3–§4</b> — incl. five as-written bugs (the Eq.-(6)
+        ∞-case tilde; the cell maps pricing the rectangle <i>behind</i> the vessel). Four already
+        resolved in the rewrites; each item has a why-it-matters page
+        (<code>audit_explained.html</code>).</li>
+      <li>Walkthrough HTML extended (Parts 6–7); this summary + the question card; preps
+        maintained as the running record.</li>
+    </ul>
+  </div>
+
+  <h2 class="att">Needs your attention today</h2>
+
+  <div class="att">
+  <div class="blk">
+    <h3>1 · The Eq. (6) direction</h3>
+    <ul><li>Your equation (Aug 3) is cost-to-go; your algorithm (Aug 5) is to-arrive. One choice
+      resolves the A1/A3/A5 audit cluster. <span class="rec">Leaning to-arrive</span> — it
+      matches the algorithm and the code, and two of your sentences become correct as-is.</li></ul>
+  </div>
+  <div class="blk">
+    <h3>2 · Ratify the SOG = 0 model</h3>
+    <ul><li><span class="rec">Variant (c)</span> vs (a) — results identical either way (E-B);
+      plus Eq. (5) must emit the waiting candidate unconditionally, and d = d_M needs a
+      convention (𝒟(L) is an empty min).</li></ul>
+  </div>
+  <div class="blk">
+    <h3>3 · Two conventions blocking the re-runs</h3>
+    <ul><li><b>v_max</b> under [0, v_max] (mean+3? vessel cap?) and the <b>Luo band policy</b>
+      (own 8–18 vs [0, v_max]).</li></ul>
+  </div>
+  <div class="blk">
+    <h3>4 · §4.3's future</h3>
+    <ul><li>Write the two-sided version now ("0.2–0.4% above / ~4% certified below / linear in
+      the step"), or run iteration 3 first for the extrapolated F̂*?</li></ul>
+  </div>
+  <div class="blk">
+    <h3>5 · Review batch in your text</h3>
+    <ul><li>Seven audit items (A2 cell maps, C1 anchoring — now with iteration-2 evidence, C3,
+      C4, C5, C9, C11) + five slips in the new Algorithm 1 box (push target, undefined D, stale
+      band, "Belman's", stray words). All with one-line proposed fixes.</li></ul>
+  </div>
+  </div>
+
+  <footer>repo HEAD 1dbbfd1 · all gates green · full detail: docs/meeting_prep_2026_08_10.md</footer>
+</div>
