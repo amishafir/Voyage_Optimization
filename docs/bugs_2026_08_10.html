@@ -1,0 +1,126 @@
+<title>The bugs — as-written errors in §3–§4</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#fff; --ink:#1b2430; --muted:#54626f; --hair:#d9e0e8;
+    --bug:#a8332e; --ok:#1f7a5a; --acc:#1f4e79;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style",Palatino,Georgia,serif;
+  }
+  @media (prefers-color-scheme:dark){:root{--bg:#0f1418;--card:#161d25;--ink:#dae2ec;--muted:#9aa8b6;--hair:#26303b;--bug:#e07a70;--ok:#54b98c;--acc:#6fa8d6;}}
+  :root[data-theme="light"]{--bg:#eef1f5;--card:#fff;--ink:#1b2430;--muted:#54626f;--hair:#d9e0e8;--bug:#a8332e;--ok:#1f7a5a;--acc:#1f4e79;}
+  :root[data-theme="dark"]{--bg:#0f1418;--card:#161d25;--ink:#dae2ec;--muted:#9aa8b6;--hair:#26303b;--bug:#e07a70;--ok:#54b98c;--acc:#6fa8d6;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+  .wrap{max-width:46rem;margin:0 auto;padding:2rem 1.2rem 4rem}
+  h1{font-family:var(--serif);font-size:1.6rem;font-weight:600;margin:0 0 .15rem}
+  .sub{color:var(--muted);font-size:.9rem;margin:0 0 1.3rem}
+  h2{font-family:var(--serif);font-size:1.12rem;font-weight:650;margin:1.4rem 0 .35rem;border-top:2px solid var(--bug);padding-top:.8rem}
+  .b{background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--bug);border-radius:9px;padding:.7rem 1rem;margin:.5rem 0}
+  .b h3{font-size:.94rem;font-weight:650;margin:0 0 .2rem}
+  .b h3 .id{font-family:var(--mono);font-size:.7rem;color:#fff;background:var(--bug);border-radius:4px;padding:.1em .4em;margin-right:.45rem;vertical-align:.1em}
+  .b p{margin:.18rem 0;font-size:.9rem;color:var(--muted)}
+  .b b{color:var(--ink)}
+  .now{font-family:var(--serif);background:color-mix(in srgb,var(--bug) 7%,var(--card));border-radius:6px;padding:.3rem .55rem;display:block;margin:.3rem 0;font-size:.92rem;color:var(--ink);overflow-x:auto}
+  .fix{color:var(--ok);font-weight:600}
+  .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:.12em .45em;margin-left:.45rem;vertical-align:.15em}
+  .tag.dir{background:color-mix(in srgb,var(--acc) 15%,transparent);color:var(--acc)}
+  .tag.done{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+  code{font-family:var(--mono);font-size:.85em}
+  footer{margin-top:1.8rem;border-top:1px solid var(--hair);padding-top:.6rem;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+  a{color:var(--acc)}
+</style>
+
+<div class="wrap">
+  <h1>The bugs</h1>
+  <p class="sub">As-written errors only — a reader implementing the paper gets a different
+    algorithm than the one we ran. Tags: <span class="tag dir">direction-dependent</span> =
+    vanishes/changes under the Eq.-(6) direction decision · <span class="tag done">resolved</span>.</p>
+
+  <h2>Equations &amp; definitions (§4.1)</h2>
+
+  <div class="b">
+    <h3><span class="id">A1</span>Eq. (6)'s ∞-case tests the wrong point <span class="tag dir">direction-dependent</span></h3>
+    <span class="now">∞ &nbsp;if&nbsp; t̃ = t<sub>Θ</sub>, <u>d</u> &lt; d<sub>M</sub></span>
+    <p><b>Every</b> non-sink source has d &lt; d<sub>M</sub>, so the case fires for every leg
+      touching the final time line — including a legal on-time arrival at (L,T). The algorithm
+      and the code accept that arrival; the equation forbids it.</p>
+    <p class="fix">Fix: one tilde — d̃ &lt; d<sub>M</sub> (test the successor). Disappears
+      entirely if Eq. (6) flips to-arrive.</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">A2</span>The cell maps price the rectangle <i>behind</i> the vessel</h3>
+    <span class="now">i(d) = argmax<sub>i</sub>{ d<sub>i</sub> <u>&lt;</u> d } ,&nbsp;
+      j(t) = argmax<sub>j</sub>{ t<sub>j</sub> <u>&lt;</u> t } &nbsp;(strict)</span>
+    <p>Every DP state sits <b>on</b> a line. With strict inequalities, a state at t = 6.0 h
+      exactly prices its outgoing leg with the forecast block that just <b>expired</b>; a state
+      on a cell boundary prices with the cell it is <b>leaving</b>. The code does the right
+      thing; the definition doesn't.</p>
+    <p class="fix">Fix: weak inequalities (≤) in i(d) and j(t).</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">A3</span>Solution prose contradicts the cost-to-go equation <span class="tag dir">direction-dependent</span></h3>
+    <span class="now">"…the minimum fuel <b>to arrive on time at each state</b> (d,t)…"</span>
+    <p>Under the current cost-to-go Eq. (6), C*(d,t) is the fuel to <b>finish from</b> (d,t) —
+      under the "arrive at" reading, C*(0,0) would be trivially 0, yet the answer is read there.
+      Also: the thing starting at (d,t) is a <b>leg</b>, not a "subsegment".</p>
+    <p class="fix">Fix: "…to complete the voyage from (d,t)…" — or nothing, if Eq. (6) flips
+      to-arrive (the sentence becomes correct as written).</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">A5</span>"…the following <b>forward</b> Bellman equation" <span class="tag dir">direction-dependent</span></h3>
+    <p>The recursion that follows is cost-to-go — evaluated <b>backward</b>. Whoever trusts the
+      adjective sweeps it the wrong way (a state's value needs its successors, which forward
+      order hasn't visited).</p>
+    <p class="fix">Fix: drop the adjective — or keep it, if Eq. (6) flips to-arrive.</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">A4</span>Soft-ETA remark charged a fee no one can incur <span class="tag done">resolved Aug 4</span></h3>
+    <p>"Lateness charge λ(t̃−T)" with t̃ ≤ T on the grid — never positive. Now reads "extend the
+      time lines beyond T and charge λ·max(0, t̃−T)".</p>
+  </div>
+
+  <h2>Algorithm 1 box (the Aug-5 lines)</h2>
+
+  <div class="b">
+    <h3><span class="id">S1</span>Line 9 pushes the wrong state</h3>
+    <span class="now">if (d,t) ∉ Q then push(Q, <u>(d,t)</u>)</span>
+    <p>As written the queue receives only the state just popped — it <b>never grows</b>, and the
+      loop ends after one state.</p>
+    <p class="fix">Fix: push (d̃,t̃) — the improved successor.</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">S2</span>Line 10: undefined symbol</h3>
+    <span class="now">curr ← (D, T)</span>
+    <p><code>D</code> is defined nowhere.</p>
+    <p class="fix">Fix: (L, T) — or (d<sub>M</sub>, t<sub>Θ</sub>).</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">S3</span>Input line: stale band</h3>
+    <span class="now">speed band [v<sub>min</sub>, v<sub>max</sub>]</span>
+    <p>§3 now says 𝒱 = [0, v<sub>max</sub>].</p>
+    <p class="fix">Fix: [0, v<sub>max</sub>].</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">S4</span>Title typo</h3>
+    <span class="now">"Solve the <u>Belman's</u> equations"</span>
+    <p class="fix">Fix: Bellman.</p>
+  </div>
+
+  <div class="b">
+    <h3><span class="id">S5</span>Line 12: stray words</h3>
+    <span class="now">while curr ≠ (0,0) <u>not empty</u> do</span>
+    <p class="fix">Fix: drop "not empty".</p>
+  </div>
+
+  <footer>not listed here: the formal gaps (Eq. (5) waiting candidate; 𝒟(L) empty at the
+    destination) and the style/collision items — those live on the
+    <a href="monday_questions_2026_08_10.html">question card</a> and in prep §3 ·
+    detail per item: <a href="audit_explained.html">audit_explained.html</a></footer>
+</div>
