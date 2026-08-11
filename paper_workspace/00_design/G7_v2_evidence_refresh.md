@@ -214,8 +214,26 @@ Before `G1_evidence_ledger.md` is re-pointed at v2 results and re-frozen:
   - **Revised full-sweep estimate**: ~35–45 minutes for all 35 voyages (both routes), down from
     ~4.5–5 hours — route2's smaller graph (4.3M vs 9.2M edges per `G4_methods.md` §4.6) should
     make its per-voyage time lower than route1's, not yet measured directly.
-- [~] D — promotion / re-freeze. **Full 35-voyage v2 sweep launched 2026-08-11** via
-      `run_chain_sweep_cpp.py --routes route1,route2` (background), writing to
-      `results/2026_08_11_chain_sweep_v2_cpp/results.csv` incrementally. Not complete yet —
-      remaining once it finishes: sanity-check the real output, re-run
-      `analyze_chain_sweep.py` on it, work through the promotion checklist above (§D).
+- [~] D — promotion / re-freeze. **Full 35-voyage v2 sweep completed 2026-08-11**,
+      52.7 min wall time, `results/2026_08_11_chain_sweep_v2_cpp/results.csv` (35 rows, both
+      routes). Checklist status:
+  - [x] Continuity check (A.3) — passed, see above.
+  - [x] `analyze_chain_sweep.py` reviewed for both routes at the new voyage counts. Headline:
+        route1 SR-Luo gap **-1.80%** (95% CI [-2.10%, -1.50%], n=13), route2 **-2.60%**
+        (CI [-2.89%, -2.31%], n=22) — both land inside the original 19-voyage paper's reported
+        1.8–2.6% range, despite nearly doubling the voyage count. Bootstrap and t-interval CIs
+        track closely throughout (no method divergence flags).
+  - [x] Naive/SR/Luo gap signs and magnitudes checked against v1 on the 19 overlapping
+        (route, sh_base) voyages: **max diff 0.93% (SR), 0.75% (Luo)**, median ~0.15% — small,
+        one-sided-ish (v2 mostly ~0.1-0.3% higher fuel than v1), consistent with Python-vs-C++
+        floating-point/summation-order differences on identical input weather (confirmed exact
+        match in A.3), not a data or logic bug. Fuel ordering SR < Luo < Baseline held in every
+        one of the 35 voyages.
+  - [ ] CI method review at real n (13/22) — done implicitly above (bootstrap vs t agree).
+  - [ ] Figures regenerated from v2 data — not done (still using v1-based figures/tables in the
+        draft).
+  - [ ] `G1_evidence_ledger.md` / `00_design/README.md` "Locked inputs" updated to cite v2 — not
+        done; pending explicit go-ahead to promote (this is the "no new runs" constraint being
+        formally superseded, worth a deliberate step not a drive-by edit).
+  - [ ] Committed to git — **not yet**, holding per earlier note to commit once validated;
+        validation above passed, ready whenever wanted.
