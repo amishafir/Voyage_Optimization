@@ -484,7 +484,9 @@ We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \
 {\small (b) a state on a \emph{time} line}
 \end{minipage}
 \caption{A state of the dynamic program and its candidate successors (values illustrative), for the
-two cases of the grid: (a) the state sits on a \emph{distance} line --- the boundary it has just
+two cases of the grid --- the compass in each panel gives the reading: the horizontal axis is
+distance $d$, increasing left to right; the vertical axis is elapsed time $t$, increasing top to
+bottom. (a) the state sits on a \emph{distance} line --- the boundary it has just
 crossed --- in the interior of a forecast block; (b) the state sits on a \emph{time} line --- a
 decision epoch --- in the interior of a cell. In both cases every admissible speed leads to one of
 two walls: the next distance line $d_{\mathcal{D}(d)}$, where the sea conditions change, or the
@@ -495,8 +497,8 @@ spaced $\tau$ on the distance wall (circles) and arrival distances spaced $\delt
 (squares), the two families of Eq.~\eqref{eq:neighbors}. The fast edge of the cone crosses the
 distance wall before the block ends, capping the second family; every slower speed, down to
 waiting, runs out of the block first, clipping the first family at the time wall. Each surviving
-node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$ --- here $\kappa=13$ and
-$\kappa=17$ candidates, respectively.}
+node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$, labelled on the grid in NM and
+hours respectively.}
 \label{fig:state-neighbours}
 \end{figure}
 When the vessel is streaming in a sub-segment that starts at point $d$ at time $t$  it is subject to the fixed sea conditions and with the same heading until the end of the sea condition time block and the end of the sub-segment, whatever it reaches first. I.e., it steams inside a given rectunglar area of the time-distance space demonstrated in Figure X.   Therefore, the FCR is determined only by $v$ within this rectunglar area.  We denote this FCR by $\phi(d, t; v)$ metric ton / hour.
@@ -642,12 +644,12 @@ predecessors to the origin.
 % ==== Algorithm 1 box (moved up from after the enumeration prose, 2026-08-04 restructure: box first, walkthrough after) ====
 \begin{center}
 \fbox{\begin{minipage}{0.95\textwidth}
-\textbf{Algorithm~1: Solve the Belman's equations}\\[-6pt]
+\textbf{Algorithm~1: Solve the Bellman's equations}\\[-6pt]
 \rule{\linewidth}{0.4pt}
 \footnotesize
 \begin{tabbing}
 xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
-\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[v_{\min},v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
+\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[0,v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
 \textbf{Output:}  Speed schedule and total fuel consumption \\
 {\small$\triangleright$ \emph{Stage 1 --- forward closure: discover all reachable states and calculate their values}}\\
 {\scriptsize 1}\> $C^*(0,0) \leftarrow 0$; \quad $C^*(d,t) \leftarrow \infty$ \, for all $(d,t) \ne (0,0)$;\\
@@ -664,7 +666,7 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 {\small$\triangleright$ \emph{Stage 2 --- extraction}}\\
 {\scriptsize 10}\> $curr \leftarrow (L,T)$; \\ 
 {\scriptsize 11}\> $J^{\star} \leftarrow [curr]$; \\
-{\scriptsize 12}\> \textbf{while} $curr \ne (0,0)$ not empty \textbf{do}\\
+{\scriptsize 12}\> \textbf{while} $curr \ne (0,0)$ \textbf{do}\\
 {\scriptsize 13}\>\> $curr \leftarrow pred(curr)$ ;\\
  {\scriptsize 14}\>\> $J^{\star} \leftarrow [curr] + J^{\star}$; \\
 {\scriptsize 15}\> \textbf{return}  $J^{\star}$ (optimal journey) 

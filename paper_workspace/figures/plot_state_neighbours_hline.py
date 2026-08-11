@@ -67,17 +67,33 @@ ax.plot([d0, d0], [t0, TW], color=ORANGE, lw=2.0, zorder=3)
 ax.plot([DW, DW + 2.6], [t_fast, t_fast + 2.6 / VMAX],
         color=ORANGE, lw=1.1, ls=(0, (2, 3)), alpha=0.55, zorder=2.5)
 
-# candidate arcs + family nodes
-for tp in fam1_t:
-    ax.plot([d0, DW], [t0, tp], color="#8ea8c3", lw=0.9, alpha=0.85, zorder=2.8)
-for dp in fam2_d:
-    if abs(dp - DW) > 1e-9:
+# candidate arcs + family nodes -- thin the fan lines when there are many
+# candidates (readability); every dot/square and its number label stays.
+fam2_only = [dp for dp in fam2_d if abs(dp - DW) > 1e-9]
+fan1_step = 1 if len(fam1_t) <= 5 else 2
+for i, tp in enumerate(fam1_t):
+    if i % fan1_step == 0 or i == len(fam1_t) - 1:
+        ax.plot([d0, DW], [t0, tp], color="#8ea8c3", lw=0.9, alpha=0.85, zorder=2.8)
+fan2_step = 1 if len(fam2_only) <= 5 else 2
+for i, dp in enumerate(fam2_only):
+    if i % fan2_step == 0 or i == len(fam2_only) - 1:
         ax.plot([d0, dp], [t0, TW], color="#9dbf9e", lw=0.9, alpha=0.9, zorder=2.8)
 ax.scatter([DW] * len(fam1_t), fam1_t, s=64, color=BLUE, zorder=4,
            edgecolor="white", lw=0.8)
-fam2_only = [dp for dp in fam2_d if abs(dp - DW) > 1e-9]
 ax.scatter(fam2_only, [TW] * len(fam2_only), s=64, color=GREEN, zorder=4,
            edgecolor="white", lw=0.8, marker="s")
+
+# grid-value numbers: time on the blue (distance-wall) dots, distance on the
+# green (time-wall) squares -- makes the tau/delta spacing concrete. Units
+# shown on the first and last of each family only (not every one).
+for i, tp in enumerate(fam1_t):
+    label = f"{tp:.1f} h" if i in (0, len(fam1_t) - 1) else f"{tp:.1f}"
+    ax.annotate(label, (DW, tp), xytext=(9, 0), textcoords="offset points",
+                fontsize=8.5, color=BLUE, va="center", ha="left")
+for i, dp in enumerate(fam2_only):
+    label = f"{dp:.0f} NM" if i in (0, len(fam2_only) - 1) else f"{dp:.0f}"
+    ax.annotate(label, (dp, TW), xytext=(0, -9), textcoords="offset points",
+                fontsize=8.5, color=GREEN, va="top", ha="center")
 
 # the state
 ax.scatter([d0], [t0], s=130, color="#c62828", zorder=5, edgecolor="white", lw=1.1)
@@ -96,8 +112,6 @@ ax.annotate(r"$\bar v = 0$", (d0, (t0 + TW) / 2 + 0.12), xytext=(-9, 0),
             textcoords="offset points", fontsize=12.5, color=ORANGE,
             rotation=90, va="center", ha="right")
 ktotal = len(fam1_t) + len(fam2_only)
-ax.text(DW + 1.1, (t_fast + TW) / 2 + 0.10, rf"$\kappa = {ktotal}$",
-        fontsize=14, color="#33475b", va="center", ha="left")
 
 ax.set_xlim(DPREV - 3.0, DW + 5.8)
 ax.set_ylim(TW + 0.28, -0.30)
@@ -105,6 +119,20 @@ ax.set_xticks([]); ax.set_yticks([])
 for s in ax.spines.values():
     s.set_visible(False)
 fig.tight_layout()
+
+# orientation compass: own inset axes reserved above the plot, so it never
+# collides with data-dependent label positions in either panel.
+fig.subplots_adjust(top=0.84)
+COMPASS = "#33475b"
+ax_c = fig.add_axes([0.06, 0.87, 0.34, 0.11])
+ax_c.set_xlim(0, 1); ax_c.set_ylim(0, 1); ax_c.axis("off")
+ax_c.annotate("", xy=(0.30, 0.80), xytext=(0.02, 0.80),
+              arrowprops=dict(arrowstyle="-|>", color=COMPASS, lw=1.4, mutation_scale=14))
+ax_c.annotate("", xy=(0.02, 0.10), xytext=(0.02, 0.80),
+              arrowprops=dict(arrowstyle="-|>", color=COMPASS, lw=1.4, mutation_scale=14))
+ax_c.text(0.36, 0.80, "distance $d$ [NM]", fontsize=10.5, color=COMPASS, va="center", ha="left")
+ax_c.text(0.08, 0.10, "time $t$ [h]", fontsize=10.5, color=COMPASS, va="center", ha="left")
+
 fig.savefig("state_neighbours_hline.pdf")
 fig.savefig("state_neighbours_hline.png", dpi=300)
 print("panel (b): kappa =", ktotal, "| fam1:", len(fam1_t), "| fam2:", len(fam2_only))
