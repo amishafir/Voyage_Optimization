@@ -33,6 +33,10 @@ sentence in it is assembled from a verified link in the chain below it.
 - [x] **G4** — methods skeleton ✅ FROZEN (`G4_methods.md`). Jensen = **standalone Mechanism section** (between Methods and Results); §4.6 structural-only reaffirmed; Excluded list agreed. **SR = Shafir–Raviv** (confirmed). Paper structure settled.
 - [ ] G5 — gap map (last gate blocking the Introduction's motivation/gap)
 - [ ] G6 — abstract + title
+- [ ] **G7** — v2 evidence refresh (`G7_v2_evidence_refresh.md`, started 2026-08-11) — **deliberately
+      reopens** the "no new runs" constraint below: more voyages per route (data-refresh-gated),
+      constant-speed/Naive baseline wired into the chain sweep, std→CI. v1 evidence stays frozen
+      as fallback until G7's promotion criteria are met.
 
 ## Writing-forward (drafts/)
 The bottom three frozen gates are being written into actual paper prose under `../drafts/`:
