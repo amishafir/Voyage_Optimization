@@ -239,7 +239,7 @@ control.
 \section{Problem formulation}
 \label{sec:problem}
 
-In this paper we study the problem of controling the speed of sea vessels with the goal of minimizing it total voyage fule consumption considering dynamic and stochastic sea conditions and utlizing noisy weather forecasts.  As a first step, we define a dynamic determinstic version of the problem were the sea conditions at each location along the plan route at each time during the planning horizon  is known and we then extened to a stocastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem and the method by which the fuel consuption is calculated. This description requires some understanding of the physical asspect of sea voyage which we berifely provide here. 
+In this paper we study the problem of controling the speed of sea vessels with the goal of minimizing it total voyage fuel consumption considering dynamic and stochastic sea conditions and utlizing noisy weather forecasts.  As a first step, we define a dynamic determinstic version of the problem were the sea conditions at each location along the planed route at each time during the planning horizon  is known. We then extened the problem to a stocastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem and the method by which the fuel consuption is calculated. This description requires some understanding of the physical asspect of sea voyage which we berifely provide here. 
 
 \begin{description}
 	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
@@ -249,7 +249,9 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage will satisfying the ETA requirement. The SOG of the vessel is seleceted from the set, $\mathcal{V}=[0, v_{max}]$ knots ($NM/h$).   The voyage can be divided into sub-segments during which the course and and the weather conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such sub-segment.  Therefore, a solution can be described by a list of sub-segments and the SOG in each one of them.
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage while satisfying the ETA requirement. The SOG of the vessel is seleceted from the set, $\mathcal{V}=[0, v_{max}]$ knots ($NM/h$).   The voyage can be divided into sub-segments during which the course and and the sea conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such sub-segment.  Therefore, a solution can be described by a list of sub-segments and the SOG in each one of them.
+
+In the stochastic version of the problem, speed decisions are made based on the current sea conditions and a forecast with a given spatial and temporal granularity. The forecast is updated periodically.  In this study the dynamic version is solved using a rolling horizon framework that uses the solution method for the static problem as a building block. 
 
 \subsection{Speed over ground}
 \label{sec:sog}
@@ -656,7 +658,7 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 {\scriptsize 1}\> $C^*(0,0) \leftarrow 0$; \quad $C^*(t,d) \leftarrow \infty$ \, for all $(t,d) \ne (0,0)$;\\
 {\scriptsize 2}\>  Define priority queue $Q\leftarrow[(0,0)]$\\
 {\scriptsize 3}\> \textbf{while} $Q$ not empty \textbf{do}\\
-{\scriptsize 4}\>\> $(t,d)\leftarrow \mathrm{pop}(Q)$ with minimal $t$ and minimal $d$ lexicograpgically;\\
+{\scriptsize 4}\>\> $(t,d)\leftarrow \mathrm{pop}(Q)$ minimal element lexicograpgically;\\
 {\scriptsize 5}\>\> \textbf{for} $(\tilde t,\tilde d)\in \mathcal{A}(t,d)$ \textbf{do}    \quad{\small$\triangleright$ scan all reachable states, see \eqref{eq:neighbors}} \\
 %{\scriptsize 6}\>\>\> $\bar v\leftarrow(\tilde d-d)/(\tilde t-t)$;\quad \textbf{if} $\bar v$ unattainable at $(d,t)$ \textbf{then continue}\\
 %{\scriptsize 7}\>\>\> $\mathcal{A}\leftarrow\mathcal{A}\cup\bigl\{\,(d,t)\!\to\!(\tilde d,\tilde t)\ \text{with speed}\ \bar v,\ \text{cost}\ \phi(d,t;\bar v)\,(\tilde t-t)\,\bigr\}$\\
@@ -730,14 +732,13 @@ Re-planning more frequently than 6 h therefore acts on no new wind information, 
 cadence used below is set by the data rather than tuned.
 
 \subsubsection{Voyage data}
-Each voyage is a fixed route of total length $L$ to be completed within a required arrival time $T$
-(Section~\ref{sec:problem}). Two routes were studied, chosen to contrast weather regimes: Route~1
-(Persian Gulf $\rightarrow$ Strait of Malacca) is long and crosses mild, relatively uniform
-conditions, whereas Route~2 (St.~John's $\rightarrow$ Liverpool, North Atlantic) is shorter and far
-harsher, with mean wind and wave conditions several times larger and far more variable. The two
-tracks are shown in Figure~\ref{fig:routes} and their waypoints in Table~\ref{tab:waypoints}.
-Because the sea conditions along a route depend on when the voyage departs, different departure times
-yield different problem instances --- the basis of the consecutive-voyage chains defined below.
+%Each voyage is a fixed route of total length $L$ to be completed within a required arrival time $T$
+Two routes were used to benchmark our algoritm:
+\begin{enumerate}
+	\item   \emph{Indian Ocean} route (Persian Gulf $\rightarrow$ Strait of Malacca). This is a 3,393 NM long route that crosses a  calm stretch of ocean with  relatively stable conditions.
+	\item  \emph{North Atlantic} route (St.~John's $\rightarrow$ Liverpool). This is s shorter route (1,955 NM), with rougher and more volotile sea conditions.
+\end{enumerate} chosen to contrast weather regimes: Route~1
+The two routes are depicte in Figure~\ref{fig:routes} and their waypoints are detailed in Table~\ref{tab:waypoints}.  The speed optimization problem can be solved with various ETA values. Moreover, because the sea conditions changes over time, a problem instance is determined by the  route, departure time and desired ETA.  In our experiment we tseted each route with 25 different depature times during the spring of 2026, spaced three days appart.  Each of these $2 \times 25$ route-departure times combinations were teseted with 3 ETA levels corrosponding to an average sailing speed of 10, 12, and 14 NM, making a benchmark set consisting of 150 problem instances. 
 
 \begin{figure}[ht]
 \centering
@@ -855,7 +856,7 @@ and~\ref{tab:modec-r2}; aggregates are in Table~\ref{tab:modec}.
 
 \begin{table}[ht]
 \centering
-\small
+\tiny
 \caption{Perfect-foresight aggregates (35 voyages). Naive is the fixed mean-SOG constant speed under
 the same actual weather. Spread is a 95\% paired bootstrap CI (a paired $t$-interval cross-check
 agreed closely throughout, not shown); negative gap = the first method burns less fuel.}
