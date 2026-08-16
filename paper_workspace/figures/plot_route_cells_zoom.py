@@ -2,7 +2,7 @@
 Coastal zoom that demonstrates the speed-change points of state_space_optF on a
 real map.
 
-Focuses on the START of Route 1 — the Persian Gulf / Strait of Hormuz / Gulf of
+Focuses on the START of the Indian Ocean route — the Persian Gulf / Strait of Hormuz / Gulf of
 Oman — which is enclosed by land (Arabia, Iran, Oman), so it reads clearly as a
 map while the 0.5 deg cells stay large. The track is sea-routed around the
 Musandam peninsula. Shows:
@@ -32,7 +32,7 @@ import cartopy.feature as cfeature
 
 from sea_routing import SeaGrid, clip_to_sea
 
-# --- Route 1 start waypoints (lat, lon): Port A, Gulf of Oman, Arabian Sea 1 -
+# --- Indian Ocean route start waypoints (lat, lon): Port A, Gulf of Oman, Arabian Sea 1 -
 WPS = [(24.75, 52.83), (26.55, 56.45), (24.08, 60.88)]
 HEADING_WPS = [(26.55, 56.45)]            # interior waypoint = heading change
 START = (24.75, 52.83)
@@ -86,7 +86,7 @@ for p in raw:
     if not crossings or abs(p[0] - crossings[-1][0]) + abs(p[1] - crossings[-1][1]) > 0.12:
         crossings.append(p)
 
-# Cumulative along-track distance (nm) + constant-speed schedule (Route 1 mean,
+# Cumulative along-track distance (nm) + constant-speed schedule (Indian Ocean route mean,
 # 3393.2 nm / 280 h) to place the 6 h time-block points at the ship's position.
 cum = [0.0]
 for (la0, lo0), (la1, lo1) in zip(track[:-1], track[1:]):

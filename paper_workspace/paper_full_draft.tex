@@ -327,9 +327,9 @@ Still-water speed range & $V_s$ & 11--13 kn \\
 \end{tabular}
 \end{table}
 
-Two routes are studied, chosen to contrast weather regimes: Route~1 (Persian Gulf $\rightarrow$
-Strait of Malacca, $L=3{,}393$ nm, $T=\SI{280}{\hour}$), in mild and relatively uniform conditions,
-and Route~2 (St.\ John's $\rightarrow$ Liverpool, North Atlantic, $L=1{,}955$ nm,
+Two routes are studied, chosen to contrast weather regimes: the Indian Ocean route (Persian Gulf
+$\rightarrow$ Strait of Malacca, $L=3{,}393$ nm, $T=\SI{280}{\hour}$), in mild and relatively uniform
+conditions, and the North Atlantic route (St.\ John's $\rightarrow$ Liverpool, $L=1{,}955$ nm,
 $T=\SI{168}{\hour}$), in harsher and more variable conditions. Full route and weather statistics are
 given in Section~\ref{sec:data}.
 
@@ -471,37 +471,20 @@ $t_{\mathcal{T}(t)}$, with the arrival distance snapped to the $\delta$-grid.  W
 Between a state and a neighbour the vessel steams at a single fixed speed drawn from $\mathcal{V}$, held constant across the rectangular sub-space it traverses.
 
 We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
-% ==== fig:state-neighbours placed here (2026-08-04, Ami): before the "When the vessel is at point" paragraph; [H] pins it ====
-% ==== 2026-08-06: two-panel version (a: state on a distance line, b: state on a time line), one joint caption.
-% ==== Previous single-panel captions in git history. ====
+% ==== fig:state-neighbours: matched two-panel asset generated from one real Route-1 block. ====
 \begin{figure}[H]
 \centering
-\begin{minipage}[t]{0.492\textwidth}
-\centering
-\includegraphics[width=\linewidth]{figures/state_neighbours.pdf}\par\vspace{2pt}
-{\small (a) a state on a \emph{distance} line}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.492\textwidth}
-\centering
-\includegraphics[width=\linewidth]{figures/state_neighbours_hline.pdf}\par\vspace{2pt}
-{\small (b) a state on a \emph{time} line}
-\end{minipage}
-\caption{A state of the dynamic program and its candidate successors (values illustrative), for the
-two cases of the grid --- the compass in each panel gives the reading: the horizontal axis is
-distance $d$, increasing left to right; the vertical axis is elapsed time $t$, increasing top to
-bottom. (a) the state sits on a \emph{distance} line --- the boundary it has just
-crossed --- in the interior of a forecast block; (b) the state sits on a \emph{time} line --- a
-decision epoch --- in the interior of a cell. In both cases every admissible speed leads to one of
-two walls: the next distance line $d_{\mathcal{D}(d)}$, where the sea conditions change, or the
-next time line $t_{\mathcal{T}(t)}$, where the forecast is refreshed. The speed cone
-$\mathcal{V}=[0,v_{\max}]$ --- its slow edge vertical, $\bar v=0$: the vessel may wait in place ---
-intersects the walls in two windows, and the grid picks out the nodes inside them: arrival times
-spaced $\tau$ on the distance wall (circles) and arrival distances spaced $\delta$ on the time wall
-(squares), the two families of Eq.~\eqref{eq:neighbors}. The fast edge of the cone crosses the
-distance wall before the block ends, capping the second family; every slower speed, down to
-waiting, runs out of the block first, clipping the first family at the time wall. Each surviving
-node fixes its own leg speed $\bar v=(\tilde d-d)/(\tilde t-t)$, labelled on the grid in NM and
-hours respectively.}
+\includegraphics[width=\textwidth]{figures/state_neighbours_pair.pdf}
+\caption{A state of the dynamic program and its candidate successors in one real interior block of
+the Indian Ocean route, voyage~0: distance $d\in[1963.886,1995.719]$ NM and elapsed time
+$t\in[120,126]$ h, with $\delta=1$ NM and $\tau=0.1$ h. The horizontal axis is distance,
+increasing left to right, and elapsed time increases downward. Panel (a) places the source at
+$(t,d)=(123.0\ \mathrm{h},1963.886\ \mathrm{NM})$ on a distance line; panel (b) places it at
+$(120.0\ \mathrm{h},1979.719\ \mathrm{NM})$ on a time line. In both panels the same speed cone,
+currently generated with $\mathcal{V}=[0,15.119]$ kn, reaches the next distance wall (blue circles)
+or the next time wall (green squares); its vertical edge is the $\bar v=0$ wait leg. The markers
+show every Eq.~\eqref{eq:neighbors} candidate. Numeric labels and fan lines are thinned
+deterministically for legibility, without removing candidate markers.}
 \label{fig:state-neighbours}
 \end{figure}
 When the vessel is streaming in a sub-segment that starts at point $d$ at time $t$  it is subject to the fixed sea conditions and with the same heading until the end of the sea condition time block and the end of the sub-segment, whatever it reaches first. I.e., it steams inside a given rectunglar area of the time--distance space demonstrated in Figure X.   Therefore, the FCR is determined only by $v$ within this rectunglar area.  We denote this FCR by $\phi(t, d; v)$ metric ton / hour.
@@ -715,15 +698,6 @@ every forecast cycle issued ahead of those conditions. The actual record provide
 conditions against which a voyage is evaluated; the predicted record provides the forecasts available
 to a planner at each decision point.
 
-\paragraph{Forecast accuracy.} The two records also let forecast error be quantified directly, by
-comparing each predicted value against the actual weather later observed at the same waypoint and
-time, as a function of lead time. Wind-speed RMSE grew systematically with lead time: it approximately
-doubled over the first 133 h on the milder route (4.13 $\rightarrow$ 8.40 km/h) and grew more steeply
-on the harsher one ($+286\%$ over 144 h) \todo{FIG: forecast error vs lead time}. This degradation is
-an intrinsic property of the data, reported here independent of any optimisation; it is why a
-rolling-horizon plan, which commits speeds against forecasts that are later revised, consumes more
-fuel than a perfect-foresight oracle (Section~\ref{sec:res-rh}).
-
 \paragraph{NWP model refresh cycle.} Each product refreshes on its own fixed cycle, which sets the
 re-plan cadence used later. The GFS wind product refreshes every 6 h, MFWAM (waves) every 12 h, and
 SMOC (currents) every 24 h. The predicted-weather record confirms this: at a 1 h query cadence, 86\%
@@ -737,14 +711,14 @@ Two routes were used to benchmark our algoritm:
 \begin{enumerate}
 	\item   \emph{Indian Ocean} route (Persian Gulf $\rightarrow$ Strait of Malacca). This is a 3,393 NM long route that crosses a  calm stretch of ocean with  relatively stable conditions.
 	\item  \emph{North Atlantic} route (St.~John's $\rightarrow$ Liverpool). This is s shorter route (1,955 NM), with rougher and more volotile sea conditions.
-\end{enumerate} chosen to contrast weather regimes: Route~1
+\end{enumerate}
 The two routes are depicte in Figure~\ref{fig:routes} and their waypoints are detailed in Table~\ref{tab:waypoints}.  The speed optimization problem can be solved with various ETA values. Moreover, because the sea conditions changes over time, a problem instance is determined by the  route, departure time and desired ETA.  In our experiment we tseted each route with 25 different depature times during the spring of 2026, spaced three days appart.  Each of these $2 \times 25$ route-departure times combinations were teseted with 3 ETA levels corrosponding to an average sailing speed of 10, 12, and 14 NM, making a benchmark set consisting of 150 problem instances. 
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/routes.pdf}
-\caption{The two study routes and their waypoints: (a) Route~1, Persian Gulf $\rightarrow$ Strait of
-Malacca; (b) Route~2, St.\ John's $\rightarrow$ Liverpool (North Atlantic).}
+\caption{The two study routes and their waypoints: (a) the Indian Ocean route, Persian Gulf
+$\rightarrow$ Strait of Malacca; (b) the North Atlantic route, St.\ John's $\rightarrow$ Liverpool.}
 \label{fig:routes}
 \end{figure}
 
@@ -755,8 +729,8 @@ Malacca; (b) Route~2, St.\ John's $\rightarrow$ Liverpool (North Atlantic).}
 \label{tab:waypoints}
 \begin{tabular}{rlrr@{\hspace{1.5em}}rlrr}
 \toprule
-\multicolumn{4}{c}{Route 1: Persian Gulf $\rightarrow$ Strait of Malacca (3{,}393 nm)} &
-\multicolumn{4}{c}{Route 2: St.\ John's $\rightarrow$ Liverpool (1{,}955 nm)} \\
+\multicolumn{4}{c}{Indian Ocean Route: Persian Gulf $\rightarrow$ Strait of Malacca (3{,}393 nm)} &
+\multicolumn{4}{c}{North Atlantic Route: St.\ John's $\rightarrow$ Liverpool (1{,}955 nm)} \\
 \cmidrule(lr){1-4}\cmidrule(lr){5-8}
 \# & Waypoint & Lat & Lon & \# & Waypoint & Lat & Lon \\
 \midrule
@@ -831,9 +805,9 @@ Both SR and Luo are exercised under this regime.
 Each route was evaluated as a \emph{consecutive-voyage chain} in which voyage $N{+}1$ departs at the
 sample hour at which voyage $N$ arrives. Fixing the step to the ETA guaranteed that every planner
 encountered identical departure weather at every voyage. Under perfect foresight, thirteen voyages were
-run on Route~1 and twenty-two on Route~2 --- 35 in total --- spanning the full collection window to
+run on the Indian Ocean route and twenty-two on the North Atlantic route --- 35 in total --- spanning the full collection window to
 date ($\sim$155 days). Rolling-horizon evaluation currently covers the original 19-voyage subset (seven
-on Route~1, twelve on Route~2 --- the first $\sim$80 days of the same chain); extending it to the full
+on the Indian Ocean route, twelve on the North Atlantic route --- the first $\sim$80 days of the same chain); extending it to the full
 35 is left to future work (Section~\ref{sec:limitations}). At each departure SR and Luo were run under
 the perfect-foresight oracle and, on the 19-voyage subset, the 6 h rolling horizon, with the
 rolling-horizon result compared against the Naive baseline. Because identical departure weather was
@@ -848,7 +822,7 @@ speed-locked formulation of \citet{luo2024}.
 
 \subsection{Fuel under perfect foresight}
 \label{sec:res-oracle}
-We evaluated 35 voyages, 13 on Route~1 and 22 on Route~2, spanning the full collection window to date
+We evaluated 35 voyages, 13 on the Indian Ocean route and 22 on the North Atlantic route, spanning the full collection window to date
 ($\sim$155 days). In every voyage both SR and Luo consumed the full time budget (zero arrival slack).
 We also report Naive, the fixed mean-SOG policy of Section~\ref{sec:methods} sailed through the same
 actual weather, as a third reference point. Per-voyage fuel is reported in Tables~\ref{tab:modec-r1}
@@ -865,15 +839,15 @@ agreed closely throughout, not shown); negative gap = the first method burns les
 \toprule
 Route & $n$ & SR (mt) & Luo (mt) & Naive (mt) & SR$-$Luo (\%) & SR$-$Naive (\%) & Luo$-$Naive (\%) \\
 \midrule
-1 (Malacca)  & 13 & 346.48 [341.6, 351.4] & 352.84 [347.7, 358.1] & 355.07 [349.7, 360.6] & $-1.80$ [$-2.10,-1.50$] & $-2.41$ [$-2.71,-2.12$] & $-0.62$ [$-0.74,-0.51$] \\
-2 (Atlantic) & 22 & 196.75 [192.1, 201.8] & 202.01 [197.2, 207.2] & 203.88 [198.9, 209.3] & $-2.60$ [$-2.89,-2.31$] & $-3.48$ [$-3.80,-3.14$] & $-0.91$ [$-1.05,-0.76$] \\
+Indian Ocean  & 13 & 346.48 [341.6, 351.4] & 352.84 [347.7, 358.1] & 355.07 [349.7, 360.6] & $-1.80$ [$-2.10,-1.50$] & $-2.41$ [$-2.71,-2.12$] & $-0.62$ [$-0.74,-0.51$] \\
+North Atlantic & 22 & 196.75 [192.1, 201.8] & 202.01 [197.2, 207.2] & 203.88 [198.9, 209.3] & $-2.60$ [$-2.89,-2.31$] & $-3.48$ [$-3.80,-3.14$] & $-0.91$ [$-1.05,-0.76$] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[ht]
 \centering
-\caption{Perfect-foresight per-voyage fuel, Route 1 (Malacca, ETA 280 h). $\mathrm{sh}_0$ = departure
+\caption{Perfect-foresight per-voyage fuel, Indian Ocean route (Malacca, ETA 280 h). $\mathrm{sh}_0$ = departure
 sample hour. Negative gap = SR burns less fuel than Luo.}
 \label{tab:modec-r1}
 \begin{tabular}{
@@ -906,7 +880,7 @@ sample hour. Negative gap = SR burns less fuel than Luo.}
 
 \begin{table}[ht]
 \centering
-\caption{Perfect-foresight per-voyage fuel, Route 2 (Atlantic, ETA 168 h). $\mathrm{sh}_0$ = departure
+\caption{Perfect-foresight per-voyage fuel, North Atlantic route (ETA 168 h). $\mathrm{sh}_0$ = departure
 sample hour. Negative gap = SR burns less fuel than Luo.}
 \label{tab:modec-r2}
 \begin{tabular}{
@@ -948,21 +922,21 @@ sample hour. Negative gap = SR burns less fuel than Luo.}
 
 \noindent\textbf{SR consumed less fuel than Luo on every voyage.} SR was more fuel-efficient on all 35
 of 35 voyages, with no exception on either route. The per-voyage advantage ranged from 3.28 to 9.92 mt
-on Route~1 and from 2.30 to 8.12 mt on Route~2.
+on the Indian Ocean route and from 2.30 to 8.12 mt on the North Atlantic route.
 
 \noindent\textbf{The absolute advantage was comparable across routes, but proportionally larger on
-the shorter voyage.} The mean saving was similar in absolute terms: 6.36 mt on Route~1 and 5.27 mt on
-Route~2, even though Route~2 takes roughly half the time. As a fraction of total fuel, the advantage is
+the shorter voyage.} The mean saving was similar in absolute terms: 6.36 mt on the Indian Ocean route and 5.27 mt on
+the North Atlantic route, even though the North Atlantic route takes roughly half the time. As a fraction of total fuel, the advantage is
 therefore larger on the shorter, harsher Atlantic route (2.60\%) than on Malacca (1.80\%); the 95\% CIs
 in Table~\ref{tab:modec} do not overlap. This is the scaling we expect from the convexity of fuel
 consumption in speed (Section~\ref{sec:problem}).
 
 \noindent\textbf{Both SR and Luo also beat Naive, with SR by the larger margin.} SR saved 2.41\% of
-fuel relative to Naive on Route~1 and 3.48\% on Route~2. Luo's saving relative to Naive was smaller,
+fuel relative to Naive on the Indian Ocean route and 3.48\% on the North Atlantic route. Luo's saving relative to Naive was smaller,
 0.62\% and 0.91\%. This is because Luo can change its speed only once per block, while SR can change
 it on every leg.
 
-\noindent\textbf{Departure weather dominated voyage-to-voyage fuel variation.} On Route~2, under the
+\noindent\textbf{Departure weather dominated voyage-to-voyage fuel variation.} On the North Atlantic route, under the
 same formulation, the worst departure (227.91 mt) consumed 27.5\% more fuel than the best (178.68 mt).
 This spread is far larger than the entire SR--Luo gap. The Atlantic fuel spread (27.6\%) was about
 three times that of Malacca (9.1\%).
@@ -983,15 +957,15 @@ summarised in Table~\ref{tab:rh}.
 \toprule
 Route & $n$ & RH-SR vs Naive (mean \%) & RH-Luo vs Naive (mean \%) & RH-SR saves on \\
 \midrule
-2 (Atlantic) & 12 & $-1.8$ & $0.0$  & 11/12 \\
-1 (Malacca)  & 7  & $-1.3$ & $-0.0$ & 6/7 \\
+North Atlantic & 12 & $-1.8$ & $0.0$  & 11/12 \\
+Indian Ocean   & 7  & $-1.3$ & $-0.0$ & 6/7 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[ht]
 \centering
-\caption{Rolling-horizon per-voyage realised fuel, Route 1 (Malacca, ETA 280 h). $\mathrm{sh}_0$ =
+\caption{Rolling-horizon per-voyage realised fuel, Indian Ocean route (Malacca, ETA 280 h). $\mathrm{sh}_0$ =
 departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline.}
 \label{tab:rh-r1}
 \begin{tabular}{rrrrrr}
@@ -1011,7 +985,7 @@ $\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & 
 
 \begin{table}[ht]
 \centering
-\caption{Rolling-horizon per-voyage realised fuel, Route 2 (Atlantic, ETA 168 h). $\mathrm{sh}_0$ =
+\caption{Rolling-horizon per-voyage realised fuel, North Atlantic route (ETA 168 h). $\mathrm{sh}_0$ =
 departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline.}
 \label{tab:rh-r2}
 \begin{tabular}{rrrrrr}
@@ -1035,9 +1009,9 @@ $\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & 
 \end{table}
 
 \noindent\textbf{SR re-planning saved fuel; Luo re-planning did not.} Rolling-horizon
-SR reduced realised fuel relative to set-and-forget on 17 of 19 voyages (mean $-1.8\%$ on Route~2,
-$-1.3\%$ on Route~1; best $-3.69\%$). The two exceptions were marginal ($+0.10\%$ on Route~1,
-$+0.39\%$ on Route~2), where committing early speeds against forecasts that were later revised cost
+SR reduced realised fuel relative to set-and-forget on 17 of 19 voyages (mean $-1.8\%$ on the North Atlantic route,
+$-1.3\%$ on the Indian Ocean route; best $-3.69\%$). The two exceptions were marginal ($+0.10\%$ on the Indian Ocean route,
+$+0.39\%$ on the North Atlantic route), where committing early speeds against forecasts that were later revised cost
 slightly more than holding the mean. Rolling-horizon Luo was statistically indistinguishable from
 set-and-forget (mean within $0.05\%$ of Naive on both routes): its fixed block speed left no room to
 exploit the refreshed forecasts. The SR--Luo contrast established under perfect foresight therefore
@@ -1057,8 +1031,8 @@ fuel reductions above.
 
 \subsection{Supporting observations}
 Two measurements underpin the rolling-horizon design (Section~\ref{sec:data}). First, forecast
-accuracy degraded systematically with lead time (wind RMSE roughly doubled over 133 h on Route~1;
-$+286\%$ over 144 h on Route~2), establishing why realised RH fuel exceeded the oracle. Second, the
+accuracy degraded systematically with lead time (wind RMSE roughly doubled over 133 h on the Indian Ocean route;
+$+286\%$ over 144 h on the North Atlantic route), establishing why realised RH fuel exceeded the oracle. Second, the
 6 h re-plan cadence was fixed to the GFS model cycle, of which 86\% of hourly queries returned
 identical data, so sub-6 h re-planning carried no new information.
 

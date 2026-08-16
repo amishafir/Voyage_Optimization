@@ -35,7 +35,7 @@ HEADING_WP = (26.50, 56.55)
 CELL = 0.5
 WINDOW = (55.1, 57.9, 25.0, 27.0)
 
-# Full Route 1 (Persian Gulf -> Strait of Malacca) waypoints, for the locator
+# Full Indian Ocean route (Persian Gulf -> Strait of Malacca) waypoints, for the locator
 # inset that shows this zoom is a close-up of the start of a 3,393 nm voyage.
 FULL_ROUTE = [(24.75, 52.83), (26.55, 56.45), (24.08, 60.88), (21.73, 65.73),
               (17.96, 69.19), (14.18, 72.07), (10.45, 75.16), (7.00, 78.46),

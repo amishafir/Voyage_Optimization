@@ -2,8 +2,8 @@
 Generate the two study-route maps for the paper (Figure: fig:routes).
 
 Produces a single compact, two-panel figure (routes.pdf):
-  (a) Route 1 — Persian Gulf -> Strait of Malacca
-  (b) Route 2 — St. John's   -> Liverpool (North Atlantic)
+  (a) Indian Ocean route — Persian Gulf -> Strait of Malacca
+  (b) North Atlantic route — St. John's -> Liverpool
 
 Waypoints are taken verbatim from the route definitions in
 pipeline/config/routes/{persian_gulf_malacca,st_johns_liverpool}.yaml.
@@ -49,9 +49,9 @@ ROUTE2 = [  # St. John's -> Liverpool
 #       title, waypoints, extent (lon0,lon1,lat0,lat1), start lbl, end lbl,
 #       grid step (deg), coast clearance (deg)
 PANELS = [
-    ("(a) Route 1: Persian Gulf $\\rightarrow$ Strait of Malacca",
+    ("(a) Indian Ocean route: Persian Gulf $\\rightarrow$ Strait of Malacca",
      ROUTE1, (48, 103, -2, 30), "Port A", "Port B", 0.10, 0.05),
-    ("(b) Route 2: St. John's $\\rightarrow$ Liverpool",
+    ("(b) North Atlantic route: St. John's $\\rightarrow$ Liverpool",
      ROUTE2, (-57, 2, 44, 59), "St. John's", "Liverpool", 0.08, 0.03),
 ]
 

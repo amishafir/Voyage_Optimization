@@ -2,7 +2,7 @@
 Spatial projection of the state-space figure (state_space_optF) onto the real
 route map, in the spirit of routes.png.
 
-For Route 1 (Persian Gulf -> Strait of Malacca) it draws, on the real coastline
+For the Indian Ocean route (Persian Gulf -> Strait of Malacca) it draws, on the real coastline
 map:
   - the 0.5 deg GEOGRAPHIC CELLS the route passes through (shaded band + edges),
   - the ROUTE (sea-respecting track),
@@ -40,7 +40,7 @@ from shapely.geometry import LineString, Point
 from shapely.ops import unary_union
 from shapely.prepared import prep
 
-# --- Route 1 waypoints (lat, lon) ------------------------------------------
+# --- Indian Ocean route waypoints (lat, lon) --------------------------------
 ROUTE1 = [
     (24.75, 52.83), (26.55, 56.45), (24.08, 60.88), (21.73, 65.73),
     (17.96, 69.19), (14.18, 72.07), (10.45, 75.16), (7.00, 78.46),
@@ -219,7 +219,7 @@ gl.top_labels = False
 gl.right_labels = False
 gl.xlabel_style = {"size": 7}
 gl.ylabel_style = {"size": 7}
-ax.set_title("Route 1 over its 0.5$\\degree$ weather cells "
+ax.set_title("Indian Ocean route over its 0.5$\\degree$ weather cells "
              "(spatial companion to the time--distance state space)",
              fontsize=9.5, pad=6)
 
