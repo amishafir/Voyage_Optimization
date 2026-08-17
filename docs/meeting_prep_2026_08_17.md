@@ -100,6 +100,33 @@ time line. Reference image shared before the session.
   - Line 638 (Algorithm 1 pseudocode input) — "speed band `$[0,v_{\max}]$`"; should become
     `$[v_{\min},v_{\max}]$` with a note that the endpoints are the exception.
 
+  **Code side — worth checking before assuming this needs a real code change:**
+  - The production DP config may already default `v_min` close to 8 kn, not 0:
+    `pipeline/dp_rebuild/common.py:33` (`min_speed: float = 8.0`),
+    `pipeline/shared/physics.py:280,551` (`"min_speed": 8.0`), and the C++ mirror
+    `pipeline/dp_cpp/src/common.hpp:27` (`double min_speed = 8.0;`).
+  - `SR_main.py:160` / `luo_main.py:480` (and their C++ ports `SR_main.cpp:96` /
+    `luo_main.cpp:331`) default `cfg.v_min` to `mean_sog - 3.0` when `--min_speed` isn't passed
+    explicitly — ≈8.6–9.1 kn for our two routes. `pipeline/dp_cpp/src/MODE_C_PORT_SPEC.md` shows
+    real example invocations already using `--min_speed 9` / `9.13333`.
+  - So the actual optimizer may already be running with `v_min ≈ 8–9`, not `0` — the `[0, v_max]`
+    text in the paper could just be stale/pre-dating that default. **Confirm with Tal which
+    experiments the current results tables were actually generated with** before touching any code.
+  - `pipeline/dp_rebuild/lb_bound.py:32` already has a comment flagging this: "clip v_minus at the
+    CURRENT band's v_min (frame.cfg.v_min; do not assume v_min = 0 — that band change is pending)."
+    Check whether "pending" is now stale too.
+  - One place that **does** hardcode `v_min = 0` today, disconnected from the real pipeline config:
+    `paper_workspace/figures/plot_state_neighbours_pair.py` — `BlockSpec` has no `vmin_kn` field at
+    all; `candidate_families()` only checks `speed <= vmax_kn`, no lower bound. This is the one
+    figure/script that would need an actual code change (add `vmin_kn`, thread it into the
+    feasibility check) once the grid/discretization item above is also settled.
+  - **FCR at the wait leg should be 0** (per this session): `atomic_edges.py`'s `price_candidate()`
+    already implements this behind `wait_mode` — `"free"` sets `sws0, fcr0 = 0.0, 0.0` (what we
+    want); `"hold"` prices a nonzero station-keeping thrust via `_hold_thrust_kn()`. Use `"free"`
+    for the endpoint-only waiting under the new convention, not `"hold"` — this effectively answers
+    the FCR half of the still-open **2A** waiting-convention vote in favor of variant (a)'s pricing,
+    even though `v=0` itself is now endpoint-restricted like variant (c).
+
 ---
 
 ## 2. Decisions carried over from Aug 10
