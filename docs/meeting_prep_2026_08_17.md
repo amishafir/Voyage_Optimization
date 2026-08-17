@@ -6,6 +6,11 @@ This is the running log for the Aug-17 session. Add new items under Section 1 as
 Carryovers below are copied from the previous prep and still need to be confirmed against work
 completed since Aug 10.
 
+> **⚠ Tal is currently changing part of the points already logged in this doc.** Once he pushes,
+> diff carefully against each open item below before acting on it — some may already be addressed,
+> possibly differently than expected. Don't assume, don't blindly re-implement or overwrite; check
+> the exact changes first.
+
 ---
 
 ## 1. New items for this session
