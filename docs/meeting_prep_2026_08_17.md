@@ -150,6 +150,15 @@ time line. Reference image shared before the session.
   `$d_i/V_{g,i}$` — with no intermediate/expanded form shown. Needs a clearer walkthrough or an
   expanded intermediate step before the reader hits the composed equation.
 
+- [ ] Idea to discuss (not urgent, "we can think about it"): in the graph-construction candidate
+  search, start the next-node scan from `v_min`, snap to the first reachable node, then do the same
+  from `v_max` — bounding the search window from both ends up front instead of scanning the full
+  node range, so fewer nodes need to be checked. **Note:** `neighbour_candidates()` in
+  `pipeline/dp_rebuild/atomic_edges.py` (lines 117–145) may already do exactly this — it computes
+  `t_fast`/`d_fast` from `v_max` and `t_slow`/`d_slow` from `v_min` first, then only loops between
+  those two bounds rather than over the whole grid. Worth confirming against the code before
+  treating this as new work.
+
 ---
 
 ## 2. Decisions carried over from Aug 10
