@@ -1,0 +1,191 @@
+<title>Tal's changes — Wednesday, 12 August 2026</title>
+<style>
+  :root {
+    --bg: #f3f0e9;
+    --paper: #fffdf8;
+    --ink: #18232c;
+    --muted: #60707d;
+    --faint: #8b979f;
+    --line: #d9d4ca;
+    --blue: #175575;
+    --blue-soft: #e2edf2;
+    --green: #176c59;
+    --green-soft: #e3f0eb;
+    --amber: #976116;
+    --amber-soft: #f6ecd8;
+    --red: #a14a46;
+    --red-soft: #f6e5e1;
+    --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --serif: Georgia, "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161b;
+      --paper: #172027;
+      --ink: #e7edf1;
+      --muted: #a8b3bd;
+      --faint: #74818b;
+      --line: #32404a;
+      --blue: #74b7d6;
+      --blue-soft: #173545;
+      --green: #72c5b1;
+      --green-soft: #183b34;
+      --amber: #dfb76e;
+      --amber-soft: #3b2d17;
+      --red: #e5968f;
+      --red-soft: #402522;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: var(--bg); font-family: var(--sans); line-height: 1.55; }
+  main { max-width: 920px; margin: 0 auto; padding: 42px 20px 70px; }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; }
+  h1 { max-width: 760px; margin: 5px 0 11px; font-size: clamp(2rem, 6vw, 3.4rem); line-height: 1.04; letter-spacing: -.035em; }
+  h2 { margin: 0; font-size: clamp(1.4rem, 3vw, 1.9rem); }
+  h3 { margin: 0; font-size: 1.12rem; }
+  p { margin: 0; }
+  code { font-family: var(--mono); font-size: .88em; overflow-wrap: anywhere; }
+  .eyebrow { color: var(--blue); font: 700 .72rem var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+  .lede { max-width: 720px; color: var(--muted); font-size: 1.05rem; }
+  .commit { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 18px; color: var(--muted); font: .76rem var(--mono); }
+  .commit strong { color: var(--blue); }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 26px; }
+  .metric { padding: 14px; background: var(--paper); border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 9px; }
+  .metric:nth-child(1) { --accent: var(--blue); }
+  .metric:nth-child(2) { --accent: var(--green); }
+  .metric:nth-child(3) { --accent: var(--amber); }
+  .metric:nth-child(4) { --accent: var(--red); }
+  .metric b { display: block; font: 600 1.8rem/1 var(--serif); }
+  .metric span { display: block; margin-top: 6px; color: var(--muted); font-size: .78rem; }
+
+  .scope { margin-top: 14px; padding: 14px 16px; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: 9px; font-size: .88rem; }
+  .scope strong { color: var(--ink); }
+  .section-head { margin: 46px 0 15px; padding-top: 16px; border-top: 2px solid var(--ink); }
+  .section-head p { margin-top: 5px; color: var(--muted); font-size: .88rem; }
+  .changes { display: grid; gap: 11px; }
+  .change { background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 9px; overflow: hidden; }
+  .change:nth-child(1), .change:nth-child(2) { --accent: var(--blue); }
+  .change:nth-child(3) { --accent: var(--green); }
+  .change:nth-child(4) { --accent: var(--amber); }
+  .change:nth-child(5) { --accent: var(--red); }
+  .change-head { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 16px 10px; }
+  .number { display: grid; width: 30px; height: 30px; place-items: center; color: var(--paper); background: var(--accent); border-radius: 50%; font: 700 .72rem var(--mono); }
+  .lines { color: var(--faint); font: .68rem var(--mono); white-space: nowrap; }
+  .change-body { padding: 0 16px 15px 66px; }
+  .change-body > p { color: var(--muted); font-size: .9rem; }
+  .effect { margin-top: 9px; padding: 9px 11px; color: var(--ink); background: color-mix(in srgb, var(--accent) 9%, var(--paper)); border-radius: 7px; font-size: .86rem; }
+  .effect b { color: var(--accent); }
+  .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .before, .after { padding: 9px 10px; border-radius: 7px; font-size: .8rem; }
+  .before { color: var(--red); background: var(--red-soft); }
+  .after { color: var(--green); background: var(--green-soft); }
+  .diff-label { display: block; margin-bottom: 3px; font: 700 .64rem var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+  .flags { display: grid; gap: 8px; }
+  .flag { padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--red); border-radius: 8px; }
+  .flag b { color: var(--red); }
+  .flag p { margin-top: 3px; color: var(--muted); font-size: .86rem; }
+  .file { padding: 14px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; }
+  .file code { color: var(--blue); }
+  .file p { margin-top: 5px; color: var(--muted); font-size: .86rem; }
+  footer { margin-top: 42px; padding-top: 15px; color: var(--faint); border-top: 1px solid var(--line); font: .72rem/1.6 var(--mono); }
+
+  @media (max-width: 680px) {
+    main { padding: 28px 14px 52px; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .change-head { grid-template-columns: 34px minmax(0, 1fr); }
+    .lines { grid-column: 2; }
+    .change-body { padding-left: 62px; }
+    .diff { grid-template-columns: 1fr; }
+  }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Wednesday only · 12 August 2026</p>
+    <h1>Tal's changes last Wednesday</h1>
+    <p class="lede">Tal made one commit that day. It changed only the paper draft, across five distinct regions: problem wording, the stochastic/rolling-horizon bridge, Algorithm&nbsp;1 wording, voyage benchmark design, and table sizing.</p>
+    <p class="commit"><strong>aa43baf</strong><span>16:01:33 +03:00</span><span>talraviv &lt;talraviv69@gmail.com&gt;</span><span>“Update paper draft text and section formatting”</span></p>
+  </header>
+
+  <section class="metrics" aria-label="Commit summary">
+    <div class="metric"><b>1</b><span>commit</span></div>
+    <div class="metric"><b>1</b><span>file changed</span></div>
+    <div class="metric"><b>+13</b><span>inserted lines</span></div>
+    <div class="metric"><b>−12</b><span>deleted lines</span></div>
+  </section>
+
+  <div class="scope"><strong>Scope:</strong> this report contains only Tal's Git-authored work from Wednesday, 12 August 2026. Earlier and later Tal commits are excluded.</div>
+
+  <section>
+    <div class="section-head">
+      <h2>The five changed places</h2>
+      <p>Line numbers refer to the file after Tal's commit, which is also the current repository snapshot.</p>
+    </div>
+
+    <div class="changes">
+      <article class="change">
+        <div class="change-head"><span class="number">1</span><h3>Problem-formulation opening</h3><span class="lines">lines 242–255</span></div>
+        <div class="change-body">
+          <p>Corrected “fule” to “fuel,” changed “plan route” to “planed route,” and split the deterministic-to-stochastic transition into two sentences.</p>
+          <div class="diff"><div class="before"><span class="diff-label">Before</span>“…voyage fule… along the plan route… and we then extened…”</div><div class="after"><span class="diff-label">After</span>“…voyage fuel… along the planed route… We then extened…”</div></div>
+          <div class="effect"><b>Effect:</b> a small readability and typo pass; the mathematical model is unchanged.</div>
+        </div>
+      </article>
+
+      <article class="change">
+        <div class="change-head"><span class="number">2</span><h3>Deterministic and stochastic solution descriptions</h3><span class="lines">lines 251–255</span></div>
+        <div class="change-body">
+          <p>Changed “will satisfying” to “while satisfying,” replaced “weather conditions” with the broader “sea conditions,” and added a new paragraph explaining forecast-driven decisions.</p>
+          <div class="effect"><b>Effect:</b> the paper now explicitly connects the stochastic problem to periodic forecast updates and states that rolling horizon repeatedly uses the static solution method as its building block.</div>
+        </div>
+      </article>
+
+      <article class="change">
+        <div class="change-head"><span class="number">3</span><h3>Algorithm 1 queue wording</h3><span class="lines">line 661</span></div>
+        <div class="change-body">
+          <p>Simplified the instruction for removing the next state from the priority queue.</p>
+          <div class="diff"><div class="before"><span class="diff-label">Before</span>pop with minimal <em>t</em> and minimal <em>d</em> lexicographically</div><div class="after"><span class="diff-label">After</span>pop the minimal element lexicographically</div></div>
+          <div class="effect"><b>Effect:</b> shorter wording for the same lexicographic ordering rule; no algorithmic behavior changes.</div>
+        </div>
+      </article>
+
+      <article class="change">
+        <div class="change-head"><span class="number">4</span><h3>Voyage benchmark definition</h3><span class="lines">lines 735–741</span></div>
+        <div class="change-body">
+          <p>Replaced the earlier narrative comparison with an enumerated description of the Indian Ocean and North Atlantic routes. Added route lengths of 3,393 and 1,955 NM and defined a proposed benchmark of 25 departure dates per route and three ETA levels corresponding to average speeds of 10, 12, and 14.</p>
+          <div class="effect"><b>Effect:</b> the experimental unit becomes explicit: route + departure time + ETA, yielding a stated total of 2 × 25 × 3 = <strong>150 problem instances</strong>.</div>
+        </div>
+      </article>
+
+      <article class="change">
+        <div class="change-head"><span class="number">5</span><h3>Perfect-foresight table typography</h3><span class="lines">line 859</span></div>
+        <div class="change-body">
+          <p>Changed the LaTeX table size command from <code>\small</code> to <code>\tiny</code>.</p>
+          <div class="effect"><b>Effect:</b> the table occupies less horizontal and vertical space, but its data and caption are unchanged.</div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Review flags introduced or exposed by this commit</h2>
+      <p>These are not extra changes; they are consistency issues visible in the newly added wording.</p>
+    </div>
+    <div class="flags">
+      <div class="flag"><b>Broken sentence after the route list.</b><p>The text continues with “chosen to contrast weather regimes: Route~1” after <code>\end{enumerate}</code>, leaving a fragment from the previous paragraph.</p></div>
+      <div class="flag"><b>Benchmark-count mismatch to verify.</b><p>The new voyage-data paragraph says 150 problem instances, while the unchanged perfect-foresight table caption still says 35 voyages. Those may be different subsets, but the relationship is not explained here.</p></div>
+      <div class="flag"><b>New prose still needs a copy edit.</b><p>Examples include “algoritm,” “This is s shorter,” “volotile,” “depicte,” “tseted,” “depature,” “appart,” “teseted,” and “corrosponding.” The speed values are labeled “NM” rather than knots or NM/h.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>File touched</h2></div>
+    <div class="file"><code>paper_workspace/paper_full_draft.tex</code><p>All Wednesday changes are confined to this file. No C++, data, figures, scripts, or other documentation changed in Tal's 12 August commit.</p></div>
+  </section>
+
+  <footer>Source: <code>git show aa43baf</code>. Date interpreted in the repository author's +03:00 timezone. Generated against <code>main</code> at <code>aa43baf</code>.</footer>
+</main>

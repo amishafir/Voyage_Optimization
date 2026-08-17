@@ -11,6 +11,13 @@
 | Password | `greek` |
 | Working Directory | `~/Ami` |
 
+## Other Servers
+
+| Server | Username | Password | Notes |
+|--------|----------|----------|-------|
+| `edison-pc.eng.tau.ac.il` | `user` | `greek` (same as Shlomo1) | Data-collection host, `collect_all` tmux session. Verified working 2026-08-16. |
+| `Shlomo2-pcl.eng.tau.ac.il` | `user` | `greek` (same as Shlomo1/Edison) | Data-collection host, runs its own independent `collect_all` copy. Verified working 2026-08-17 — a separate `amishafir` account also exists but its password is unconfirmed; don't bother with it, `user`/`greek` works fine. |
+
 ## Quick Commands
 
 ### Check VPN
@@ -81,7 +88,7 @@ scp user@Shlomo1-pcl.eng.tau.ac.il:~/Ami/output_file ./
 ## Troubleshooting
 
 - **"Connection refused"**: Check VPN is connected (`ifconfig | grep utun`)
-- **"Permission denied"**: Password is `greek`
+- **"Permission denied"**: Password is `greek` for the `user` account on all three hosts (Shlomo1/Shlomo2/Edison).
 - **"expect: command not found"**: `brew install expect`
 - **"Module not found" on server**: `ssh user@server "pip3 install --user package_name"`
 
