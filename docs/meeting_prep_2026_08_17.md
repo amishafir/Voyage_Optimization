@@ -160,6 +160,14 @@ time line. Reference image shared before the session.
   those two bounds rather than over the whole grid. Worth confirming against the code before
   treating this as new work.
 
+- [x] **Handled by Tal — no action needed on our side.** Equations 4 and 5 in §4.1 (`State space`,
+  `paper_full_draft.tex` lines 415–465: Eq.~\eqref{eq:state-space} at line 432 and
+  Eq.~\eqref{eq:neighbors} at line 456) changed, and so did `fig:state-neighbours` (already logged
+  above). **Consequence to verify:** the graph-building code now produces different nodes as a
+  result — when Tal's push lands, check the actual node set the new equations generate, not just
+  the paper text/figure, since `Eq.~\eqref{eq:neighbors}` is what `atomic_edges.py`'s
+  `neighbour_candidates()` is supposed to implement (see the candidate-search item above).
+
 ---
 
 ## 2. Decisions carried over from Aug 10
