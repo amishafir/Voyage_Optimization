@@ -75,7 +75,8 @@ time line. Reference image shared before the session.
 
 ### 1C. Add new topics here
 
-- [ ] Change the discretization used for `fig:state-neighbours` (see
+- [x] **Handled by Tal — no action needed on our side.** Change the discretization used for
+  `fig:state-neighbours` (see
   [state_neighbours_figure_redesign.md](state_neighbours_figure_redesign.md)): every plotted node
   must have an outgoing arc, and the number of nodes along both the vertical (time) and horizontal
   (distance) axes must equal 7 — even if that requires a coarser `τ`/`δ` grid for the figure than
