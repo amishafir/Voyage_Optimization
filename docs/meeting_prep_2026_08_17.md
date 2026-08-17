@@ -77,6 +77,29 @@ time line. Reference image shared before the session.
   the production values (`τ=0.1 h`, `δ=1 NM`) currently used. Proposed figure-only grid: `τ = 1 h`
   (hourly), `δ = 5 NM`.
 
+- [ ] Revert the SOG band's lower bound from `0` to `v_min ≈ 8` kn: `v=0` (waiting/station-keeping)
+  should only be reachable at the very beginning and very end of a voyage, not mid-route. Relates
+  to the still-open waiting-convention decision in **2A** below (variant (a) free-everywhere vs.
+  variant (c) priced/destination-only) — this makes the "destination-only" side of that choice the
+  default and additionally forbids origin-adjacent-but-not-origin waiting. Places in
+  `paper_full_draft.tex` that currently hardcode or describe the `[0, v_max]` band and need
+  reconciling once `v_min` is set:
+  - Line 252 — the static-problem definition: `$\mathcal{V}=[0, v_{max}]$` (the foundational spot;
+    should become `$[v_{\min}, v_{\max}]$`).
+  - Line 290 — already written generically as `$\mathcal{V}=[v_{\min},v_{\max}]$`; this is the form
+    the rest of the paper should match.
+  - Line 484 (figure caption, `fig:state-neighbours`) — "currently generated with
+    `$\mathcal{V}=[0,15.119]$ kn`"; entangled with the discretization item above since it's the same
+    figure/script.
+  - Line 485 (same caption) — "its vertical edge is the `$\bar v=0$` wait leg", shown on an interior
+    (non-endpoint) block. Once `v=0` is endpoint-only, either pick a block that legitimately has a
+    wait leg (start/end) or drop this from the caption/figure.
+  - Line 626–627 (Algorithm walkthrough) — already correctly restricts zero-speed waiting to the
+    destination on early arrival ("possibly with some waiting at distance `L` ... at zero speed");
+    needs the equivalent statement added for the origin end.
+  - Line 638 (Algorithm 1 pseudocode input) — "speed band `$[0,v_{\max}]$`"; should become
+    `$[v_{\min},v_{\max}]$` with a note that the endpoints are the exception.
+
 ---
 
 ## 2. Decisions carried over from Aug 10
