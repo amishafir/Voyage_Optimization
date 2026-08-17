@@ -77,6 +77,8 @@ time line. Reference image shared before the session.
   the production values (`τ=0.1 h`, `δ=1 NM`) currently used. Proposed figure-only grid: `τ = 1 h`
   (hourly), `δ = 5 NM`.
 
+- [ ] **Note: Tal's next push already implements some of this** — re-check the diff before assuming
+  the items below are still fully open; don't duplicate work already landed.
 - [ ] Revert the SOG band's lower bound from `0` to `v_min ≈ 8` kn: `v=0` (waiting/station-keeping)
   should only be reachable at the very beginning and very end of a voyage, not mid-route. Relates
   to the still-open waiting-convention decision in **2A** below (variant (a) free-everywhere vs.
@@ -126,6 +128,9 @@ time line. Reference image shared before the session.
     for the endpoint-only waiting under the new convention, not `"hold"` — this effectively answers
     the FCR half of the still-open **2A** waiting-convention vote in favor of variant (a)'s pricing,
     even though `v=0` itself is now endpoint-restricted like variant (c).
+
+- [ ] Search for a "Text Studio" Overleaf/LaTeX add-on (richer text editing/formatting in the
+  paper) and evaluate whether it's worth adopting.
 
 ---
 
