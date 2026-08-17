@@ -249,7 +249,17 @@ In this paper we study the problem of controling the speed of sea vessels with t
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage while satisfying the ETA requirement. The SOG of the vessel is seleceted from the set, $\mathcal{V}=[0, v_{max}]$ knots ($NM/h$).   The voyage can be divided into sub-segments during which the course and and the sea conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such sub-segment.  Therefore, a solution can be described by a list of sub-segments and the SOG in each one of them.
+Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage while satisfying the ETA requirement. While under way the SOG of the vessel is seleceted from the band $[V_{\min}, V_{\max}]$ knots ($NM/h$), where the upper bound $V_{\max}$ is the fastest speed the vessel can sustain and the lower bound $V_{\min}>0$ is imposed by the minimum stable engine load and by manoeuvrability. The two ends of the route are exceptions, and they are not symmetric. At the origin ($d=0$) the vessel may idle before departing, so zero speed joins the band. At the destination ($d=D$) it has nowhere further to go: zero is the \emph{only} admissible speed there, and the vessel simply idles until the ETA. Writing $d$ for the along-track distance travelled and $D$ for the total length of the route, the set of admissible speeds is therefore
+\begin{equation}
+	\label{eq:speed-set}
+	\mathcal{V}(d)=
+	\begin{cases}
+		\{0\}\cup[V_{\min},V_{\max}], & d=0,\\[2pt]
+		[V_{\min},V_{\max}], & 0<d<D,\\[2pt]
+		\{0\}, & d=D,
+	\end{cases}
+\end{equation}
+so the vessel never idles in mid-ocean, and once it has reached $d=D$ it cannot move again.   The voyage can be divided into sub-segments during which the course and and the sea conditions are fixed.  Due to the convexity of the FCR function,  in an optimal solution the SOG is fixed during each such sub-segment.  Therefore, a solution can be described by a list of sub-segments and the SOG in each one of them.
 
 In the stochastic version of the problem, speed decisions are made based on the current sea conditions and a forecast with a given spatial and temporal granularity. The forecast is updated periodically.  In this study the dynamic version is solved using a rolling horizon framework that uses the solution method for the static problem as a building block. 
 
@@ -284,10 +294,12 @@ The deterministic speed-control problem is to choose the per-leg SOG that minimi
 subject to the arrival deadline,
 \begin{equation}
 \label{eq:obj}
-\min_{\{V_{g,i}\in\mathcal{V}\}}\; \sum_{i=1}^{M} \fcr\!\big(g^{-1}(V_{g,i};w_i)\big)\,\frac{d_i}{V_{g,i}}
+\min_{\{V_{g,i}\in[V_{\min},V_{\max}]\}}\; \sum_{i=1}^{M} \fcr\!\big(g^{-1}(V_{g,i};w_i)\big)\,\frac{d_i}{V_{g,i}}
 \qquad\text{s.t.}\qquad \sum_{i=1}^{M}\frac{d_i}{V_{g,i}} \le T ,
 \end{equation}
-with a hard arrival constraint and the SOG confined to the band $\mathcal{V}=[v_{\min},v_{\max}]$.
+with a hard arrival constraint and the SOG of every leg confined to the band $[V_{\min},V_{\max}]$;
+the zero-speed option of Eq.~\eqref{eq:speed-set} covers no distance and so contributes no term to the
+sum, it only consumes part of the time budget $T$ at the origin or at the destination.
 Because fuel depends on SWS while the plan targets SOG, holding a target SOG through varying weather
 forces the SWS to vary, and the convex FCR penalises that variation --- the mechanism the paper
 exploits (Section~\ref{sec:methods}).
@@ -395,8 +407,11 @@ which the target SOG may be chosen --- freely per leg, or once per time block.
 
 We approximate the deterministic speed-control problem of Section~\ref{sec:problem} as a discrete
 dynamic program (DP) with discretized state and action spaces. The voyage is represented in the time--distance plane, with
-along-track distance $d\in[0,L]$ and elapsed time $t\in[0,T]$; the vessel follows an increasing
-trajectory from $(0,0)$ to the destination distance $(t,L)$ for some $t\leq T$, with instantaneous slope equal $v(t)$.
+along-track distance $d\in[0,D]$ and elapsed time $t\in[0,T]$; the vessel follows a non-decreasing
+trajectory from $(0,0)$ to the destination distance $(t,D)$ for some $t\leq T$, with instantaneous slope equal $v(t)$.
+The trajectory is strictly increasing in the interior, since $v(t)\ge V_{\min}>0$ there; it can be flat
+only on the first and the last distance layer, $d=0$ and $d=D$, where Eq.~\eqref{eq:speed-set} admits
+$v=0$.
 
 Three structural properties reduce this continuous-control problem, without loss of optimality, to
 one with finitely many decision epochs. First, the heading is constant in each route segment (hence
@@ -404,10 +419,10 @@ in each leg). Second, the sea conditions are constant within each sea cell and t
 Third, the FCR is a convex function of the SOG (see Section~\ref{sec:problem}).
 Therefore, under optimal control the SOG remains constant as long as the vessel is in the same leg and within the same time block; the remaining continuum --- where exactly on a boundary the vessel arrives --- is handled by the grid of Section~\ref{sec:states}.
 
-As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitude or longitude line, a new subsegment starts. Within each time block, the sea conditions are assumed constant throughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (major) segment, the vessel changes its heading, which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular $d_M = L$.
+As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitude or longitude line, a new subsegment starts. Within each time block, the sea conditions are assumed constant throughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (major) segment, the vessel changes its heading, which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular the last breakpoint is the end of the route, $d_M = D$, and we use the two interchangeably from here on.
 
 % ==== NEW (forward pointer to φ instead of a second fuel-rate symbol) ====
-The FCR of the vessel steaming at speed $v \in \mathcal{V}$ therefore depends only on the subsegment and the time block it is in; Section~\ref{sec:states} makes this precise through the function $\phi(t,d;v)$.
+The FCR of the vessel steaming at speed $v \in \mathcal{V}(d)$ therefore depends only on the subsegment and the time block it is in; Section~\ref{sec:states} makes this precise through the function $\phi(t,d;v)$. Idling is free of propulsion fuel, $\phi(t,d;0)=0$, so a wait at $d=0$ or at $d=D$ costs time but no fuel; auxiliary (hotel) consumption is outside the scope of this model.
 
 
 
@@ -424,7 +439,7 @@ $0=t_0, t_1,\ldots, t_{\Theta}=T$.
 
 
 
-The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the time--distance plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 1$ NM), starting from the crossing of each time line with a distance line and going backward in space
+The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the time--distance plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 1$ NM), both measured from the start of the voyage so that every line carries the same uniform grid
 (Figure~\ref{fig:state-neighbours}).
 
 
@@ -434,57 +449,80 @@ We define the set of states as
 	\begin{aligned}
 		\mathcal{S}
 		={}& \biggl\{
-		(t_j,d_i-n\delta):
-		i=1,\ldots,M,\;
-		j=0,\ldots,\Theta,\;
+		(t_j, n\delta):
+		j=1,\ldots,\Theta,\;
 		n=0,\ldots,
-		\left\lfloor\frac{d_i-d_{i-1}}{\delta}\right\rfloor
+		\left\lfloor\frac{D}{\delta}\right\rfloor
 		\biggr\} \cup \\
 		&{}
 		\biggl\{
-		(t_j-n\tau,d_i):
+		(n\tau,d_i):
 		i=0,\ldots,M,\;
-		j=1,\ldots,\Theta,\;
 		n=0,\ldots,
-		\left\lfloor\frac{t_j-t_{j-1}}{\tau}\right\rfloor
-		\biggr\} \cup \{(0,0)\}.
+		\left\lfloor\frac{T}{\tau}\right\rfloor
+		\biggr\} \cup
+		\biggl\{
+		(T,D)
+		\biggr\}.
 	\end{aligned}
 \end{equation}
 
+The first term places the uniform $\delta$-grid on every time line, spanning the whole route; the
+second places the uniform $\tau$-grid on every distance line, spanning the whole horizon. Both grids
+are anchored at the origin rather than at each line crossing, which keeps them uniform whatever the
+block lengths happen to be. In particular the first distance line, $d_0=0$, carries the \emph{entire}
+$\tau$-grid, which is what Eq.~\eqref{eq:speed-set} requires there: the vessel may idle at the origin
+and depart at any grid time, so every $n\tau \le T$ must be an admissible departure state. The last
+distance line, $d_M=D$, carries it for the same reason, an early arrival idling forward to the
+deadline. The third term adds the terminal state $(T,D)$ explicitly, since neither $T$ nor $D$ need
+fall on the $\tau$- or $\delta$-grid. The origin $(0,0)$ is the $i=0,n=0$ element of the second term,
+and is the boundary condition of the recursion below.
 
-Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the index of the distance line that follows distance $d$. Similarly $\mathcal{T}(t) = \arg\min_{j} \{j \in \mathbb{N} : t_j > t\}$.  Now for any state $(t,d)\in\mathcal{S}$ we define its set of neighbouring states as
+
+Let $\mathcal{D}(d) = \arg\min_{i} \{i \in \mathbb{N} : d_i > d\}$ define the index of the distance line that follows distance $d$, with the convention $\mathcal{D}(D)=M$, so that $d_{\mathcal{D}(D)}=D$ and the destination layer has no distance line beyond it. Similarly $\mathcal{T}(t) = \arg\min_{j} \{j \in \mathbb{N} : t_j > t\}$.  Now for any state $(t,d)\in\mathcal{S}$ we define its set of neighbouring states as
 \begin{equation}
 \label{eq:neighbors}
 \begin{aligned}
 \mathcal{A}(t,d) ={}&
-\biggl\{ (t',\, d_{\mathcal{D}(d)}) : t' = t_{\mathcal{T}(t)} - n\tau,  t < T,
-   n=0,\ldots,\left\lfloor\frac{t_{\mathcal{T}(t)}-t}{\tau}\right\rfloor, \frac{d_{\mathcal{D}(d)}-d}{t'-t} \in \mathcal{V} \biggr\} \cup \\
-&\biggl\{ (t_{\mathcal{T}(t)},\, d') : d' = d_{\mathcal{D}(d)} - n\delta,t < T,
-   n=0,\ldots,\left\lfloor\frac{d_{\mathcal{D}(d)}-d}{\delta}\right\rfloor, \frac{d'-d}{t_{\mathcal{T}(t)}-t} \in \mathcal{V}  \biggr\}.
+\biggl\{ (t',\, d_{\mathcal{D}(d)}) \in \mathcal{S} : t' \le  \mathcal{T}(t), \frac{d_{\mathcal{D}(d)}-d}{t'-t} \in \mathcal{V}(d) \biggr\} \cup \\
+&\biggl\{ (t_{\mathcal{T}(t)},\, d')  \in \mathcal{S}: d' \le d_{\mathcal{D}(d)}, \frac{d'-d}{t_{\mathcal{T}(t)}-t} \in \mathcal{V}(d)  \biggr\}.
 \end{aligned}
 \end{equation}
-The first set collects the neighbours reached on the next distance line $d_{\mathcal{D}(d)}$, with the
-arrival time snapped to the $\tau$-grid; the second, the neighbours reached on the next time line
-$t_{\mathcal{T}(t)}$, with the arrival distance snapped to the $\delta$-grid.  We define the inverse set function $\mathcal{A}(t,d)^{-1} \equiv \{(\tilde t, \tilde d) : (\tilde t, \tilde d) \in \mathcal{A}(t,d)  \}$. That is the set of all previous discretized location in the time--distance space from which $(t,d)$ can be reached.
+The first set collects the neighbours reached on the next distance line $d_{\mathcal{D}(d)}$, with 
+arrival time $t'$ not later than the next time line  $\mathcal{T}(t)$ that implies a valid speed.
+Similarly, the second includes  the neighbours reached on the next time line but before the next distance line and implying a valid speed.  
+ We define the inverse set function $\mathcal{A}(t,d)^{-1} \equiv \{(\tilde t, \tilde d) : (\tilde t, \tilde d) \in \mathcal{A}(t,d)  \}$. That is the set of all previous discretized location in the time--distance space from which $(t,d)$ can be reached.
 
+The speed test in Eq.~\eqref{eq:neighbors} is taken against $\mathcal{V}(d)$ of
+Eq.~\eqref{eq:speed-set}, evaluated at the distance $d$ of the \emph{source} state; this is
+unambiguous because a zero-speed leg has $\tilde d=d$, so its two endpoints lie on the same distance
+layer. The three cases of Eq.~\eqref{eq:speed-set} then read off directly. On the first layer, $d=0$,
+the vertical legs $(t,0)\to(t',0)$ postpone the departure, alongside the ordinary legs that set off
+into the route. In the interior, $0<d<D$, the floor $V_{\min}>0$ removes the vertical leg altogether:
+every leg advances the vessel, and the admissible cone is bounded below by the $V_{\min}$ ray rather
+than by the vertical. On the last layer, $\mathcal{V}(D)=\{0\}$, so the vertical legs
+$(t,D)\to(t',D)$ are the only ones available and an early arrival simply idles forward to the
+deadline; the convention $d_{\mathcal{D}(D)}=D$ is what keeps Eq.~\eqref{eq:neighbors} well defined
+once no distance line lies beyond the destination.
 
-Between a state and a neighbour the vessel steams at a single fixed speed drawn from $\mathcal{V}$, held constant across the rectangular sub-space it traverses.
+Between a state and a neighbour the vessel steams at a single fixed speed drawn from $\mathcal{V}(d)$, held constant across the rectangular sub-space it traverses.
 
 We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
 % ==== fig:state-neighbours: matched two-panel asset generated from one real Route-1 block. ====
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/state_neighbours_pair.pdf}
-\caption{A state of the dynamic program and its candidate successors in one real interior block of
-the Indian Ocean route, voyage~0: distance $d\in[1963.886,1995.719]$ NM and elapsed time
-$t\in[120,126]$ h, with $\delta=1$ NM and $\tau=0.1$ h. The horizontal axis is distance,
-increasing left to right, and elapsed time increases downward. Panel (a) places the source at
-$(t,d)=(123.0\ \mathrm{h},1963.886\ \mathrm{NM})$ on a distance line; panel (b) places it at
-$(120.0\ \mathrm{h},1979.719\ \mathrm{NM})$ on a time line. In both panels the same speed cone,
-currently generated with $\mathcal{V}=[0,15.119]$ kn, reaches the next distance wall (blue circles)
-or the next time wall (green squares); its vertical edge is the $\bar v=0$ wait leg. The markers
-show every Eq.~\eqref{eq:neighbors} candidate. Numeric labels and fan lines are thinned
-deterministically for legibility, without removing candidate markers.}
+\caption{An initial state and its candidate successors in one real interior block of the Indian
+Ocean route, voyage~0 ($d\in[1963.886,1995.719]$ NM, $t\in[120,126]$ h). The source is
+$(121\ \mathrm{h},1963.886\ \mathrm{NM})$ in (a) and $(120\ \mathrm{h},1970\ \mathrm{NM})$ in (b).
+Circles are states on the distance lines, which carry the $\tau$-grid; squares are states on the
+time lines, which carry the $\delta$-grid; both grids are anchored at the voyage start
+(Eq.~\eqref{eq:state-space}). Coloured markers are the successors admitted by
+Eq.~\eqref{eq:neighbors}, grey ones the remaining states. The cone spans the $V_{\min}$ and
+$V_{\max}$ rays; with $V_{\min}>0$ it has no vertical edge, since Eq.~\eqref{eq:speed-set} admits
+the zero-speed wait leg only at $d=0$ and $d=D$. For legibility the drawing uses $\delta=5$ NM,
+$\tau=1$ h and $[V_{\min},V_{\max}]=[3,16]$ kn; the experiments use $\delta=1$ NM, $\tau=0.1$ h and
+the band of Section~\ref{sec:data}.}
 \label{fig:state-neighbours}
 \end{figure}
 When the vessel is streaming in a sub-segment that starts at point $d$ at time $t$  it is subject to the fixed sea conditions and with the same heading until the end of the sea condition time block and the end of the sub-segment, whatever it reaches first. I.e., it steams inside a given rectunglar area of the time--distance space demonstrated in Figure X.   Therefore, the FCR is determined only by $v$ within this rectunglar area.  We denote this FCR by $\phi(t, d; v)$ metric ton / hour.
@@ -499,7 +537,7 @@ C^{*}(t,d)=\min_{\substack{(\tilde t,\tilde d) \in\mathcal{A}^{-1}( t, d)}}   \b
 	C^{*}(\tilde t,\tilde d)+(\tilde t- t)\,\phi(t,d; (\tilde d- d)/(\tilde t-t))  & \text{otherwise}
 \end{cases}
 \end{equation}
-With the boundary condition $C^*(0,0) = 0$ and the the minimum total voyage fuel is obtained at $C^{*}(T,L)$.
+With the boundary condition $C^*(0,0) = 0$ and the the minimum total voyage fuel is obtained at $C^{*}(T,D)$.
 
 We denote the solution of (\ref{eq:cost-to-arrive}) for each  state $(t,d)$ by  $(\tilde t^{\star},\tilde d^{\star})$. The value of this solution is
 the minimum fuel to arrive on time at each state $(t,d)$ or infinity if it is not possible to meet the ETA. The SOG at the subsegment that starts at $(t,d)$ is
@@ -623,9 +661,12 @@ immediately updated  (lines~6--7). For each state the aglrithm stores its value 
 $pred(\cdot)$ (line~8). The actual arc set is not stored yet the expensive physics of the FCR evaluation per leg is peformed exactly once, when the leg's source
 is expanded. Because every leg strictly increases time, the lexicographic scan order guarantees that
 a state's value is final before the state is expanded.
-Extraction of the actual journeyis then preformed (lines~10--15).  The voyage terminates at $(T,L)$, possibly with some waiting at distance $L$ so an early arrival continues to the deadline at
-zero speed. The optimal journey $J^{\star}$ is read by backtracking the recorded
-predecessors to the origin.
+Extraction of the actual journeyis then preformed (lines~10--15).  The voyage terminates at $(T,D)$: by
+Eq.~\eqref{eq:speed-set} zero is the only speed available on the last distance layer, so an early
+arrival continues to the deadline at zero speed and every optimal plan can be read off the single
+terminal state $(T,D)$ rather than off a set of candidate arrival times. The first layer admits zero
+speed too --- there alongside the ordinary band --- so a plan may equally postpone its departure. The
+optimal journey $J^{\star}$ is read by backtracking the recorded predecessors to the origin.
 
 % ==== Algorithm 1 box (moved up from after the enumeration prose, 2026-08-04 restructure: box first, walkthrough after) ====
 \begin{center}
@@ -635,7 +676,7 @@ predecessors to the origin.
 \footnotesize
 \begin{tabbing}
 xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
-\textbf{Input:} distance lines $d_0<\dots<d_M{=}L$, time lines $t_0<\dots<t_\Theta{=}T$, speed band $[0,v_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
+\textbf{Input:} distance lines $d_0<\dots<d_M{=}D$, time lines $t_0<\dots<t_\Theta{=}T$, speed sets $\mathcal{V}(\cdot)$ of \eqref{eq:speed-set} with band $[V_{\min},V_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
 \textbf{Output:}  Speed schedule and total fuel consumption \\
 {\small$\triangleright$ \emph{Stage 1 --- forward closure: discover all reachable states and calculate their values}}\\
 {\scriptsize 1}\> $C^*(0,0) \leftarrow 0$; \quad $C^*(t,d) \leftarrow \infty$ \, for all $(t,d) \ne (0,0)$;\\
@@ -650,7 +691,7 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 {\scriptsize 8}\>\>\>\> $pred(\tilde t,\tilde d) \leftarrow (t,d)$; \\
 {\scriptsize 9}\>\>\> \textbf{if} $(t,d) \notin Q$ then $push(Q,(t,d))$; \\
 {\small$\triangleright$ \emph{Stage 2 --- extraction}}\\
-{\scriptsize 10}\> $curr \leftarrow (T,L)$; \\
+{\scriptsize 10}\> $curr \leftarrow (T,D)$; \\
 {\scriptsize 11}\> $J^{\star} \leftarrow [curr]$; \\
 {\scriptsize 12}\> \textbf{while} $curr \ne (0,0)$ \textbf{do}\\
 {\scriptsize 13}\>\> $curr \leftarrow pred(curr)$ ;\\
@@ -763,10 +804,12 @@ duration.
 \end{comment}
 % ==== NEW (speed drawn from the band 𝒱; enumeration is node-first, §4.2) ====
 is made. Throughout, the speed at each decision is drawn from a common band spanning the mean voyage
-speed $L/T \pm 3$ kn --- the interval $\mathcal{V}$ of Section~\ref{sec:methods}, enumerated
-node-first on the $\delta,\tau$ grid --- and the arrival time $T$ was binding in every run (zero slack)
---- so all comparisons are at equal voyage time, isolating the effect of the setting rather than the
-schedule's duration.
+speed $D/T \pm 3$ kn, that is $V_{\min}=D/T-3$ and $V_{\max}=D/T+3$ --- the band of
+Eq.~\eqref{eq:speed-set}, enumerated node-first on the $\delta,\tau$ grid --- and the arrival time $T$
+was binding in every run (zero slack) --- so all comparisons are at equal voyage time, isolating the
+effect of the setting rather than the schedule's duration. Because the arrival constraint bound in
+every run, the zero-speed option that Eq.~\eqref{eq:speed-set} makes available at $d=0$ and $d=D$ was
+never exercised: no optimal plan chose to idle.
 
 \subsubsection{Speed-decision granularity}
 \textbf{SR (this paper).} The method under test is the dynamic program of Section~\ref{sec:methods} applied
@@ -786,7 +829,7 @@ Luo's actual method rather than a weakened variant. Any fuel difference from SR 
 therefore attributable to decision granularity alone.
 
 \noindent\textbf{Fixed-speed (Naive).} The operational reference is a set-and-forget policy that
-sails a single fixed mean SOG ($L/T$) through the actual time-varying weather, with no optimisation
+sails a single fixed mean SOG ($D/T$) through the actual time-varying weather, with no optimisation
 and no re-planning.
 
 \subsubsection{Information regime}
