@@ -132,6 +132,19 @@ time line. Reference image shared before the session.
 - [ ] Search for a "Text Studio" Overleaf/LaTeX add-on (richer text editing/formatting in the
   paper) and evaluate whether it's worth adopting.
 
+- [ ] Need to return to §3.2 (`\subsection{Fuel and objective}`, `\label{sec:objective}`,
+  `paper_full_draft.tex` lines 273–296) — the deterministic objective/constraint statement,
+  Eq.~\eqref{eq:obj}, and the `$\mathcal{V}=[v_{\min},v_{\max}]$` band definition (line 290) live
+  here; likely relevant once the `v_min` decision above is ratified.
+
+- [ ] The FCR formula in §3.2 is not understandable as written (`paper_full_draft.tex` lines
+  275–282, Eq.~\eqref{eq:legfuel}): `$F_i = \fcr\big(g^{-1}(V_{g,i};w_i)\big)\,d_i/V_{g,i}$` forces
+  the reader to mentally chain three things introduced in different places — the SOG-to-SWS inverse
+  `$g^{-1}$` (defined in §3.1), the cubic FCR `$\fcr(V_s)=a\,V_s^{3}$` (stated two sentences earlier
+  but with the coefficient `$a$` deferred to Appendix~\ref{app:fcr}), and the leg transit time
+  `$d_i/V_{g,i}$` — with no intermediate/expanded form shown. Needs a clearer walkthrough or an
+  expanded intermediate step before the reader hits the composed equation.
+
 ---
 
 ## 2. Decisions carried over from Aug 10
