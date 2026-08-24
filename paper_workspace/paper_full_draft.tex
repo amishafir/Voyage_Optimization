@@ -708,19 +708,64 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 \section{Data and experimental design}
 \label{sec:data}
 In this section we describe the testbed on which the method of Section~\ref{sec:methods} is evaluated.
-We first present the data that define the problem instances --- the sea conditions queried along each
-route and the voyages themselves --- and then the experimental design: the settings under which the
-dynamic program is exercised and the baselines against which it is compared, namely a fixed-speed
-operational reference and the state-of-the-art block formulation of \citet{luo2024}.
+We first present the input data that define the problem instances: the physical ocean routes and the time dependent sea conditions along them as well as the forecast data applicable for the dynamic and stochastic version of the speed optimization. In addition, we describe the baselines against which the proposed method is bench marked. 
 
 \subsection{Data}
+
+In this section we describe the input data that constitute our test bed problem instances:
+
+\subsubsection{The physical route}
+%Each voyage is a fixed route of total length $L$ to be completed within a required arrival time $T$
+Two routes were used to benchmark our algorithm:
+\begin{enumerate}
+	\item   \emph{Indian Ocean} route (Persian Gulf $\rightarrow$ Strait of Malacca). This is a 3,393 NM long route that crosses a  calm stretch of ocean with  relatively stable conditions.
+	\item  \emph{North Atlantic} route (St.~John's $\rightarrow$ Liverpool). This is a shorter route (1,955 NM), with rougher and more volatile sea conditions.
+\end{enumerate}
+The two routes are depicted in Figure~\ref{fig:routes} and their waypoints are detailed in Table~\ref{tab:waypoints}.  
+
+\begin{figure}[ht]
+	\centering
+	\includegraphics[width=\textwidth]{figures/routes.pdf}
+	\caption{The two study routes and their waypoints: (a) the Indian Ocean route, Persian Gulf
+		$\rightarrow$ Strait of Malacca; (b) the North Atlantic route, St.\ John's $\rightarrow$ Liverpool.}
+	\label{fig:routes}
+\end{figure}
+
+\begin{table}[ht]
+	\centering
+	\footnotesize
+	\caption{Waypoints of the two routes (decimal degrees; positive north / east).}
+	\label{tab:waypoints}
+	\begin{tabular}{rlrr@{\hspace{1.5em}}rlrr}
+		\toprule
+		\multicolumn{4}{c}{Indian Ocean Route: Persian Gulf $\rightarrow$ Strait of Malacca (3{,}393 nm)} &
+		\multicolumn{4}{c}{North Atlantic Route: St.\ John's $\rightarrow$ Liverpool (1{,}955 nm)} \\
+		\cmidrule(lr){1-4}\cmidrule(lr){5-8}
+		\# & Waypoint & Lat & Lon & \# & Waypoint & Lat & Lon \\
+		\midrule
+		1  & Port A (Persian Gulf)       & 24.75 & 52.83  & 1  & St.\ John's          & 47.57 & $-52.71$ \\
+		2  & Gulf of Oman                & 26.55 & 56.45  & 2  & Grand Banks          & 48.80 & $-47.50$ \\
+		3  & Arabian Sea 1               & 24.08 & 60.88  & 3  & Mid-Atlantic West    & 50.40 & $-41.00$ \\
+		4  & Arabian Sea 2               & 21.73 & 65.73  & 4  & Mid-Atlantic Central & 52.00 & $-34.00$ \\
+		5  & Arabian Sea 3               & 17.96 & 69.19  & 5  & Mid-Atlantic East    & 53.30 & $-26.50$ \\
+		6  & Arabian Sea 4               & 14.18 & 72.07  & 6  & Rockall Bank         & 54.20 & $-18.50$ \\
+		7  & Indian Ocean 1              & 10.45 & 75.16  & 7  & West of Ireland      & 55.50 & $-11.00$ \\
+		8  & Indian Ocean 2              &  7.00 & 78.46  & 8  & Malin Head           & 55.80 & $-7.00$  \\
+		9  & Bay of Bengal               &  5.64 & 82.12  & 9  & North Channel        & 55.20 & $-5.20$  \\
+		10 & Indian Ocean 3              &  4.54 & 87.04  & 10 & Irish Sea North      & 54.20 & $-3.80$  \\
+		11 & Andaman Sea 1               &  5.20 & 92.27  & 11 & Liverpool            & 53.41 & $-3.01$  \\
+		12 & Andaman Sea 2               &  5.64 & 97.16  &    &                      &       &          \\
+		13 & Port B (Strait of Malacca)  &  1.81 & 100.10 &    &                      &       &          \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
 
 \subsubsection{Sea conditions data}
 The sea conditions were obtained from the Open-Meteo API \citep{openmeteo}, which redistributes the
 outputs of operational \emph{numerical weather prediction} (NWP) models --- physics-based forecasting
-systems that integrate the governing equations of the atmosphere and ocean forward in time from an
-estimated initial state, and that periodically re-initialise on a fixed cycle. One product was used
-per environmental driver:
+systems that integrate the governing equations of the atmosphere and ocean forward in time from an estimated initial state, and that periodically re-initialise on a fixed cycle.  The system provide the following measurements in spatial granularity of $0.25\degree \times 0.25\degree$ and temporal granularity of 6 hours. At each sampling point the system also provides a forecast for the next 168 hours (a week) in the same granularity. 
+
 \begin{itemize}
 \item \textbf{Wind} (10 m speed and direction) --- the NOAA \emph{Global Forecast System} (GFS), the
 operational global atmospheric model of the U.S.\ weather service, at $0.25\degree$ resolution,
@@ -731,8 +776,9 @@ to 168 h.
 \item \textbf{Ocean currents} (velocity and direction) --- the M\'et\'eo-France SMOC ocean model, at
 $0.08\degree$ resolution, re-initialised once daily, to 168 h.
 \end{itemize}
-The Beaufort number consumed by the speed model was computed from the 10 m wind speed rather than
-read from the API (Section~\ref{sec:problem}). For each route, two records were collected at every
+
+For each route, 
+two records were collected at every
 waypoint on a 6 h sampling cadence over $\sim$80 days and stored in HDF5 with separate tables: the
 \emph{actual} weather --- the conditions ultimately realised --- and the \emph{predicted} weather ---
 every forecast cycle issued ahead of those conditions. The actual record provides the ground-truth
@@ -746,51 +792,11 @@ of consecutive wind values were identical to the previous hour (94\% for waves, 
 Re-planning more frequently than 6 h therefore acts on no new wind information, which is why the 6 h
 cadence used below is set by the data rather than tuned.
 
-\subsubsection{Voyage data}
-%Each voyage is a fixed route of total length $L$ to be completed within a required arrival time $T$
-Two routes were used to benchmark our algorithm:
-\begin{enumerate}
-	\item   \emph{Indian Ocean} route (Persian Gulf $\rightarrow$ Strait of Malacca). This is a 3,393 NM long route that crosses a  calm stretch of ocean with  relatively stable conditions.
-	\item  \emph{North Atlantic} route (St.~John's $\rightarrow$ Liverpool). This is a shorter route (1,955 NM), with rougher and more volatile sea conditions.
-\end{enumerate}
-The two routes are depicted in Figure~\ref{fig:routes} and their waypoints are detailed in Table~\ref{tab:waypoints}.  The speed optimization problem can be solved with various ETA values. Moreover, because the sea conditions change over time, a problem instance is determined by the  route, departure time and desired ETA.  In our experiment we tested each route with 25 different departure times during the spring of 2026, spaced three days apart.  Each of these $2 \times 25$ route-departure time combinations were tested with 3 ETA levels corresponding to an average sailing speed of 10, 12, and 14 NM, making a benchmark set consisting of 150 problem instances. 
 
-\begin{figure}[ht]
-\centering
-\includegraphics[width=\textwidth]{figures/routes.pdf}
-\caption{The two study routes and their waypoints: (a) the Indian Ocean route, Persian Gulf
-$\rightarrow$ Strait of Malacca; (b) the North Atlantic route, St.\ John's $\rightarrow$ Liverpool.}
-\label{fig:routes}
-\end{figure}
+Because the sea conditions change over time, different departure times implies different problem instances.  In our experiment we tested each route with 25 different departure times during the spring of 2026, spaced three days apart.  Each of the $2 \times 25$ route-departure time combinations were tested.
+The ETA  (the required length of the voyage) also affect the problem instance. Therefore, an instance in our numerical experiment is determined by the route, departure time and ETA.
+With 3 ETA levels corresponding to an average sailing speed of 10, 12, and 14 NM, we obtain a benchmark set consisting of 150  instances. 
 
-\begin{table}[ht]
-\centering
-\footnotesize
-\caption{Waypoints of the two routes (decimal degrees; positive north / east).}
-\label{tab:waypoints}
-\begin{tabular}{rlrr@{\hspace{1.5em}}rlrr}
-\toprule
-\multicolumn{4}{c}{Indian Ocean Route: Persian Gulf $\rightarrow$ Strait of Malacca (3{,}393 nm)} &
-\multicolumn{4}{c}{North Atlantic Route: St.\ John's $\rightarrow$ Liverpool (1{,}955 nm)} \\
-\cmidrule(lr){1-4}\cmidrule(lr){5-8}
-\# & Waypoint & Lat & Lon & \# & Waypoint & Lat & Lon \\
-\midrule
-1  & Port A (Persian Gulf)       & 24.75 & 52.83  & 1  & St.\ John's          & 47.57 & $-52.71$ \\
-2  & Gulf of Oman                & 26.55 & 56.45  & 2  & Grand Banks          & 48.80 & $-47.50$ \\
-3  & Arabian Sea 1               & 24.08 & 60.88  & 3  & Mid-Atlantic West    & 50.40 & $-41.00$ \\
-4  & Arabian Sea 2               & 21.73 & 65.73  & 4  & Mid-Atlantic Central & 52.00 & $-34.00$ \\
-5  & Arabian Sea 3               & 17.96 & 69.19  & 5  & Mid-Atlantic East    & 53.30 & $-26.50$ \\
-6  & Arabian Sea 4               & 14.18 & 72.07  & 6  & Rockall Bank         & 54.20 & $-18.50$ \\
-7  & Indian Ocean 1              & 10.45 & 75.16  & 7  & West of Ireland      & 55.50 & $-11.00$ \\
-8  & Indian Ocean 2              &  7.00 & 78.46  & 8  & Malin Head           & 55.80 & $-7.00$  \\
-9  & Bay of Bengal               &  5.64 & 82.12  & 9  & North Channel        & 55.20 & $-5.20$  \\
-10 & Indian Ocean 3              &  4.54 & 87.04  & 10 & Irish Sea North      & 54.20 & $-3.80$  \\
-11 & Andaman Sea 1               &  5.20 & 92.27  & 11 & Liverpool            & 53.41 & $-3.01$  \\
-12 & Andaman Sea 2               &  5.64 & 97.16  &    &                      &       &          \\
-13 & Port B (Strait of Malacca)  &  1.81 & 100.10 &    &                      &       &          \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 \subsection{Experimental design}
 The deterministic dynamic program of Section~\ref{sec:methods} is exercised across two independent
