@@ -370,6 +370,8 @@ convention statement, and the matching §4.2/caption edits — all landed in `5f
 | Reconcile the 0.5° cell justification against the actual source resolutions — note 3 in §8 | | open |
 | Decide whether route2's 0.08° sampling should survive into the model — note 4 in §8 | | open |
 | Resolve the now three-way resolution contradiction after `5f38cba` — note 5 in §8 | | open |
+| Add `--grid_deg` CLI flag + route2 sensitivity sweep at 0.25° — note 6 in §8 | | open |
+| **Re-collect route1 weather at ~5-10 NM** — note 6, the bigger finding | | open |
 | | | |
 
 ## 8. Running notes
@@ -598,5 +600,104 @@ weather-node spacing, and a reader still cannot see that the two routes were sam
 **Also:**
 - New typo in the added sentence, line 767: "The system **provide**" -> provides.
 - Em-dashes: **70 -> 68** live. Note 2's sweep is still needed, and lines 807-809 are still his.
+
+
+### Note 6 — the `0.08°` currents question, measured. It is not the real problem.
+
+Full quantitative assessment against the downloaded v3 files and the real physics functions. Two
+structural facts reframe the question, and both were verified directly in the source:
+
+**1. The feared failure mode cannot occur.** The resolver does **not** compute a vector mean.
+`weather.py:453-457` takes `np.mean(currents)` for magnitude and `_circular_mean_deg(current_dirs)`
+for direction. Magnitude is preserved by construction, so opposing currents cannot average toward
+zero. The real error is the opposite sign: full current strength retained, pointed in an averaged
+direction, which **overstates** net cell drift by **+3.1-3.7%**.
+
+**2. SR never had sub-cell resolution to lose.** SR's H-lines *are* the 0.5° grid crossings —
+`h_line_distances_from_geo(..., grid_deg)` (`dp_cpp/src/nodes.cpp:49`) built from
+`rhumb_grid_crossings(..., grid_deg=0.5)` (`dp_rebuild/geo_grid.py:126`). All three policies read
+weather through the same `cell_weather_at`. So the averaging removes decision opportunities *below*
+the cell — a resolution **no** policy possesses — which makes the effect **common-mode** and means it
+does **not** bias SR-vs-Luo or SR-vs-baseline.
+
+**Measured information loss** (vector variance decomposed per 6 h slice, E/N components):
+
+| | route1 | route2 |
+|---|---|---|
+| within-cell / (within+between) | **7.19%** | **9.87%** |
+| within-cell RMS spread, median | 0.201 kmh | 0.184 kmh |
+| waypoints per cell (mean / max) | 1.16 / 2 | 3.41 / 5 |
+| SR H-lines (spatial decisions) | 164 | 121 |
+
+~90% of exploitable current variation is between-cell and survives. Route2 does carry genuinely more
+sub-0.5° mesoscale structure (structure function higher at every lag below ~70 NM), but the two
+routes' loss figures are close — **not** the 5x asymmetry the sampling difference suggested.
+
+**Cancellation is rare.** `R = |vector mean| / mean(|v|)`: median **0.99** both routes; `R < 0.5` in
+**0.89%** (route1) / **0.44%** (route2) of cases once near-zero-current cells are excluded. The low-R
+tail sits where the current is too weak to matter.
+
+**Fuel translation** — the recoverable gain, i.e. the upper bound on what a finer grid would buy SR
+inside a cell (constrained reallocation at fixed cell transit time, real `calculate_sws_from_sog` /
+`calculate_fuel_consumption_rate`):
+
+| | route1 | route2 |
+|---|---|---|
+| lost to 0.5° averaging | **~0.18-0.19%** | **~0.11-0.14%** |
+| SR vs baseline (committed results) | −2.411% | −3.483% |
+| SR vs Luo | −1.799% | −2.602% |
+
+**~0.1-0.2 pp against a 2.4-3.5 pp reported advantage — 5-8% of the effect, an order of magnitude
+smaller.** Median is ~0; the loss lives in a p90 tail. Accounting bias from evaluating fuel at the
+cell mean is −0.2 to −0.3% (Jensen gap), also common-mode.
+
+So our reported SR advantage is **conservative by ~0.1-0.2 pp**, but for a subtler reason than
+"averaging removed signal SR was using": SR never had that resolution. A jointly finer grid (weather
+*and* H-lines) would raise SR's ceiling while barely moving Luo, whose blocks are already far coarser
+than 0.5°.
+
+---
+
+**The bigger finding, which we were not looking for: route1 is under-sampled against its own decision
+grid.**
+
+Route1's weather spacing is 26.1 NM but its mean cell traverse is 20.7 NM, so many cells contain **no
+waypoint at all** and fall through to nearest-waypoint substitution (`weather.py:502-520`):
+
+| | route1 | route2 |
+|---|---|---|
+| H-line segments in a **zero-waypoint** cell | **41 of 164 (25.0%)** | 10 of 121 (8.3%) |
+| route distance affected | **393 NM = 11.6%** | 74 NM = 3.8% |
+| substitution distance mean / max | **9.1 / 18.9 NM** | 1.4 / 2.5 NM |
+
+At 9-10 NM substitution, route1's own structure function implies a current-vector error of
+**0.4-0.7 kmh — 2-3x the 0.20 kmh within-cell averaging error** — over 11.6% of the route. It is a
+displacement error rather than a signed bias, so it adds noise to route1's absolute fuel more than it
+biases the gaps, but it partially undercuts the fine-grained-DP premise on that 11.6%.
+
+**If one data-collection fix is worth doing, it is re-collecting route1 at ~5-10 NM, not refining the
+grid.**
+
+---
+
+**Options** (files named; full table in the agent report):
+
+| Option | Verdict |
+|---|---|
+| (a) document the limitation | **Do this.** Supported by the numbers. |
+| (b) finer cells for currents only | Largely pointless — H-lines stay at 0.5°, so SR still cannot act on it; and route1's 26 NM sampling cannot populate sub-0.5° cells. |
+| (c) finer cells throughout | Poor return: SR nodes ~152k->~300k, edges 9.2M->20-35M, and **infeasible on route1** without re-collection. |
+| (d) path-integrated vector mean per sub-segment | Best accuracy-per-effort. Kills the +3.1-3.7% overstatement, zero runtime cost, graph unchanged. `frame.cpp:30-31`, `weather.py:463`. |
+| (e) route2 sensitivity at 0.25° | **Cheapest decisive test.** `grid_deg` already exists as a `Frame` field (`frame.hpp:15`) but is not a CLI flag — ~10 lines each in `SR_main.cpp` / `luo_main.cpp`. |
+
+**Recommendation: (e), then (a); add (d) if there is slack.** Prediction for (e): SR-vs-baseline
+improves by <=0.2 pp (−3.48% -> ~−3.6%), Luo-vs-baseline moves <=0.05 pp. If the shift exceeds
+~0.5 pp, the within-cell estimate is missing cross-cell time reallocation and (c) deserves another
+look.
+
+**Two things to disclose in the paper regardless**, both currently undocumented:
+1. The aggregation is a **scalar mean of magnitudes with a circular mean of directions**, not a vector
+   mean, and it overstates net cell drift by 3.1-3.7%.
+2. Route1's 25% zero-waypoint cells and the 9.1 NM mean nearest-waypoint substitution.
 
 
