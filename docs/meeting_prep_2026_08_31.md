@@ -128,9 +128,65 @@ defaults differ:
       GFS at 0.25°** — worth confirming that is what was actually served, since over open ocean the
       documented global fallback is ECMWF IFS HRES at 9 km, not GFS.
 
+### 1G. The `0.08°` matters because it is **tidal** — and the exposure is temporal, not spatial
+
+This is the most consequential item in this doc, and it is on an axis nothing else here touches.
+
+**What SMOC actually is.** Not a general-circulation product. `SMOC` = **Surface Merged Ocean
+Current**, 1/12° (= 0.0833° ≈ 0.08°), hourly, and it is a **sum of three components**:
+
+> `u_total = u_geostrophic+Ekman (GLO12) + u_Stokes (wave drift) + u_tide`
+
+That is *why* it is 0.08° and hourly. General circulation is smooth and slow and needs neither.
+**Tides and Stokes drift do.** The resolution exists to carry the tidal signal.
+
+**Why that lands on route 2.** Route 2 ends at **Liverpool**, through the Irish Sea and Liverpool
+Bay — among the largest tidal ranges in the world, with tidal streams of several knots. The M2 tide
+is **semi-diurnal, period 12.42 h**, reversing roughly every 6.2 h. We sample every **6 h** and hold
+weather constant: **2.07 samples per tidal cycle**, essentially *at* the Nyquist limit of 2.0.
+Formally above it, so not aliased — but at 2.07 samples per cycle the reconstructed amplitude and
+phase are badly distorted, and the small offset from 2.0 produces a slow beat.
+
+**Measured in the v3 data** (consecutive 6 h samples, absolute change in current direction):
+
+| Region | median turn | reversals >135° | median speed |
+|---|---:|---:|---:|
+| mid-ocean (800–1100 NM) | **26.6°** | 4.7% | 0.918 kmh |
+| **Liverpool approach (last 120 NM)** | **153.4°** | **64.1%** | 0.918 kmh |
+
+**On the final 120 NM the current reverses between two-thirds of consecutive samples** — median turn
+153°, essentially a flip, at the same speed as mid-ocean. That is the M2 tide, exactly as SMOC's
+composition predicts.
+
+**Why it is not negligible.** The DP holds weather constant for 6 h, so on that stretch it holds a
+current that has physically reversed inside the block. At ~0.9 kmh (0.5 kn) against a ~11.6 kn mean
+SOG, a flip is a ~1 kn swing in the required through-water speed; with FCR cubic, that is roughly a
+**25% error in the fuel rate** on affected legs, over ~120 NM ≈ **6% of route 2**. And unlike the
+spatial averaging, this is **not obviously common-mode** — it is a time-varying error that a
+rolling-horizon planner acting on 6 h forecasts will actively chase.
+
+**This reframes the whole investigation.** The question began as "0.08° is finer than our 0.5° cell —
+are we discarding spatial detail?" Answer: barely, ~7–10% of variance, ≤0.2 pp of fuel (Aug-24
+note 6). **The real exposure is temporal, and concentrated in the tidal approaches.** Consequences:
+
+- [ ] **The 6 h block is the binding approximation, not the 0.5° cell.** Refining the spatial grid
+      does nothing for this. Only finer *time* blocks would — and **SMOC is hourly**, so the data
+      supports it. This is the opposite conclusion to everything else in Section 1.
+- [ ] **A defensible framing exists and should be stated**: tidal currents are near-periodic with
+      near-zero mean over a cycle, so their effect on *total voyage* fuel largely cancels even though
+      it does not cancel per leg. That is an honest limitation rather than an error — but it must be
+      written down, because a reviewer who knows the Irish Sea will ask.
+- [ ] **Cheapest decisive test:** re-run route 2 with the last ~120 NM excluded, or with a finer time
+      block over that stretch only, and see whether `gap_pct` (SR vs Luo) moves. **This is the first
+      thing in the whole investigation with a plausible route to actually moving a number.**
+- [ ] Check whether route 1 has any equivalent exposure — the Strait of Malacca and the Persian Gulf
+      approaches are also tidal, though route 1's 26.1 NM / 6 h sampling would resolve it even less.
+
 Sources: [Marine Weather API](https://open-meteo.com/en/docs/marine-weather-api) ·
 [Weather Forecast API](https://open-meteo.com/en/docs) ·
-[interpolation discussion](https://github.com/open-meteo/open-meteo/discussions/549)
+[interpolation discussion](https://github.com/open-meteo/open-meteo/discussions/549) ·
+[SMOC product](https://data.marine.copernicus.eu/product/GLOBAL_ANALYSISFORECAST_PHY_001_024/description) ·
+[SMOC: a new global surface current product](https://marine.copernicus.eu/sites/default/files/wp-content/uploads/2019/04/Poster_SMOC_EGU2018APRIL.pdf)
 
 ---
 
@@ -146,6 +202,8 @@ Sources: [Marine Weather API](https://open-meteo.com/en/docs/marine-weather-api)
 | Add `--grid_deg` CLI flag + route2 sensitivity at 0.25° | 24th §8 n6 | open |
 | **Route1 empty-cell fallback → along-track interpolation** (cheapest real test) | 24th §8 n6 | open |
 | Re-collect route1 at 5–10 NM (perfect-foresight only; RH cannot be backfilled) | 24th §8 n6 | open |
+| **Tidal exposure on route2's Liverpool approach — measure whether it moves `gap_pct`** | **1G** | **open** |
+| Consider a finer time block over tidal approaches (SMOC is hourly) | 1G | open |
 | Fix `Figure X` placeholder at line 528 | 24th 1A | open |
 | Fix the "19 voyages" sentences (canonical is 35 = 13+22) | 24th 1D | open |
 | `NM` used as a speed unit at line 756 | 24th 1E | open |
