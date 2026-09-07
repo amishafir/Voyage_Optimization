@@ -764,29 +764,33 @@ The two routes are depicted in Figure~\ref{fig:routes} and their waypoints are d
 \subsubsection{Sea conditions data}
 The sea conditions were obtained from the Open-Meteo API \citep{openmeteo}, which redistributes the
 outputs of operational \emph{numerical weather prediction} (NWP) models --- physics-based forecasting
-systems that integrate the governing equations of the atmosphere and ocean forward in time from an estimated initial state, and that periodically re-initialise on a fixed cycle.  The system provide the following measurements in spatial granularity of $0.25\degree \times 0.25\degree$ and temporal granularity of 6 hours. At each sampling point the system also provides a forecast for the next 168 hours (a week) in the same granularity. 
+systems that integrate the governing equations of the atmosphere and ocean forward in time from an estimated initial state, and that periodically re-initialise on a fixed cycle.  The source models provide these measurements on native grids of approximately $0.08\degree$ --- between 3 and 5 NM, depending on latitude --- at hourly resolution. The 6 h interval used throughout this study is a sampling choice made for tractability and API budget, not a property of the source data. At each sampling point a forecast was retrieved for the following 168 hours (a week) at hourly lead-time resolution.
 
 \begin{itemize}
-\item \textbf{Wind} (10 m speed and direction) --- the NOAA \emph{Global Forecast System} (GFS), the
-operational global atmospheric model of the U.S.\ weather service, at $0.25\degree$ resolution,
-re-initialised every 6 h (at 00/06/12/18 UTC) and forecasting to a 168 h horizon.
+\item \textbf{Wind} (10 m speed and direction) --- served by the API's automatic model selection, as the
+request does not pin a specific model. The grid coordinates returned along both routes describe an
+octahedral reduced-Gaussian grid, with latitude rows $0.0703\degree$ apart and a within-row longitude
+spacing of $0.1584\degree$ whose point count varies by row; the resulting cells are approximately 9 km,
+equivalent to $0.08\degree$. This is consistent with the ECMWF \emph{Integrated Forecasting System} (IFS)
+high-resolution configuration rather than with GFS at $0.25\degree$. Re-initialised every 6 h, retrieved
+to a 168 h horizon.
 \item \textbf{Waves} (significant wave height) --- the M\'et\'eo-France wave model (MFWAM), a
-third-generation spectral ocean-wave model, at $0.25\degree$ resolution, re-initialised twice daily,
-to 168 h.
+third-generation spectral ocean-wave model, at $0.08\degree$ resolution, re-initialised twice daily,
+retrieved to a 168 h horizon.
 \item \textbf{Ocean currents} (velocity and direction) --- the M\'et\'eo-France SMOC ocean model, at
-$0.08\degree$ resolution, re-initialised once daily, to 168 h.
+$0.08\degree$ resolution, re-initialised once daily, retrieved to a 168 h horizon.
 \end{itemize}
 
 For each route, 
 two records were collected at every
-waypoint on a 6 h sampling cadence over $\sim$80 days and stored in HDF5 with separate tables: the
+waypoint on a 6 h sampling cadence over $\sim$170 days and stored in HDF5 with separate tables: the
 \emph{actual} weather --- the conditions ultimately realised --- and the \emph{predicted} weather ---
 every forecast cycle issued ahead of those conditions. The actual record provides the ground-truth
 conditions against which a voyage is evaluated; the predicted record provides the forecasts available
 to a planner at each decision point.
 
 \paragraph{NWP model refresh cycle.} Each product refreshes on its own fixed cycle, which sets the
-re-plan cadence used later. The GFS wind product refreshes every 6 h, MFWAM (waves) every 12 h, and
+re-plan cadence used later. The wind product refreshes every 6 h, MFWAM (waves) every 12 h, and
 SMOC (currents) every 24 h. The predicted-weather record confirms this: at a 1 h query cadence, 86\%
 of consecutive wind values were identical to the previous hour (94\% for waves, 97\% for currents).
 Re-planning more frequently than 6 h therefore acts on no new wind information, which is why the 6 h
@@ -846,7 +850,7 @@ achievable advantage (Section~\ref{sec:res-oracle}).
 \noindent\textbf{Rolling horizon.} The planner is re-solved at 6 h decision steps. At each step the
 first 6 h block is planned against actual (nowcast) weather and the remainder against the most recent
 available predicted cycle; only the first block is committed before advancing and re-planning.
-Realised fuel is the sum of the committed blocks. The 6 h cadence equals the GFS NWP cycle (above).
+Realised fuel is the sum of the committed blocks. The 6 h cadence equals the wind model's NWP cycle (above).
 Both SR and Luo are exercised under this regime.
 
 \subsubsection{Evaluation protocol}
@@ -1082,7 +1086,7 @@ fuel reductions above.
 Two measurements underpin the rolling-horizon design (Section~\ref{sec:data}). First, forecast
 accuracy degraded systematically with lead time (wind RMSE roughly doubled over 133 h on the Indian Ocean route;
 $+286\%$ over 144 h on the North Atlantic route), establishing why realised RH fuel exceeded the oracle. Second, the
-6 h re-plan cadence was fixed to the GFS model cycle, of which 86\% of hourly queries returned
+6 h re-plan cadence was fixed to the wind model's re-initialisation cycle, of which 86\% of hourly queries returned
 identical data, so sub-6 h re-planning carried no new information.
 
 %% ============================================================ 8. DISCUSSION
