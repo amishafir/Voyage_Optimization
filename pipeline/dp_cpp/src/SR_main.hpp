@@ -25,6 +25,9 @@ struct SRArgs {
     // node-first, legacy for the SOG grid (mirrors the Python default).
     // "legacy" | "streaming"; an explicit value always wins.
     std::optional<std::string> engine;
+    // H-line placement: "geo" = 0.5 deg cell crossings (legacy),
+    // "waypoint" = at the weather sample points.
+    std::string partition = "geo";
 };
 
 struct SRResult {

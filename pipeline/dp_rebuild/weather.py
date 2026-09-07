@@ -74,6 +74,28 @@ class Weather:
                 return True
         return False
 
+    def has_nan_consumed(self) -> bool:
+        """NaN in a field the cost function actually consumes.
+
+        The speed model reads wind *direction* (step 1 -> C_beta), the Beaufort
+        number (steps 3, 5, 9) and the current vector (step 8). It never reads
+        wind speed - that only determines BN, at collection - and never reads
+        wave height at all.
+
+        Gating an arc on `has_nan()` therefore discards it over fields that
+        cannot change the result. On route 1, nodes 124-130 carry NaN
+        wave_height in 99.7% of issues, which silently removed the last
+        ~165 nm of the route from the graph.
+        """
+        for f in (
+            self.wind_direction_10m_deg,
+            self.ocean_current_velocity_kmh,
+            self.ocean_current_direction_deg,
+        ):
+            if isinstance(f, float) and isnan(f):
+                return True
+        return isnan(float(self.beaufort_number))
+
 
 def _circular_mean_deg(angles_deg: List[float]) -> float:
     """Circular mean of angles in degrees, NaN-tolerant. Returns NaN if all NaN.
@@ -96,6 +118,16 @@ class Waypoint:
     lat: float
     lon: float
     segment: int
+
+    # Aliases so an HDF5 waypoint list can be passed anywhere a
+    # route_waypoints.Waypoint is expected (position_at_d, rhumb_* helpers).
+    @property
+    def lat_deg(self) -> float:
+        return self.lat
+
+    @property
+    def lon_deg(self) -> float:
+        return self.lon
 
 
 class VoyageWeather:
@@ -330,6 +362,46 @@ class VoyageWeather:
             return min(valid_anywhere, key=lambda w: abs(w.distance_nm - d))
 
         return self.nearest_waypoint(d)
+
+    def usable_node_ids(self) -> set:
+        """node_ids carrying at least one non-NaN actual reading.
+
+        Some waypoints have NaN marine data in every issue — on route 1 these
+        are nodes 80 and 126-130, the coastal Malacca approach plus one
+        mid-route point, 6 of 131. Under the cell partition they were silently
+        filled from a neighbour by `nearest_valid_waypoint_in_segment`.
+
+        A waypoint that carries no reading is not an information boundary, so
+        it must not place an H-line. It still contributes its distance: the
+        route is not shortened, the segment before it simply spans further.
+        """
+        consumed = ("wind_direction_10m_deg", "ocean_current_velocity_kmh",
+                    "ocean_current_direction_deg")
+        good: set = set()
+        for (nid, _sh), row in self._actual.items():
+            if nid in good:
+                continue
+            if not any(isnan(float(row[f])) for f in consumed):
+                good.add(nid)
+        return good
+
+    def weather_at_waypoint(
+        self,
+        node_id: int,
+        sample_hour: int,
+        forecast_hour: Optional[int] = None,
+    ) -> Dict[str, float]:
+        """The reading stored at one waypoint — no cell, no aggregation.
+
+        This is the whole weather lookup under the waypoint partition: a
+        segment's conditions *are* its source waypoint's reading. A missing
+        (node, issue, lead) key yields all-NaN, which the caller's walkback
+        handles exactly as it does for the cell path.
+        """
+        row = self._row_for(node_id, sample_hour, forecast_hour)
+        if row is None:
+            return {f: float("nan") for f in WEATHER_FIELDS}
+        return {f: float(row[f]) for f in WEATHER_FIELDS}
 
     def _row_for(
         self,

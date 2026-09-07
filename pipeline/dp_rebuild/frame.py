@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import sys
 from bisect import bisect_right
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import List, Optional
 
@@ -30,10 +30,12 @@ if str(_PIPELINE_ROOT) not in sys.path:
 from weather import Weather  # noqa: E402
 from nodes import (  # noqa: E402
     GraphConfig,
+    assert_tau_feasible,
+    cumulative_rhumb_nm,
     h_line_distances_from_geo,
     v_line_times_from_route,
 )
-from geo_grid import position_at_d  # noqa: E402
+from geo_grid import position_at_d, rhumb_bearing_deg  # noqa: E402
 from weather import VoyageWeather  # noqa: E402
 from route import Route  # noqa: E402
 
@@ -54,6 +56,13 @@ class Frame:
     grid_deg: float = 0.5
     sog_step: float = SOG_STEP_DEFAULT
     base_sample_hour: int = 0
+    # "geo"      — H-lines at 0.5 deg crossings, weather from the cell mean (legacy)
+    # "waypoint" — H-lines at the sample points, weather from the source waypoint
+    partition: str = "geo"
+    # One rhumb bearing per segment; populated only for partition="waypoint".
+    segment_heading: List[float] = field(default_factory=list, repr=False)
+    # node_id sourcing each segment's reading; partition="waypoint" only.
+    segment_src_node: List[int] = field(default_factory=list, repr=False)
     _sog_grid_cache: List[float] = field(default_factory=list, repr=False)
 
     # ---------------------------------------------------------------- SOG grid
@@ -111,13 +120,48 @@ class Frame:
 
     # ---------------------------------------------------------------- physics inputs
 
+    def segment_index(self, d: float) -> int:
+        """Index of the segment a source at distance d departs into.
+
+        Exact by construction: `h_line_distances` holds the very numbers that
+        define the segment boundaries, so a source sitting on a line resolves
+        to the segment it is about to traverse. There is no derived coordinate
+        to round and hence none of the `floor(lat/0.5)` boundary ambiguity that
+        the cell path has. `h_line_distances` excludes d_0 = 0, so no -1.
+        """
+        k = bisect_right(self.h_line_distances, d)
+        return min(max(k, 0), len(self.h_line_distances) - 1)
+
+    def weather_unusable(self, w: Weather) -> bool:
+        """Whether a reading is too incomplete to price an arc.
+
+        Under the waypoint partition only the fields the cost function actually
+        consumes can invalidate an arc; wind speed and wave height are not
+        consumed. The legacy geo path keeps the original all-fields test so it
+        stays bit-identical.
+        """
+        return w.has_nan_consumed() if self.partition == "waypoint" else w.has_nan()
+
     def cell_weather_at(
         self,
         d: float,
         sample_hour: int,
         forecast_hour: Optional[int] = None,
     ) -> Weather:
-        """Cell-canonical weather row for the 0.5° cell containing position d."""
+        """Weather governing the segment departing position d.
+
+        partition="waypoint": the source waypoint's stored reading.
+        partition="geo":      the 0.5 deg cell mean (legacy).
+        """
+        if self.partition == "waypoint":
+            k = self.segment_index(d)
+            return Weather.from_dict(
+                self.voyage.weather_at_waypoint(
+                    self.segment_src_node[k],
+                    sample_hour=sample_hour,
+                    forecast_hour=forecast_hour,
+                )
+            )
         return Weather.from_dict(
             self.voyage.cell_weather_at_d(
                 d,
@@ -129,7 +173,15 @@ class Frame:
         )
 
     def paper_heading_at(self, d: float) -> float:
-        """Paper-segment β (deg) at distance d (rhumb-line polyline lookup)."""
+        """Ship heading (deg) governing the segment departing position d.
+
+        partition="waypoint": the segment's own rhumb bearing. This also fixes
+        the boundary case — `position_at_d` resolves a distance lying exactly
+        on a segment boundary to the segment that *ends* there, so the legacy
+        path prices the outgoing leg with the incoming heading.
+        """
+        if self.partition == "waypoint":
+            return self.segment_heading[self.segment_index(d)]
         _lat, _lon, seg_idx = position_at_d(d, self.waypoints)
         segs = self.route.windows[0].segments
         seg = segs[max(0, min(seg_idx, len(segs) - 1))]
@@ -148,6 +200,7 @@ def from_route(
     grid_deg: float = 0.5,
     sog_step: float = SOG_STEP_DEFAULT,
     base_sample_hour: int = 0,
+    partition: str = "geo",
 ) -> Frame:
     """Construct a Frame from a route + waypoints + HDF5 weather.
 
@@ -166,8 +219,53 @@ def from_route(
             v_min=9.0,
             v_max=13.0,
         )
+    seg_headings: List[float] = []
+    seg_src_node: List[int] = []
+    if partition == "waypoint":
+        # The sample points become the graph's polyline. This is what makes the
+        # distance axis identical to the path the weather was sampled along,
+        # collapsing the paper-table / rhumb / haversine axes into one.
+        # The sample points define the partition. `waypoints` stays the paper
+        # polyline so the output/plotting path (position_at_d) is untouched and
+        # both engines agree; the partition needs only the three arrays below.
+        samples = list(voyage.waypoints)
+        cum = [0.0] + cumulative_rhumb_nm(samples)   # cum[i] = distance of sample i
+        L = cum[-1]
+        cfg = replace(cfg, length_nm=L)
+
+        # Only waypoints that actually carry a reading may place an H-line.
+        usable = voyage.usable_node_ids()
+        idx = [i for i, w in enumerate(samples) if w.node_id in usable]
+        if not idx or idx[0] != 0:
+            raise ValueError(
+                "partition='waypoint' needs a usable reading at the first "
+                f"waypoint; usable indices start at {idx[0] if idx else None}")
+        dropped = len(samples) - len(idx)
+        if dropped:
+            print(f"[frame] partition=waypoint: {dropped} of {len(waypoints)} "
+                  f"of them carry no valid reading and place no H-line "
+                  f"(node_ids {[samples[i].node_id for i in range(len(samples)) if i not in set(idx)]})")
+
+        # Segment k spans [cum[idx[k]], cum[idx[k+1]]), sourced at idx[k].
+        # A trailing run of unusable waypoints extends the final segment to L.
+        bounds = [cum[i] for i in idx[1:]]
+        if not bounds or bounds[-1] < L - 1e-9:
+            bounds.append(round(L, 9))
+        h_dists = [round(b, 9) for b in bounds]
+
+        ends = idx[1:] + ([len(samples) - 1] if idx[-1] != len(samples) - 1 else [])
+        for k, i0 in enumerate(idx[:len(h_dists)]):
+            i1 = ends[k]
+            seg_src_node.append(samples[i0].node_id)
+            seg_headings.append(rhumb_bearing_deg(
+                samples[i0].lat_deg, samples[i0].lon_deg,
+                samples[i1].lat_deg, samples[i1].lon_deg))
+
+        assert_tau_feasible(cfg, h_dists)
+    else:
+        h_dists = h_line_distances_from_geo(cfg, waypoints, grid_deg=grid_deg)
+
     v_times = v_line_times_from_route(cfg, route)
-    h_dists = h_line_distances_from_geo(cfg, waypoints, grid_deg=grid_deg)
     return Frame(
         cfg=cfg,
         route=route,
@@ -178,6 +276,9 @@ def from_route(
         grid_deg=grid_deg,
         sog_step=sog_step,
         base_sample_hour=base_sample_hour,
+        partition=partition,
+        segment_heading=seg_headings,
+        segment_src_node=seg_src_node,
     )
 
 

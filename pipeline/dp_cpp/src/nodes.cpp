@@ -46,6 +46,26 @@ std::vector<double> h_line_distances_from_route(const GraphConfig& cfg, const Ro
     return std::vector<double>(distances.begin(), distances.end());
 }
 
+void assert_tau_feasible(const GraphConfig& cfg,
+                          const std::vector<double>& h_dists) {
+    double prev = 0.0;
+    for (double d : h_dists) {
+        double G = d - prev;
+        int k_min = std::max(1, (int)std::ceil(G / (cfg.v_max * cfg.tau_h) - 1e-9));
+        if (cfg.v_min > 1e-9) {
+            int k_max = (int)std::floor(G / (cfg.v_min * cfg.tau_h) + 1e-9);
+            if (k_min > k_max) {
+                fprintf(stderr,
+                        "[assert_tau_feasible] segment [%.3f, %.3f] = %.3f nm has no "
+                        "feasible tau-step traverse in [%.3f, %.3f] kn at tau=%.3f h\n",
+                        prev, d, G, cfg.v_min, cfg.v_max, cfg.tau_h);
+                std::abort();
+            }
+        }
+        prev = d;
+    }
+}
+
 std::vector<double> h_line_distances_from_geo(const GraphConfig& cfg,
                                                const std::vector<Waypoint>& waypoints,
                                                double grid_deg) {

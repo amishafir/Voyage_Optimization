@@ -234,6 +234,33 @@ WeatherDict VoyageWeather::row_to_dict(const WeatherRow& r) const {
 
 // ---- Public lookups ----
 
+WeatherDict VoyageWeather::weather_at_waypoint(int node_id, int sample_hour,
+                                                int forecast_hour) const {
+    const WeatherRow* row = row_for(node_id, sample_hour, forecast_hour);
+    if (row == nullptr) {
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {{"wind_speed_10m_kmh", nan}, {"wind_direction_10m_deg", nan},
+                {"beaufort_number", 0.0},   {"wave_height_m", nan},
+                {"ocean_current_velocity_kmh", nan},
+                {"ocean_current_direction_deg", nan}};
+    }
+    return row_to_dict(*row);
+}
+
+std::unordered_set<int> VoyageWeather::usable_node_ids() const {
+    std::unordered_set<int> good;
+    for (const auto& kv : actual_) {
+        int nid = kv.first.first;
+        if (good.count(nid)) continue;
+        const WeatherRow& r = kv.second;
+        if (!std::isnan(r.wind_direction_10m_deg)
+            && !std::isnan(r.ocean_current_velocity_kmh)
+            && !std::isnan(r.ocean_current_direction_deg))
+            good.insert(nid);
+    }
+    return good;
+}
+
 WeatherDict VoyageWeather::weather_at(double d, int sample_hour, int forecast_hour) const {
     int seg = segment_for_distance(d);
     const auto& wp = nearest_valid_in_segment(d, seg, sample_hour, forecast_hour);

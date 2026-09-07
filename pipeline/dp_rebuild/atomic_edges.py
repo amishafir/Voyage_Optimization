@@ -292,7 +292,7 @@ def _emit_from_src(
         sample_hour = frame.voyage.active_sample_hour(src_t, sh_base=sh_base_arg)
 
     weather = frame.cell_weather_at(src_d, sample_hour, fh_eff)
-    if weather.has_nan() and override_sample_hour is None:
+    if frame.weather_unusable(weather) and override_sample_hour is None:
         # Walk back through sh_list to the most recent valid sample at this cell,
         # holding the effective forecast_hour fixed. Applies to Mode C
         # (fh_eff=None) and to rolling-horizon (fh_eff = forecast lead). For
@@ -301,19 +301,19 @@ def _emit_from_src(
         # older issue instead of crashing; if it exhausts, the source emits no
         # edges below.
         idx = bisect_right(sh_list, sample_hour) - 1
-        while idx > 0 and weather.has_nan():
+        while idx > 0 and frame.weather_unusable(weather):
             idx -= 1
             weather = frame.cell_weather_at(src_d, sh_list[idx], fh_eff)
-            if not weather.has_nan():
+            if not frame.weather_unusable(weather):
                 sample_hour = sh_list[idx]
                 break
-    if weather.has_nan():
+    if frame.weather_unusable(weather):
         return []
 
     if perturber is not None:
         weather = perturber.perturb(weather, t_h=src_t, d_nm=src_d,
                                     waypoints=frame.waypoints)
-        if weather.has_nan():
+        if frame.weather_unusable(weather):
             return []
     weather_dict = {
         "wind_speed_10m_kmh": weather.wind_speed_10m_kmh,

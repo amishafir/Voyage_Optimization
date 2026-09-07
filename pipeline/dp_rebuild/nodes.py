@@ -157,6 +157,58 @@ def h_line_distances_from_h5(cfg: GraphConfig, voyage, grid_deg: float = 0.5) ->
     return sorted(distances)
 
 
+def cumulative_rhumb_nm(waypoints) -> List[float]:
+    """Cumulative rhumb distance through a waypoint polyline: [d_1 … d_{n-1}].
+
+    Under the waypoint partition these ARE the H-line distances: a distance
+    line is placed wherever the cost coefficient changes, which happens at a
+    new weather reading and at a change of course. The collected waypoint set
+    already contains every route control point (`is_original`), so the union
+    of the two causes is the waypoint set itself.
+
+    d_0 = 0 is the implicit voyage start (matching `h_line_distances_from_geo`)
+    and the last entry is L. Measuring along the sample polyline makes the
+    graph's distance axis identical to the path the weather was sampled along.
+    """
+    from geo_grid import rhumb_distance_nm
+
+    out: List[float] = []
+    d = 0.0
+    for i in range(len(waypoints) - 1):
+        d += rhumb_distance_nm(
+            waypoints[i].lat_deg, waypoints[i].lon_deg,
+            waypoints[i + 1].lat_deg, waypoints[i + 1].lon_deg,
+        )
+        out.append(round(d, 9))
+    return out
+
+
+def assert_tau_feasible(cfg: GraphConfig, h_dists: List[float]) -> None:
+    """τ-grid traversability as an invariant rather than a filter.
+
+    Under uniform spacing every segment is traversable (verified: 0 of 130 on
+    route 1, 0 of 388 on route 2), so this never fires. A failure indicates a
+    problem upstream — it must not silently delete H-lines, because that is
+    what made the spatial grid a function of the speed band and hence of the
+    ETA.
+    """
+    import math as _m
+
+    prev = 0.0
+    for d in h_dists:
+        G = d - prev
+        k_min = max(1, int(_m.ceil(G / (cfg.v_max * cfg.tau_h) - 1e-9)))
+        if cfg.v_min > 1e-9:
+            k_max = int(_m.floor(G / (cfg.v_min * cfg.tau_h) + 1e-9))
+            if k_min > k_max:
+                raise AssertionError(
+                    f"segment [{prev:.3f}, {d:.3f}] = {G:.3f} nm has no feasible "
+                    f"tau-step traverse in [{cfg.v_min}, {cfg.v_max}] kn "
+                    f"at tau={cfg.tau_h} h"
+                )
+        prev = d
+
+
 def h_line_distances_from_geo(
     cfg: GraphConfig,
     waypoints,

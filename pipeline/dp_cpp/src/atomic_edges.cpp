@@ -54,17 +54,17 @@ std::vector<AtomicEdge> emit_from_src(double src_t, double src_d,
     }
 
     Weather wx = frame.cell_weather_at(src_d, sample_hour, fh_eff);
-    if (wx.has_nan() && override_sample_hour < 0) {
+    if (frame.weather_unusable(wx) && override_sample_hour < 0) {
         // Walk back through sh_list to the most recent valid sample at this cell,
         // holding the effective forecast_hour fixed (works for Mode C and RH).
         auto it = std::lower_bound(sh_list.begin(), sh_list.end(), sample_hour);
-        while (it != sh_list.begin() && wx.has_nan()) {
+        while (it != sh_list.begin() && frame.weather_unusable(wx)) {
             --it;
             wx = frame.cell_weather_at(src_d, *it, fh_eff);
-            if (!wx.has_nan()) { sample_hour = *it; break; }
+            if (!frame.weather_unusable(wx)) { sample_hour = *it; break; }
         }
     }
-    if (wx.has_nan()) return {};
+    if (frame.weather_unusable(wx)) return {};
 
     WeatherDict wx_dict = wx.to_dict();
     double heading = frame.paper_heading_at(src_d);

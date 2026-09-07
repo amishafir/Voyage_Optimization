@@ -106,6 +106,9 @@ def parse_args() -> argparse.Namespace:
                     help="Waiting-arc prototype (meeting prep 2A): off = current "
                          "behavior; free = variant (a), phi(.;0)=0; hold = variant "
                          "(c), station-keeping price, symmetric thrust.")
+    ap.add_argument("--partition", choices=["geo", "waypoint"], default="geo",
+                    help="H-line placement: 'geo' = 0.5deg cell crossings (legacy), "
+                         "'waypoint' = at the weather sample points")
     ap.add_argument("--engine", choices=["legacy", "streaming"], default=None,
                     help="legacy = two-phase build->solve (stores the full arc set); "
                          "streaming = one-pass fused engine (stores only (C*, pred) "
@@ -162,7 +165,9 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
 
     sample_hour = int(getattr(args, "sample_hour", 0) or 0)
     frame = make_frame(route, voyage, waypoints, cfg=cfg,
-                       base_sample_hour=sample_hour)
+                       base_sample_hour=sample_hour,
+                       partition=getattr(args, "partition", "geo"))
+    cfg = frame.cfg  # partition="waypoint" re-derives length_nm from the samples
     n_blocks = int(cfg.eta_h / cfg.dt_h)
     if verbose:
         _print_header("dp_SR — frame")

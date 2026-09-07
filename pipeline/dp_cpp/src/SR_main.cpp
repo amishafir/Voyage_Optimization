@@ -95,7 +95,8 @@ SRResult sr_solve(const SRArgs& args, const VoyageWeather& voyage,
     double mean_sog = (base_cfg.length_nm - d_start) / base_cfg.eta_h;
     base_cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
     base_cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
-    Frame frame = make_frame(route, voyage, wps, &base_cfg, args.sample_hour);
+    Frame frame = make_frame(route, voyage, wps, &base_cfg, args.sample_hour,
+                             0.5, 0.1, args.partition);
     if (verbose) summarize_frame(frame);
 
     // ---- Engine selection (streaming refactor Phase 4) ----
@@ -199,6 +200,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--sample_hour") args.sample_hour = std::stoi(need_next());
         else if (arg == "--node_first") args.node_first  = true;
         else if (arg == "--engine")    args.engine    = need_next();
+        else if (arg == "--partition") args.partition = need_next();
         else if (arg == "--smoke")     smoke          = true;
         else if (arg == "--csv")       write_csv      = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }

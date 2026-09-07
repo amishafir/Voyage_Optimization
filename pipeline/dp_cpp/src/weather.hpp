@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 static const char* WEATHER_FIELDS[] = {
@@ -24,6 +25,17 @@ struct Weather {
     bool has_nan() const {
         return std::isnan(wind_speed_10m_kmh) || std::isnan(wind_direction_10m_deg)
             || std::isnan(wave_height_m)       || std::isnan(ocean_current_velocity_kmh)
+            || std::isnan(ocean_current_direction_deg);
+    }
+
+    // NaN in a field the cost function actually consumes. The speed model
+    // reads wind *direction*, the Beaufort number and the current vector; it
+    // never reads wind speed (that only sets BN, at collection) and never
+    // reads wave height. Gating an arc on has_nan() discards it over fields
+    // that cannot change the result.
+    bool has_nan_consumed() const {
+        return std::isnan(wind_direction_10m_deg)
+            || std::isnan(ocean_current_velocity_kmh)
             || std::isnan(ocean_current_direction_deg);
     }
 
@@ -98,6 +110,16 @@ public:
     // anchor at the earliest sample_hour (legacy / file-front). Handles
     // non-uniform cadence (e.g. 6 h) and off-grid bases (bisect-rounded).
     int active_sample_hour(double t_voyage_h, int sh_base = -1) const;
+
+    // The reading stored at one waypoint - no cell, no aggregation. Under the
+    // waypoint partition a segment's conditions ARE its source waypoint's row.
+    WeatherDict weather_at_waypoint(int node_id, int sample_hour,
+                                     int forecast_hour = -1) const;
+
+    // node_ids carrying at least one row with every consumed field valid.
+    // A waypoint with no reading is not an information boundary, so it must
+    // not place an H-line; it still contributes its distance.
+    std::unordered_set<int> usable_node_ids() const;
 
     // Segment-aware weather lookup (nearest valid waypoint in segment)
     WeatherDict weather_at(double d, int sample_hour, int forecast_hour = -1) const;
