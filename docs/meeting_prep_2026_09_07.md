@@ -332,6 +332,79 @@ and 27.1 / 5.0 NM under the waypoint partition.
 - [x] Both waypoint counts are **configuration-independent** — no filter fires, so they are fixed by the
       sampling alone.
 
+### 1K. Review of Tal's push `8995489` — mostly right, two new contradictions
+
+He fixed the wave problem in both the code and the paper, and redrew Fig. 1. Reviewed against the
+implementation.
+
+**What is correct and now matches the code**
+
+- [x] `ΔV_wave` removed from `eq:sog` in **both** SOG subsections; the `H_w` / beam-to-length claim at
+      the old line 358 is gone. The paper's speed model now describes what the code computes.
+- [x] MFWAM bullet removed from §5.1.1; waves removed from the refresh-cycle paragraph.
+- [x] All four functional wave-NaN sites fixed — `Weather.has_nan()` (Python + C++),
+      `_row_has_nan()`, the C++ private `WeatherRow::has_nan()`, and the C++ `cell_weather_at_d`
+      fallback trigger — and fixed **globally**, not flag-gated.
+
+**Measured effect of the NaN fix** (route 1, v3_aug24, coarse grid):
+
+| | Python | C++ | cross-engine |
+|---|---|---|---|
+| geo, before | 362.97071551837325 | 363.02198563243803 | 0.0513 mt |
+| geo, after | **361.99831751974130** | **362.04958763380608** | 0.0513 mt |
+| shift | **−0.9724 mt (−0.27%)** | **−0.9724 mt** | unchanged |
+
+- [x] Route 1's **published** path moves −0.27%, identically on both engines. Route 2 geo is unchanged
+      (it has no dead nodes). Both waypoint results are bit-identical to before, which confirms his
+      `has_nan()` and the `has_nan_consumed()` added in `c3ea2f8` are functionally equivalent.
+- [ ] **Consolidate the two predicates.** `has_nan()` and `has_nan_consumed()` are now near-duplicates
+      (mine additionally tests `isnan(beaufort_number)`), and `frame.weather_unusable()`'s partition
+      dispatch is pointless — both branches do the same thing. Keep one.
+- [ ] The goldens and `reference_runs` are now genuinely invalid, not just for the partition work.
+- [ ] `gap_pct` impact is unmeasured: Luo shifts too, so the published 1.80% / 2.60% may move less than
+      0.27%. Needs a Luo run to know.
+
+**Two new contradictions the push introduces**
+
+- [ ] **The paper now says 0.08° cells; the code still uses 0.5°.** Verified: `frame.py:56,200`,
+      `nodes.py:215`, `frame.hpp:16,65` all default `grid_deg = 0.5`. Seven `0.08\degree` claims now sit
+      in the text (intro line 114, the sea-conditions definition, the subsegment rule at 422). This is
+      **worse than before**: previously the paper and code agreed on 0.5° and only the *justification*
+      was wrong; now they disagree on the mechanism. Paper says subsegments are ~5 NM and M ≈ 680 on
+      route 1; the code produces 163 at ~20.8 NM.
+- [ ] **And 0.08° is the wrong target anyway.** Per §1D/1E, route 1 samples at 25 NM, so 0.08°
+      subsegments leave **4 of every 5 blind** — 680 subsegments at 0.20 samples each. Substituting one
+      wrong number for another. The defensible unit is the sampling interval, which is §1E's proposal.
+      Line 247's new justification ("the native resolution at which the services deliver their fields")
+      is closer to honest than the old category error but is still false of the implementation.
+- [ ] **δ = 0.2 NM is claimed but the code uses 1.0 NM.** Line 441 and the new Fig. 1 caption both state
+      δ = 0.2 NM as the experimental grid; `nodes.py:46` and `nodes.hpp:19` both have `zeta_nm = 1.0`.
+      Either the paper is wrong or the runs need redoing at 0.2 NM — the latter would multiply the
+      time-line node count fivefold.
+
+**Figure 1**
+
+- [x] Redrawn as a stacked two-panel schematic on a 5 NM subsegment, `d∈[240,245]`, `t∈[24,30]` h, all
+      states as discs, one arc per candidate. The old fan thinning capped arcs at 8 while plotting every
+      marker, leaving markers without arcs once the grid was refined — a real bug, correctly fixed.
+- [ ] **It moved from real geometry to illustrative coordinates.** `state_neighbours_figure_redesign.md`
+      §2 explicitly requires the opposite — "the geometry comes from the production analytic
+      rhumb-line/grid frame, not from hand-picked illustration values" — with a reproducibility rule
+      asserting regenerated values match to 1e-6. Either the doc should be updated to record the
+      reversal, or the figure should go back to a real block. It should not silently contradict its own
+      design doc.
+- [ ] The caption's "5 NM is representative of a 0.08° cell on these routes" inherits the 0.08°-vs-0.5°
+      problem above.
+
+**Still outstanding, untouched by the push**
+
+- [ ] `Figure X` placeholder still at line 530, in the very paragraph that describes the rectangle.
+- [ ] The sub-segment definition at line 509, `i(d) = argmax_i{d_i < d}`, still uses a strict `<`, so a
+      state exactly on distance line `d_k` is assigned to the sub-segment it is **leaving**. That is the
+      same boundary error as the old `floor(lat/0.5)` coin-flip, and it now contradicts the
+      `bisect_right` lookup committed in `c3ea2f8`. One of the two must move; the paper is the one that
+      is wrong.
+
 ---
 
 ## 2. Actions still open
