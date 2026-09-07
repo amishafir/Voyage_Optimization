@@ -261,6 +261,48 @@ do not, that is a reassuring sentence worth being able to write. Either way it i
 would otherwise describe a partition that does not exist, and the tables cannot be regenerated before it
 is fixed. Only the §5.1.1 wording and the cosmetic fixes (line 528, 756, 63/121/125) are independent.
 
+### 1I. Servers checked, fresh data pulled — 41 voyages now available
+
+Checked all three collection hosts over the VPN.
+
+| Host | Status | route 1 | route 2 |
+|---|---|---|---|
+| **Shlomo2** | **live, most current** | 269.4 MB, 2026-09-07 14:01 | 632.0 MB, 14:08 |
+| Edison | live, ~3 h behind | 269.8 MB, 11:03 | 632.2 MB, 11:09 |
+| Shlomo1 | **dead since 2026-03-10** | 1.7 MB | 4.8 MB |
+
+- [x] **Shlomo1's collector has been dead for six months.** If anyone still believes three hosts are
+  collecting, they are not — it stopped on 10 March. Its files never grew past the March snapshot.
+- [x] Edison's files are marginally *larger* but older, so the two live hosts are not byte-identical —
+  independent collectors with slightly different histories. Shlomo2 taken as the more current.
+- [x] Downloaded to `paper_workspace/data/experiment_{b_138wp,d_391wp}_v4_sep07.h5` (269.4 + 632.0 MB,
+  both complete). Named `_v4_sep07` so the `_v3_aug24` files the paper currently uses are untouched.
+
+**Voyages extractable** — non-overlapping chain, departures stepped by the ETA:
+
+| dataset | issues | sh range | span | gaps | chain | ran | gain |
+|---|---|---|---|---|---|---|---|
+| route 1 `v4_sep07` | 735 | 6..4410 | 183.5 d | **0** | **15** | 13 | **+2** |
+| route 2 `v4_sep07` | 736 | 0..4410 | 183.8 d | **0** | **26** | 22 | **+4** |
+| route 1 `v3_aug24` | 679 | 6..4074 | 169.5 d | 0 | 14 | 13 | +1 |
+| route 2 `v3_aug24` | 680 | 0..4074 | 169.8 d | 0 | 24 | 22 | +2 |
+
+**41 voyages are available on the new data** (15 + 26) against the 35 published — **+6**. Both routes are
+gap-free at 6 h cadence across the full 183 days.
+
+- [x] **The "35 vs 38" decision from Aug 24 is resolved and superseded.** 38 is exactly what `v3_aug24`
+  supports (14 + 24); 35 is what was run, because `sh_bases` were sized for a snapshot ending ~3696. With
+  the new data the question is **35 → 41**, not 35 → 38.
+- [ ] **`sh_bases` are hardcoded lists and still hold the v1 values** — `run_chain_sweep.py:59,68` and
+  `dp_cpp/run_rh_chain.py:40,46` each contain 7 + 12 = **19** departures, which is where the paper's stale
+  "nineteen voyages" comes from. Extending to 41 means editing four literal lists across two engines, not
+  changing a computation. Worth replacing with a computed list so the count follows the data.
+- [ ] If overlapping departures were acceptable the ceiling is **1,396** (688 + 708 — every 6 h departure
+  whose window fits). That is a different experimental design rather than a larger version of this one,
+  but it is what the data supports, and it bears on the "150 instances" paragraph in §1G.
+- [x] The new route 1 file carries **the same six dead nodes** (80, 126–130, 100% NaN in the consumed
+  fields), so the `usable_node_ids` logic from §1E carries over unchanged. Route 2 has none.
+
 ---
 
 ## 2. Actions still open
@@ -273,6 +315,9 @@ is fixed. Only the §5.1.1 wording and the cosmetic fixes (line 528, 756, 63/121
 | Add `--grid_deg` flag + route2 sensitivity at 0.25° | 24th §8 n6 | **superseded — the 0.5° cell goes** |
 | Route1 empty-cell fallback → along-track interpolation | 24th §8 n6 | **superseded — no cells** |
 | Re-collect route1 at 5–10 NM (perfect-foresight only; RH cannot be backfilled) | 24th §8 n6 | open, better motivated by 1D |
+| **Restart Shlomo1's collector, or retire the host** | **1I** | **new** — dead since 2026-03-10 |
+| **Replace the hardcoded `sh_bases` with a computed list** | **1I** | **new** — four literal lists, two engines |
+| **Re-run the chain sweep on `v4_sep07` at 41 voyages** | **1I** | **new** — blocked on the Luo/RH partition work in 1E |
 | Tidal exposure on route2's Liverpool approach | 31st 1G | open — reframed as a between-block sampling issue |
 | Consider a finer time block (data is hourly; block is 6 h) | 31st 1G | open, generalised beyond the tidal case |
 | Fix `Figure X` placeholder at line 528 | 24th 1A | open |
@@ -292,7 +337,7 @@ is fixed. Only the §5.1.1 wording and the cosmetic fixes (line 528, 756, 63/121
 
 | Decision | Ref | Note |
 |---|---|---|
-| 35 vs 38 voyages | 24th 2B | data pulled and verified; one config line either way |
+| ~~35 vs 38 voyages~~ → **35 vs 41** | 24th 2B / **1I** | superseded: 38 was the v3_aug24 ceiling, 41 is the v4_sep07 ceiling |
 | `v_max = D/T + 3` ratified? | 24th 2A | already written at line 807 — ratification, not design |
 | Luo band: align, or restore 8–18 kn? | 24th 1M | code already aligned; text must match |
 | Pin `requirements.txt`? | 24th 1O | decides whether a rerun reproduces or replaces |
