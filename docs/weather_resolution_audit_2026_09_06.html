@@ -1,0 +1,375 @@
+<title>The Discretization Unit Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --paper:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2;
+  --ink:#12222E; --ink-soft:#3D5261; --muted:#63788A;
+  --rule:#D6DFE6; --rule-strong:#B9C7D1;
+  --teal:#0E6E7D; --teal-soft:#D9EDF0;
+  --amber:#9A6407; --amber-soft:#F6EAD2;
+  --rust:#9E3320; --rust-soft:#F7E1DC;
+  --kelp:#2C6E52; --kelp-soft:#DDEDE4;
+  --shadow:0 1px 2px rgba(18,34,46,.06),0 8px 24px -12px rgba(18,34,46,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0C1A22; --surface:#122430; --surface-2:#17303E;
+    --ink:#E4ECF1; --ink-soft:#B7C8D4; --muted:#89A0AF;
+    --rule:#233A49; --rule-strong:#33505F;
+    --teal:#5CC3D4; --teal-soft:#10333C;
+    --amber:#E0A63C; --amber-soft:#33280F;
+    --rust:#E8836A; --rust-soft:#37201B;
+    --kelp:#68BE95; --kelp-soft:#132E24;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0C1A22; --surface:#122430; --surface-2:#17303E;
+  --ink:#E4ECF1; --ink-soft:#B7C8D4; --muted:#89A0AF;
+  --rule:#233A49; --rule-strong:#33505F;
+  --teal:#5CC3D4; --teal-soft:#10333C;
+  --amber:#E0A63C; --amber-soft:#33280F;
+  --rust:#E8836A; --rust-soft:#37201B;
+  --kelp:#68BE95; --kelp-soft:#132E24;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:74ch;margin:0 auto;padding:0 24px 96px}
+@media(max-width:600px){.wrap{padding:0 18px 64px}}
+.masthead{border-bottom:2px solid var(--ink);padding:56px 0 22px;margin-bottom:44px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--teal);font-weight:500;
+  display:flex;flex-wrap:wrap;gap:10px 18px;margin-bottom:20px}
+h1{font-family:Spectral,Georgia,serif;font-weight:700;font-size:clamp(2.1rem,5.6vw,3.1rem);
+  line-height:1.1;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+.standfirst{font-family:Spectral,Georgia,serif;font-size:1.16rem;line-height:1.55;
+  color:var(--ink-soft);margin:0;max-width:62ch}
+.standfirst em{color:var(--ink);font-style:italic}
+h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:1.62rem;line-height:1.2;
+  letter-spacing:-.01em;margin:56px 0 6px;text-wrap:balance}
+.dek{color:var(--muted);font-size:.95rem;margin:0 0 26px;max-width:60ch}
+h3{font-family:"IBM Plex Sans",sans-serif;font-weight:600;font-size:1.02rem;
+  margin:34px 0 10px;letter-spacing:-.005em}
+p{margin:0 0 17px}
+strong{font-weight:600}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.855em}
+code{background:var(--surface-2);border-radius:3px;padding:.1em .35em;color:var(--ink-soft)}
+.tw{overflow-x:auto;margin:24px 0;border:1px solid var(--rule);background:var(--surface);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:.885rem;min-width:520px}
+th{text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:500;padding:13px 16px;
+  border-bottom:1px solid var(--rule-strong);background:var(--surface-2);white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid var(--rule);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.field{font-weight:600}
+td.f{font-family:"IBM Plex Mono",monospace;font-size:.82rem;line-height:1.65;white-space:nowrap}
+td.step{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.inert td{color:var(--muted)}
+.none{color:var(--rule-strong)}
+.dead{color:var(--rust);font-weight:600}
+.partial{color:var(--amber);font-weight:600}
+.full{color:var(--kelp);font-weight:600}
+.pill{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.09em;
+  text-transform:uppercase;font-weight:500;padding:2px 7px;border-radius:2px;
+  white-space:nowrap;display:inline-block}
+.pill.live{background:var(--kelp-soft);color:var(--kelp)}
+.pill.derived{background:var(--teal-soft);color:var(--teal)}
+.pill.gone{background:var(--rust-soft);color:var(--rust)}
+.pill.absent{background:var(--amber-soft);color:var(--amber)}
+.entry-note{border-left:3px solid var(--teal);background:var(--surface);
+  border-top:1px solid var(--rule);border-right:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);padding:18px 22px;margin:24px 0;box-shadow:var(--shadow)}
+.entry-note.warn{border-left-color:var(--amber)}
+.entry-note .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--amber);font-weight:500;display:block;margin-bottom:11px}
+.entry-note p{margin:0;font-size:.93rem;color:var(--ink-soft)}
+.entry-note p + p{margin-top:10px}
+.entry-note .eq{font-family:"IBM Plex Mono",monospace;font-size:.86rem;color:var(--ink);
+  display:block;margin:10px 0}
+.proof{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--rust);
+  padding:20px 22px;margin:24px 0;box-shadow:var(--shadow)}
+.proof .plabel{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--rust);margin-bottom:13px;font-weight:500}
+.proof pre{margin:0;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.85;
+  color:var(--ink-soft);overflow-x:auto;font-variant-numeric:tabular-nums}
+.proof .verdict{margin-top:14px;padding-top:13px;border-top:1px solid var(--rule);
+  font-size:.9rem;color:var(--ink);font-weight:500}
+.callout{border-top:2px solid var(--teal);border-bottom:2px solid var(--teal);padding:22px 0;margin:30px 0}
+.callout p{font-family:Spectral,Georgia,serif;font-size:1.14rem;line-height:1.5;margin:0 0 14px;color:var(--ink)}
+.callout p:last-child{margin-bottom:0}
+figure{margin:30px 0;padding:0}
+figure svg{display:block;max-width:100%;height:auto;margin:0 auto}
+figcaption{font-size:.87rem;color:var(--muted);margin-top:14px;
+  padding-top:12px;border-top:1px solid var(--rule);max-width:62ch}
+figcaption strong{color:var(--ink-soft)}
+.foot{margin-top:64px;padding-top:20px;border-top:2px solid var(--ink);
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);line-height:1.8}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>Voyage Optimization</span><span>Discretization</span><span>2026-09-07</span>
+  </div>
+  <h1>One granularity, one reading, one rectangle</h1>
+  <p class="standfirst">
+    What the forecast API actually delivers, what the model actually consumes, and what the graph's
+    discretization unit therefore <em>is</em> — a rectangle in distance and time bounded by new weather
+    readings and by changes of course.
+  </p>
+</header>
+
+<h2>All three fields arrive at the same resolution</h2>
+<p class="dek">
+  Established by probing the API's resolved cell coordinates, not by reading the documentation or the
+  paper.
+</p>
+
+<p>
+  Open-Meteo performs no spatial interpolation: it returns the value of whichever grid cell contains the
+  requested point, and reports the cell it used. Sweeping coordinates and reading those back recovers each
+  endpoint's grid exactly.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Endpoint</th><th>Grid recovered by probing</th><th>Cell at 12.8°N</th><th>Cell at 52.4°N</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="field">Marine API<br><span style="font-size:11px;color:var(--muted)">waves, currents</span></td>
+      <td>Regular, <strong>exactly 1/12°</strong> (0.08333°). Centres at (k+½)/12, so edges fall on integer multiples of 1/12°</td>
+      <td class="n">5.00 × 4.88 NM</td>
+      <td class="n">5.00 × 3.05 NM</td>
+    </tr>
+    <tr>
+      <td class="field">Forecast API<br><span style="font-size:11px;color:var(--muted)">wind</span></td>
+      <td><strong>Octahedral reduced Gaussian</strong> — rows 0.0703° apart; within a row, longitude spacing 0.1584°, the point count differing row to row, so rows are staggered. This is <strong>ECMWF IFS HRES at ~9 km</strong></td>
+      <td class="n">≈ 4.22 × 9.3 NM</td>
+      <td class="n">≈ 4.22 × 6.06 NM</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout">
+  <p>
+    <strong>All three fields arrive at essentially the same resolution — about 0.08°, or 3–5 NM.</strong>
+    Not 0.25° for wind against 0.08° for the marine fields.
+  </p>
+</div>
+
+<p>
+  The paper's §5.1.1 is wrong on both counts it states. Wind is attributed to <strong>GFS at 0.25°</strong>;
+  because <code>models</code> is never set, the request falls back to <code>best_match</code>, which selects
+  the highest-resolution applicable model — over open ocean, ECMWF IFS HRES at ~9 km. And MFWAM is given as
+  <strong>0.25°</strong> where the documented and probed figure is 0.08°. The premise that the components
+  arrive at heterogeneous granularities needing reconciliation is simply not the case.
+</p>
+
+<div class="entry-note warn">
+  <span class="lab">One parameter left unset that should not be</span>
+  <p>
+    <code>cell_selection</code> is never sent either. The Marine API defaults to <code>sea</code>, which is
+    correct for us; the Forecast API defaults to <code>land</code>, which seeks a grid cell on land of
+    similar elevation. On an ocean route that is the wrong default, and near the coastal ends of both routes
+    the wind record may be mis-sourced. The fix is one parameter.
+  </p>
+</div>
+
+<h2>Every sampled parameter, and where it enters</h2>
+<p class="dek">
+  Five raw values come back from the two APIs; a sixth, the Beaufort number, we derive. This is the
+  complete map from stored column to formula.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Stored column</th><th>Source</th><th>Symbol</th><th>Enters at</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="field">wind_direction_10m_deg</td><td>Forecast API</td><td class="f">φ</td>
+      <td>Step 1 → θ, then C<sub>β</sub></td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">beaufort_number</td><td>Derived at collection</td><td class="f">BN</td>
+      <td>Steps 3, 5, 9 — C<sub>β</sub>, C<sub>form</sub>, BN≥5 rule</td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">ocean_current_velocity_kmh</td><td>Marine API</td><td class="f">V<sub>c</sub></td>
+      <td>Step 8 — vector synthesis</td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">ocean_current_direction_deg</td><td>Marine API</td><td class="f">γ</td>
+      <td>Step 8 — vector synthesis</td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">wind_speed_10m_kmh</td><td>Forecast API</td><td class="f">V<sub>wind</sub></td>
+      <td>Never appears in a formula, but is the <em>sole</em> determinant of BN — and therefore of steps 3, 5 and 9</td>
+      <td><span class="pill derived">Indirect</span></td></tr>
+    <tr class="inert"><td class="field">wave_height_m</td><td>Marine API</td><td class="f">H<sub>w</sub></td>
+      <td>Extracted and passed at every pricing call — never referenced</td><td><span class="pill gone">Dead</span></td></tr>
+    <tr class="inert"><td class="field">wave direction</td><td class="none">never requested</td><td class="f none">—</td>
+      <td>Wind direction φ doubles as the weather angle, so waves are assumed to run with the wind</td>
+      <td><span class="pill absent">Absent</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="proof">
+  <div class="plabel">shared/physics.py — SOG vs significant wave height</div>
+<pre>wave_height =  0.0 m   →   SOG = 12.679868708 kn
+wave_height =  1.0 m   →   SOG = 12.679868708 kn
+wave_height =  2.5 m   →   SOG = 12.679868708 kn
+wave_height =  5.0 m   →   SOG = 12.679868708 kn
+wave_height = 12.0 m   →   SOG = 12.679868708 kn
+wave_height = 99.0 m   →   SOG = 12.679868708 kn</pre>
+  <div class="verdict">
+    Bit-identical across a physically absurd range. This is the method, not a defect: the Kwon-style
+    coefficients carry sea state through the Beaufort number, which has no slot for
+    <code>H<sub>w</sub></code>. Correcting MFWAM's 0.25° → 0.08° fixes a citation about data we collect and
+    then discard.
+  </div>
+</div>
+
+<h2>The computation chain, step by step</h2>
+<p class="dek">
+  Nine steps take a still-water speed and the cell's weather to a speed over ground. Four touch no weather
+  at all.
+</p>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Step</th><th>Formula</th><th>Weather consumed</th></tr></thead>
+  <tbody>
+    <tr class="inert"><td class="step">0</td>
+      <td class="f">BN = threshold(V<sub>wind</sub> / 3.6), 12 cut-points in m s⁻¹</td>
+      <td>wind speed → BN, at collection</td></tr>
+    <tr><td class="step">1</td><td class="f">θ = |φ − α|, wrapped to [0, π]</td><td>wind direction</td></tr>
+    <tr class="inert"><td class="step">2</td><td class="f">Fn = V<sub>s</sub> / √(gL)</td><td class="none">none</td></tr>
+    <tr><td class="step">3</td><td class="f">C<sub>β</sub> = f(θ, BN) — four angular bands</td><td>wind direction, BN</td></tr>
+    <tr class="inert"><td class="step">4</td><td class="f">C<sub>U</sub> = f(Fn, C<sub>b</sub>)</td><td class="none">none</td></tr>
+    <tr><td class="step">5</td><td class="f">C<sub>form</sub> = 0.5·BN + BN<sup>6.5</sup> / (22·∇<sup>2/3</sup>)</td><td>BN</td></tr>
+    <tr class="inert"><td class="step">6</td><td class="f">ΔV/V<sub>s</sub> · 100% = C<sub>β</sub> · C<sub>U</sub> · C<sub>form</sub>, clamped [0, 50]</td><td class="none">composed</td></tr>
+    <tr class="inert"><td class="step">7</td><td class="f">V<sub>w</sub> = V<sub>s</sub>(1 − ΔV/100), floor 1 kn</td><td class="none">composed</td></tr>
+    <tr><td class="step">8</td>
+      <td class="f">V<sub>g</sub> = √(V<sub>x</sub>² + V<sub>y</sub>²),&nbsp; V<sub>x</sub> = V<sub>w</sub>sin α + V<sub>c</sub>sin γ,&nbsp; V<sub>y</sub> = V<sub>w</sub>cos α + V<sub>c</sub>cos γ</td>
+      <td>current velocity, current direction</td></tr>
+    <tr><td class="step">9</td><td class="f">if BN ≥ 5: V<sub>g</sub> ×= 0.965</td><td>BN</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="entry-note">
+  <p>
+    <strong>The fuel rate consumes no weather whatsoever.</strong>
+    <span class="eq">FCR = 0.000706 · V<sub>s</sub>³&nbsp;&nbsp;(mt h⁻¹, floor 0.1)</span>
+    It is a pure cubic in still-water speed. Weather has exactly <em>one</em> point of entry into the
+    objective: the solver fixes an arc's SOG from its distance and duration, inverts
+    <code>V<sub>s</sub> = g<sup>−1</sup>(V<sub>g</sub>; w)</code> by binary search through steps 1–9, and
+    prices the resulting SWS cubically.
+  </p>
+  <p>
+    Of the four values reaching that inversion, one is an integer 0–12, two describe the current, and one
+    is a bearing. That is the entire weather content of the cost function — and §5.1.1 spends three bullets
+    documenting the resolution, cadence and horizon of products supplying rather less than that.
+  </p>
+</div>
+
+<h2>The rectangle</h2>
+<p class="dek">
+  Not a square, in two different senses — and its edges have two different causes.
+</p>
+
+<h3>Rectangles, not squares</h3>
+<p>
+  <strong>Geographically:</strong> the source tile is 1/12° on both axes, but a degree of latitude is 60 NM
+  while a degree of longitude is 60·cos(lat) NM. So the tile measures <strong>5.00 × 4.88 NM</strong> on
+  route 1 and <strong>5.00 × 3.05 NM</strong> on route 2 — a rectangle that narrows with latitude, and keeps
+  changing shape along the voyage. For wind there is no fixed rectangle at all: the reduced Gaussian grid
+  holds cell <em>area</em> roughly constant rather than cell shape.
+</p>
+<p>
+  <strong>In the graph:</strong> the unit is a rectangle in the <strong>(distance, time)</strong> plane,
+  bounded by two H-lines and two V-lines. That is the object the DP actually works on.
+</p>
+
+<h3>Its distance edges have two causes</h3>
+<p>
+  An H-line is needed wherever the <strong>cost coefficient</strong> changes, and that has two independent
+  causes. A new weather reading changes the resistance directly. A change of course alters the relative
+  angle between the ship and an unchanged wind or current, so the effective weather changes even when the
+  forecast values are identical.
+</p>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Boundary cause</th><th>route 1</th><th>route 2</th></tr></thead>
+  <tbody>
+    <tr><td class="field">New weather reading — a sampled waypoint</td><td class="n">131</td><td class="n">389</td></tr>
+    <tr><td class="field">Change of course — a control point where heading turns</td><td class="n">13</td><td class="n">11</td></tr>
+    <tr><td class="field">Sampling interval</td><td class="n">25 NM</td><td class="n">5 NM</td></tr>
+    <tr><td class="field">Source tiles a segment crosses</td><td class="n dead">median 8</td><td class="n partial">median 3</td></tr>
+    <tr><td class="field">Segments confined to one tile</td><td class="n dead">0.0%</td><td class="n dead">0.0%</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  So the rule is a union: <code>H = weather points ∪ course-change points</code>. In the current data the
+  course-change points are already a subset of the waypoints — <code>generate_waypoints</code> emits every
+  control point — so the union collapses to just the waypoints. The convexity argument needs both held
+  constant: with weather <em>and</em> heading fixed across a rectangle, the fuel rate is convex in speed, so
+  a constant speed across it beats any varying profile achieving the same transit time. That makes this
+  partition provably the right one — no finer partition can improve the solution, and any coarser one
+  forfeits optimality.
+</p>
+
+<div class="callout">
+  <p>
+    All the weather arrives at one granularity — about 0.08°, or 3–5 NM. That source tile is a
+    <strong>rectangle</strong>, 5.00 NM tall and 3–5 NM wide depending on latitude, and it is the only
+    region in which the forecast is genuinely constant. Our sampling cannot resolve it: our along-track
+    intervals are 25 NM and 5 NM, each crossing several tiles.
+  </p>
+  <p>
+    So in the graph we build <strong>rectangles in distance × time</strong>. Their distance edges come from
+    two causes — a new weather reading, and a change of course — because both change the cost coefficient.
+    Their time edges come from the forecast block. Inside one rectangle we hold exactly one weather reading
+    and one heading, so the model treats conditions as constant there: constant <em>in our knowledge</em>,
+    not in fact. And that is the right partition regardless, because with the cost coefficient fixed across
+    a rectangle, constant speed across it is optimal.
+  </p>
+</div>
+
+<div class="entry-note warn">
+  <span class="lab">The one collection fix this exposes</span>
+  <p>
+    The union is only <em>exactly</em> right if the sample points lie on the path the ship sails. They do
+    not. The DP integrates <strong>rhumb legs</strong> between control points, so heading is constant within
+    each leg — but the collector interpolated the waypoints along the <strong>great circle</strong>, so they
+    sit off those legs by up to 1.4 NM on route 1 and 4.1 NM on route 2, and their bearings drift within a
+    leg by a median 0.52° / 4.32°, up to 6.30° on route 2.
+  </p>
+  <p>
+    For any future collection the fix is one line: <strong>generate the waypoints along the rhumb line.</strong>
+    Then all three statements hold at once — the path is a sequence of rhumb legs, heading is constant per
+    leg, the sample points lie exactly on the path, and the control points are exactly the course-change
+    subset of the waypoints.
+  </p>
+</div>
+
+<div class="foot">
+  Verified against pipeline/ at commit f99aba7.<br>
+  Source grids established by probing resolved cell coordinates on both Open-Meteo endpoints at
+  50.4°N 41°W (2026-09-06) and cross-checked against the Marine and Forecast data-source tables.<br>
+  Geometry derived from route configs and waypoint generation; formula map and dead-input proof from the
+  physics module. No figure in this document is measured from collected weather values.<br>
+  Full audit — findings, graph redesign, paper-impact table — retained at
+  <code>docs/weather_resolution_audit_FULL_2026_09_06.html</code>.
+</div>
+
+</div>

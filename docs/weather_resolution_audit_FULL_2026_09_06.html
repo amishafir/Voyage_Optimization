@@ -1,0 +1,1345 @@
+<title>The Discretization Unit Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --paper:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2;
+  --ink:#12222E; --ink-soft:#3D5261; --muted:#63788A;
+  --rule:#D6DFE6; --rule-strong:#B9C7D1;
+  --teal:#0E6E7D; --teal-soft:#D9EDF0;
+  --amber:#9A6407; --amber-soft:#F6EAD2;
+  --rust:#9E3320; --rust-soft:#F7E1DC;
+  --kelp:#2C6E52; --kelp-soft:#DDEDE4;
+  --shadow:0 1px 2px rgba(18,34,46,.06),0 8px 24px -12px rgba(18,34,46,.18);
+  --maxw:74ch;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0C1A22; --surface:#122430; --surface-2:#17303E;
+    --ink:#E4ECF1; --ink-soft:#B7C8D4; --muted:#89A0AF;
+    --rule:#233A49; --rule-strong:#33505F;
+    --teal:#5CC3D4; --teal-soft:#10333C;
+    --amber:#E0A63C; --amber-soft:#33280F;
+    --rust:#E8836A; --rust-soft:#37201B;
+    --kelp:#68BE95; --kelp-soft:#132E24;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0C1A22; --surface:#122430; --surface-2:#17303E;
+  --ink:#E4ECF1; --ink-soft:#B7C8D4; --muted:#89A0AF;
+  --rule:#233A49; --rule-strong:#33505F;
+  --teal:#5CC3D4; --teal-soft:#10333C;
+  --amber:#E0A63C; --amber-soft:#33280F;
+  --rust:#E8836A; --rust-soft:#37201B;
+  --kelp:#68BE95; --kelp-soft:#132E24;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px 96px}
+@media(max-width:600px){.wrap{padding:0 18px 64px}}
+.masthead{border-bottom:2px solid var(--ink);padding:56px 0 22px;margin-bottom:44px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--teal);font-weight:500;
+  display:flex;flex-wrap:wrap;gap:10px 18px;margin-bottom:20px}
+h1{font-family:Spectral,Georgia,serif;font-weight:700;font-size:clamp(2.1rem,5.6vw,3.1rem);
+  line-height:1.1;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+.standfirst{font-family:Spectral,Georgia,serif;font-size:1.16rem;line-height:1.55;
+  color:var(--ink-soft);margin:0;max-width:62ch}
+.standfirst em{color:var(--ink);font-style:italic}
+.byline{margin-top:22px;padding-top:16px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);
+  display:flex;flex-wrap:wrap;gap:6px 22px}
+h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:1.62rem;line-height:1.2;
+  letter-spacing:-.01em;margin:56px 0 6px;text-wrap:balance}
+.dek{color:var(--muted);font-size:.95rem;margin:0 0 26px;max-width:60ch}
+h3{font-family:"IBM Plex Sans",sans-serif;font-weight:600;font-size:1.02rem;
+  margin:34px 0 10px;letter-spacing:-.005em}
+h4{font-family:"IBM Plex Sans",sans-serif;font-weight:600;font-size:.96rem;
+  margin:26px 0 8px;color:var(--ink)}
+p{margin:0 0 17px}
+a{color:var(--teal)}
+strong{font-weight:600}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.855em}
+code{background:var(--surface-2);border-radius:3px;padding:.1em .35em;color:var(--ink-soft)}
+.source-quote{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--ink);
+  padding:24px 26px;margin:0 0 22px;box-shadow:var(--shadow)}
+.source-quote .qlabel{font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.source-quote ul{margin:0;padding-left:20px;font-family:Spectral,Georgia,serif;font-size:1.02rem}
+.source-quote li{margin-bottom:10px;line-height:1.5}
+.source-quote li:last-child{margin-bottom:0}
+.mark-bad{background:var(--rust-soft);color:var(--rust);padding:.05em .3em;border-radius:2px;font-weight:600}
+.mark-ok{background:var(--kelp-soft);color:var(--kelp);padding:.05em .3em;border-radius:2px;font-weight:600}
+.chain{display:flex;flex-direction:column;margin:26px 0 10px}
+.link{display:grid;grid-template-columns:auto 1fr;gap:20px;padding:20px 0;border-top:1px solid var(--rule)}
+.link:last-child{border-bottom:1px solid var(--rule)}
+.link-n{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;
+  color:var(--surface);background:var(--teal);width:26px;height:26px;border-radius:50%;
+  display:grid;place-items:center;margin-top:3px}
+.link h4{margin:0 0 4px;font-size:1rem;font-weight:600;font-family:"IBM Plex Sans",sans-serif}
+.link .gran{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--teal);margin-bottom:8px}
+.link p{margin:0;font-size:.93rem;color:var(--ink-soft)}
+.link .loss{margin-top:9px;font-size:.87rem;color:var(--rust);font-weight:500;
+  display:flex;gap:7px;align-items:baseline}
+.link .loss::before{content:"→";color:var(--rule-strong);font-weight:400}
+.tw{overflow-x:auto;margin:24px 0;border:1px solid var(--rule);background:var(--surface);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:.885rem;min-width:520px}
+th{text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:500;padding:13px 16px;
+  border-bottom:1px solid var(--rule-strong);background:var(--surface-2);white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid var(--rule);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.field{font-weight:600}
+td.f{font-family:"IBM Plex Mono",monospace;font-size:.82rem;line-height:1.65;white-space:nowrap}
+td.step{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.inert td{color:var(--muted)}
+.none{color:var(--rule-strong)}
+.dead{color:var(--rust);font-weight:600}
+.partial{color:var(--amber);font-weight:600}
+.full{color:var(--kelp);font-weight:600}
+.pill{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.09em;
+  text-transform:uppercase;font-weight:500;padding:2px 7px;border-radius:2px;
+  white-space:nowrap;display:inline-block}
+.pill.live{background:var(--kelp-soft);color:var(--kelp)}
+.pill.derived{background:var(--teal-soft);color:var(--teal)}
+.pill.gone{background:var(--rust-soft);color:var(--rust)}
+.pill.absent{background:var(--amber-soft);color:var(--amber)}
+.entry-note{border-left:3px solid var(--teal);background:var(--surface);
+  border-top:1px solid var(--rule);border-right:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);padding:18px 22px;margin:24px 0;box-shadow:var(--shadow)}
+.entry-note.warn{border-left-color:var(--amber)}
+.entry-note .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--amber);font-weight:500;display:block;margin-bottom:11px}
+.entry-note ol{margin:0;padding-left:20px}
+.entry-note li{font-size:.9rem;color:var(--ink-soft);margin-bottom:7px}
+.entry-note li:last-child{margin-bottom:0}
+.entry-note p{margin:0;font-size:.93rem;color:var(--ink-soft)}
+.entry-note p + p{margin-top:10px}
+.entry-note .eq{font-family:"IBM Plex Mono",monospace;font-size:.86rem;color:var(--ink);
+  display:block;margin:10px 0}
+.proof{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--rust);
+  padding:20px 22px;margin:24px 0;box-shadow:var(--shadow)}
+.proof .plabel{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--rust);margin-bottom:13px;font-weight:500}
+.proof pre{margin:0;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.85;
+  color:var(--ink-soft);overflow-x:auto;font-variant-numeric:tabular-nums}
+.proof .verdict{margin-top:14px;padding-top:13px;border-top:1px solid var(--rule);
+  font-size:.9rem;color:var(--ink);font-weight:500}
+.algo{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--teal);
+  padding:20px 22px;margin:24px 0;box-shadow:var(--shadow);overflow-x:auto}
+.algo pre{margin:0;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.75;
+  color:var(--ink-soft);white-space:pre}
+.algo pre b{color:var(--ink);font-weight:600}
+.algo pre i{color:var(--muted);font-style:normal}
+.algo .alabel{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--teal);margin-bottom:13px;font-weight:500}
+.findings{display:flex;flex-direction:column;gap:2px;margin:26px 0}
+.finding{background:var(--surface);border:1px solid var(--rule);
+  border-left:4px solid var(--rule-strong);padding:18px 22px}
+.finding.crit{border-left-color:var(--rust)}
+.finding.high{border-left-color:var(--amber)}
+.finding.med{border-left-color:var(--teal)}
+.fhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:7px}
+.fhead h4{margin:0;font-size:1rem;font-weight:600;flex:1 1 auto;min-width:14rem}
+.sev{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:500;padding:3px 8px;border-radius:2px;white-space:nowrap}
+.sev.crit{background:var(--rust-soft);color:var(--rust)}
+.sev.high{background:var(--amber-soft);color:var(--amber)}
+.sev.med{background:var(--teal-soft);color:var(--teal)}
+.finding p{margin:0 0 8px;font-size:.925rem;color:var(--ink-soft)}
+.finding p:last-child{margin-bottom:0}
+.evidence{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);
+  display:block;margin-top:9px;padding-top:9px;border-top:1px dotted var(--rule-strong);
+  font-variant-numeric:tabular-nums}
+.sound{background:var(--kelp-soft);border:1px solid var(--kelp);padding:22px 24px;margin:26px 0}
+.sound h3{margin:0 0 12px;color:var(--kelp)}
+.sound ul{margin:0;padding-left:19px}
+.sound li{margin-bottom:8px;font-size:.925rem;color:var(--ink-soft)}
+.sound li:last-child{margin-bottom:0}
+.sound li strong{color:var(--ink)}
+.callout{border-top:2px solid var(--teal);border-bottom:2px solid var(--teal);padding:22px 0;margin:30px 0}
+.callout p{font-family:Spectral,Georgia,serif;font-size:1.14rem;line-height:1.5;margin:0;color:var(--ink)}
+figure{margin:30px 0;padding:0}
+figure svg{display:block;max-width:100%;height:auto;margin:0 auto}
+figcaption{font-size:.87rem;color:var(--muted);margin-top:14px;
+  padding-top:12px;border-top:1px solid var(--rule);max-width:62ch}
+figcaption strong{color:var(--ink-soft)}
+.foot{margin-top:64px;padding-top:20px;border-top:2px solid var(--ink);
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);line-height:1.8}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>Voyage Optimization</span><span>Design Audit</span><span>2026-09-06</span>
+  </div>
+  <h1>What is a square, exactly?</h1>
+  <p class="standfirst">
+    A two-line description of the wave and current sources opened a question about spatial resolution.
+    Checking it against the API rather than the paper dissolves the premise: <em>all three fields arrive
+    at the same resolution</em>. What remains is a sampling design that cannot resolve the grid its own
+    data comes on, and a model that discards most of what it collects.
+  </p>
+  <div class="byline">
+    <span>Scope: design and sampling mechanism only</span>
+    <span>No measurement of collected weather values</span>
+  </div>
+</header>
+
+<h2>Where it started</h2>
+<p class="dek">Two adjacent bullets in §5.1.1, describing the forecast sources.</p>
+
+<div class="source-quote">
+  <div class="qlabel">paper_full_draft.tex — lines 773–777</div>
+  <ul>
+    <li><strong>Waves</strong> (significant wave height) — the Météo-France wave model (MFWAM), a
+      third-generation spectral ocean-wave model, at <span class="mark-bad">0.25°</span> resolution,
+      re-initialised twice daily, to 168 h.</li>
+    <li><strong>Ocean currents</strong> (velocity and direction) — the Météo-France SMOC ocean model,
+      at <span class="mark-ok">0.08°</span> resolution, re-initialised once daily, to 168 h.</li>
+  </ul>
+</div>
+
+<p>
+  Two fields from the same provider, one line apart, at resolutions differing by a factor of three,
+  while the model declares sea conditions constant within a <code>0.5° × 0.5°</code> cell over a
+  six-hour block. If each component arrives on its own grid, what is the square we hold constant, and
+  is composing three granularities into one unit legitimate?
+</p>
+
+<h2>The premise does not survive contact with the API</h2>
+<p class="dek">
+  Open-Meteo returns the <em>resolved</em> grid cell for every request. Sweeping coordinates and reading
+  those back recovers each endpoint's grid exactly — no inference required.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Endpoint</th><th>Grid recovered by probing</th><th>Cell at 12.8°N</th><th>Cell at 52.4°N</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="field">Marine API<br><span style="font-size:11px;color:var(--muted)">waves, currents</span></td>
+      <td>Regular, <strong>exactly 1/12°</strong> (0.08333°). Centres at (k+½)/12, so <strong>edges fall on integer multiples of 1/12°</strong></td>
+      <td class="n">5.00 × 4.88 NM</td>
+      <td class="n">5.00 × 3.05 NM</td>
+    </tr>
+    <tr>
+      <td class="field">Forecast API<br><span style="font-size:11px;color:var(--muted)">wind</span></td>
+      <td><strong>Octahedral reduced Gaussian</strong> — Gaussian rows 0.0703° apart; within a row, longitude spacing 0.1584°, and the point <em>count differs row to row</em> (0.158448° / 0.158722°), so rows are staggered. This is <strong>ECMWF IFS HRES at ~9 km</strong>, not GFS at 0.25°</td>
+      <td class="n">≈ 4.22 × 9.3 NM</td>
+      <td class="n">≈ 4.22 × 6.06 NM</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="entry-note">
+  <p>
+    <strong>All three fields arrive at essentially the same resolution — about 0.08°, or 3–5 NM.</strong>
+    Not 0.25° for wind against 0.08° for the marine fields. The premise that opened this investigation,
+    that the components come at heterogeneous granularities needing reconciliation, is not the case.
+  </p>
+  <p>
+    One real asymmetry survives, and it concerns <em>alignment</em>, not scale. The marine grid is regular
+    and edge-registered, so it tiles cleanly against any box drawn on multiples of 1/12°. The wind grid
+    aligns with nothing — Gaussian latitude rows with a point count that changes row to row cannot be made
+    to tile against the marine grid, against a regular box, or against itself. No single square can be
+    drawn that respects both sources.
+  </p>
+</div>
+
+<figure>
+<svg viewBox="0 0 560 400" role="img"
+     aria-label="One requested coordinate falls inside two differently shaped and differently placed grid cells: a 5.00 by 3.19 nautical mile marine tile and a 4.22 by 6.06 nautical mile staggered wind cell.">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <!-- wind cells: staggered rows, dashed -->
+  <g stroke="var(--teal)" stroke-width="1.4" fill="none" stroke-dasharray="5 3" opacity="0.95">
+    <line x1="60" y1="87.3"  x2="230" y2="87.3"/>
+    <line x1="60" y1="180.9" x2="230" y2="180.9"/>
+    <line x1="60" y1="274.5" x2="230" y2="274.5"/>
+    <line x1="179.4" y1="180.9" x2="179.4" y2="274.5"/>
+    <line x1="118.0" y1="87.3"  x2="118.0" y2="180.9"/>
+  </g>
+
+  <!-- marine tile that answered, highlighted -->
+  <rect x="74.2" y="164.3" width="70.8" height="111" fill="var(--teal-soft)" opacity="0.55"/>
+
+  <!-- marine grid: regular, solid -->
+  <g stroke="currentColor" stroke-width="1" fill="none" opacity="0.5">
+    <line x1="74.2"  y1="40" x2="74.2"  y2="333"/>
+    <line x1="145.0" y1="40" x2="145.0" y2="333"/>
+    <line x1="215.8" y1="40" x2="215.8" y2="333"/>
+    <line x1="60" y1="53.3"  x2="230" y2="53.3"/>
+    <line x1="60" y1="164.3" x2="230" y2="164.3"/>
+    <line x1="60" y1="275.3" x2="230" y2="275.3"/>
+  </g>
+  <rect x="60" y="40" width="170" height="293" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.75"/>
+
+  <!-- the requested point -->
+  <g>
+    <circle cx="145.0" cy="186.5" r="4.5" fill="var(--rust)"/>
+    <line x1="145.0" y1="186.5" x2="255" y2="150" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+    <text x="260" y="147" font-size="12" fill="currentColor" font-family="IBM Plex Mono, monospace">you ask for</text>
+    <text x="260" y="162" font-size="12" fill="currentColor" font-family="IBM Plex Mono, monospace">50.400, −41.000</text>
+  </g>
+
+  <!-- marine resolved centre -->
+  <g>
+    <circle cx="109.6" cy="219.8" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="145.0" y1="186.5" x2="109.6" y2="219.8" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"/>
+    <line x1="109.6" y1="219.8" x2="255" y2="248" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+    <text x="260" y="238" font-size="12" fill="currentColor" font-family="IBM Plex Mono, monospace">marine tile centre</text>
+    <text x="260" y="253" font-size="12" fill="currentColor" font-family="IBM Plex Mono, monospace">50.375, −41.0417</text>
+    <text x="260" y="268" font-size="12" fill="var(--rust)" font-family="IBM Plex Mono, monospace">2.19 NM away</text>
+  </g>
+
+  <!-- wind resolved centre -->
+  <g>
+    <rect x="108.1" y="223.7" width="8" height="8" fill="none" stroke="var(--teal)" stroke-width="1.8"/>
+    <line x1="112.1" y1="227.7" x2="255" y2="305" stroke="var(--teal)" stroke-width="1" opacity="0.6"/>
+    <text x="260" y="295" font-size="12" fill="var(--teal)" font-family="IBM Plex Mono, monospace">wind cell centre</text>
+    <text x="260" y="310" font-size="12" fill="var(--teal)" font-family="IBM Plex Mono, monospace">50.369, −41.0387</text>
+    <text x="260" y="325" font-size="12" fill="var(--rust)" font-family="IBM Plex Mono, monospace">2.37 NM away</text>
+  </g>
+
+  <!-- dimension: marine tile -->
+  <g stroke="currentColor" stroke-width="1" opacity="0.8">
+    <line x1="66" y1="164.3" x2="66" y2="275.3" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  </g>
+  <text x="40" y="216" font-size="11.5" fill="currentColor" font-family="IBM Plex Mono, monospace">5.00</text>
+  <text x="40" y="230" font-size="11.5" fill="currentColor" font-family="IBM Plex Mono, monospace">NM</text>
+  <g stroke="currentColor" stroke-width="1" opacity="0.8">
+    <line x1="74.2" y1="288" x2="145.0" y2="288" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  </g>
+  <text x="80" y="303" font-size="11.5" fill="currentColor" font-family="IBM Plex Mono, monospace">3.19 NM</text>
+
+  <!-- keys -->
+  <g font-family="IBM Plex Mono, monospace" font-size="11.5">
+    <line x1="60" y1="356" x2="86" y2="356" stroke="currentColor" stroke-width="1" opacity="0.6"/>
+    <text x="92" y="360" fill="currentColor">marine 1/12° — regular, 5.00 × 3.19 NM</text>
+    <line x1="60" y1="376" x2="86" y2="376" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="5 3"/>
+    <text x="92" y="380" fill="var(--teal)">wind ECMWF ~9 km — staggered, 4.22 × 6.06 NM</text>
+  </g>
+
+  <text x="60" y="28" font-size="12.5" fill="currentColor" font-family="IBM Plex Sans, sans-serif" font-weight="600">
+    One sample, at 50.4°N 41°W</text>
+</svg>
+<figcaption>
+  <strong>A sample is a tile's value, not a point's.</strong> The requested coordinate lands 2.19 NM from
+  the centre of the marine tile that answers it, and 2.37 NM from the wind cell that answers it — two
+  differently shaped, differently placed cells with no shared boundary. Ask anywhere else inside the
+  shaded marine tile and the returned wave and current numbers are byte-identical; cross its edge and
+  they change. Note that −41.000 falls exactly on that tile's eastern edge, so −40.99999 would have
+  returned the neighbouring tile instead.
+</figcaption>
+</figure>
+
+<p>
+  Two further facts follow from the request as written, both from the documentation. <code>models</code>
+  is never set, so <code>best_match</code> selects the highest-resolution applicable model — hence ECMWF
+  rather than GFS. And <code>cell_selection</code> is never set, so the Marine API defaults to
+  <code>sea</code>, which is correct for us, while the Forecast API defaults to <code>land</code>, which
+  finds a grid cell on land of similar elevation. On an ocean route that is the wrong default, and it is
+  a plausible explanation for the known Port B behaviour.
+</p>
+
+<h2>What our sampling can and cannot resolve</h2>
+<p class="dek">
+  The question is not what the weather does; it is what our sampling design is <em>capable</em> of
+  seeing. That is fixed by the source grid and the waypoint spacing alone.
+</p>
+
+<p>
+  Two scales must not be conflated. There is the scale at which the weather is <strong>genuinely
+  constant</strong> — a property of the data, established from the API's grid definition — and the scale
+  at which <strong>our sampling mechanism is entitled to assert it</strong>. We can never claim constancy
+  below our own sampling interval, because we hold no observation there. Resolving a feature of size
+  <em>L</em> requires sampling at <em>L</em>/2 or finer.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th></th><th>route 1 — 12.8°N</th><th>route 2 — 52.4°N</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="field">True constancy scale — the source cell</td><td class="n">5.00 × 4.88 NM</td><td class="n">5.00 × 3.05 NM</td></tr>
+    <tr><td class="field">Our waypoint spacing</td><td class="n dead">25 NM</td><td class="n partial">5 NM</td></tr>
+    <tr><td class="field">Finest feature our sampling could resolve</td><td class="n dead">50 NM</td><td class="n partial">10 NM</td></tr>
+    <tr><td class="field">Source cell ÷ spacing <span class="mono" style="font-size:10.5px;color:var(--muted)">(needs ≥ 2)</span></td><td class="n dead">0.20</td><td class="n dead">0.61</td></tr>
+    <tr><td class="field">Source cells skipped between samples</td><td class="n dead">≈ 5</td><td class="n">≈ 1–2</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="entry-note warn">
+  <span class="lab">The epistemic position, stated exactly</span>
+  <p>
+    <strong>Neither route's sampling can resolve the grid its own data arrives on.</strong> Route 1 is
+    five times coarser than the source cell and could not resolve anything below 50 NM. Route 2 sits at
+    roughly the cell scale — it lands about one sample per cell and can never see inside one.
+  </p>
+  <p>
+    So the true constancy scale is <strong>3–5 NM</strong>, and we know that from the API's grid, not
+    from anything we collected. Our own dataset cannot confirm it and, on route 1, contains no
+    information about spatial structure finer than 25 NM at all.
+  </p>
+</div>
+
+<h3>The square our sampling can actually support</h3>
+<p>
+  It follows that there is exactly one square we are entitled to draw: <strong>the interval between
+  consecutive waypoints</strong>. Inside it we hold precisely one reading, so the forecast is constant
+  across it <em>by construction</em> — not because the atmosphere is uniform there, but because that is
+  the resolution of our knowledge. Any finer square subdivides a single number; any coarser square merges
+  readings that are genuinely independent.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th></th><th>route 1</th><th>route 2</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="field">Source tile — where the forecast is truly constant</td><td class="n">5.00 × 4.88 NM</td><td class="n">5.00 × 3.05 NM</td></tr>
+    <tr><td class="field"><strong>The square we can support</strong> — one sampling interval</td><td class="n dead"><strong>25 NM</strong></td><td class="n full"><strong>5 NM</strong></td></tr>
+    <tr><td class="field">Source tiles that square actually crosses</td><td class="n dead">median 8, up to 16</td><td class="n partial">median 3, up to 5</td></tr>
+    <tr><td class="field">Independent readings inside it</td><td class="n">exactly 1</td><td class="n">exactly 1</td></tr>
+    <tr><td class="field">Segments confined to a single tile</td><td class="n dead">0.0%</td><td class="n dead">0.0%</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  There is a hard limit here that has to be stated plainly, because it is easy to talk oneself out of.
+  <strong>No practical segment stays inside one source tile.</strong> A track running diagonally across a
+  1/12° grid crosses latitude and longitude boundaries alike, so even route 2's 5 NM segment passes through
+  a median of three tiles, and route 1's 25 NM segment through eight. Measured over both routes, the share
+  of segments confined to a single tile is <strong>0.0%</strong>.
+</p>
+<p>
+  Getting a segment inside one tile would need a length of roughly 1 NM or less — below the 1.58 NM median
+  distance between a sample and the position its value belongs to. So it is unachievable in principle, not
+  merely unaffordable: we cannot localise a reading to a tile more precisely than the tile is wide.
+  <strong>The graph square is therefore never a region of constant forecast, and cannot be made one.</strong>
+  It is a region over which we hold one reading, drawn from one of the several tiles it crosses. Route 2 is
+  2.7× better than route 1 on that count — three tiles rather than eight — which is a real difference in
+  quality but not a difference in kind.
+</p>
+
+<figure>
+<svg viewBox="0 0 520 278" role="img"
+     aria-label="Drawn to the same scale, a 25 nautical mile segment on route 1 crosses a median of eight source tiles and reads one of them; a 5 nautical mile segment on route 2 crosses a median of three and reads one. No segment on either route stays inside a single tile.">
+  <text x="70" y="30" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">
+    Same scale · dashed = source tile boundary along the track</text>
+
+  <!-- ROUTE 1 : 25 NM, 8 tiles -->
+  <text x="70" y="62" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="currentColor">route 1 — segment = 25 NM</text>
+  <rect x="70" y="76" width="37.5" height="40" fill="var(--teal-soft)"/>
+  <g stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity="0.6">
+    <line x1="107.5" y1="76" x2="107.5" y2="116"/><line x1="145" y1="76" x2="145" y2="116"/>
+    <line x1="182.5" y1="76" x2="182.5" y2="116"/><line x1="220" y1="76" x2="220" y2="116"/>
+    <line x1="257.5" y1="76" x2="257.5" y2="116"/><line x1="295" y1="76" x2="295" y2="116"/>
+    <line x1="332.5" y1="76" x2="332.5" y2="116"/>
+  </g>
+  <rect x="70" y="76" width="300" height="40" fill="none" stroke="var(--teal)" stroke-width="2"/>
+  <circle cx="70" cy="96" r="4.5" fill="var(--rust)"/>
+  <g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.45">
+    <circle cx="126" cy="96" r="3.6"/><circle cx="164" cy="96" r="3.6"/><circle cx="201" cy="96" r="3.6"/>
+    <circle cx="239" cy="96" r="3.6"/><circle cx="276" cy="96" r="3.6"/><circle cx="314" cy="96" r="3.6"/>
+    <circle cx="351" cy="96" r="3.6"/>
+  </g>
+  <g font-family="IBM Plex Mono, monospace" font-size="11">
+    <text x="385" y="93" fill="currentColor">crosses 8 tiles</text>
+    <text x="385" y="109" fill="var(--rust)">reads 1</text>
+  </g>
+
+  <!-- ROUTE 2 : 5 NM, 3 tiles -->
+  <text x="70" y="152" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="currentColor">route 2 — segment = 5 NM</text>
+  <rect x="70" y="166" width="20" height="40" fill="var(--teal-soft)"/>
+  <g stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity="0.6">
+    <line x1="90" y1="166" x2="90" y2="206"/><line x1="110" y1="166" x2="110" y2="206"/>
+  </g>
+  <rect x="70" y="166" width="60" height="40" fill="none" stroke="var(--teal)" stroke-width="2"/>
+  <circle cx="70" cy="186" r="4.5" fill="var(--rust)"/>
+  <g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.45">
+    <circle cx="100" cy="186" r="3.6"/><circle cx="120" cy="186" r="3.6"/>
+  </g>
+  <g font-family="IBM Plex Mono, monospace" font-size="11">
+    <text x="145" y="183" fill="currentColor">crosses 3 tiles</text>
+    <text x="145" y="199" fill="var(--rust)">reads 1</text>
+  </g>
+
+  <!-- scale -->
+  <g stroke="currentColor" stroke-width="1" opacity="0.7">
+    <line x1="70" y1="230" x2="370" y2="230"/>
+    <line x1="70" y1="226" x2="70" y2="234"/><line x1="370" y1="226" x2="370" y2="234"/>
+    <line x1="130" y1="227" x2="130" y2="233"/>
+  </g>
+  <text x="74" y="224" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.8">5 NM</text>
+  <text x="290" y="224" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.8">25 NM</text>
+
+  <!-- legend -->
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+    <circle cx="74" cy="252" r="4.5" fill="var(--rust)"/>
+    <text x="88" y="256" fill="var(--rust)">the one tile we read</text>
+    <circle cx="74" cy="268" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.45"/>
+    <text x="88" y="272" fill="currentColor" opacity="0.8">tiles the segment crosses but never observes</text>
+  </g>
+</svg>
+<figcaption>
+  <strong>No segment on either route stays inside one source tile — 0.0% on both.</strong> A diagonal track
+  crosses latitude and longitude boundaries alike, so a 25 NM segment on route 1 passes through a median of
+  eight tiles (range 6–16) and a 5 NM segment on route 2 through a median of three (range 2–5). Each reads
+  the single tile containing its source waypoint. Route 2 is <em>2.7× better</em> than route 1, not matched:
+  its segments cross fewer tiles because they are shorter, though it crosses tiles more often per mile,
+  since its tiles are narrower at 52°N.
+</figcaption>
+</figure>
+
+<h4>Where inside the square does the value actually live?</h4>
+<p>
+  Every value sits at the <em>centre</em> of its tile — but that centre is the model's grid point, not our
+  waypoint. We ask at an arbitrary position inside the tile and receive the number computed at its centre,
+  so each sample carries a small, bounded position error.
+</p>
+
+<figure>
+<svg viewBox="0 0 500 236" role="img"
+     aria-label="Source tiles are 5.00 nautical miles tall at every latitude but narrow with latitude: 5.00 nautical miles wide near the equator, 3.37 at 47.6 degrees north, 2.81 at 55.8 degrees north. The model grid point sits at the tile centre while our waypoint sits off-centre by one to two nautical miles.">
+  <g stroke="currentColor" stroke-width="1.4" fill="none">
+    <rect x="70" y="60" width="100" height="100"/>
+    <rect x="230" y="60" width="67.4" height="100"/>
+    <rect x="360" y="60" width="56.2" height="100"/>
+  </g>
+
+  <!-- grid points (tile centres) and our waypoints -->
+  <g stroke="currentColor" stroke-width="1.6">
+    <line x1="115" y1="115" x2="125" y2="125"/><line x1="125" y1="115" x2="115" y2="125"/>
+    <line x1="258.7" y1="115" x2="268.7" y2="125"/><line x1="268.7" y1="115" x2="258.7" y2="125"/>
+    <line x1="383.1" y1="115" x2="393.1" y2="125"/><line x1="393.1" y1="115" x2="383.1" y2="125"/>
+  </g>
+  <g stroke="var(--rust)" stroke-width="1" stroke-dasharray="3 3">
+    <line x1="120" y1="120" x2="148" y2="148"/>
+    <line x1="263.7" y1="120" x2="285.7" y2="142"/>
+    <line x1="388.1" y1="120" x2="410.1" y2="142"/>
+  </g>
+  <g fill="var(--rust)">
+    <circle cx="148" cy="148" r="4.5"/><circle cx="285.7" cy="142" r="4.5"/><circle cx="410.1" cy="142" r="4.5"/>
+  </g>
+
+  <!-- height bracket, shared -->
+  <g stroke="currentColor" stroke-width="1" opacity="0.7">
+    <line x1="58" y1="60" x2="58" y2="160"/>
+    <line x1="54" y1="60" x2="62" y2="60"/><line x1="54" y1="160" x2="62" y2="160"/>
+  </g>
+  <text x="20" y="106" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">5.00</text>
+  <text x="20" y="119" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">NM</text>
+  <text x="20" y="136" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">always</text>
+
+  <!-- per-tile labels -->
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" text-anchor="middle">
+    <text x="120" y="180">5.00 NM wide</text>
+    <text x="263.7" y="180">3.37 NM</text>
+    <text x="388.1" y="180">2.81 NM</text>
+  </g>
+  <g font-family="IBM Plex Sans, sans-serif" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.8">
+    <text x="120" y="46">route 1 · 1.8°N</text>
+    <text x="263.7" y="46">route 2 · 47.6°N</text>
+    <text x="388.1" y="46">route 2 · 55.8°N</text>
+  </g>
+  <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--rust)" text-anchor="middle">
+    <text x="120" y="196">off-centre 2.03</text>
+    <text x="263.7" y="196">1.58</text>
+    <text x="388.1" y="196">1.58</text>
+  </g>
+
+  <!-- legend -->
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+    <line x1="70" y1="217" x2="78" y2="225" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="78" y1="217" x2="70" y2="225" stroke="currentColor" stroke-width="1.6"/>
+    <text x="88" y="225" fill="currentColor">model grid point — the value is computed here</text>
+    <circle cx="74" cy="235" r="4" fill="var(--rust)"/>
+    <text x="88" y="239" fill="var(--rust)">our waypoint — where we asked</text>
+  </g>
+</svg>
+<figcaption>
+  <strong>The tile is 5.00 NM tall everywhere and narrows with latitude.</strong> Centre-to-side is a
+  constant 2.50 NM north–south, because a degree of latitude is 60 NM at every latitude; east–west it is
+  2.50·cos(lat) NM, falling from 2.50 NM near the equator to 1.41 NM at route 2's northern extreme. So
+  the tile is close to square on route 1 and nearly 2:1 taller than wide on route 2 — and it keeps
+  changing shape along the voyage. For wind there is no fixed rectangle at all: the reduced Gaussian grid
+  carries a different point count on each row, holding cell <em>area</em> roughly constant rather than
+  cell shape.
+</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Offset from waypoint to the value's true position</th><th>route 1</th><th>route 2</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="field">Median</td><td class="n">2.03 NM</td><td class="n">1.58 NM</td></tr>
+    <tr><td class="field">Maximum</td><td class="n">3.26 NM</td><td class="n">2.94 NM</td></tr>
+    <tr><td class="field">Tile half-diagonal — the hard bound</td><td class="n">3.35 – 3.53 NM</td><td class="n">2.87 – 3.02 NM</td></tr>
+    <tr><td class="field"><strong>As a share of the square</strong></td><td class="n full"><strong>8% of 25 NM</strong></td><td class="n partial"><strong>32% of 5 NM</strong></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  This is the one caveat that belongs beside the waypoint-interval square. On route 1 the offset is 8% of
+  the square and can be ignored. On route 2 it is <strong>32%</strong> — the sample's true position can sit
+  a third of a square from where the graph places it. That is not an argument against the square; it is the
+  reason not to go <em>finer</em> than 5 NM there, since below about 5 NM the position uncertainty of each
+  sample would exceed the square it is being placed in.
+</p>
+<p>
+  Worth noting for the record: the API returns the resolved centre with every response, and the collector
+  discards it — <code>collector.py</code> reads only the values. The offset is therefore unrecoverable from
+  the stored data, though it would be a one-line change to keep it.
+</p>
+
+<div class="callout">
+  <p>
+    The square is not a geographic cell; it is one sampling interval. Within it the forecast is constant
+    because we hold a single reading, and that is the strongest claim the sampling permits. Stated that
+    way it is exact and defensible on both routes — and it is not the claim the paper currently makes.
+  </p>
+</div>
+
+<h3>The temporal side is where the capability is thrown away</h3>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Input</th><th>Source</th><th>Native temporal</th><th>Re-initialised</th><th>We store</th><th>We use</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="field">Wind</td><td>ECMWF IFS HRES</td><td class="n">hourly</td><td class="n">6 h</td><td class="n full">hourly</td><td class="n dead">6 h block</td></tr>
+    <tr><td class="field">Waves</td><td>MFWAM</td><td class="n">3-hourly</td><td class="n">12 h</td><td class="n full">hourly</td><td class="n dead">unused</td></tr>
+    <tr><td class="field">Currents</td><td>SMOC</td><td class="n">hourly</td><td class="n">24 h</td><td class="n full">hourly</td><td class="n dead">6 h block</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="entry-note">
+  <p>
+    <strong>We collect hourly and then discard five hours in six.</strong> Every forecast issue stores
+    hourly lead times out to the 7-day default, so a one-hour block requires no new collection, no API
+    budget, and no re-run of the campaign. The capability is already in the file.
+  </p>
+  <p>
+    §5.1.1 justifies the 6 h block from the GFS refresh cycle. That cycle justifies the
+    <em>re-planning cadence</em> — how often a new forecast becomes available is exactly the right reason
+    to re-plan every 6 h. It says nothing about how long weather may be held constant. The forecast
+    <em>issue</em> is 6-hourly; the forecast <em>itself</em> is hourly. The paper conflates two different
+    quantities under one number.
+  </p>
+</div>
+
+<h2>Every sampled parameter, and where it enters</h2>
+<p class="dek">
+  Five raw values come back from the two APIs; a sixth, the Beaufort number, we derive. This is the
+  complete map from stored column to formula.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Stored column</th><th>Source</th><th>Symbol</th><th>Enters at</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="field">wind_direction_10m_deg</td><td>Forecast API</td><td class="f">φ</td>
+      <td>Step 1 → θ, then C<sub>β</sub></td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">beaufort_number</td><td>Derived at collection</td><td class="f">BN</td>
+      <td>Steps 3, 5, 9 — C<sub>β</sub>, C<sub>form</sub>, BN≥5 rule</td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">ocean_current_velocity_kmh</td><td>Marine API</td><td class="f">V<sub>c</sub></td>
+      <td>Step 8 — vector synthesis</td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">ocean_current_direction_deg</td><td>Marine API</td><td class="f">γ</td>
+      <td>Step 8 — vector synthesis</td><td><span class="pill live">Used</span></td></tr>
+    <tr><td class="field">wind_speed_10m_kmh</td><td>Forecast API</td><td class="f">V<sub>wind</sub></td>
+      <td>Never appears in a formula, but is the <em>sole</em> determinant of BN — and therefore of steps 3, 5 and 9</td>
+      <td><span class="pill derived">Indirect</span></td></tr>
+    <tr class="inert"><td class="field">wave_height_m</td><td>Marine API</td><td class="f">H<sub>w</sub></td>
+      <td>Extracted and passed at every pricing call — never referenced</td><td><span class="pill gone">Dead</span></td></tr>
+    <tr class="inert"><td class="field">wave direction</td><td class="none">never requested</td><td class="f none">—</td>
+      <td>Wind direction φ doubles as the weather angle, so waves are assumed to run with the wind</td>
+      <td><span class="pill absent">Absent</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>The computation chain, step by step</h3>
+<p>Nine steps take an SWS and the cell's weather to an SOG. Four touch no weather at all.</p>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Step</th><th>Formula</th><th>Weather consumed</th></tr></thead>
+  <tbody>
+    <tr class="inert"><td class="step">0</td>
+      <td class="f">BN = threshold(V<sub>wind</sub> / 3.6), 12 cut-points in m s⁻¹</td>
+      <td>wind speed → BN, at collection</td></tr>
+    <tr><td class="step">1</td><td class="f">θ = |φ − α|, wrapped to [0, π]</td><td>wind direction</td></tr>
+    <tr class="inert"><td class="step">2</td><td class="f">Fn = V<sub>s</sub> / √(gL)</td><td class="none">none</td></tr>
+    <tr><td class="step">3</td><td class="f">C<sub>β</sub> = f(θ, BN) — four angular bands</td><td>wind direction, BN</td></tr>
+    <tr class="inert"><td class="step">4</td><td class="f">C<sub>U</sub> = f(Fn, C<sub>b</sub>)</td><td class="none">none</td></tr>
+    <tr><td class="step">5</td><td class="f">C<sub>form</sub> = 0.5·BN + BN<sup>6.5</sup> / (22·∇<sup>2/3</sup>)</td><td>BN</td></tr>
+    <tr class="inert"><td class="step">6</td><td class="f">ΔV/V<sub>s</sub> · 100% = C<sub>β</sub> · C<sub>U</sub> · C<sub>form</sub>, clamped [0, 50]</td><td class="none">composed</td></tr>
+    <tr class="inert"><td class="step">7</td><td class="f">V<sub>w</sub> = V<sub>s</sub>(1 − ΔV/100), floor 1 kn</td><td class="none">composed</td></tr>
+    <tr><td class="step">8</td>
+      <td class="f">V<sub>g</sub> = √(V<sub>x</sub>² + V<sub>y</sub>²),&nbsp; V<sub>x</sub> = V<sub>w</sub>sin α + V<sub>c</sub>sin γ,&nbsp; V<sub>y</sub> = V<sub>w</sub>cos α + V<sub>c</sub>cos γ</td>
+      <td>current velocity, current direction</td></tr>
+    <tr><td class="step">9</td><td class="f">if BN ≥ 5: V<sub>g</sub> ×= 0.965</td><td>BN</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="entry-note">
+  <p>
+    <strong>The fuel rate consumes no weather whatsoever.</strong>
+    <span class="eq">FCR = 0.000706 · V<sub>s</sub>³&nbsp;&nbsp;(mt h⁻¹, floor 0.1)</span>
+    It is a pure cubic in still-water speed. Weather has exactly <em>one</em> point of entry into the
+    objective: the solver fixes an arc's SOG from its distance and duration, inverts
+    <code>V<sub>s</sub> = g<sup>−1</sup>(V<sub>g</sub>; w)</code> by binary search through steps 1–9, and
+    prices the resulting SWS cubically.
+  </p>
+  <p>
+    Of the four values reaching that inversion, one is an integer 0–12, two describe the current, and one
+    is a bearing. That is the entire weather content of the cost function — and §5.1.1 spends three
+    bullets documenting the resolution, cadence and horizon of products supplying rather less than that.
+  </p>
+</div>
+
+<div class="proof">
+  <div class="plabel">shared/physics.py — SOG vs significant wave height</div>
+<pre>wave_height =  0.0 m   →   SOG = 12.679868708 kn
+wave_height =  1.0 m   →   SOG = 12.679868708 kn
+wave_height =  2.5 m   →   SOG = 12.679868708 kn
+wave_height =  5.0 m   →   SOG = 12.679868708 kn
+wave_height = 12.0 m   →   SOG = 12.679868708 kn
+wave_height = 99.0 m   →   SOG = 12.679868708 kn</pre>
+  <div class="verdict">
+    Bit-identical across a physically absurd range. This is the method, not a defect: the Kwon-style
+    coefficients carry sea state through the Beaufort number, which has no slot for
+    <code>H<sub>w</sub></code>. Correcting MFWAM's 0.25° → 0.08° fixes a citation about data we collect
+    and discard.
+  </div>
+</div>
+
+<h2>What is actually wrong</h2>
+<p class="dek">Ranked by consequence for the paper's claims, not by size of the code change.</p>
+
+<div class="findings">
+
+  <div class="finding crit">
+    <div class="fhead">
+      <h4>The paper's governing SOG equation does not describe the implemented function</h4>
+      <span class="sev crit">Critical</span>
+    </div>
+    <p>
+      Equation <span class="mono">(eq:sog)</span> states
+      <code>V<sub>g</sub> = V<sub>s</sub> − ΔV<sub>wind</sub> − ΔV<sub>wave</sub> + V<sub>c,∥</sub></code>
+      with <code>V<sub>c,∥</sub> = V<sub>c</sub>cos θ<sub>c</sub></code>. Both halves are wrong.
+    </p>
+    <p>
+      <strong>There are no separate wind and wave terms</strong> — the code applies one combined
+      Beaufort-driven loss. <strong>The current is not an along-track projection</strong> but a full 2-D
+      vector synthesis, which is why a pure beam current <em>raises</em> SOG (12.50 → 12.86 kn at 3 kn
+      abeam) rather than leaving along-track progress unchanged.
+    </p>
+    <span class="evidence">physics.py:292-316 · :234-236</span>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <h4>Significant wave height is not an input — and the paper says both things</h4>
+      <span class="sev crit">Critical</span>
+    </div>
+    <p>
+      Waves affect the model only through the Beaufort number, whose scale definition already encodes a
+      characteristic sea state. The paper states this correctly at line 247 — "wave condition measured in
+      Beaufort units" — then contradicts it at line 358: "the wave added-resistance loss scales with
+      significant wave height <code>H<sub>w</sub></code> and the beam-to-length ratio." Neither quantity
+      appears in the speed path.
+    </p>
+    <span class="evidence">physics.py:249 declared · :446 passed · never an operand · collector.py:137 BN from wind speed</span>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <h4>Segment-boundary nodes are priced with the previous segment's heading</h4>
+      <span class="sev crit">Critical</span>
+    </div>
+    <p>
+      <code>position_at_d</code> resolves a distance lying exactly on a segment boundary to the segment
+      that <em>ends</em> there, so every path gets the outgoing leg's first stretch priced with the
+      incoming heading. Route 1's first turn is 61.25° → 121.53°, so that stretch is priced 60° off, which
+      feeds straight into the relative wind angle and the resistance. This is independent of how the
+      squares are drawn and survives any re-placement of the lines.
+    </p>
+    <span class="evidence">geo_grid.py:246 · route 1 — 11/11 interior boundaries · route 2 — 9/9</span>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <h4>The 0.5° cell corresponds to nothing, and five defects follow from it</h4>
+      <span class="sev crit">Critical</span>
+    </div>
+    <p>
+      It is neither the source grid (~0.08°) nor our sampling interval (25 / 5 NM). Because it matches
+      neither, five separate faults arise, all of which disappear when the squares are drawn at the
+      sampling interval instead:
+    </p>
+    <ol style="margin:10px 0 0;padding-left:20px;font-size:.925rem;color:var(--ink-soft)">
+      <li><strong>Cell identity is a coin-flip on the boundary.</strong> A node sitting on a 0.5° line has
+        <code>floor(lat/0.5)</code> landing on an integer, so arcs departing it are priced with the cell
+        being <em>left</em> about half the time — 80/152 crossings on route 1, 56/111 on route 2. A guard
+        existed in <code>build_edges.lookup_source_state</code> and was lost in the refactor.</li>
+      <li><strong>Currents are averaged as magnitude and bearing separately</strong>, not as vectors, so a
+        cell spanning a reversal manufactures current instead of cancelling it: 1 kn@090° with 1 kn@270°
+        returns 1.000 kn@180° where the true mean is zero.</li>
+      <li><strong>Beaufort is quantised before averaging</strong> — <code>round(mean(BN))</code> rather
+        than <code>BN(mean(V<sub>wind</sub>))</code> — an undocumented choice with no small consequences,
+        since one BN step doubles C<sub>form</sub> at low Beaufort.</li>
+      <li><strong>Route 1's cells are frequently empty</strong> and fetch a neighbour's reading, caching it
+        as their own; route 2's average four independent readings into one. One declared assumption, two
+        different operators, on the paper's two experiments.</li>
+      <li><strong>Cell size varies with latitude</strong> — 29.3 NM of longitude on route 1 against
+        18.3 NM on route 2 — so route 2 has a denser decision grid by geometry alone. The paper attributes
+        its larger SR–Luo gap entirely to weather severity.</li>
+    </ol>
+    <span class="evidence">weather.py:386-461 · geo_grid.py:216-219 · resolved by the redesign below</span>
+  </div>
+
+  <div class="finding high">
+    <div class="fhead">
+      <h4>The spatial grid is a function of the treatment variable</h4>
+      <span class="sev high">High</span>
+    </div>
+    <p>
+      H-lines are filtered for τ-feasibility against the speed band, and the band is derived from
+      <code>mean_sog ± 3</code> = f(distance, ETA). Changing the ETA changes <em>which cells exist in the
+      graph</em>. For a study whose independent variable is the ETA, that is a design problem in itself.
+    </p>
+    <span class="evidence">nodes.py:214-225 ← SR_main.py:159-161</span>
+  </div>
+
+  <div class="finding med">
+    <div class="fhead">
+      <h4>Beaufort is computed before averaging, not after</h4>
+      <span class="sev med">Medium</span>
+    </div>
+    <p>
+      BN is derived per waypoint at collection, so the pipeline evaluates
+      <code>round(mean(BN<sub>i</sub>))</code> rather than <code>BN(mean(V<sub>wind,i</sub>))</code>.
+      Averaging the physical quantity and then quantising is arguably the more defensible order, and a
+      ±1 disagreement is never small — at low Beaufort the linear term doubles C<sub>form</sub>, at high
+      Beaufort the 6.5-power term does the same. The choice is undocumented and reversible in one line.
+    </p>
+    <span class="evidence">weather.py:454</span>
+  </div>
+
+  <div class="finding med">
+    <div class="fhead">
+      <h4>The experimental-setup paragraph describes a study that was never run</h4>
+      <span class="sev med">Medium</span>
+    </div>
+    <p>
+      Lines 796–798 claim 25 departure times spaced three days apart across 3 ETA levels, giving 150
+      instances. The code has one ETA per route, with departures stepped <em>by the ETA</em>. No
+      three-ETA sweep exists and no 150-instance result appears anywhere. The section still says
+      "nineteen voyages" (canonical: 35) and "~80 days" (canonical: ~155).
+    </p>
+    <span class="evidence">run_chain_sweep.py:58-68</span>
+  </div>
+
+  <div class="finding med">
+    <div class="fhead">
+      <h4>Route 1 plans 112 hours beyond its forecast horizon, undisclosed</h4>
+      <span class="sev med">Medium</span>
+    </div>
+    <p>
+      Route 1's ETA is 280 h; the horizon is 168 h. The planner silently reuses each issue's maximum
+      available lead beyond that. Forty percent of the voyage is planned on a frozen forecast.
+    </p>
+    <span class="evidence">run_rh.py:122-123</span>
+  </div>
+
+  <div class="finding med">
+    <div class="fhead">
+      <h4>Forecast-hour semantics are undefined by the schema</h4>
+      <span class="sev med">Medium</span>
+    </div>
+    <p>
+      The collector writes offsets relative to process start; the rolling-horizon code reads them as leads
+      relative to the forecast issue. The shipped file satisfies both because of how collection was run. A
+      re-collection in one continuous process would silently corrupt every forecast vintage, with no error.
+    </p>
+    <span class="evidence">collector.py:176-177 vs run_rh.py:121 — latent, not an observed error</span>
+  </div>
+
+  <div class="finding med">
+    <div class="fhead">
+      <h4>Wind may be sampled from land cells</h4>
+      <span class="sev med">Medium</span>
+    </div>
+    <p>
+      <code>cell_selection</code> is never set. The Marine API defaults to <code>sea</code>, correctly, but
+      the Forecast API defaults to <code>land</code> — it seeks a land cell of similar elevation. Near the
+      coastal ends of both routes the wind record may therefore be mis-sourced. The fix is one parameter.
+    </p>
+    <span class="evidence">collector.py:79-85 — parameter absent</span>
+  </div>
+
+</div>
+
+<div class="sound">
+  <h3>What the audit did not find</h3>
+  <ul>
+    <li><strong>No forecast lookahead leak.</strong> Rolling-horizon vintage selection is correct: the
+      planner never reads a forecast issued after the decision time, and never substitutes actuals where a
+      forecast was intended.</li>
+    <li><strong>The rhumb-line geometry is right.</strong> It reproduces the benchmark paper's segment
+      table to 0.36 NM over 3,393 NM — the loxodrome is deliberate, not accidental.</li>
+    <li><strong>Direction averaging avoids the classic wrap bug.</strong> Bearings use a circular mean, so
+      0° and 350° do not average to 175°.</li>
+    <li><strong>Wind and current conventions are correct</strong> — meteorological FROM for wind,
+      oceanographic TOWARDS for current, each used consistently.</li>
+    <li><strong>The spatial machinery is real, not decorative</strong> — the crossings genuinely place the
+      decision lines and resolve the weather, so this is a change of <em>where</em> the lines go, not the
+      introduction of a mechanism that was missing.</li>
+  </ul>
+</div>
+
+<h2>What changes in the graph</h2>
+<p class="dek">
+  The rule is the same on both routes. The constraint that binds is not — so these are two decisions, and
+  they should be made and reported separately.
+</p>
+
+<h3>The rule, and why it is exactly right</h3>
+<p>
+  A decision point belongs where the <strong>weather partition</strong> changes. There is a reason this is
+  the right partition rather than merely a reasonable one: within a stretch over which the weather is held
+  constant, the fuel rate is convex in speed, so a constant speed over that stretch beats any varying
+  profile achieving the same transit time. The optimal control is therefore piecewise constant on exactly
+  the partition the weather is piecewise constant on — <strong>no finer partition can improve the
+  solution, and any coarser one forfeits optimality</strong>.
+</p>
+<p>
+  Our weather partition is the set of waypoint intervals, one reading each. So H-lines belong at the
+  waypoints, on both routes. What differs is what that costs and what it leaves unresolved.
+</p>
+
+<h3>Route 1 — sampling-limited: adopt it now, it is free</h3>
+
+<div class="tw">
+<table>
+  <thead><tr><th></th><th>today — 0.5° crossings</th><th>proposed — at waypoints</th></tr></thead>
+  <tbody>
+    <tr><td class="field">H-lines</td><td class="n">163</td><td class="n full">131</td></tr>
+    <tr><td class="field">Segment length</td><td class="n dead">irregular 10.4 – 30.9 NM</td><td class="n">25.00 – 48.99, median 25.00</td></tr>
+    <tr><td class="field">Readings per segment</td><td class="n dead">0.83 — some blind</td><td class="n full">exactly 1</td></tr>
+    <tr><td class="field">Heading changes captured</td><td>separately, as extra lines</td><td class="full">all 13 control points are waypoints</td></tr>
+    <tr><td class="field">Lattice cost, 6 h block</td><td class="n">1.0×</td><td class="n full">0.8×</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Route 1 gets <strong>smaller and correct at the same time</strong>. There is no cost trade-off to weigh,
+  so this one needs only Tal's agreement that the rule is right. The 13 control points are already
+  waypoints, so every heading change is an H-line automatically — no separate segment-boundary lines
+  needed.
+</p>
+
+<div class="entry-note warn">
+  <span class="lab">What route 1 still cannot do</span>
+  <p>
+    Each 25 NM segment crosses a <strong>median 8 source tiles</strong> (up to 16) and reads one of them.
+    The graph cannot fix that — only finer collection can. Two things follow for the write-up:
+  </p>
+  <ol style="margin-top:10px">
+    <li>State the square as 25 NM and the constancy scale as ~5 NM, and say plainly that route 1's squares
+      are five times the resolution of the data. It is a sampling-budget limitation, not a modelling
+      error.</li>
+    <li>Twelve segments run long — up to <strong>48.99 NM</strong>, together 446 NM or 13.1% of the route —
+      because of the collector's <code>int(d/interval) − 1</code> off-by-one. Fix that for any future
+      collection so segments are a uniform 25 NM. It cannot be fixed retrospectively.</li>
+  </ol>
+  <p>
+    Re-collecting route 1 finer would help only the perfect-foresight runs: rolling-horizon needs forecasts
+    issued in real time, and those cannot be backfilled.
+  </p>
+</div>
+
+<figure>
+<svg viewBox="0 0 520 292" role="img"
+     aria-label="Along the first 130 nautical miles of route 1, the 0.5 degree cell crossings are irregularly spaced from 10.4 to 30.9 nautical miles and one segment contains no sample, whereas H-lines placed at the waypoints give uniform 25 nautical mile segments each containing exactly one sample.">
+  <!-- axis -->
+  <line x1="70" y1="40" x2="460" y2="40" stroke="currentColor" stroke-width="1" opacity="0.6"/>
+  <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.75" text-anchor="middle">
+    <text x="70" y="30">0</text><text x="145" y="30">25</text><text x="220" y="30">50</text>
+    <text x="295" y="30">75</text><text x="370" y="30">100</text><text x="445" y="30">125 NM</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1" opacity="0.5">
+    <line x1="70" y1="36" x2="70" y2="44"/><line x1="145" y1="36" x2="145" y2="44"/>
+    <line x1="220" y1="36" x2="220" y2="44"/><line x1="295" y1="36" x2="295" y2="44"/>
+    <line x1="370" y1="36" x2="370" y2="44"/><line x1="445" y1="36" x2="445" y2="44"/>
+  </g>
+
+  <!-- sample guides running down through both bands -->
+  <g stroke="var(--rust)" stroke-width="1" stroke-dasharray="3 4" opacity="0.55">
+    <line x1="70" y1="66" x2="70" y2="252"/><line x1="145" y1="66" x2="145" y2="252"/>
+    <line x1="220" y1="66" x2="220" y2="252"/><line x1="295" y1="66" x2="295" y2="252"/>
+    <line x1="370" y1="66" x2="370" y2="252"/><line x1="445" y1="66" x2="445" y2="252"/>
+  </g>
+
+  <text x="70" y="60" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="var(--rust)">samples we hold — every 25 NM</text>
+  <g fill="var(--rust)">
+    <circle cx="70" cy="66" r="4"/><circle cx="145" cy="66" r="4"/><circle cx="220" cy="66" r="4"/>
+    <circle cx="295" cy="66" r="4"/><circle cx="370" cy="66" r="4"/><circle cx="445" cy="66" r="4"/>
+  </g>
+
+  <!-- BAND 1: today -->
+  <text x="70" y="103" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="currentColor">today — H-lines at 0.5° crossings</text>
+  <rect x="162.7" y="110" width="31.5" height="40" fill="var(--rust)" opacity="0.16"/>
+  <rect x="70" y="110" width="390" height="40" fill="none" stroke="currentColor" stroke-width="1.2"/>
+  <g stroke="currentColor" stroke-width="2">
+    <line x1="101.5" y1="110" x2="101.5" y2="150"/><line x1="162.7" y1="110" x2="162.7" y2="150"/>
+    <line x1="194.2" y1="110" x2="194.2" y2="150"/><line x1="286.9" y1="110" x2="286.9" y2="150"/>
+    <line x1="348.4" y1="110" x2="348.4" y2="150"/><line x1="379.6" y1="110" x2="379.6" y2="150"/>
+  </g>
+  <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.8" text-anchor="middle">
+    <text x="132" y="165">20.4</text><text x="178" y="165">10.5</text><text x="240" y="165">30.9</text>
+    <text x="317" y="165">20.5</text><text x="364" y="165">10.4</text>
+  </g>
+  <text x="178" y="105" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--rust)" text-anchor="middle">no sample</text>
+
+  <!-- BAND 2: proposed -->
+  <text x="70" y="183" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="var(--teal)">proposed — H-lines at waypoints</text>
+  <rect x="70" y="190" width="390" height="40" fill="none" stroke="var(--teal)" stroke-width="1.2"/>
+  <g stroke="var(--teal)" stroke-width="2">
+    <line x1="70" y1="190" x2="70" y2="230"/><line x1="145" y1="190" x2="145" y2="230"/>
+    <line x1="220" y1="190" x2="220" y2="230"/><line x1="295" y1="190" x2="295" y2="230"/>
+    <line x1="370" y1="190" x2="370" y2="230"/><line x1="445" y1="190" x2="445" y2="230"/>
+  </g>
+  <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--teal)" text-anchor="middle">
+    <text x="107" y="245">25.0</text><text x="182" y="245">25.0</text><text x="257" y="245">25.0</text>
+    <text x="332" y="245">25.0</text><text x="407" y="245">25.0</text>
+  </g>
+
+  <text x="70" y="275" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">
+    irregular 10.4–30.9 NM, one blind segment  →  uniform 25 NM, exactly one sample each</text>
+</svg>
+<figcaption>
+  <strong>The real first 130 NM of route 1.</strong> Cell crossings land at 10.5, 30.9, 41.4, 72.3, 92.8
+  and 103.2 NM — gaps of 10.4 to 30.9 NM, because the track crosses latitude and longitude lines at a
+  varying angle. The segment from 30.9 to 41.4 NM contains no waypoint, so it inherits a neighbour's
+  reading. Placing the lines at the waypoints instead gives uniform segments, each carrying exactly one
+  independent sample.
+</figcaption>
+</figure>
+
+<h3>Route 2 — compute-limited: the decision is runtime, not data</h3>
+
+<div class="tw">
+<table>
+  <thead><tr><th></th><th>today — 0.5° crossings</th><th>proposed — at waypoints</th><th>fallback — every 2nd</th></tr></thead>
+  <tbody>
+    <tr><td class="field">H-lines</td><td class="n">121</td><td class="n full">389</td><td class="n">195</td></tr>
+    <tr><td class="field">Segment length</td><td class="n">16.15 NM mean</td><td class="n">5.00 – 8.97, median 5.00</td><td class="n">10.00 median</td></tr>
+    <tr><td class="field">Readings per segment</td><td class="n partial">≈4, averaged into one</td><td class="n full">exactly 1</td><td class="n partial">2, averaged</td></tr>
+    <tr><td class="field">Source tiles crossed per segment</td><td class="n dead">median 8</td><td class="n full">median 3</td><td class="n partial">median 5</td></tr>
+    <tr><td class="field">Lattice cost, 6 h block</td><td class="n">1.0×</td><td class="n partial">3.2×</td><td class="n">1.6×</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Route 2's segments cross a median of three source tiles against route 1's eight, so it is the closer of
+  the two to the resolution of its own data — though still not inside a single tile. The full proposal
+  recovers roughly three times the spatial information the route already holds and currently averages
+  away. The price is 3.2× the lattice.
+</p>
+<p>
+  So this is a runtime judgement. If 3.2× proves intractable, taking every second waypoint gives 195
+  H-lines at 1.6× — still finer than today and still an improvement — but it reintroduces two-sample
+  averaging and with it the aggregation questions the redesign was meant to remove. I would pay the 3.2×
+  and keep the clean rule.
+</p>
+
+<div class="entry-note">
+  <p>
+    <strong>And there is a floor: do not go finer than 5 NM on route 2.</strong> Each sample sits a median
+    1.58 NM from the position its value actually belongs to — 32% of a 5 NM square. Below about 5 NM the
+    position uncertainty of a sample would exceed the square it is being placed in, so 5 NM is not merely
+    the budget that was available; it is close to the right answer on its own terms.
+  </p>
+</div>
+
+<h3>How to build the H-lines</h3>
+<p>
+  The construction is shorter than the one it replaces, and it turns on a single move:
+  <strong>make the collected waypoints the graph's polyline.</strong> Today the polyline runs through the
+  13 (or 11) control points and the waypoints are a separate list used only to fill cells. Promote them,
+  and the path the graph integrates becomes the path the weather was sampled along — which removes the
+  great-circle-versus-rhumb discrepancy rather than papering over it.
+</p>
+
+<div class="algo">
+  <div class="alabel">Construction — replaces h_line_distances_from_geo</div>
+<pre><b>input</b>  W = [(lat, lon)] — the collected waypoints, in route order
+       Δt — block length (h),  T — horizon (h),  τ — time grid (h)
+
+<b>1. distance axis</b>          <i>the waypoints ARE the polyline</i>
+   d[0] = 0
+   d[i] = d[i−1] + rhumb_distance(W[i−1], W[i])
+   L    = d[n−1]
+
+<b>2. H-lines</b>                <i>one per waypoint, both ends included</i>
+   H = d                        <i>— no crossings, no unions, no dedupe</i>
+
+<b>3. per-segment state</b>      <i>segment k spans [ d[k], d[k+1] )</i>
+   heading[k] = rhumb_bearing(W[k], W[k+1])
+   weather[k] = the reading stored at waypoint k
+   <i>— no cell, no aggregation, no empty-cell fallback</i>
+
+<b>4. V-lines</b>
+   V = { 0, Δt, 2Δt, … } ∪ { T }
+
+<b>5. segment lookup at pricing time</b>
+   k = bisect_right(H, d_src) − 1
+   <i>— exact: d_src is one of the numbers that define the boundaries</i>
+
+<b>6. feasibility</b>            <i>assertion, no longer a filter</i>
+   assert [ len[k]/v_max , len[k]/v_min ] contains a multiple of τ</pre>
+</div>
+
+<h4>Why the boundary ambiguity disappears</h4>
+<p>
+  Step 5 is the fix at the root. Today a node's cell is found by converting its distance to a latitude and
+  longitude and taking <code>floor(lat/0.5)</code> — and on a boundary that floor is a floating-point
+  coin-flip. In the new construction the node distances and the segment boundaries are
+  <em>the same numbers</em>, so the comparison is exact. I verified that
+  <code>bisect_right(H, d) − 1</code> returns the departing segment at <strong>every</strong> H-line on
+  both routes, with no exceptions. There is no derived coordinate to round, so there is nothing to get
+  wrong — and <code>position_at_d</code> leaves the pricing path entirely, taking the segment-boundary
+  heading bug with it.
+</p>
+
+<h4>The feasibility filter becomes a no-op</h4>
+<p>
+  Uniform spacing makes the τ-grid check pass everywhere: <strong>0 of 130</strong> segments fail on route
+  1 and <strong>0 of 388</strong> on route 2. The shortest segment on route 2 is 5.00 NM, whose traverse
+  window at 8.5–14.5 kn spans 0.345–0.588 h, or 2.4 τ steps — comfortably more than one. So the filter can
+  stay as an assertion, and if it ever fires that is now a signal something is wrong upstream rather than
+  routine attrition. This is what removes the ETA dependence: the filter no longer deletes lines, so the
+  spatial grid stops being a function of the speed band.
+</p>
+
+<h4>Two consequences worth stating in the paper</h4>
+<div class="entry-note">
+  <p>
+    <strong>The route length shifts very slightly.</strong> Measuring along the waypoint polyline gives
+    3393.55 NM on route 1 and 1954.03 NM on route 2. Route 1's figure sits 0.31 NM from Luo's table
+    (3393.24) and 2.29 NM below the stored haversine axis. The published "3,393 NM" stays correct to four
+    figures, and the three competing distance axes collapse to one.
+  </p>
+  <p>
+    <strong>Heading becomes per-segment rather than per-leg, and on route 2 that matters.</strong> Because
+    the waypoints sit on a great circle, the bearing drifts within each control-point leg — a median of
+    0.52° and up to 1.72° on route 1, but a median of <strong>4.32° and up to 6.30° on route 2</strong>.
+    The new construction captures that drift instead of holding one heading per leg. It also means the
+    paper's claim that "heading is constant in each route segment" (line 417) becomes true of the
+    discretization segment rather than the control-point leg — a better claim, but a different one.
+  </p>
+</div>
+
+<h4>What code this deletes</h4>
+<div class="tw">
+<table>
+  <thead><tr><th>Component</th><th>Fate</th></tr></thead>
+  <tbody>
+    <tr><td class="field"><code>nodes.h_line_distances_from_geo</code></td><td>replaced by steps 1–2</td></tr>
+    <tr><td class="field"><code>weather.cell_weather</code>, <code>_build_cell_index</code></td><td class="dead">deleted — no aggregation</td></tr>
+    <tr><td class="field"><code>weather.weather_at</code> fallback chain</td><td class="dead">deleted — no empty segments</td></tr>
+    <tr><td class="field"><code>frame.cell_weather_at</code></td><td>becomes a segment-index lookup</td></tr>
+    <tr><td class="field"><code>geo_grid.rhumb_grid_crossings</code>, <code>cell_index</code></td><td>off the solve path; keep for the figures</td></tr>
+    <tr><td class="field"><code>geo_grid.position_at_d</code></td><td>off the pricing path; keep for plotting</td></tr>
+    <tr><td class="field"><code>nodes</code> τ-feasibility filter</td><td>kept as an assertion</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Six findings collapse at once</h3>
+<div class="entry-note">
+  <p>
+    With one sample per segment, a segment's weather simply <em>is</em> that waypoint's reading. No cell,
+    no aggregation. That removes:
+  </p>
+  <ol style="margin-top:10px">
+    <li>the 0.5° binning and <code>cell_weather</code> entirely;</li>
+    <li>the <strong>empty-cell fallback</strong> — every segment carries its own sample by construction;</li>
+    <li>the <strong><code>floor()</code> boundary coin-flip</strong> — there are no cell boundaries to land on;</li>
+    <li>the <strong>non-vector current averaging</strong> — nothing is averaged;</li>
+    <li>the <strong>Beaufort quantise-then-average</strong> question — nothing is averaged;</li>
+    <li>most of the <strong>ETA-dependent H-line filter</strong>, since uniform spacing makes τ-feasibility uniform.</li>
+  </ol>
+</div>
+
+<h3>The temporal change, and the decoupling it requires</h3>
+<p>
+  Shrink the constancy block from 6 h toward 1 h. The hourly data is already in the file, so this costs
+  no collection. But <strong>keep the re-plan cadence at 6 h</strong>: the forecast <em>issue</em> is
+  6-hourly, which is the right reason to re-plan on that cycle, while the forecast <em>itself</em> is
+  hourly. The paper currently binds both to one number; they must be separated in the text and in
+  <code>run_rh</code>.
+</p>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Lattice size (H × V) vs today</th><th>route 1</th><th>route 2</th></tr></thead>
+  <tbody>
+    <tr><td class="field">H at waypoints + 6 h block</td><td class="n full">0.8×</td><td class="n">3.2×</td></tr>
+    <tr><td class="field">H at waypoints + 3 h block</td><td class="n">1.6×</td><td class="n">6.4×</td></tr>
+    <tr><td class="field">H at waypoints + 1 h block</td><td class="n">4.9×</td><td class="n partial">19.3×</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Note the two routes diverge here as well, and in the same direction as before. Route 1 can go to a
+  <strong>3 h block for 1.6×</strong> and even 1 h for 4.9× — its H-line saving pays for much of the extra
+  time resolution. Route 2 cannot: 3 h costs 6.4× and 1 h costs 19.3×, on top of a route that is already
+  the more expensive of the two. If only one route can afford a finer block, it should be route 1 — which
+  is the opposite of where the spatial deficiency lies, and worth saying out loud rather than discovering
+  later.
+</p>
+
+<h3>Order of work</h3>
+<div class="entry-note">
+  <ol>
+    <li><strong>Correctness fixes first</strong> — free, and independent of every decision above. Probe the
+      interior of the cell being entered rather than the point on its line; return the <em>outgoing</em>
+      segment's heading at a boundary; vector-average currents while <code>cell_weather</code> still
+      exists.</li>
+    <li><strong>Route 1: move H-lines to the waypoints.</strong> No trade-off to weigh — 163 → 131 lines at
+      0.8× cost. Needs only agreement that the rule is right.</li>
+    <li><strong>Route 2: decide the 3.2×.</strong> A runtime call. Measure it before committing, and keep
+      the 195-line fallback in reserve rather than as the plan.</li>
+    <li><strong>Then the block</strong>, per route: 3 h on route 1 is cheap; on route 2 it is not. Measure
+      before choosing, and do not assume both routes take the same value.</li>
+  </ol>
+</div>
+
+<p>
+  One convention to state rather than inherit, on both routes: price each segment with its
+  <strong>source</strong> waypoint's sample, matching the existing price-at-source convention, rather than
+  a two-point mean. And note that adopting a per-route block length means the paper can no longer describe
+  "the" discretization unit — it has to name one per route, which is more honest anyway given that the
+  spacing already differs by 5×.
+</p>
+
+<div class="sound">
+  <h3>What should not change</h3>
+  <ul>
+    <li>The <strong>(t, d) node formulation</strong> — nodes as time–distance pairs on a fixed track.</li>
+    <li>The <strong>rhumb geometry</strong> — it reproduces the benchmark table to 0.36 NM.</li>
+    <li>The <strong>streaming solver</strong> and the node-first arc enumeration.</li>
+    <li>The <strong>rolling-horizon vintage selection</strong> — no lookahead leak was found.</li>
+  </ul>
+  <p style="margin:12px 0 0;font-size:.925rem;color:var(--ink-soft)">
+    This is a change to <em>where the lines go</em>, not to the method.
+  </p>
+</div>
+
+<h2>What this does to the paper</h2>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Line</th><th>Current claim</th><th>Required change</th></tr></thead>
+  <tbody>
+    <tr><td class="n">771</td><td>Wind from GFS at 0.25°</td>
+      <td><strong>Wrong on both counts.</strong> <code>models</code> is unset, so best_match serves
+        <strong>ECMWF IFS HRES at ~9 km</strong> on an octahedral reduced-Gaussian grid. Either pin the
+        model and re-collect, or describe what is actually served</td></tr>
+    <tr><td class="n">773–775</td><td>MFWAM at 0.25°, twice daily, to 168 h</td>
+      <td>0.08°; and the field is unused, so delete the bullet or state plainly that wave height is
+        collected and not consumed. "168 h" is a property of our request (the 7-day default), not of the
+        product, which runs 10 days</td></tr>
+    <tr><td class="n">777</td><td>SMOC at 0.08°, once daily, to 168 h</td>
+      <td>Resolution and cadence correct. Same caveat on the horizon</td></tr>
+    <tr><td class="n">358–359</td><td>Wave loss "scales with <em>H<sub>w</sub></em> and the beam-to-length ratio"</td>
+      <td>False, and contradicts line 247. Waves enter only via Beaufort number</td></tr>
+    <tr><td class="n">274, 364</td>
+      <td><code>V<sub>g</sub> = V<sub>s</sub> − ΔV<sub>wind</sub> − ΔV<sub>wave</sub> + V<sub>c,∥</sub></code></td>
+      <td>Neither half matches the code: one combined BN-driven loss, and the current enters as a 2-D
+        vector magnitude</td></tr>
+    <tr><td class="n">247</td><td>0.5° "chosen because it is used by global weather services"</td>
+      <td>Category error — the cell is imposed by us, and no source uses 0.5°. State it as a tractability
+        choice with the aggregation rule</td></tr>
+    <tr><td class="n">767</td><td>System granularity 0.25°, 6 h</td>
+      <td>Both wrong: sources are ~0.08° and hourly. 6 h is <em>our</em> cadence</td></tr>
+    <tr><td class="n">245</td><td>Vessel travels on a great circle</td>
+      <td>The solver sails a rhumb line, and line 417 already says heading is constant per segment.
+        Mutually exclusive</td></tr>
+    <tr><td class="n">796–798</td><td>150 instances, 3 ETAs, 3-day spacing</td>
+      <td>Describes an experiment that exists neither in the code nor the results</td></tr>
+    <tr><td class="n">63, 121, 125</td><td>Nineteen voyages</td><td>35 (13 + 22)</td></tr>
+    <tr><td class="n">782</td><td>Collection over ~80 days</td><td>~155 days</td></tr>
+    <tr><td class="n">—</td><td>Waypoint spacing never stated</td>
+      <td>25 NM vs 5 NM — a 5× asymmetry that determines whether a cell carries its own data</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>The honest framing</h2>
+<p>
+  The paper justifies allowing speed to change at cell crossings on the grounds that the operative data
+  change there. They do not. The forecast changes on a ~0.08° grid — 3–5 NM — and our knowledge of it
+  changes only at our waypoints. Neither happens at a geographic line we drew ourselves. The decision
+  grid and the information grid are different objects, and the fix is to make them the same object.
+</p>
+<p>
+  What can be defended, and stated exactly, is this: <strong>the spatial unit is one sampling interval,
+  within which the forecast is constant because we hold a single reading of it.</strong> That is true on
+  both routes by construction. On route 2, sampled at 5 NM against a 3–5 NM source tile, it is also true
+  of the data. On route 1, sampled at 25 NM, the unit is five times the constancy scale, and that is a
+  limitation of the sampling budget which belongs in the text.
+</p>
+<p>
+  On the spatial axis there is no version of this that reaches constancy: every practical segment crosses
+  several source tiles, so the square can only ever be an information partition, never a physical one. The
+  block is different. It is six times coarser than the hourly data already in the file and already paid
+  for, and shrinking it costs nothing but compute. If one number in the discretization can actually be
+  improved rather than merely described more honestly, it is the six hours.
+</p>
+
+<div class="foot">
+  Verified against pipeline/ at commit f99aba7.<br>
+  Source grids established by probing resolved cell coordinates on both Open-Meteo endpoints at
+  50.4°N 41°W (2026-09-06) and cross-checked against the Marine and Forecast data-source tables.<br>
+  Geometry derived from route configs and waypoint generation; formula map and dead-input proof from the
+  physics module. No figure in this document is measured from collected weather values.
+</div>
+
+</div>
