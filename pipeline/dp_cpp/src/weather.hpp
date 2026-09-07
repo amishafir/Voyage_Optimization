@@ -22,9 +22,12 @@ struct Weather {
     double ocean_current_velocity_kmh = 0.0;
     double ocean_current_direction_deg = 0.0;
 
+    // NaN in a field the model consumes. Wave height is carried but never read
+    // by the speed model, and wind speed only sets BN at collection time, so
+    // neither may invalidate an otherwise usable reading.
     bool has_nan() const {
-        return std::isnan(wind_speed_10m_kmh) || std::isnan(wind_direction_10m_deg)
-            || std::isnan(wave_height_m)       || std::isnan(ocean_current_velocity_kmh)
+        return std::isnan(wind_direction_10m_deg)
+            || std::isnan(ocean_current_velocity_kmh)
             || std::isnan(ocean_current_direction_deg);
     }
 
@@ -145,8 +148,9 @@ private:
         double wave_height_m           = std::numeric_limits<double>::quiet_NaN();
         double ocean_current_velocity_kmh  = std::numeric_limits<double>::quiet_NaN();
         double ocean_current_direction_deg = std::numeric_limits<double>::quiet_NaN();
-        bool has_nan() const { return std::isnan(wind_speed_10m_kmh) || std::isnan(wind_direction_10m_deg)
-            || std::isnan(wave_height_m) || std::isnan(ocean_current_velocity_kmh)
+        // Consumed fields only; see Weather::has_nan above.
+        bool has_nan() const { return std::isnan(wind_direction_10m_deg)
+            || std::isnan(ocean_current_velocity_kmh)
             || std::isnan(ocean_current_direction_deg); }
     };
 
@@ -195,9 +199,9 @@ WeatherDict VoyageWeather::cell_weather_at_d(double d, const std::vector<WP>& pa
                  (int)std::floor(lon_at / grid_deg)};
     auto wx = cell_weather(cell, sample_hour, forecast_hour, grid_deg);
     // Fall back to segment-aware nearest-valid lookup if cell has no valid data
-    bool any_nan = std::isnan(wx.at("wind_speed_10m_kmh"))
-                || std::isnan(wx.at("wave_height_m"))
-                || std::isnan(wx.at("ocean_current_velocity_kmh"));
+    bool any_nan = std::isnan(wx.at("wind_direction_10m_deg"))
+                || std::isnan(wx.at("ocean_current_velocity_kmh"))
+                || std::isnan(wx.at("ocean_current_direction_deg"));
     if (any_nan)
         return weather_at(d, sample_hour, forecast_hour);
     return wx;

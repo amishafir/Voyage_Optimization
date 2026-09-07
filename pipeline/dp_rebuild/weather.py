@@ -63,10 +63,15 @@ class Weather:
         )
 
     def has_nan(self) -> bool:
+        """NaN in a field the model consumes.
+
+        Wave height is carried in the record but is not an input to the speed
+        model, so a NaN there must not invalidate an otherwise usable reading.
+        Wind *speed* is likewise only used at collection time, to derive the
+        Beaufort number, and is left out for the same reason.
+        """
         for f in (
-            self.wind_speed_10m_kmh,
             self.wind_direction_10m_deg,
-            self.wave_height_m,
             self.ocean_current_velocity_kmh,
             self.ocean_current_direction_deg,
         ):
@@ -314,11 +319,12 @@ class VoyageWeather:
         return min(lst, key=lambda w: abs(w.distance_nm - d))
 
     def _row_has_nan(self, row) -> bool:
-        """True if any of the marine fields on this weather row is NaN."""
+        """True if a field the speed model consumes is NaN on this row."""
         if row is None:
             return True
-        for f in ("wind_speed_10m_kmh", "wind_direction_10m_deg",
-                  "wave_height_m",
+        # Wave height and wind speed are carried but not consumed by the speed
+        # model, so neither may gate a row. See Weather.has_nan.
+        for f in ("wind_direction_10m_deg",
                   "ocean_current_velocity_kmh", "ocean_current_direction_deg"):
             v = row[f]
             if v != v:  # NaN check (NaN != NaN)
