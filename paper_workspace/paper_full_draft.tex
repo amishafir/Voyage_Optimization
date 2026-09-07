@@ -92,7 +92,7 @@ vessel crosses a continually varying ocean.
 That same cube law cuts both ways. Its convexity means that under uniform conditions a single constant
 speed is fuel-optimal, and much of the speed-optimisation literature builds on exactly this property:
 one speed per voyage leg or per planning stage, with weather treated as constant over the span
-\citep{Norstad2011, Hvattum2013}. But the ocean is not uniform. When wind, waves and current change
+\citep{Norstad2011, Hvattum2013}. But the ocean is not uniform. When wind and current change
 along the route and over the voyage, the very convexity that rewards a constant speed under uniform
 conditions \emph{penalises} it under varying ones --- holding a single speed through changing weather
 forces the engine through inefficient excursions and, by Jensen's inequality, wastes fuel relative to a
@@ -111,7 +111,7 @@ weather forecasts refreshed periodically as the voyage unfolds?
 
 This paper answers all three. We formulate deterministic speed control as a shortest-path problem on a
 directed acyclic graph in the time--distance plane, in which the speed may change at every boundary
-where the operative data change --- each $0.5\degree$ weather-cell crossing and each heading change ---
+where the operative data change --- each $0.08\degree$ weather-cell crossing and each heading change ---
 rather than being locked across coarse stages. This per-cell resolution, unreachable by stage-based
 formulations without prohibitive growth of the profile space, is obtained here in a single Bellman
 sweep at polynomial cost. We then embed the program in a rolling-horizon scheme driven by \emph{real}
@@ -244,7 +244,7 @@ In this paper we study the problem of controlling the speed of sea vessels with 
 \begin{description}
 	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly referred to in the literature as expected time of arrival (ETA).
-	\item [Sea conditions]    The sea conditions  are given by the wind speed and direction, sea current speed and direction, and wave condition measured in Beaufort units. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours and the space to \emph{cells} of $0.5\degree \times 0.5\degree$ latitude and longitude. Recall that each latitude degree and each longitude degree at the equator is 60 NM (111 km).  This discretization level was chosen because it is used by global weather and forecast services.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
+	\item [Sea conditions]    The sea conditions are given by the wind speed and direction, summarised by the Beaufort number, and by the sea current speed and direction. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours and the space to \emph{cells} of $0.08\degree \times 0.08\degree$ latitude and longitude. Recall that a degree of latitude is 60 NM (111 km) everywhere, while a degree of longitude is 60 NM at the equator and shrinks with the cosine of the latitude; a $0.08\degree$ cell is therefore roughly 5 NM across on the routes studied here. This discretization level was chosen because it is the native resolution at which the global weather and forecast services used in this study deliver their fields (Section~\ref{sec:data}).  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
 	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtains this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, which is described in Appendix~\ref{app:fcr}.  We assume that the vessel characteristics are fixed.  The vessel course is fixed at that of the route segment.  It is assumed that the FCR is an increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
 \end{description}
 
@@ -267,11 +267,11 @@ In the stochastic version of the problem, speed decisions are made based on the 
 \label{sec:sog}
 The vessel's \emph{still-water speed} (SWS) $V_s$ is the speed it would make in calm water at a given
 power setting; the \emph{speed over ground} (SOG) $V_g$ is $V_s$ modified by the environment --- wind
-and waves reduce it, while the along-track component of the current adds to or subtracts from it.
+reduces it, while the along-track component of the current adds to or subtracts from it.
 Following the resistance-correction model of \citet{yang2020},
 \begin{equation}
 \label{eq:sog}
-V_g \;=\; V_s - \Delta V_{\text{wind}}(V_s,w) - \Delta V_{\text{wave}}(V_s,w) + V_{c,\parallel},
+V_g \;=\; V_s - \Delta V_{\text{wind}}(V_s,w) + V_{c,\parallel},
 \qquad V_g \ge 0,
 \end{equation}
 where $w$ is the local sea state and $V_{c,\parallel}$ the along-track current component. For fixed
@@ -349,19 +349,18 @@ given in Section~\ref{sec:data}.
 \label{sec:sog}
 The vessel's still-water speed (SWS), $V_s$, is the speed it would make in calm water at a given
 power setting. The speed actually achieved over the ground (SOG), $V_g$, is $V_s$ modified by the
-environment: wind and waves reduce it, and the along-track component of the current adds to or
+environment: wind reduces it, and the along-track component of the current adds to or
 subtracts from it. This study uses the resistance-decomposition model of \citet{yang2020}.
 
-The wind- and wave-induced speed losses depend on the Beaufort number $BN$ (computed from the 10 m
+The wind-induced speed loss depends on the Beaufort number $BN$ (computed from the 10 m
 wind speed; see Section~\ref{sec:data}), the Froude number, and a set of direction- and
-form-dependent coefficients tabulated by \citet{yang2020}. The wind speed loss is a
-fifth-order function of the wind angle relative to heading, and the wave added-resistance loss scales
-with significant wave height $H_w$ and the beam-to-length ratio. The current contributes its
+form-dependent coefficients tabulated by \citet{yang2020}. It is piecewise constant in the wind
+angle relative to heading. The current contributes its
 along-track projection, $V_{c,\parallel}=V_c\cos\theta_c$. Combining these terms gives the speed over
 ground:
 \begin{equation}
 \label{eq:sog}
-V_g \;=\; V_s - \Delta V_{\text{wind}} - \Delta V_{\text{wave}} + V_{c,\parallel},
+V_g \;=\; V_s - \Delta V_{\text{wind}} + V_{c,\parallel},
 \qquad V_g \ge 0.
 \end{equation}
 
@@ -419,7 +418,7 @@ in each leg). Second, the sea conditions are constant within each sea cell and t
 Third, the FCR is a convex function of the SOG (see Section~\ref{sec:problem}).
 Therefore, under optimal control the SOG remains constant as long as the vessel is in the same leg and within the same time block; the remaining continuum --- where exactly on a boundary the vessel arrives --- is handled by the grid of Section~\ref{sec:states}.
 
-As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.5\degree$ latitude or longitude line, a new subsegment starts. Within each time block, the sea conditions are assumed constant throughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (major) segment, the vessel changes its heading, which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular the last breakpoint is the end of the route, $d_M = D$, and we use the two interchangeably from here on.
+As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.08\degree$ latitude or longitude line, a new subsegment starts, so a subsegment is about 5 NM long. Within each time block, the sea conditions are assumed constant throughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (major) segment, the vessel changes its heading, which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular the last breakpoint is the end of the route, $d_M = D$, and we use the two interchangeably from here on.
 
 % ==== NEW (forward pointer to φ instead of a second fuel-rate symbol) ====
 The FCR of the vessel steaming at speed $v \in \mathcal{V}(d)$ therefore depends only on the subsegment and the time block it is in; Section~\ref{sec:states} makes this precise through the function $\phi(t,d;v)$. Idling is free of propulsion fuel, $\phi(t,d;0)=0$, so a wait at $d=0$ or at $d=D$ costs time but no fuel; auxiliary (hotel) consumption is outside the scope of this model.
@@ -439,7 +438,7 @@ $0=t_0, t_1,\ldots, t_{\Theta}=T$.
 
 
 
-The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the time--distance plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 1$ NM), both measured from the start of the voyage so that every line carries the same uniform grid
+The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the time--distance plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 0.2$ NM), both measured from the start of the voyage so that every line carries the same uniform grid
 (Figure~\ref{fig:state-neighbours}).
 
 
@@ -512,17 +511,20 @@ We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/state_neighbours_pair.pdf}
-\caption{An initial state and its candidate successors in one real interior block of the Indian
-Ocean route, voyage~0 ($d\in[1963.886,1995.719]$ NM, $t\in[120,126]$ h). The source is
-$(121\ \mathrm{h},1963.886\ \mathrm{NM})$ in (a) and $(120\ \mathrm{h},1970\ \mathrm{NM})$ in (b).
-Circles are states on the distance lines, which carry the $\tau$-grid; squares are states on the
-time lines, which carry the $\delta$-grid; both grids are anchored at the voyage start
-(Eq.~\eqref{eq:state-space}). Coloured markers are the successors admitted by
-Eq.~\eqref{eq:neighbors}, grey ones the remaining states. The cone spans the $V_{\min}$ and
-$V_{\max}$ rays; with $V_{\min}>0$ it has no vertical edge, since Eq.~\eqref{eq:speed-set} admits
-the zero-speed wait leg only at $d=0$ and $d=D$. For legibility the drawing uses $\delta=5$ NM,
-$\tau=1$ h and $[V_{\min},V_{\max}]=[3,16]$ kn; the experiments use $\delta=1$ NM, $\tau=0.1$ h and
-the band of Section~\ref{sec:data}.}
+\caption{An initial state and its candidate successors, on a schematic block: a $5$ NM
+subsegment, $d\in[240,245]$ NM, inside a six-hour epoch, $t\in[24,30]$ h, with each panel
+showing a $2.3$ h window of it. The coordinates are illustrative, chosen so the grids can be read off
+the axes; $5$ NM is representative of a $0.08\degree$ cell on these routes. The source is
+$(24.2\ \mathrm{h},240\ \mathrm{NM})$ in (a) and $(29\ \mathrm{h},240\ \mathrm{NM})$ in (b). Every state is drawn as a disc: those on the
+distance lines carry the $\tau$-grid, those on the time lines the $\delta$-grid, and both grids are
+anchored at the voyage start (Eq.~\eqref{eq:state-space}). Blue marks the successors admitted by
+Eq.~\eqref{eq:neighbors} on the next distance line, green those admitted on the next time line, and
+grey the remaining states. The cone spans the
+$V_{\min}$ and $V_{\max}$ rays; with $V_{\min}>0$ it has no vertical edge, since
+Eq.~\eqref{eq:speed-set} admits the zero-speed wait leg only at $d=0$ and $d=D$. At this cell size
+the vessel normally leaves through the distance wall, as in (a); the time wall is reachable only late
+in the epoch, as in (b). The drawing uses the experimental grids, $\delta=0.2$ NM and $\tau=0.1$ h,
+with the band widened to $[3,16]$ kn for legibility.}
 \label{fig:state-neighbours}
 \end{figure}
 When the vessel is steaming in a sub-segment that starts at point $d$ at time $t$  it is subject to the fixed sea conditions and with the same heading until the end of the sea condition time block and the end of the sub-segment, whatever it reaches first. I.e., it steams inside a given rectangular area of the time--distance space demonstrated in Figure X.   Therefore, the FCR is determined only by $v$ within this rectangular area.  We denote this FCR by $\phi(t, d; v)$ metric ton / hour.
@@ -773,9 +775,6 @@ octahedral reduced-Gaussian grid, with latitude rows $0.0703\degree$ apart and a
 spacing of $0.1584\degree$ whose point count varies by row; the resulting cells are approximately 9 km,
 equivalent to $0.08\degree$. This is consistent with the ECMWF \emph{Integrated Forecasting System} (IFS)
 high-resolution configuration. Re-initialised every 6 h, retrieved to a 168 h horizon.
-\item \textbf{Waves} (significant wave height) --- the M\'et\'eo-France wave model (MFWAM), a
-third-generation spectral ocean-wave model, at $0.08\degree$ resolution, re-initialised twice daily,
-retrieved to a 168 h horizon.
 \item \textbf{Ocean currents} (velocity and direction) --- the M\'et\'eo-France SMOC ocean model, at
 $0.08\degree$ resolution, re-initialised once daily, retrieved to a 168 h horizon.
 \end{itemize}
@@ -789,9 +788,9 @@ conditions against which a voyage is evaluated; the predicted record provides th
 to a planner at each decision point.
 
 \paragraph{NWP model refresh cycle.} Each product refreshes on its own fixed cycle, which sets the
-re-plan cadence used later. The wind product refreshes every 6 h, MFWAM (waves) every 12 h, and
-SMOC (currents) every 24 h. The predicted-weather record confirms this: at a 1 h query cadence, 86\%
-of consecutive wind values were identical to the previous hour (94\% for waves, 97\% for currents).
+re-plan cadence used later. The wind product refreshes every 6 h and SMOC (currents) every 24 h.
+The predicted-weather record confirms this: at a 1 h query cadence, 86\% of consecutive wind values
+were identical to the previous hour, and 97\% of consecutive current values.
 Re-planning more frequently than 6 h therefore acts on no new wind information, which is why the 6 h
 cadence used below is set by the data rather than tuned.
 

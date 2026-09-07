@@ -1,8 +1,12 @@
 """Generate the matched two-panel state-neighbours figure.
 
-The panels use one real interior block from the Indian Ocean route (Persian Gulf
-to the Strait of Malacca), voyage 0.  Geometry is reconstructed from the canonical
-route waypoints; candidates are generated from Eq. (5), not hand-authored.
+The block is SYNTHETIC: a 5 NM subsegment at d in [240, 245] inside a six-hour
+epoch, chosen so the reader can read the grids straight off the axes.  It is not
+a block of any particular voyage.  The 5 NM width is representative rather than
+measured: a 0.08 deg cell is roughly that wide on the routes of the paper.  Only
+the speed band defaults (PROVISIONAL_VMIN/VMAX_KN) still derive from the real
+Indian Ocean route length and ETA, and the drawing overrides them anyway.
+Candidates are generated from Eq. (5), not hand-authored.
 
 Outputs (in this directory by default):
   state_neighbours.pdf / .png
@@ -81,29 +85,29 @@ PROVISIONAL_VMIN_KN = ROUTE_LENGTH_NM / ETA_H - 3.0
 # admissible windows are then narrower than one grid step, so the band is
 # widened to [3, 16] kn purely for the drawing.  Both families stay populated
 # and V_min > 0 still makes the cone's lower edge a ray rather than a vertical.
-FIGURE_DELTA_NM = 5.0
-FIGURE_TAU_H = 1.0
+FIGURE_DELTA_NM = 0.2
+FIGURE_TAU_H = 0.1
 FIGURE_VMIN_KN = 3.0
 FIGURE_VMAX_KN = 16.0
 
-FROZEN_D_LEFT_NM = 1963.886308
-FROZEN_D_RIGHT_NM = 1995.718977
+FROZEN_D_LEFT_NM = 240.0
+FROZEN_D_RIGHT_NM = 245.0
 
 
 @dataclass(frozen=True)
 class BlockSpec:
-    route: str = "Indian Ocean route: Persian Gulf--Strait of Malacca"
-    voyage: str = "voyage 0 (sh_base=6)"
+    route: str = "synthetic illustrative block (not a specific voyage)"
+    voyage: str = "n/a"
     d_left: float = FROZEN_D_LEFT_NM
     d_right: float = FROZEN_D_RIGHT_NM
-    t_top: float = 120.0
-    t_bottom: float = 126.0
+    t_top: float = 24.0
+    t_bottom: float = 30.0
     tau_h: float = FIGURE_TAU_H
     delta_nm: float = FIGURE_DELTA_NM
     vmax_kn: float = FIGURE_VMAX_KN
     vmin_kn: float = FIGURE_VMIN_KN
-    xlim: tuple[float, float] = (1958.0, 2002.0)
-    ylim: tuple[float, float] = (119.2, 126.8)
+    xlim: tuple[float, float] = (239.3, 245.8)
+    ylim: tuple[float, float] = (23.55, 30.55)
 
 
 @dataclass(frozen=True)
@@ -115,6 +119,10 @@ class PanelSpec:
     subtitle: str
     # True only at d = 0 or d = D, where Eq. (2) admits the zero-speed wait leg.
     boundary_layer: bool = False
+    # Optional per-panel time window. Both panels use the same SPAN, so the
+    # drawn scale is identical; only the absolute range differs, because the
+    # two sources sit at different points of the same 6 h epoch.
+    ylim: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -129,19 +137,21 @@ PANELS = {
     "a": PanelSpec(
         key="a",
         # On the absolute tau-grid of Eq. (5).
-        source_t=121.0,
+        source_t=24.2,
         source_d=FROZEN_D_LEFT_NM,
         source_line="distance",
         subtitle=r"(a) an initial state on a $\mathit{distance}$ line",
+        ylim=(23.85, 26.15),
     ),
     "b": PanelSpec(
         key="b",
-        source_t=120.0,
-        # Must sit on the absolute delta-grid of Eq. (5); the old value
-        # (d_right - 16) was anchored to the wall and is no longer a state.
-        source_d=1970.0,
-        source_line="time",
-        subtitle=r"(b) an initial state on a $\mathit{time}$ line",
+        # Late in the epoch: the remaining time is short enough that the
+        # V_min ray leaves through the time wall instead of the distance wall.
+        source_t=29.0,
+        source_d=FROZEN_D_LEFT_NM,
+        source_line="distance",
+        subtitle=r"(b) an initial state late in the $\mathit{time}$ block",
+        ylim=(28.25, 30.55),  # shows t_{j+1}
     ),
 }
 
@@ -151,7 +161,7 @@ PANELS = {
 # ---------------------------------------------------------------------------
 
 FIGSIZE = (6.0, 4.6)
-PAIR_FIGSIZE = (12.0, 4.6)
+PAIR_FIGSIZE = (6.0, 6.4)
 PLOT_BOX = (0.17, 0.15, 0.67, 0.66)
 COMPASS_BOX = (0.06, 0.87, 0.34, 0.11)
 SUBTITLE_Y = 0.035
@@ -183,8 +193,8 @@ FONT = {
     "subtitle": 10.0,
 }
 
-SOURCE_SIZE = 92
-CANDIDATE_SIZE = 31
+SOURCE_SIZE = 47
+CANDIDATE_SIZE = 16
 MARKER_EDGE_WIDTH = 0.65
 # One style per line family, applied identically in both panels.
 DISTANCE_LINE_WIDTH = 1.9
@@ -258,15 +268,18 @@ def _longitude_crossing_distance_nm(target_lon: float) -> tuple[float, int]:
     raise ValueError(f"Route does not cross longitude {target_lon}")
 
 
-def verify_provenance(block: BlockSpec) -> None:
-    left, left_segment = _longitude_crossing_distance_nm(78.5)
-    right, right_segment = _longitude_crossing_distance_nm(79.0)
-    assert left_segment == right_segment == 8
-    assert abs(left - block.d_left) <= 1e-6, (left, block.d_left)
-    assert abs(right - block.d_right) <= 1e-6, (right, block.d_right)
+def verify_block(block: BlockSpec) -> None:
+    """Structural checks only.
+
+    The block is synthetic, so there is no route geometry to verify it against.
+    What must hold is that it is a well-formed interior block: positive extent
+    in both axes, a six-hour epoch, and both grids dividing into it.
+    """
     assert block.t_top > 0.0 and block.d_left > 0.0
     assert block.t_bottom - block.t_top == 6.0
-    assert block.d_left < block.d_right < ROUTE_LENGTH_NM
+    assert block.d_left < block.d_right
+    assert block.tau_h > 0.0 and block.delta_nm > 0.0
+    assert block.vmin_kn >= 0.0 and block.vmax_kn > block.vmin_kn
 
 
 # ---------------------------------------------------------------------------
@@ -413,7 +426,8 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
 
     ax = fig.add_axes(_subrect(canvas, PLOT_BOX))
     ax.set_xlim(*block.xlim)
-    ax.set_ylim(block.ylim[1], block.ylim[0])  # elapsed time increases downward
+    _ylim = panel.ylim or block.ylim
+    ax.set_ylim(_ylim[1], _ylim[0])  # elapsed time increases downward
     ax.set_xticks([])
     ax.set_yticks([])
     for spine in ax.spines.values():
@@ -438,8 +452,8 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
                 color=COLORS["time"], lw=TIME_LINE_WIDTH, zorder=1.4)
 
     # Every state of Eq. (5) on all four boundaries of the block, at full marker
-    # size in grey: circles on the two distance lines, which carry the tau-grid,
-    # and squares on the two time lines, which carry the delta-grid.  Candidate
+    # size in grey: the two distance lines carry the tau-grid and the two time
+    # lines carry the delta-grid; all states are drawn as discs.  Candidate
     # markers are overplotted below, so what stays grey is what is unreachable
     # from this source.
     all_times = grid_times(block)
@@ -450,7 +464,7 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
                    edgecolor=COLORS["white"], linewidth=MARKER_EDGE_WIDTH, zorder=2)
     for t_line in (block.t_top, block.t_bottom):
         ax.scatter(all_distances, [t_line] * len(all_distances), s=CANDIDATE_SIZE,
-                   color=COLORS["inactive"], marker="s",
+                   color=COLORS["inactive"], marker="o",
                    edgecolor=COLORS["white"], linewidth=MARKER_EDGE_WIDTH, zorder=2)
 
     # Speed cone: upper edge is the v_max ray, lower edge is the v_min ray
@@ -478,16 +492,18 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
     ax.plot([panel.source_d, slow_end[0]], [panel.source_t, slow_end[1]],
             color=COLORS["speed"], lw=SPEED_EDGE_WIDTH, zorder=3.2)
 
-    # Candidate fan lines are thinned, while every candidate marker remains.
+    # One fan line per candidate marker: the thinned variant (max 8 rays)
+    # was invisible while the grids were coarse, but at delta = tau = 0.1
+    # it leaves markers without an arc, which misreads as spurious states.
     f1 = list(families.distance_wall)
     f2 = list(families.time_wall)
-    for i in _sample_indices(len(f1), 8):
+    for i in range(len(f1)):
         dst_t, dst_d = f1[i]
         ax.plot([panel.source_d, dst_d], [panel.source_t, dst_t],
                 color=COLORS["fan1"], lw=FAN_WIDTH, alpha=0.82, zorder=2.7)
     # The shared corner is rendered as family 1 only.
     f2_render = [p for p in f2 if p not in set(f1)]
-    for i in _sample_indices(len(f2_render), 8):
+    for i in range(len(f2_render)):
         dst_t, dst_d = f2_render[i]
         ax.plot([panel.source_d, dst_d], [panel.source_t, dst_t],
                 color=COLORS["fan2"], lw=FAN_WIDTH, alpha=0.86, zorder=2.7)
@@ -498,7 +514,7 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
                    edgecolor=COLORS["white"], linewidth=MARKER_EDGE_WIDTH, zorder=4)
     if f2_render:
         ax.scatter([d for _t, d in f2_render], [t for t, _d in f2_render],
-                   s=CANDIDATE_SIZE, color=COLORS["family2"], marker="s",
+                   s=CANDIDATE_SIZE, color=COLORS["family2"], marker="o",
                    edgecolor=COLORS["white"], linewidth=MARKER_EDGE_WIDTH, zorder=4)
 
     # Source state and exact numeric label, tuple order matching the paper.
@@ -516,22 +532,25 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
                           edgecolor="none", alpha=0.85))
 
     # Four real block boundary labels.
+    _top_vis = _ylim[0]
     ax.annotate(rf"$d_i={_num(block.d_left)}\,\mathrm{{NM}}$",
-                (block.d_left, block.t_top), xytext=(0, 9), textcoords="offset points",
+                (block.d_left, _top_vis), xytext=(0, 9), textcoords="offset points",
                 fontsize=FONT["boundary"], color=COLORS["distance"],
                 ha="left", va="bottom")
     ax.annotate(rf"$d_{{i+1}}={_num(block.d_right)}\,\mathrm{{NM}}$",
-                (block.d_right, block.t_top), xytext=(0, 9), textcoords="offset points",
+                (block.d_right, _top_vis), xytext=(0, 9), textcoords="offset points",
                 fontsize=FONT["boundary"], color=COLORS["distance"],
                 ha="right", va="bottom")
-    ax.annotate(rf"$t_j={_num(block.t_top)}\,\mathrm{{h}}$",
-                (block.d_left, block.t_top), xytext=(-7, 0), textcoords="offset points",
-                fontsize=FONT["boundary"], color=COLORS["time"],
-                ha="right", va="center")
-    ax.annotate(rf"$t_{{j+1}}={_num(block.t_bottom)}\,\mathrm{{h}}$",
-                (block.d_left, block.t_bottom), xytext=(-7, 0), textcoords="offset points",
-                fontsize=FONT["boundary"], color=COLORS["time"],
-                ha="right", va="center")
+    if block.t_top >= _ylim[0] - 1e-9:
+        ax.annotate(rf"$t_j={_num(block.t_top)}\,\mathrm{{h}}$",
+                    (block.d_left, block.t_top), xytext=(-7, 0), textcoords="offset points",
+                    fontsize=FONT["boundary"], color=COLORS["time"],
+                    ha="right", va="center")
+    if block.t_bottom <= _ylim[1] + 1e-9:
+        ax.annotate(rf"$t_{{j+1}}={_num(block.t_bottom)}\,\mathrm{{h}}$",
+                    (block.d_left, block.t_bottom), xytext=(-7, 0), textcoords="offset points",
+                    fontsize=FONT["boundary"], color=COLORS["time"],
+                    ha="right", va="center")
 
     # Candidate labels: actual absolute values, deterministically thinned.
     for i in _time_label_indices(f1):
@@ -539,7 +558,7 @@ def _draw_panel(fig, canvas: tuple[float, float, float, float],
         ax.annotate(_num(dst_t), (dst_d, dst_t), xytext=(6, 0),
                     textcoords="offset points", fontsize=FONT["candidate"],
                     color=COLORS["family1"], ha="left", va="center")
-    for i in _sample_indices(len(f2_render), 5):
+    for i in _sample_indices(len(f2_render), 3):
         dst_t, dst_d = f2_render[i]
         ax.annotate(_num(dst_d), (dst_d, dst_t), xytext=(0, -6),
                     textcoords="offset points", fontsize=FONT["candidate"],
@@ -601,7 +620,7 @@ def generate_assets(output_dir: Path | str | None = None,
     output.mkdir(parents=True, exist_ok=True)
     block = BlockSpec(vmax_kn=float(vmax_kn), vmin_kn=float(vmin_kn),
                       delta_nm=float(delta_nm), tau_h=float(tau_h))
-    verify_provenance(block)
+    verify_block(block)
 
     chosen = tuple(panels)
     summary: dict[str, object] = {
@@ -627,8 +646,8 @@ def generate_assets(output_dir: Path | str | None = None,
 
     if combined and set(chosen) == {"a", "b"}:
         fig = plt.figure(figsize=PAIR_FIGSIZE, facecolor="white")
-        _draw_panel(fig, (0.0, 0.0, 0.5, 1.0), block, PANELS["a"])
-        _draw_panel(fig, (0.5, 0.0, 0.5, 1.0), block, PANELS["b"])
+        _draw_panel(fig, (0.0, 0.5, 1.0, 0.5), block, PANELS["a"])
+        _draw_panel(fig, (0.0, 0.0, 1.0, 0.5), block, PANELS["b"])
         _save(fig, output / "state_neighbours_pair")
 
     print(json.dumps(summary, indent=2))
