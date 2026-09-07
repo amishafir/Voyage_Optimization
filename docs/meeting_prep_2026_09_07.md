@@ -6,9 +6,14 @@ Sections 4–6 of the Aug-24 and Aug-31 preps were never filled in, so both deci
 forward again below. Section 1 is new material: the discretization question was taken to the source APIs
 and to the code, and **the premise the whole investigation rested on turned out to be wrong**.
 
-Supporting document: `docs/weather_resolution_audit_2026_09_06.html` (focused version — sources, parameter
-map, computation chain, the rectangle). Full version with all findings, the per-route graph redesign and
-the paper-impact table retained at `docs/weather_resolution_audit_FULL_2026_09_06.html`.
+Supporting documents:
+
+- `docs/weather_resolution_audit_2026_09_06.html` — focused: sources, parameter map, computation chain,
+  the rectangle. Full version with all twelve findings, the per-route graph redesign and the paper-impact
+  table retained at `docs/weather_resolution_audit_FULL_2026_09_06.html`.
+- [h_line_realignment_design.md](h_line_realignment_design.md) — **where the changes land**: every code
+  site in both engines, the collection fixes, the verification strategy, the paper edits, and the
+  dependency order. Summarised in §1H below.
 
 ---
 
@@ -214,6 +219,48 @@ wind model's cycle"). The 6 h refresh figure stays valid; Open-Meteo lists ECMWF
   any results table. Also uses NM as a speed unit. This is a description of a different study, not a wrong
   number.
 
+### 1H. Where the changes land — and two facts that set the cost
+
+Full specification in [h_line_realignment_design.md](h_line_realignment_design.md). Two things in it
+change the size of this job and should be settled in the room.
+
+**The C++ engine is the production path.** The paper's numbers come from
+`paper_workspace/results/2026_08_11_chain_sweep_v2_cpp/`. `pipeline/dp_cpp/src/` is 3,487 lines mirroring
+the Python solve path function-for-function, so **every change lands twice** — `nodes.cpp:49`,
+`frame.cpp:30,36`, `weather.cpp` (353 + 182 lines), `geo_grid.cpp:48,109`, `atomic_edges.cpp:56,63`,
+`luo_main.cpp:119,125,204,210,241,275`, `SR_main.cpp:33`. Cross-engine bit-exactness is the real gate,
+as it was for the streaming refactor.
+
+**Both regression harnesses break by construction.** Python goldens store `schedule_sha256`; the C++
+harness compares per-edge CSVs. Changing the partition changes every node id, so
+**the existing baselines cannot validate this work — only report that it happened.** Proposal: flag-gate
+`--h_lines={geo,waypoint}` in both engines, run the two on identical inputs, accept the measured delta,
+then re-freeze.
+
+**Code sites, in brief:**
+
+| Area | What happens |
+|---|---|
+| `nodes.py:160` / `nodes.cpp:49` | H-line generator replaced by the waypoint-distance list |
+| `nodes.py:206-247` τ filter | demoted to an assertion (verified 0/130 and 0/388 fail) — this is what ends the ETA→grid coupling |
+| `frame.py:114` / `frame.cpp:30` | `cell_weather_at` → `segment_weather_at`, via `bisect_right(H, d) − 1` |
+| `frame.py:131` / `frame.cpp:36` | `paper_heading_at` → per-segment rhumb bearing — **the heading fix**, and it ends the dependence on Luo's 12-value heading table |
+| `weather.py:386,399,463` | cell index, cell aggregation and the fallback chain all **deleted** |
+| `geo_grid.py:126,216,222` | crossings, `cell_index`, `position_at_d` off the pricing path; kept for figures |
+| `luo_main.*` | must be exercised on the identical partition or the comparison is meaningless |
+| `collect/waypoints.py:37-66,127` | rhumb interpolation; drop the `−1` — **future collections only** |
+| `collect/collector.py:79-85,128-141` | `cell_selection=sea`; store the resolved cell coordinates and model |
+
+**One piece of deliberate throwaway work.** The boundary-probe coin-flip and the segment-boundary heading
+affected **the published numbers**. Recommendation: fix those two on the *old* partition first, re-run the
+v2 sweep, and compare `gap_pct` against `2026_08_11_chain_sweep_v2_cpp`. If the reported 1.80% / 2.60%
+move materially, the paper needs a correction note regardless of what happens to the partition; if they
+do not, that is a reassuring sentence worth being able to write. Either way it is better known now.
+
+**Order.** Paper method text and results tables must *follow* the partition change, not lead it — the text
+would otherwise describe a partition that does not exist, and the tables cannot be regenerated before it
+is fixed. Only the §5.1.1 wording and the cosmetic fixes (line 528, 756, 63/121/125) are independent.
+
 ---
 
 ## 2. Actions still open
@@ -259,6 +306,9 @@ wind model's cycle"). The 6 h refresh figure stays valid; Open-Meteo lists ECMWF
 | **Re-collect with `models` pinned, or describe what was served?** | **1A** | §5.1.1 currently describes what was served |
 | **Rework or drop the 86% staleness argument?** | **1G** | it justifies the 6 h re-plan cadence |
 | **Which experiment does the 150-instance paragraph describe?** | **1G** | rewrite needs the answer, not a number |
+| **Change both engines, or retire the Python path?** | **1H** | C++ produced the paper numbers; keeping both doubles the work but preserves the cross-check |
+| **Measure the boundary-probe bug against the published results first?** | **1H** | throwaway work, but it tells us whether 1.80% / 2.60% need a correction note |
+| **Flag-gate the partition, or change it outright?** | **1H** | the goldens cannot validate this either way; flag-gating makes the delta measurable |
 
 ## 4. Decisions made during the session
 
