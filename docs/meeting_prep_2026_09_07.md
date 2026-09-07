@@ -182,7 +182,7 @@ waypoints the graph's polyline, which also removes the great-circle-vs-rhumb dis
 | 1 | **Paper Eq. (eq:sog) misdescribes the code in both halves**: no separate ΔV_wind / ΔV_wave (one combined BN-driven loss), and the current is a 2-D vector magnitude, not the along-track projection `V_c cos θ_c`. A pure beam current *raises* SOG (12.50 → 12.86 kn at 3 kn abeam). | critical |
 | 2 | **Segment-boundary heading** — `position_at_d` returns the segment that *ends* at a boundary, so route 1's first turn is priced 60° off. 11/11 and 9/9 interior boundaries. Independent of the squares; survives any re-placement. | critical |
 | 3 | **The 0.5° cell** causes five faults that all die with it: `floor()` coin-flip (80/152 and 56/111 crossings), non-vector current averaging (1 kn@090° + 1 kn@270° → 1.000 kn@180°), `round(mean(BN))` rather than `BN(mean(V))`, empty cells on route 1 vs 4-sample means on route 2, and latitude-dependent cell size confounding the cross-route gap. | critical |
-| 4 | **Spatial grid is a function of the ETA** — H-lines filtered against a band derived from `mean_sog ± 3` = f(L, ETA). The independent variable moves the discretization. | high |
+| 4 | **Spatial grid is a function of the ETA** — H-lines filtered against a band derived from `mean_sog ± 3` = f(L, ETA). The independent variable moves the discretization. Measured in §1J: 164 → 163 at τ=0.1, but 164 → 143 at τ=0.5. | high |
 | 5 | **`forecast_hour` semantics undefined by the schema** — collector writes process-start-relative offsets, RH reads issue-relative leads. Shipped file satisfies both by accident of how it was run; a re-collection in one continuous process corrupts every vintage silently. | high, latent |
 | 6 | **`cell_selection` unset** — Marine defaults to `sea` (correct), Forecast defaults to `land`. Wind near the coastal ends may be mis-sourced. One parameter. | medium |
 | 7 | **Route 1 plans 112 h past its forecast horizon** (280 h ETA vs 168 h), silently reusing each issue's max lead. Undisclosed. | medium |
@@ -302,6 +302,35 @@ gap-free at 6 h cadence across the full 183 days.
   but it is what the data supports, and it bears on the "150 instances" paragraph in §1G.
 - [x] The new route 1 file carries **the same six dead nodes** (80, 126–130, 100% NaN in the consumed
   fields), so the `usable_node_ids` logic from §1E carries over unchanged. Route 2 has none.
+
+### 1J. Sub-segment counts, and why the geo count is not a property of the route
+
+The paper's §4 term: a sub-segment is the interval between two distance lines.
+
+| | route 1 (Indian Ocean) | route 2 (North Atlantic) |
+|---|---|---|
+| **geo — raw geometry** | **164** | **121** |
+| geo — after τ filter, τ = 0.1 (**production**) | **163** (1 dropped) | **121** (0 dropped) |
+| geo — after τ filter, τ = 0.5 (coarse tests) | 143 (21 dropped) | 110 (11 dropped) |
+| **waypoint partition** | **125** | **388** |
+
+Route lengths 3393.24 / 1954.70 NM, so mean sub-segment length is 20.8 / 16.2 NM under geo
+and 27.1 / 5.0 NM under the waypoint partition.
+
+- [x] **163 and 121 are the production figures** — that is what the published results were computed on.
+- [ ] **The geo count is not a property of the route.** It depends on τ and on the speed band, which is
+      derived from `mean_sog = L/ETA`. At τ = 0.5 route 1 loses 21 sub-segments; change the ETA and the
+      band moves and the count moves with it. So "how many sub-segments does route 1 have" has no answer
+      under the current design without also stating the ETA and the time grid. This is §1F #4 in concrete
+      numbers, and it is the strongest single argument for the redesign.
+- [x] **Only route 1 loses anything at production settings** — 1 of 164. Small, but the published route 1
+      graph is missing a decision point for a reason with nothing to do with geography.
+- [x] **The partition flips which route is finer.** Under geo, route 1 has *more* sub-segments than
+      route 2 (163 vs 121) despite being 1.7× longer, because 0.5° cells are wider at low latitude. Under
+      the waypoint partition it inverts to 125 vs 388. That inversion is the point: route 2 is sampled 5×
+      more densely and should have a correspondingly finer partition, which the 0.5° cell was masking.
+- [x] Both waypoint counts are **configuration-independent** — no filter fires, so they are fixed by the
+      sampling alone.
 
 ---
 
