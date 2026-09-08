@@ -35,6 +35,9 @@ struct LuoArgs {
     double res_nm   = 1.0;
     bool   baseline = false;
     int    sample_hour = 0;   // departure-time anchor (Phase 1; unused in Phase 0)
+    // H-line placement. MUST match the partition SR is run with, or the
+    // SR-vs-Luo gap compares two different distance axes.
+    std::string partition = "geo";
 };
 
 struct LuoResult {

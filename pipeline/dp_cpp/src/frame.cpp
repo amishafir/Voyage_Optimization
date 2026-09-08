@@ -123,8 +123,14 @@ Frame make_frame(const Route& route, const VoyageWeather& voyage,
                 samples[i1].lat_deg, samples[i1].lon_deg));
         }
         assert_tau_feasible(f.cfg, f.h_line_distances);
-    } else {
+    } else if (partition == "geo") {
         f.h_line_distances = h_line_distances_from_geo(f.cfg, waypoints, grid_deg);
+    } else {
+        // Previously an unrecognised string fell through to geo and ran
+        // silently, so a typo produced a plausible published-path result.
+        fprintf(stderr, "[make_frame] unknown partition '%s'; "
+                        "expected \"geo\" or \"waypoint\"\n", partition.c_str());
+        std::abort();
     }
     f.v_line_times = v_line_times_from_route(f.cfg, route);
     return f;

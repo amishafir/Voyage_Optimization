@@ -248,6 +248,11 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         "eta_h": cfg.eta_h,
         "sample_hour": sample_hour,
         "d_start": d_start,
+        # The distance axis actually solved on. A sample-polyline partition
+        # re-derives it from the samples, so callers must not assume
+        # voyage.length_nm (see run_rh's `reached` gate).
+        "length_nm": cfg.length_nm,
+        "partition": frame.partition,
     }
 
 

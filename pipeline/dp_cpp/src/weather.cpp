@@ -336,7 +336,8 @@ static double circular_mean_deg(const std::vector<double>& angles) {
 
 WeatherDict VoyageWeather::cell_weather(const CellKey& cell, int sample_hour,
                                           int forecast_hour, double grid_deg) const {
-    WeatherCacheKey ck{cell.lat_idx, cell.lon_idx, sample_hour, forecast_hour};
+    WeatherCacheKey ck{(int)std::lround(grid_deg * 1e6),
+                       cell.lat_idx, cell.lon_idx, sample_hour, forecast_hour};
     auto cit = cell_cache_.find(ck);
     if (cit != cell_cache_.end()) return cit->second;
 

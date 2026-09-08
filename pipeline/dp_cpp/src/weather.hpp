@@ -76,16 +76,21 @@ namespace std { template<> struct hash<CellKey> {
     size_t operator()(const CellKey& k) const {
         return hash<int>()(k.lat_idx) ^ (hash<int>()(k.lon_idx) * 2654435761U); } }; }
 
-// Tuple key for weather cache: (grid_deg scaled, lat_idx, lon_idx, sample_hour, forecast_hour)
+// Tuple key for weather cache: (grid_key, lat_idx, lon_idx, sample_hour, forecast_hour).
+// grid_key = round(grid_deg * 1e6): the comment used to claim a scaled grid_deg
+// while the struct had none, so cell (i,j) at 0.5 deg and at 1/12 deg collided
+// and returned each other's weather on a VoyageWeather shared across solves
+// (run_rh reuses one). Only reachable if grid_deg ever varies within a process,
+// which is exactly what a configurable grid would do.
 struct WeatherCacheKey {
-    int lat_idx, lon_idx, sample_hour, forecast_hour;  // forecast_hour = -1 → actual
+    int grid_key, lat_idx, lon_idx, sample_hour, forecast_hour;  // forecast_hour = -1 → actual
     bool operator==(const WeatherCacheKey& o) const {
-        return lat_idx==o.lat_idx && lon_idx==o.lon_idx
+        return grid_key==o.grid_key && lat_idx==o.lat_idx && lon_idx==o.lon_idx
             && sample_hour==o.sample_hour && forecast_hour==o.forecast_hour; }
 };
 namespace std { template<> struct hash<WeatherCacheKey> {
     size_t operator()(const WeatherCacheKey& k) const {
-        size_t h = hash<int>()(k.lat_idx);
+        size_t h = hash<int>()(k.lat_idx) ^ (hash<int>()(k.grid_key) * 40503U);
         h ^= hash<int>()(k.lon_idx)      * 2654435761U + 0x9e3779b9;
         h ^= hash<int>()(k.sample_hour)  * 1234567891U;
         h ^= hash<int>()(k.forecast_hour)* 987654321U;

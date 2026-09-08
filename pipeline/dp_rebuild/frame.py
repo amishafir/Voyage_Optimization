@@ -42,6 +42,9 @@ from route import Route  # noqa: E402
 
 SOG_STEP_DEFAULT = 0.1  # kn — discrete SOG grid step (41 SOGs in [9, 13])
 
+# Recognised H-line placements. "geo" is the published path.
+PARTITIONS = ("geo", "waypoint")
+
 
 @dataclass
 class Frame:
@@ -221,6 +224,13 @@ def from_route(
         )
     seg_headings: List[float] = []
     seg_src_node: List[int] = []
+    if partition not in PARTITIONS:
+        # Previously an unrecognised string fell through to the geo branch and
+        # ran silently, so a typo produced a plausible-looking published-path
+        # result. Fail instead.
+        raise ValueError(
+            f"unknown partition {partition!r}; expected one of {PARTITIONS}")
+
     if partition == "waypoint":
         # The sample points become the graph's polyline. This is what makes the
         # distance axis identical to the path the weather was sampled along,
@@ -242,8 +252,8 @@ def from_route(
                 f"waypoint; usable indices start at {idx[0] if idx else None}")
         dropped = len(samples) - len(idx)
         if dropped:
-            print(f"[frame] partition=waypoint: {dropped} of {len(waypoints)} "
-                  f"of them carry no valid reading and place no H-line "
+            print(f"[frame] partition=waypoint: {dropped} of {len(samples)} "
+                  f"sample points carry no valid reading and place no H-line "
                   f"(node_ids {[samples[i].node_id for i in range(len(samples)) if i not in set(idx)]})")
 
         # Segment k spans [cum[idx[k]], cum[idx[k+1]]), sourced at idx[k].

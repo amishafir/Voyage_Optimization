@@ -167,28 +167,35 @@ def luo_block_metrics(path_arcs, blk_idx: int) -> Optional[Tuple[float, float, f
 # ----------------------------------------------------------------------
 
 def base_args(eta: float, sh_base: int, node_first: bool = False,
-              yaml: str = YAML, h5: str = H5) -> Namespace:
+              yaml: str = YAML, h5: str = H5,
+              partition: str = "geo") -> Namespace:
     return Namespace(
         yaml=yaml, h5=h5, eta=eta,
         min_speed=None, max_speed=None, zeta_nm=None, tau_h=None,
         res_nm=1.0, sample_hour=sh_base, baseline=False, csv=False,
         node_first=node_first,   # SR only; Luo/Naive ignore it
+        # One partition for SR, Luo and Naive alike. If they differ, the gap
+        # compares two distance axes and is meaningless.
+        partition=partition,
     )
 
 
 def run_naive(voyage: VoyageWeather, eta: float, sh_base: int,
-              yaml: str = YAML, h5: str = H5) -> dict:
+              yaml: str = YAML, h5: str = H5,
+              partition: str = "geo") -> dict:
     """Naive fixed-mean-SOG baseline against ACTUAL weather (Mode C)."""
-    args = base_args(eta, sh_base, yaml=yaml, h5=h5)
+    args = base_args(eta, sh_base, yaml=yaml, h5=h5, partition=partition)
     args.baseline = True
     res = luo_main.solve(args, voyage=voyage, verbose=False)
     return {"total_fuel_mt": res["total_fuel_mt"],
-            "voyage_time_h": res["voyage_time_h"]}
+            "voyage_time_h": res["voyage_time_h"],
+            "length_nm": res.get("length_nm")}
 
 
 def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
            max_replans: int = 0, node_first: bool = False,
-           yaml: str = YAML, h5: str = H5, skip_luo: bool = False) -> dict:
+           yaml: str = YAML, h5: str = H5, skip_luo: bool = False,
+           partition: str = "geo") -> dict:
     """Run the RH loop for SR and Luo. Returns totals + per-replan rows.
 
     ETA need not be a multiple of DT_H: the loop runs ceil(eta/DT_H) re-plans
@@ -204,6 +211,7 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
         "sr": {"d": 0.0, "fuel": 0.0, "prev_b1_sog": None},
         "luo": {"d": 0.0, "fuel": 0.0, "prev_b1_sog": None},
     }
+    solved_L = None   # distance axis reported by the solver
     rows = {"sr": [], "luo": []}
     realized = {"sr": [], "luo": []}
 
@@ -217,7 +225,7 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
         tk, sh_fc, staleness = make_time_key(t_wall, issues, max_lead,
                                              actual_hours=voyage.sample_hours)
         args_k = base_args(eta_sub, sh_base, node_first=node_first,
-                           yaml=yaml, h5=h5)
+                           yaml=yaml, h5=h5, partition=partition)
 
         print(f"\n[k={k:02d}] T_wall={t_wall:4d}  eta_sub={eta_sub:5.0f}h  "
               f"blk_dur={blk_dur:.0f}h  "
@@ -230,6 +238,7 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
         sr = SR_main.solve(args_k, voyage=voyage, verbose=False,
                            time_key=tk, d_start=state["sr"]["d"])
         sr_wall = time.time() - t0
+        solved_L = sr.get("length_nm", solved_L)
         f0, end_d, sog0 = sr_block_metrics(sr["schedule"], state["sr"]["d"],
                                            0.0, blk_dur)
         _, _, b1_sog = sr_block_metrics(sr["schedule"], state["sr"]["d"],
@@ -306,7 +315,11 @@ def run_rh(voyage: VoyageWeather, issues, max_lead, eta: float, sh_base: int,
 
         executed_h += blk_dur
 
-    L = voyage.length_nm
+    # The solved distance axis, not the HDF5 column. Under a sample-polyline
+    # partition these differ by 2.29 nm on route 1 and 1.32 nm on route 2, so
+    # using voyage.length_nm fails the `reached` gate (tolerance 1.0 nm) even
+    # when the vessel arrives at L exactly. solve() reports the axis it used.
+    L = solved_L if solved_L is not None else voyage.length_nm
     return {
         "sr": {"realised_fuel_mt": state["sr"]["fuel"],
                "final_d": state["sr"]["d"], "L": L,

@@ -331,7 +331,15 @@ LuoResult luo_solve(const LuoArgs& args, const VoyageWeather& voyage,
     cfg.v_min = args.min_speed.value_or(mean_sog - 3.0);
     cfg.v_max = args.max_speed.value_or(mean_sog + 3.0);
 
-    Frame frame = make_frame(route, voyage, wps, &cfg, args.sample_hour);
+    Frame frame = make_frame(route, voyage, wps, &cfg, args.sample_hour,
+                             0.5, 0.1, args.partition);
+    // Adopt the frame's cfg: a sample-polyline partition re-derives length_nm
+    // (route 1: 3393.240 -> 3393.549 nm). Without this L_scaled, the bounds
+    // list and out.route_length_nm target the route L while
+    // frame.h_line_distances ends at the sample L, so SR would be compared
+    // against a Luo run on a different distance axis. No-op for "geo", where
+    // make_frame passes cfg through unchanged.
+    cfg = frame.cfg;
 
     LuoResult out;
     out.waypoints   = wps;
@@ -558,6 +566,7 @@ int main(int argc, char* argv[]) {
         else if (a == "--res_nm")    args.res_nm    = std::stod(nxt());
         else if (a == "--sample_hour") args.sample_hour = std::stoi(nxt());
         else if (a == "--baseline")  args.baseline  = true;
+        else if (a == "--partition") args.partition = nxt();
         else if (a == "--smoke")     smoke          = true;
         else if (a == "--csv")       do_csv         = true;
         else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }

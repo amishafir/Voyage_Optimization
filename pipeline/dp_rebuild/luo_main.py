@@ -428,6 +428,10 @@ def parse_args() -> argparse.Namespace:
                     help="Voyage-start sample_hour anchor for the departure-time "
                          "sweep. 0 (default) = use sh_list[0] (legacy). >0 = anchor "
                          "the time-varying weather lookup at this sample_hour.")
+    ap.add_argument("--partition", choices=["geo", "waypoint"], default="geo",
+                    help="H-line placement: 'geo' = 0.5deg cell crossings (legacy), "
+                         "'waypoint' = at the weather sample points. MUST match the "
+                         "partition SR is run with, or the gap is meaningless.")
     ap.add_argument("--baseline", action="store_true",
                     help="Compute fixed mean-SOG baseline (no graph)")
     ap.add_argument("--csv", action="store_true",
@@ -482,7 +486,14 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
 
     sample_hour = int(getattr(args, "sample_hour", 0) or 0)
     frame = make_frame(route, voyage, waypoints, cfg=cfg,
-                       base_sample_hour=sample_hour)
+                       base_sample_hour=sample_hour,
+                       partition=getattr(args, "partition", "geo"))
+    # Adopt the frame's cfg: a sample-polyline partition re-derives length_nm
+    # (route 1: 3393.240 -> 3393.549 nm). Without this the Luo grid, L_scaled
+    # and the bounds list would target the route L while frame.h_line_distances
+    # ends at the sample L, so the two would appear as distinct boundaries and
+    # SR would be compared against a Luo run on a different distance axis.
+    cfg = frame.cfg
     res_nm = args.res_nm
 
     # ---- Grid parameters --------------------------------------------------
@@ -542,6 +553,8 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
             "eta_h": cfg.eta_h,
             "sample_hour": sample_hour,
             "d_start": d_start,
+            "length_nm": cfg.length_nm,
+            "partition": frame.partition,
         }
 
     # ---- For Luo DP, replace the L endpoint with L_snapped if they differ -
@@ -650,6 +663,8 @@ def solve(args: argparse.Namespace, voyage: Optional[VoyageWeather] = None,
         "eta_h": cfg.eta_h,
         "sample_hour": sample_hour,
         "d_start": d_start,
+        "length_nm": cfg.length_nm,
+        "partition": frame.partition,
     }
 
 
