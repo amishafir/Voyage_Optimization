@@ -347,6 +347,12 @@ def main() -> int:
     ap.add_argument("--out_dir", default="runs/2026_06_15_rh/route2/voyage_00")
     ap.add_argument("--sh_base", type=int, default=SH_BASE_DEFAULT)
     ap.add_argument("--eta", type=float, default=ETA_DEFAULT)
+    ap.add_argument("--yaml", default=YAML,
+                    help="Route YAML (default: the route-2 Atlantic YAML)")
+    ap.add_argument("--h5", default=H5,
+                    help="Voyage weather HDF5 (default: pipeline/data/experiment_d_391wp.h5)")
+    ap.add_argument("--partition", choices=["geo", "waypoint"], default="geo",
+                    help="H-line placement, applied to SR, Luo and Naive alike")
     ap.add_argument("--node_first", action="store_true",
                     help="Use node-first SR arc enumeration (T20). Luo/Naive unaffected.")
     args = ap.parse_args()
@@ -357,20 +363,23 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Output dir: {out_dir}", flush=True)
-    voyage = VoyageWeather(Path(H5))
-    issues, max_lead = load_forecast_index(H5)
-    print(f"Route 2: L={voyage.length_nm:.1f} nm, ETA={args.eta:.0f} h, "
+    voyage = VoyageWeather(Path(args.h5))
+    issues, max_lead = load_forecast_index(args.h5)
+    print(f"Route: L={voyage.length_nm:.1f} nm (h5 axis), ETA={args.eta:.0f} h, "
+          f"partition={args.partition}, "
           f"sh_base={args.sh_base}, {len(issues)} forecast cycles", flush=True)
 
     t_start = time.time()
 
     print("\n=== Naive baseline (fixed mean SOG vs actual weather) ===", flush=True)
-    naive = run_naive(voyage, args.eta, args.sh_base)
+    naive = run_naive(voyage, args.eta, args.sh_base,
+                      yaml=args.yaml, h5=args.h5, partition=args.partition)
     print(f"Naive: {naive['total_fuel_mt']:.3f} mt", flush=True)
 
     print("\n=== Rolling-horizon loop ===", flush=True)
     rh = run_rh(voyage, issues, max_lead, args.eta, args.sh_base,
-                max_replans=args.max_replans, node_first=args.node_first)
+                max_replans=args.max_replans, node_first=args.node_first,
+                yaml=args.yaml, h5=args.h5, partition=args.partition)
 
     # Write per-replan + realised CSVs
     write_replan_csv(out_dir / "rh_sr_replans.csv", rh["rows"]["sr"])

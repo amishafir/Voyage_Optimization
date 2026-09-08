@@ -100,6 +100,7 @@ int main(int argc, char* argv[]) {
     int max_replans = 0;
     std::string out_dir = "../../../runs/2026_06_15_rh_cpp/route2/voyage_00";
     std::string label = "route2";
+    std::string partition = "geo";   // applied to SR, Luo and Naive alike
     double oracle_sr = DEFAULT_ORACLE_SR, oracle_luo = DEFAULT_ORACLE_LUO;
 
     for (int i = 1; i < argc; ++i) {
@@ -117,6 +118,7 @@ int main(int argc, char* argv[]) {
         else if (a == "--label")       label = nxt();
         else if (a == "--oracle_sr")   oracle_sr = std::stod(nxt());
         else if (a == "--oracle_luo")  oracle_luo = std::stod(nxt());
+        else if (a == "--partition")   partition = nxt();
         else { fprintf(stderr, "Unknown option: %s\n", a.c_str()); return 1; }
     }
 
@@ -136,6 +138,7 @@ int main(int argc, char* argv[]) {
     // extent) — on Route 1 by ~2.6 nm — so using the HDF5 length here would
     // spuriously fail the reached gate even though the ship reached the route end.
     LuoArgs nargs; nargs.yaml = yaml; nargs.h5 = h5; nargs.eta = eta;
+    nargs.partition = partition;
     nargs.res_nm = 1.0; nargs.baseline = true; nargs.sample_hour = sh_base;
     LuoResult nres = luo_solve(nargs, voyage, /*verbose=*/false);
     double naive_mt = nres.total_fuel_mt;
@@ -176,6 +179,7 @@ int main(int argc, char* argv[]) {
 
         // ---- SR ----
         SRArgs sa; sa.yaml = yaml; sa.h5 = h5; sa.eta = eta_sub; sa.sample_hour = sh_base;
+        sa.partition = partition;
         SRResult sr = sr_solve(sa, voyage, /*verbose=*/false, tk, d_sr);
         BlockM s0 = sr_block_metrics(sr.edges, sr.schedule, d_sr, 0.0, blk_dur);
         BlockM s1 = sr_block_metrics(sr.edges, sr.schedule, d_sr, DT_H, b1_hi);
@@ -193,6 +197,7 @@ int main(int argc, char* argv[]) {
 
         // ---- Luo ----
         LuoArgs la; la.yaml = yaml; la.h5 = h5; la.eta = eta_sub; la.res_nm = 1.0;
+        la.partition = partition;
         la.sample_hour = sh_base;
         LuoResult luo = luo_solve(la, voyage, /*verbose=*/false, tk, d_luo);
         BlockM l0 = luo_block_metrics(luo.path_arcs, 0);
