@@ -54,20 +54,40 @@ ROUTES = {
     "route1": {
         "label": "Malacca",
         "yaml": "../config/routes/persian_gulf_malacca_paper.yaml",
-        "h5":   "../data/experiment_b_138wp.h5",
+        "h5":   "../../paper_workspace/data/experiment_b_138wp_v4_sep07.h5",
         "eta":  280,
-        # sh_list[0]=6 on Shlomo2 exp_b. Step by ETA=280. Last sh used ≤ 2052.
-        "sh_bases": [6, 286, 566, 846, 1126, 1406, 1686],
+        "sh_first": 6,      # first stored sample_hour on this file
     },
     "route2": {
         "label": "Atlantic",
         "yaml": "../config/routes/st_johns_liverpool.yaml",
-        "h5":   "../data/experiment_d_391wp.h5",
+        "h5":   "../../paper_workspace/data/experiment_d_391wp_v4_sep07.h5",
         "eta":  168,
-        # sh_list[0]=0 on exp_d. Step by ETA=168. Last sh used = 1848+168=2016 ≤ 2052.
-        "sh_bases": [0, 168, 336, 504, 672, 840, 1008, 1176, 1344, 1512, 1680, 1848],
+        "sh_first": 0,
     },
 }
+
+
+def chain_sh_bases(h5_path: str, eta: float, sh_first: int) -> List[int]:
+    """Departures for a consecutive-voyage chain, computed from the file's extent.
+
+    Stepping by the ETA is what guarantees every planner meets identical
+    departure weather at every voyage. A departure is admissible when the whole
+    voyage window is covered, i.e. sh + eta <= max stored sample_hour.
+
+    These used to be hardcoded literal lists sized for a snapshot ending at
+    sh 2052 (7 + 12 = 19 voyages), which is where the paper's stale "nineteen
+    voyages" comes from. Computing them means the count follows the data.
+    """
+    import h5py
+    import numpy as np
+    with h5py.File(h5_path, "r") as f:
+        last = int(np.max(f["actual_weather"]["sample_hour"]))
+    out, k = [], 0
+    while sh_first + eta * k + eta <= last:
+        out.append(int(sh_first + eta * k))
+        k += 1
+    return out
 
 
 CSV_HEADER = [
@@ -88,7 +108,8 @@ def _resolve(p: str) -> str:
     return str((_HERE / pp).resolve())
 
 
-def _build_args(route_cfg: dict, sh_base: int, node_first: bool = False) -> Namespace:
+def _build_args(route_cfg: dict, sh_base: int, node_first: bool = False,
+                partition: str = "geo") -> Namespace:
     """Construct the Namespace expected by SR_main.solve / luo_main.solve."""
     return Namespace(
         yaml=_resolve(route_cfg["yaml"]),
@@ -103,6 +124,9 @@ def _build_args(route_cfg: dict, sh_base: int, node_first: bool = False) -> Name
         baseline=False,
         csv=False,
         node_first=node_first,   # SR only; luo_main ignores it
+        # One partition for SR and Luo. If they differ the gap compares two
+        # distance axes and is meaningless.
+        partition=partition,
     )
 
 
@@ -113,16 +137,17 @@ def _print_hdr(s: str) -> None:
 
 def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
               skip_csv: bool, max_voyages: int = 0, node_first: bool = False,
+              partition: str = "geo",
               skip_luo: bool = False) -> List[dict]:
     """Run the consecutive-voyage chain for one route."""
-    sh_bases = route_cfg["sh_bases"]
-    if max_voyages and max_voyages > 0:
-        sh_bases = sh_bases[:max_voyages]
+    all_sh = chain_sh_bases(_resolve(route_cfg["h5"]), float(route_cfg["eta"]),
+                            int(route_cfg["sh_first"]))
+    sh_bases = all_sh[:max_voyages] if max_voyages and max_voyages > 0 else all_sh
     _print_hdr(f"CHAIN — {route_key} ({route_cfg['label']})  "
                f"ETA={route_cfg['eta']}  voyages={len(sh_bases)}  "
                f"SR={'node-first' if node_first else 'speed-first'}"
-               + (f" (truncated from {len(route_cfg['sh_bases'])})"
-                  if max_voyages and max_voyages > 0 else ""))
+               + (f" (truncated from {len(all_sh)})"
+                  if max_voyages and max_voyages > 0 else f" (chain supports {len(all_sh)})"))
 
     h5_path = Path(_resolve(route_cfg["h5"]))
     voyage = VoyageWeather(h5_path)
@@ -132,9 +157,9 @@ def run_chain(route_key: str, route_cfg: dict, out_dir: Path,
 
     rows: List[dict] = []
     for voyage_idx, sh_base in enumerate(sh_bases):
-        _print_hdr(f"{route_key}  voyage {voyage_idx:02d}/{len(route_cfg['sh_bases'])-1}  "
+        _print_hdr(f"{route_key}  voyage {voyage_idx:02d}/{len(sh_bases)-1}  "
                    f"sh_base={sh_base}")
-        args = _build_args(route_cfg, sh_base, node_first=node_first)
+        args = _build_args(route_cfg, sh_base, node_first=node_first, partition=partition)
 
         t0 = time.time()
         sr_res = SR_main.solve(args, voyage=voyage, verbose=False)
@@ -213,6 +238,8 @@ def parse_args() -> Namespace:
     ap.add_argument("--node_first", action="store_true",
                     help="Use node-first SR arc enumeration (Tal, T20) instead of "
                          "the 61-speed grid. Luo/Naive unaffected.")
+    ap.add_argument("--partition", choices=["geo", "waypoint"], default="geo",
+                    help="H-line placement, applied to SR and Luo alike.")
     ap.add_argument("--skip_luo", action="store_true",
                     help="Skip the (slow, unchanged) Luo baseline; write SR only. "
                          "Reuse prior Luo numbers when only SR changed (node-first refresh).")
@@ -240,7 +267,7 @@ def main() -> int:
     for route_key in chosen:
         rows = run_chain(route_key, ROUTES[route_key], out_dir, args.skip_csv,
                          max_voyages=args.max_voyages, node_first=args.node_first,
-                         skip_luo=args.skip_luo)
+                         partition=args.partition, skip_luo=args.skip_luo)
         all_rows.extend(rows)
 
     # Write summary CSV
