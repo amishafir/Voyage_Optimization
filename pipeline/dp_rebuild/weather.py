@@ -406,7 +406,14 @@ class VoyageWeather:
         """
         row = self._row_for(node_id, sample_hour, forecast_hour)
         if row is None:
-            return {f: float("nan") for f in WEATHER_FIELDS}
+            # beaufort_number must stay an int-convertible 0, not NaN: it is
+            # read back through Weather.from_dict, whose int() would raise.
+            # Mirrors pipeline/dp_cpp/src/weather.cpp:243 so a missing
+            # (node, issue, lead) key reaches the caller's NaN walkback on
+            # both engines instead of crashing on one.
+            miss = {f: float("nan") for f in WEATHER_FIELDS}
+            miss["beaufort_number"] = 0.0
+            return miss
         return {f: float(row[f]) for f in WEATHER_FIELDS}
 
     def _row_for(
