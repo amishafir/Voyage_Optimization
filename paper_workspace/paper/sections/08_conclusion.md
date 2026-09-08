@@ -6,7 +6,7 @@ This study compared three speed optimization approaches — LP, DP, and rolling 
 
 1. **SOG-targeting reverses the LP/DP ranking.** Under the operationally realistic SOG-targeting simulation, LP's segment averaging triggers Jensen's inequality on the cubic FCR, inflating realized fuel to the level of constant-speed sailing. DP and RH, operating at node-level resolution, avoid this bias.
 
-2. **RH with 6-hour re-planning achieves near-optimal fuel.** On Route 1, the rolling horizon captures 99.4% of the optimization span, within 0.1% of the perfect-foresight bound (176.40 vs 176.23 mt). On Route 2, RH remains within 0.4% of optimal (217.28 vs 216.44 mt) despite 2.7× higher wind speeds and 6.2× higher waves. The mechanism is actual weather injection at each decision point.
+2. **RH with 6-hour re-planning achieves near-optimal fuel.** On Route 1, the rolling horizon captures 99.4% of the optimization span, within 0.1% of the perfect-foresight bound (176.40 vs 176.23 mt). On Route 2, RH remains within 0.4% of optimal (217.28 vs 216.44 mt) despite 2.7× higher wind speeds and predominant Beaufort numbers three to four steps higher. The mechanism is actual weather injection at each decision point.
 
 3. **The forecast horizon effect is route-length dependent.** On routes fitting within the ~72-hour accurate forecast window, the choice of forecast horizon has negligible impact. Beyond this window, RH's periodic refresh becomes critical.
 

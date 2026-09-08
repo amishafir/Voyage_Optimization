@@ -15,7 +15,6 @@ The system was deployed across three university servers to ensure redundancy. Co
 Weather data were collected using the Open-Meteo API, which provides free access to operational NWP model outputs. Three parameters are sourced from distinct models:
 
 - **Wind speed and direction (10 m):** NOAA Global Forecast System (GFS), 0.25° resolution, initialized every 6 hours (00/06/12/18 UTC), forecast horizon up to 168 hours.
-- **Significant wave height:** Meteo-France MFWAM wave model, 0.25° resolution, initialized twice daily, forecast horizon up to 168 hours.
 - **Ocean current velocity and direction:** Meteo-France SMOC ocean model, 0.08° resolution, initialized once daily, forecast horizon up to 168 hours.
 
 The Beaufort number is not provided by the API but is calculated from the 10-metre wind speed using the WMO-standard threshold scale (Eq. 9).
@@ -26,17 +25,17 @@ Route 1 covers waypoints 1–7 of the full Persian Gulf to Strait of Malacca rou
 
 Data were collected hourly over 134 consecutive hours, yielding 134 actual-weather snapshots and 134 complete 168-hour forecast profiles per node. The voyage duration at the reference speed of 12 kn is approximately 140 hours, meaning the actual-weather record covers 96% of a simulated voyage — near-complete temporal realism.
 
-Weather conditions during the collection period were mild: mean wind speed 17.4 km/h (standard deviation 6.07 km/h), mean wave height 0.82 m (std 0.26 m), and mean ocean current velocity 1.38 km/h. The predominant Beaufort numbers were 3–4, with occasional BN 5. This calm regime means algorithm separations are small in absolute terms but are sufficient to establish the ranking and mechanisms.
+Weather conditions during the collection period were mild: mean wind speed 17.4 km/h (standard deviation 6.07 km/h) and mean ocean current velocity 1.38 km/h. The predominant Beaufort numbers were 3–4, with occasional BN 5. This calm regime means algorithm separations are small in absolute terms but are sufficient to establish the ranking and mechanisms.
 
 ## 5.4 Route 2: North Atlantic (Harsh Weather)
 
 Route 2 crosses the North Atlantic storm track from St. John's, Newfoundland (47.57°N, 52.71°W) to Liverpool (53.41°N, 3.01°W), a distance of 1,955 nm. The 11 original waypoints are interpolated at 5 nm spacing to produce 389 computational nodes. The LP uses 10 segments; the DP and RH operate at full resolution.
 
-The route traverses latitudes 47°N–56°N during winter, crossing the most active storm track in the Northern Hemisphere. Expected conditions include Beaufort 8–10, significant wave heights of 4–6 m, and frequent storm systems. The voyage duration at 12 kn is approximately 163 hours (~6.8 days), fitting within the GFS 168-hour forecast horizon. This means the DP has forecast coverage for the entire voyage, isolating the forecast freshness effect: any RH advantage over DP comes purely from using fresher forecasts at each decision point, not from extending beyond the forecast horizon.
+The route traverses latitudes 47°N–56°N during winter, crossing the most active storm track in the Northern Hemisphere. Expected conditions include Beaufort 8–10 and frequent storm systems. The voyage duration at 12 kn is approximately 163 hours (~6.8 days), fitting within the GFS 168-hour forecast horizon. This means the DP has forecast coverage for the entire voyage, isolating the forecast freshness effect: any RH advantage over DP comes purely from using fresher forecasts at each decision point, not from extending beyond the forecast horizon.
 
 Data were collected from 8 March to 15 March 2026 using 6-hour NWP-aligned sampling (Section 5.5), yielding 29 actual-weather snapshots spanning hours 0–168 and 29 complete 168-hour forecast profiles per node. The collection period covers 168 hours — exceeding the 163-hour voyage duration, providing near-complete temporal coverage.
 
-Weather conditions during the collection period were harsh: mean wind speed 46.6 km/h (std 16.8 km/h), mean significant wave height 5.05 m (std 2.10 m), and mean ocean current velocity 1.35 km/h. The predominant Beaufort numbers were 6–8, with 22% of observations at BN 7 and 17% at BN 8. This represents conditions 2.7× windier and 6.2× wavier than Route 1, providing a strong contrast for testing the generalizability of the optimization hierarchy.
+Weather conditions during the collection period were harsh: mean wind speed 46.6 km/h (std 16.8 km/h) and mean ocean current velocity 1.35 km/h. The predominant Beaufort numbers were 6–8, with 22% of observations at BN 7 and 17% at BN 8. This represents conditions 2.7× windier than Route 1, with predominant Beaufort numbers three to four steps higher, providing a strong contrast for testing the generalizability of the optimization hierarchy.
 
 [TABLE: route summary]
 
@@ -48,7 +47,7 @@ An empirical analysis of the predicted weather data from Route 1 (3.1 million ro
 
 Wind data updates every 6 hours, matching the GFS initialization cycle at 00/06/12/18 UTC. However, a processing delay of approximately 5 hours was observed empirically: 9 out of 10 detected update events occurred at hours where $\text{sample\_hour} \mod 6 = 5$. At each update, 98–100% of all nodes changed simultaneously, confirming that the updates reflect global model refreshes rather than per-location drift.
 
-At 1-hour collection frequency, 86% of consecutive wind API calls returned identical data. For waves (MFWAM, 12-hour cycle), 94% were identical; for currents (SMOC, 24-hour cycle), 97% were identical. Based on these findings, all subsequent data collection (including Route 2 and the extended Route 1 run) was configured with a 6-hour sampling interval offset by 5 hours from UTC midnight, ensuring every sample captures a fresh GFS wind update with zero information loss and 83% fewer API calls.
+At 1-hour collection frequency, 86% of consecutive wind API calls returned identical data. For currents (SMOC, 24-hour cycle), 97% were identical. Based on these findings, all subsequent data collection (including Route 2 and the extended Route 1 run) was configured with a 6-hour sampling interval offset by 5 hours from UTC midnight, ensuring every sample captures a fresh GFS wind update with zero information loss and 83% fewer API calls.
 
 This empirical finding has a dual role: it informs the data collection infrastructure (reducing API calls from ~45,000 to ~80 per day for Route 2), and it directly motivates the 6-hour re-planning interval used by the RH optimizer (Contribution 6).
 

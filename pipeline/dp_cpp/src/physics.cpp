@@ -75,12 +75,15 @@ double calculate_sog_vector_synthesis(double vw, double heading_rad,
     return std::sqrt(vg_x * vg_x + vg_y * vg_y);
 }
 
+// Sea state enters only through the Beaufort number (Kwon's method, as used by
+// Yang 2020 Eqs 7-9). Significant wave height appears in Yang only in Eqs 11-13
+// (critical STW / voluntary speed reduction, Constraint 21), which this study does
+// not model. It is still read and logged as a route descriptor; do not re-add it
+// here as a speed-model input.
 double calculate_speed_over_ground(double sws, double current_kn,
                                     double current_dir_rad, double heading_rad,
                                     double wind_dir_rad, int bn,
-                                    double wave_height_m,
                                     const ShipParameters& params) {
-    (void)wave_height_m;
     double sws_ms = sws * KNOTS_TO_MS;
     double weather_angle_rad = calculate_weather_direction_angle(wind_dir_rad, heading_rad);
     double weather_angle_deg = to_deg(weather_angle_rad);
@@ -104,12 +107,11 @@ double calculate_speed_over_ground(double sws, const WeatherDict& weather,
     };
     double wind_dir_rad  = to_rad(get("wind_direction_10m_deg"));
     int    bn            = static_cast<int>(std::round(get("beaufort_number", 3)));
-    double wave          = get("wave_height_m", 1.0);
     double current_kn    = get("ocean_current_velocity_kmh", 0.0) / 1.852;
     double current_dir   = to_rad(get("ocean_current_direction_deg"));
     double heading_rad   = to_rad(heading_deg);
     return calculate_speed_over_ground(sws, current_kn, current_dir, heading_rad,
-                                        wind_dir_rad, bn, wave, params);
+                                        wind_dir_rad, bn, params);
 }
 
 double calculate_fuel_consumption_rate(double sws) {

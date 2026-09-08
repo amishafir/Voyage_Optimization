@@ -179,7 +179,6 @@ def simulate_voyage(
                 ship_heading=heading_rad,
                 wind_direction=wind_dir_rad,
                 beaufort_scale=beaufort,
-                wave_height=wave_height,
                 ship_parameters=ship_params,
             )
             actual_sog = max(actual_sog, 0.1)

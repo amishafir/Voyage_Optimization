@@ -246,7 +246,6 @@ def calculate_speed_over_ground(
     ship_heading: float = 0.0,
     wind_direction: float = 0.0,
     beaufort_scale: int = 3,
-    wave_height: float = 1.0,
     ship_parameters: Optional[Dict] = None,
 ) -> float:
     """
@@ -261,12 +260,17 @@ def calculate_speed_over_ground(
         ship_heading:      Ship heading (radians, from north).
         wind_direction:    Wind direction (radians, from north).
         beaufort_scale:    Beaufort number (0-12).
-        wave_height:       Significant wave height (meters).
         ship_parameters:   Ship characteristics dict (optional, has defaults).
 
     Returns:
         SOG in knots.
     """
+    # Sea state enters only through the Beaufort number (Kwon's method, as used
+    # by Yang 2020 Eqs 7-9): C_beta, C_U and C_Form take BN, angle, Fn, Cb and
+    # displacement -- never significant wave height. Wave height appears in Yang
+    # only in Eqs 11-13 (critical STW / voluntary speed reduction, Constraint 21),
+    # which this study does not model. It is still collected and logged as a route
+    # descriptor; do not re-add it here as a speed-model input.
     if ship_parameters is None:
         ship_parameters = {
             "length": 200.0,
@@ -430,7 +434,6 @@ def calculate_sws_from_sog(
     # Convert weather dict to physics function inputs
     wind_dir_rad = math.radians(weather.get("wind_direction_10m_deg", 0.0))
     beaufort = int(weather.get("beaufort_number", 3))
-    wave_height = weather.get("wave_height_m", 1.0)
     current_speed_knots = weather.get("ocean_current_velocity_kmh", 0.0) / 1.852
     current_dir_rad = math.radians(weather.get("ocean_current_direction_deg", 0.0))
     heading_rad = math.radians(ship_heading_deg)
@@ -443,7 +446,6 @@ def calculate_sws_from_sog(
             ship_heading=heading_rad,
             wind_direction=wind_dir_rad,
             beaufort_scale=beaufort,
-            wave_height=wave_height,
             ship_parameters=ship_parameters,
         )
 

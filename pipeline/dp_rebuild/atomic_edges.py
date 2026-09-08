@@ -162,7 +162,6 @@ def _hold_thrust_kn(weather_dict: dict, heading_deg: float) -> float:
     from math import radians
     wind_dir = radians(weather_dict.get("wind_direction_10m_deg", 0.0))
     bf = int(weather_dict.get("beaufort_number", 3))
-    wave = weather_dict.get("wave_height_m", 1.0)
     cur_kn = weather_dict.get("ocean_current_velocity_kmh", 0.0) / 1.852
     cur_dir = radians(weather_dict.get("ocean_current_direction_deg", 0.0))
     hdg = radians(heading_deg)
@@ -171,7 +170,7 @@ def _hold_thrust_kn(weather_dict: dict, heading_deg: float) -> float:
         return calculate_speed_over_ground(
             ship_speed=sws, ocean_current=cur_kn, current_direction=cur_dir,
             ship_heading=hdg, wind_direction=wind_dir, beaufort_scale=bf,
-            wave_height=wave, ship_parameters=None)
+            ship_parameters=None)
 
     drift = sog_at(0.0)
     if drift >= 0.0:

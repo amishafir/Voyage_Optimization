@@ -24,7 +24,7 @@ $$SOG_{lower,i} \leq \sum_{k=1}^{K} SOG_{ik} \cdot x_{ik} \leq SOG_{upper,i} \qu
 
 The formulation was solved using Gurobi (for Route 1) and PuLP/CBC (as a fallback). Solution times were under 0.01 seconds for all instances.
 
-**Segment averaging.** In Route 1, the 138 interpolated nodes are aggregated into $S = 6$ segments (~23 nodes each); in Route 2, 389 nodes are aggregated into $S = 10$ segments (~39 nodes each). Scalar weather fields (wind speed, Beaufort number, wave height, current velocity) are averaged by arithmetic mean; direction fields (wind direction, current direction) are averaged by circular mean to handle the 0°/360° wraparound correctly. This averaging is the source of the LP's systematic fuel estimation bias under SOG-targeting, as analyzed in Section 7.1.
+**Segment averaging.** In Route 1, the 138 interpolated nodes are aggregated into $S = 6$ segments (~23 nodes each); in Route 2, 389 nodes are aggregated into $S = 10$ segments (~39 nodes each). Scalar weather fields (wind speed, Beaufort number, current velocity) are averaged by arithmetic mean; direction fields (wind direction, current direction) are averaged by circular mean to handle the 0°/360° wraparound correctly. This averaging is the source of the LP's systematic fuel estimation bias under SOG-targeting, as analyzed in Section 7.1.
 
 ## 4.2 Dynamic Deterministic Optimization (DP)
 

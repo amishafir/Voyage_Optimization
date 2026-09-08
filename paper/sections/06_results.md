@@ -17,7 +17,7 @@ Three bounds frame the optimization opportunity on each route.
 | Optimization span | Upper − Optimal | 27.68 | 23.20 |
 | Weather tax | Optimal − Average | 6.17 | 17.78 |
 
-The weather tax — the unavoidable cost of operating in non-uniform weather even with a perfect optimizer — is 2.9× larger on Route 2 (17.78 mt vs 6.17 mt), reflecting the substantially harsher North Atlantic conditions (mean wind 46.6 vs 17.4 km/h, mean wave height 5.05 vs 0.82 m). Despite this, the optimization span is slightly smaller on Route 2 (23.20 vs 27.68 mt) because the harsh weather compresses the feasible speed range: at many nodes, even the maximum SWS of 13 kn produces SOG well below the no-weather equivalent, leaving less room for speed variation.
+The weather tax — the unavoidable cost of operating in non-uniform weather even with a perfect optimizer — is 2.9× larger on Route 2 (17.78 mt vs 6.17 mt), reflecting the substantially harsher North Atlantic conditions (mean wind 46.6 vs 17.4 km/h; predominant BN 6–8 vs 3–4). Despite this, the optimization span is slightly smaller on Route 2 (23.20 vs 27.68 mt) because the harsh weather compresses the feasible speed range: at many nodes, even the maximum SWS of 13 kn produces SOG well below the no-weather equivalent, leaving less room for speed variation.
 
 ## 6.2 Main Comparison
 
@@ -112,17 +112,17 @@ This factorial design is available only for Route 1, where a coarse-resolution d
 
 Forecast accuracy was measured by comparing predicted weather at each lead time with actual observations.
 
-| Lead Time (h) | Route 1 Wind RMSE | Route 2 Wind RMSE | Route 1 Wave RMSE | Route 2 Wave RMSE |
-|---|---|---|---|---|
-| 0 | 4.13 | 6.41 | 0.052 | 0.612 |
-| 24 | 4.84 | 9.67 | 0.072 | 0.757 |
-| 48 | 5.63 | 10.65 | 0.076 | 0.911 |
-| 72 | 6.13 | 12.69 | 0.094 | 1.222 |
-| 96 | 7.65 | 14.90 | 0.114 | 1.403 |
-| 120 | 8.34 | 19.49 | 0.118 | 2.056 |
-| 133/144 | 8.40 | 24.75 | 0.113 | 1.568 |
+| Lead Time (h) | Route 1 Wind RMSE | Route 2 Wind RMSE |
+|---|---|---|
+| 0 | 4.13 | 6.41 |
+| 24 | 4.84 | 9.67 |
+| 48 | 5.63 | 10.65 |
+| 72 | 6.13 | 12.69 |
+| 96 | 7.65 | 14.90 |
+| 120 | 8.34 | 19.49 |
+| 133/144 | 8.40 | 24.75 |
 
-On Route 1, wind RMSE doubles from 4.13 to 8.40 km/h over 133 h (+103%), with a systematic positive bias (forecast overpredicts wind). On Route 2, wind RMSE nearly quadruples from 6.41 to 24.75 km/h over 144 h (+286%), with the same positive bias pattern but much larger absolute errors. Wave forecast errors show an even starker contrast: Route 2 wave RMSE reaches 2.06 m at 120 h lead time, compared to 0.12 m on Route 1.
+On Route 1, wind RMSE doubles from 4.13 to 8.40 km/h over 133 h (+103%), with a systematic positive bias (forecast overpredicts wind). On Route 2, wind RMSE nearly quadruples from 6.41 to 24.75 km/h over 144 h (+286%), with the same positive bias pattern but much larger absolute errors.
 
 The steeper error growth on Route 2 directly explains the larger DP violation rate (41.5% vs 12.4%): the optimizer plans against a forecast that degrades faster and further from reality, producing speed plans that are increasingly inappropriate for the actual conditions encountered.
 

@@ -41,7 +41,6 @@ double calculate_sog_vector_synthesis(double vw, double heading_rad,
 double calculate_speed_over_ground(double sws, double ocean_current_kn,
                                     double current_dir_rad, double heading_rad,
                                     double wind_dir_rad, int bn,
-                                    double wave_height_m,
                                     const ShipParameters& params);
 
 // Convenience overload accepting a WeatherDict (angles in degrees)
