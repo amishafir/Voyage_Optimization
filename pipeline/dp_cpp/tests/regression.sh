@@ -32,15 +32,26 @@ fi
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DP_CPP=$(cd "$SCRIPT_DIR/.." && pwd)
 PIPELINE=$(cd "$DP_CPP/.." && pwd)
-BIN="$DP_CPP/build"
+BIN="${DP_CPP_BIN:-$DP_CPP/build}"
 ROUTES="$PIPELINE/config/routes"
-DATA="$PIPELINE/data"
+DATA="${DP_CPP_DATA:-$PIPELINE/../paper_workspace/data}"
 GOLDEN="$SCRIPT_DIR/golden"
 WORK="$SCRIPT_DIR/work"
 
 # Route configs (must match run_chain_sweep.ROUTES).
-R1_YAML="$ROUTES/persian_gulf_malacca_paper.yaml"; R1_H5="$DATA/experiment_b_138wp.h5"; R1_ETA=280
-R2_YAML="$ROUTES/st_johns_liverpool.yaml";          R2_H5="$DATA/experiment_d_391wp.h5"; R2_ETA=168
+R1_YAML="$ROUTES/persian_gulf_malacca_paper.yaml"; R1_H5="$DATA/experiment_b_138wp_v4_sep07.h5"; R1_ETA=280
+R2_YAML="$ROUTES/st_johns_liverpool.yaml";          R2_H5="$DATA/experiment_d_391wp_v4_sep07.h5"; R2_ETA=168
+
+# Preflight: a missing dataset used to surface as six "exited non-zero" FAILs and a
+# "REGRESSION DETECTED" verdict, which is indistinguishable from a real regression.
+# Fail loudly and distinctly instead.
+for f in "$R1_H5" "$R2_H5"; do
+  [[ -f "$f" ]] || {
+    echo "missing dataset: $f" >&2
+    echo "  the datasets moved to paper_workspace/data/ (v4_sep07); override with DP_CPP_DATA=<dir>" >&2
+    exit 4
+  }
+done
 
 # Portable sha256.
 if command -v sha256sum >/dev/null 2>&1; then SHA(){ sha256sum "$1" | awk '{print $1}'; }
@@ -91,12 +102,17 @@ run_one() {
 }
 
 # The matrix = the current setup: actual weather, no RH, default sample_hour.
-run_one sr_route1    dp_SR  sr_dp.csv    --yaml "$R1_YAML" --h5 "$R1_H5" --eta "$R1_ETA" --csv
-run_one sr_route2    dp_SR  sr_dp.csv    --yaml "$R2_YAML" --h5 "$R2_H5" --eta "$R2_ETA" --csv
-run_one luo_route1   dp_luo luo_dp.csv   --yaml "$R1_YAML" --h5 "$R1_H5" --eta "$R1_ETA" --csv
-run_one luo_route2   dp_luo luo_dp.csv   --yaml "$R2_YAML" --h5 "$R2_H5" --eta "$R2_ETA" --csv
-run_one naive_route1 dp_luo baseline.csv --yaml "$R1_YAML" --h5 "$R1_H5" --eta "$R1_ETA" --baseline --csv
-run_one naive_route2 dp_luo baseline.csv --yaml "$R2_YAML" --h5 "$R2_H5" --eta "$R2_ETA" --baseline --csv
+# Both partitions are covered: "geo" is the legacy 0.5-degree cell crossing and
+# "waypoint" is the sample-point partition, and they are separate code paths in
+# frame.cpp -- a golden on one says nothing about the other.
+for PART in geo waypoint; do
+  run_one "sr_route1_$PART"    dp_SR  sr_dp.csv    --yaml "$R1_YAML" --h5 "$R1_H5" --eta "$R1_ETA" --partition "$PART" --csv
+  run_one "sr_route2_$PART"    dp_SR  sr_dp.csv    --yaml "$R2_YAML" --h5 "$R2_H5" --eta "$R2_ETA" --partition "$PART" --csv
+  run_one "luo_route1_$PART"   dp_luo luo_dp.csv   --yaml "$R1_YAML" --h5 "$R1_H5" --eta "$R1_ETA" --partition "$PART" --csv
+  run_one "luo_route2_$PART"   dp_luo luo_dp.csv   --yaml "$R2_YAML" --h5 "$R2_H5" --eta "$R2_ETA" --partition "$PART" --csv
+  run_one "naive_route1_$PART" dp_luo baseline.csv --yaml "$R1_YAML" --h5 "$R1_H5" --eta "$R1_ETA" --partition "$PART" --baseline --csv
+  run_one "naive_route2_$PART" dp_luo baseline.csv --yaml "$R2_YAML" --h5 "$R2_H5" --eta "$R2_ETA" --partition "$PART" --baseline --csv
+done
 
 echo "------------------------------------------------------------"
 if [[ "$MODE" == capture ]]; then
