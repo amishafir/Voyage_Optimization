@@ -61,6 +61,68 @@ What to add:
 - [ ] **What is held equal**: same weather, same physics, same ship, same speed band, same arrival
       constraint. State it once here so §6 need not repeat it per table.
 
+### 5.2.1a What a sub-segment *is* — the science, before any implementation
+
+Settled 2026-09-08. The definition must follow from the physics and the data, not from what the code
+produces or what is cheap to compute; the discrepancies are then accounted for separately. (An earlier
+draft of this section had it backwards, letting graph size and cross-engine bit-exactness drive the
+definition.)
+
+**The definition.** A sub-segment is the stretch over which the **cost coefficient** is constant. It
+changes for exactly two reasons: the sea conditions change, and the heading changes. Conditions are
+*identically* constant within one source tile — the API performs no interpolation, so this is a property
+of the data rather than a modelling assumption. Hence
+
+> sub-segment boundaries = source-tile crossings ∪ course-change points.
+
+**There are two source grids, and they do not align.** This is the part the paper has never stated. The
+marine fields arrive on a regular 1/12° lattice; wind arrives on an **octahedral reduced-Gaussian** grid
+at ~9 km whose longitude spacing changes row to row. The coefficient therefore changes at the *union* of
+two incommensurable lattices, which is finer than either.
+
+| | route 1 | route 2 |
+|---|---|---|
+| Marine 1/12° crossings (**exact**, pipeline's own analytic routine) | 911 | 715 |
+| Wind ~9 km crossings (**estimated** from the probed grid) | ~880 | ~463 |
+| Course-change points | 11 | 9 |
+| **Union — the true partition** | **~1,802** | **~1,187** |
+| **Mean sub-segment** | **1.88 NM** | **1.65 NM** |
+
+The wind figure carries the uncertainty: row spacing 0.0703° and within-row longitude spacing 0.158448°
+are measured at 52.4°N, and the latter is scaled as 1/cos φ for an octahedral grid. The marine count is
+exact.
+
+**The four discrepancies between that and what the code produces**, which the paper currently collapses
+into a single number:
+
+| # | Discrepancy | Effect | Kind |
+|---|---|---|---|
+| 1 | The model discretizes at **0.5°**, 6× coarser than either source grid in each axis | 1,802 → 164 (r1); 1,187 → 121 (r2) | modelling choice |
+| 2 | Only the **marine** grid places boundaries; wind cell crossings place none | drops ~880 / ~463 | modelling choice |
+| 3 | Sampling at **25 / 5 NM** holds ~1 reading per 13 / 8 true sub-segments | the partition can be drawn but not populated | **data limitation** |
+| 4 | The **τ filter** deletes boundaries as a function of the ETA | 1 / 0 at 0.5°, but **147 / 73** at 0.08° | **defect** |
+
+- [x] This makes Tal's 0.08° edit **right about the science and wrong only as a description of the
+      implementation** — a much cleaner thing to fix than a contested definition. §5.1.1 and §4 can keep
+      0.08° as the resolution at which conditions are constant; what has to change is the sentence
+      claiming the *model* discretizes there.
+- [ ] **The narrowed decision: what does the model discretize at, and how is that justified?** No
+      candidate reaches ~1.8 NM. Recommendation: the **sampling interval** (125 / 388), on the grounds
+      that a boundary carrying no reading carries no information — but stated explicitly as an
+      approximation to a known finer truth, not as a definition of a sub-segment.
+- [ ] Whichever is chosen, §5.2 states the definition, then the count the model uses, then the reason —
+      in that order. Proposed wording:
+
+> The sea conditions are constant within a source tile, so the cost coefficient changes at tile
+> crossings and at course changes: on these routes that is a partition of approximately 1,800 and 1,200
+> sub-segments, averaging under 2 NM. The model discretizes more coarsely, at *X*, giving *M*
+> sub-segments, because […]. Sampling at 25 and 5 NM further limits this to one independent reading per
+> *N* sub-segments.
+
+- [ ] Consequence for the §5.2.1 ladder table: it must report the **implemented** M with the true
+      partition alongside, or the reader will take the implemented number for the physical one — which
+      is the conflation this whole section exists to remove.
+
 ### 5.2.2 Two information regimes
 
 Keep the existing perfect-foresight / rolling-horizon split; it is clear. Two corrections:
@@ -198,11 +260,11 @@ The design above implies three, in the order §5.2 introduces them:
 | Fresh data supporting 41 voyages | downloaded, verified gap-free |
 | `sh_bases` still hardcoded at the v1 values (19) | **open** — four literal lists, two engines |
 | Oracle references are geo-only constants | **open** — makes the RH `≥ oracle` gate meaningless on any other partition |
-| Paper says 0.08° cells, code uses `grid_deg = 0.5` | **open, and it blocks §5.2.1** — the sub-segment count in the ladder table depends on which is true |
+| Paper says 0.08° cells, code uses `grid_deg = 0.5` | **reframed by 5.2.1a** — 0.08° is right as science, wrong as a description of the implementation |
 
-- [ ] **The last row is the one that gates this section.** §5.2.1's ladder needs a sub-segment count per
-      route, and that number is 163/121 under the code and ~775/651 under the paper's current 0.08°
-      claim. §5.2 cannot be written until that is decided.
+- [x] **No longer a blocker.** §5.2.1a settles the definition on scientific grounds (~1,802 / ~1,187
+      sub-segments, under 2 NM). What remains is the narrower question of what the model discretizes at
+      and how that approximation is justified — which §5.2 can be written around.
 
 ---
 
@@ -211,7 +273,8 @@ The design above implies three, in the order §5.2 introduces them:
 | Decision | Ref |
 |---|---|
 | The three method names | 1 |
-| Sub-segment count: settle 0.08° vs the implementation first | 4 |
+| What the model discretizes at, and its justification (definition itself is settled) | 5.2.1a |
+| Does the ladder table report the true partition alongside the implemented M? | 5.2.1a |
 | Is the fixed-band arm in scope, or deferred? | 5.2.4 |
 | ETA levels: five, or three? | 5.2.4 |
 | Supersede the "150 instances" sentence — agreed? | 5.2.5 |
