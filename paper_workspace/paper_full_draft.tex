@@ -438,7 +438,7 @@ $0=t_0, t_1,\ldots, t_{\Theta}=T$.
 
 
 
-The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the time--distance plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 0.2$ NM), both measured from the start of the voyage so that every line carries the same uniform grid
+The rectangular areas defined by the vertical and horizontal lines are sub-spaces of the time--distance plane. Each point within such a sub-space represents a location and time at which the heading of the vessel and the sea conditions are assumed fixed. Therefore, the optimal speed of the vessel is constant. The only points at which the vessel should make a decision lie on the vertical and horizontal lines. We approximate the optimal speed in each sub-space using a discrete dynamic program. To this end we discretize the vertical distance lines to points every fixed time interval (e.g., $\tau = 0.1$ hours), and similarly the horizontal time lines to a distance interval of fixed length (e.g., $\delta = 1$ NM), both measured from the start of the voyage so that every line carries the same uniform grid
 (Figure~\ref{fig:state-neighbours}).
 
 
@@ -507,27 +507,37 @@ once no distance line lies beyond the destination.
 Between a state and a neighbour the vessel steams at a single fixed speed drawn from $\mathcal{V}(d)$, held constant across the rectangular sub-space it traverses.
 
 We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \arg\max_i\{ d_i < d\}$ and the \emph{epoch} of a given time $t$ by $j(t) = \arg\max_j\{ t_j < t\}$.  In addition we denote $\underline{d} \equiv d_{i(d)}$ and $\underline{t} \equiv t_{j(t)}$.
-% ==== fig:state-neighbours: matched two-panel asset generated from one real Route-1 block. ====
+% ==== fig:state-neighbours: matched two-panel asset on a schematic 5 NM x 6 h block. ====
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/state_neighbours_pair.pdf}
-\caption{An initial state and its candidate successors, on a schematic block: a $5$ NM
-subsegment, $d\in[240,245]$ NM, inside a six-hour epoch, $t\in[24,30]$ h, with each panel
-showing a $2.3$ h window of it. The coordinates are illustrative, chosen so the grids can be read off
-the axes; $5$ NM is representative of a $0.08\degree$ cell on these routes. The source is
-$(24.2\ \mathrm{h},240\ \mathrm{NM})$ in (a) and $(29\ \mathrm{h},240\ \mathrm{NM})$ in (b). Every state is drawn as a disc: those on the
-distance lines carry the $\tau$-grid, those on the time lines the $\delta$-grid, and both grids are
-anchored at the voyage start (Eq.~\eqref{eq:state-space}). Blue marks the successors admitted by
-Eq.~\eqref{eq:neighbors} on the next distance line, green those admitted on the next time line, and
-grey the remaining states. The cone spans the
-$V_{\min}$ and $V_{\max}$ rays; with $V_{\min}>0$ it has no vertical edge, since
-Eq.~\eqref{eq:speed-set} admits the zero-speed wait leg only at $d=0$ and $d=D$. At this cell size
-the vessel normally leaves through the distance wall, as in (a); the time wall is reachable only late
-in the epoch, as in (b). The drawing uses the experimental grids, $\delta=0.2$ NM and $\tau=0.1$ h,
-with the band widened to $[3,16]$ kn for legibility.}
+\caption{An initial state and its candidate successors within one rectangular sub-space: a
+subsegment of $5$ NM, $d\in[d_i,d_{i+1}]=[240,245]$ NM, inside a six-hour epoch,
+$t\in[t_j,t_{j+1}]=[24,30]$ h. The coordinates are illustrative rather than drawn from a particular
+voyage, chosen so that both grids can be read off the axes; $5$ NM is the width of a
+$0.08\degree$ cell at the latitudes of the two study routes. Distance increases to the right and time
+downwards, so the distance lines $d_i,d_{i+1}$ are the vertical edges and the time lines
+$t_j,t_{j+1}$ the horizontal ones.
+\emph{Both} sources lie on the left distance line at $d_i$; the panels differ only in how late in the
+epoch the vessel arrives there, and each shows a $2.3$ h window of the six-hour epoch:
+$(24.2\ \mathrm{h},240\ \mathrm{NM})$ near its start in (a), and $(29\ \mathrm{h},240\ \mathrm{NM})$
+one hour before its end in (b).
+Every state is drawn as a disc: those on the distance lines carry the $\tau$-grid, those on the time
+lines the $\delta$-grid, and both grids are anchored at the voyage start
+(Eq.~\eqref{eq:state-space}). Blue marks the successors admitted by Eq.~\eqref{eq:neighbors} on the
+next distance line, green those admitted on the next time line, and grey the remaining states. The
+cone spans the $V_{\min}$ and $V_{\max}$ rays; with $V_{\min}>0$ it has no vertical edge, since
+Eq.~\eqref{eq:speed-set} admits the zero-speed wait leg only at $d=0$ and $d=D$.
+The two panels illustrate which wall the vessel leaves through, and at this cell size the answer is
+usually the distance wall: crossing $5$ NM takes $0.31$ h at $16$ kn and $1.67$ h at $3$ kn, both far
+short of the six-hour epoch. The time wall is therefore reachable only from within $1.67$ h of
+$t_{j+1}$, which is why the successor set in (a) lies entirely on the next distance line, while (b),
+one hour from the end of the epoch, reaches both walls. For legibility the drawing uses
+$\delta=0.2$ NM and widens the band to $[V_{\min},V_{\max}]=[3,16]$ kn; the experiments use
+$\delta=1$ NM, $\tau=0.1$ h and the band of Section~\ref{sec:data}.}
 \label{fig:state-neighbours}
 \end{figure}
-When the vessel is steaming in a sub-segment that starts at point $d$ at time $t$  it is subject to the fixed sea conditions and with the same heading until the end of the sea condition time block and the end of the sub-segment, whatever it reaches first. I.e., it steams inside a given rectangular area of the time--distance space demonstrated in Figure X.   Therefore, the FCR is determined only by $v$ within this rectangular area.  We denote this FCR by $\phi(t, d; v)$ metric ton / hour.
+When the vessel is steaming in a sub-segment that starts at point $d$ at time $t$  it is subject to the fixed sea conditions and with the same heading until the end of the sea condition time block and the end of the sub-segment, whatever it reaches first. I.e., it steams inside a given rectangular area of the time--distance space, as illustrated in Figure~\ref{fig:state-neighbours}.   Therefore, the FCR is determined only by $v$ within this rectangular area.  We denote this FCR by $\phi(t, d; v)$ metric ton / hour.
 
 The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward Bellman equation:
 
