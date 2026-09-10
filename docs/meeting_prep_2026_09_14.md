@@ -585,6 +585,54 @@ this study.
   origin of the claim that reached our draft, and it is what the next reader or agent will trust.
 
 
+### 5J. The wave field did move published results — through the NaN gate, and now it is quantified
+
+Found while checking whether the paper's tables could simply be extended from 35 voyages to 41. They
+cannot: **the paper's Route 1 perfect-foresight numbers are not reproducible with current code.**
+
+| | SR | Luo | Naive |
+|---|---|---|---|
+| `tab:modec-r1` voyage 1 (sh 6) | 354.91 | 361.67 | 362.74 |
+| `runs/2026_06_15_rh_cpp_chain/results.csv` | 354.914 | 361.671 | 362.743 |
+| current code, same voyage, same partition | **353.968** | **360.643** | **361.683** |
+
+So the published Route 1 table came from a **15 June** run. Across the seven voyages that run covers,
+SR drift is **−0.946 to +0.369 mt** (mean −0.339) — it varies per voyage and changes sign, which rules
+out a simple scaling or a solver change.
+
+It is not the dataset: `experiment_b_138wp_v3_aug24.h5` and `v4_sep07.h5` both give 353.968 for that
+voyage. It is not `--node_first` either (that gives 353.101). The axis is identical (L = 3393.24 nm in
+both).
+
+**Route 2, by contrast, reproduces exactly**: 203.36 / 210.48 / 212.61 published against
+203.357 / 210.480 / 212.609 now, and an independent percentile bootstrap over the same 22-voyage
+subset returns SR 196.74 [192.10, 201.77] and SR−Luo −2.61 % [−2.89, −2.32] against the published
+196.75 [192.1, 201.8] and −2.60 [−2.89, −2.31]. Both the numbers and the CI method check out.
+
+**The cause is the NaN gate — the wave field's one causal path.** Before `8995489`, `has_nan()`
+tested *every* weather field, so `row_has_nan()` dropped any row with a NaN wave height from the
+`geo` cell average. Tal's change narrowed the test to consumed fields, so those rows now enter the
+average and shift it:
+
+| Route | rows | wave NaN | **wave NaN but all consumed fields valid** |
+|---|---|---|---|
+| 1 Malacca | 96,285 | 8,336 | **1,426 (1.48 %)** |
+| 2 Atlantic | 286,304 | 3,501 | **0 (0.00 %)** |
+
+Route 1 has 1,426 rows that were formerly excluded and are now included. Route 2 has none — which is
+exactly why Route 2 reproduces and Route 1 does not. The mechanism is confirmed by that split, not
+merely consistent with it.
+
+**So the answer to "does the wave field affect anything" is: it did, at about 0.3 % on Route 1 and
+0.0 % on Route 2, entirely through row rejection rather than through any formula.** §5A's claim that
+wave height is not an operand stands; what it never was is *inert*. Tal's fix removed the side
+channel, and today's parameter removal (§5G) removed the last trace of it.
+
+**Consequence for the paper: the Route 1 PF table must be regenerated, not extended.** The Route 2
+table happens to be still correct, but should be regenerated in the same pass so both come from one
+run under one partition. That is a correctness fix independent of the 35→41 and partition questions.
+
+
 ## 6. Decisions needed
 
 | Decision | Ref |
@@ -596,9 +644,20 @@ this study.
 | ETA levels: five, or three? | 5.2.4 |
 | Supersede the "150 instances" sentence — agreed? | 5.2.5 |
 | Re-run at 41 voyages before or after the partition decision? | 4 |
-| **Which partition does the paper report?** It sets the headline: +2.256 % (geo) vs +1.761 % (waypoint), and the routes disagree in sign | 4A |
-| Confirm the point-vs-average mechanism behind the Atlantic sign flip before explaining it? | 4A |
+| ~~Which partition does the paper report?~~ **Decided: `waypoint`.** Migration designed in `docs/waypoint_migration_design.md` | 4A |
+| **All experiments now re-run on `waypoint`, 41 voyages** — results and revised conclusions in `docs/waypoint_results_2026_09_09.md` | results |
+| **RH-SR loses to RH-Luo on 12/26 Atlantic voyages** — nesting holds in-sample, fails out-of-sample. Promote to the paper's main empirical result? | results §2, §8.3 |
+| SR's feasible set provably contains Luo's (V-lines = Luo blocks) — move the 41/41 claim from Results to Methods? | results §1, §8.2 |
+| Add the span-vs-forecast-error scatter as the RH section's one figure? | results §8.5 |
+| ~~Course changes are not decision points~~ **withdrawn** — verified they already are (13/13, 11/11) | results §6 |
+| RH on the Atlantic drops to **−0.26 %, 15/26** (was −1.8 %, 11/12) — §7.2 needs rewriting | results §4 |
+| Python↔C++ bit-exactness not re-established on `waypoint` at scale — check before publishing? | results §7 |
+| Six scaling claims must be **deleted, not reworded** — no evidence supports any scaling yet | design §5 |
+| Run the point-weather probe + stride sweep to recover a magnitude claim? | design §4, §9 |
+| §7.2 (RH) is `geo`, 19 voyages, and shares the June-15 reproducibility defect — re-run? | design §6 |
+| Why does SR *degrade* on Atlantic with 3x more decision points? Unresolved; blocks §7.1 prose | design §9 |
 | Accept the citation-scope position — Constraint 21 is not ours to carry? | 5H |
+| **Route 1 PF numbers are from a 15 June run and are not reproducible** — regenerate both tables? | 5J |
 | Fix the false `delta_V_wave` row in the `research-paper` skill? | 5I |
 
 ## 7. Decisions made during the session
