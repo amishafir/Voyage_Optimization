@@ -30,30 +30,54 @@ HERE = Path(__file__).resolve().parent
 BIN = HERE / "build"
 ROOT = HERE.parent.parent                       # repo root
 ROUTES_DIR = HERE.parent / "config" / "routes"
-DATA = HERE.parent / "data"
+DATA = ROOT / "paper_workspace" / "data"
 
 ROUTES = {
     "route2": {
         "yaml": ROUTES_DIR / "st_johns_liverpool.yaml",
-        "h5":   DATA / "experiment_d_391wp.h5",
+        "h5":   DATA / "experiment_d_391wp_v4_sep07.h5",
         "eta":  168,
-        "sh_bases": [0, 168, 336, 504, 672, 840, 1008, 1176, 1344, 1512, 1680, 1848],
+        "sh_first": 0,
     },
     "route1": {
         "yaml": ROUTES_DIR / "persian_gulf_malacca_paper.yaml",
-        "h5":   DATA / "experiment_b_138wp.h5",
+        "h5":   DATA / "experiment_b_138wp_v4_sep07.h5",
         "eta":  280,
-        "sh_bases": [6, 286, 566, 846, 1126, 1406, 1686],
+        "sh_first": 6,
     },
 }
+
+
+def chain_sh_bases(h5: Path, eta: float, sh_first: int) -> list[int]:
+    """Departures from the data's own extent, mirroring run_pf_chain.py.
+
+    The literal lists this replaced were sized for a snapshot ending at
+    sample_hour 2052 and yielded 19 voyages, which is where the paper's stale
+    "nineteen voyages" came from. The current data supports 41.
+    """
+    import h5py
+    import numpy as np
+    with h5py.File(h5, "r") as f:
+        last = int(np.max(f["actual_weather"]["sample_hour"]))
+    out, k = [], 0
+    while sh_first + eta * k + eta <= last:
+        out.append(int(sh_first + eta * k))
+        k += 1
+    return out
 
 _FUEL_RE = re.compile(r"Total fuel:\s*([0-9.]+)")
 
 
-def mode_c_fuel(binary: str, route: dict, sh_base: int, extra: list[str]) -> float:
-    """Run a Mode C solve (no RH) and parse 'Total fuel: X mt' from stdout."""
+def mode_c_fuel(binary: str, route: dict, sh_base: int, extra: list[str],
+                 partition: str = "geo") -> float:
+    """Run a Mode C solve (no RH) and parse 'Total fuel: X mt' from stdout.
+
+    The oracle MUST be solved on the same partition as the RH run, or the
+    `RH >= oracle` gate compares against a different graph and is meaningless.
+    """
     cmd = [str(BIN / binary), "--yaml", str(route["yaml"]), "--h5", str(route["h5"]),
-           "--eta", str(route["eta"]), "--sample_hour", str(sh_base)] + extra
+           "--eta", str(route["eta"]), "--sample_hour", str(sh_base),
+           "--partition", partition] + extra
     out = subprocess.run(cmd, capture_output=True, text=True)
     m = None
     for line in out.stdout.splitlines():
@@ -71,7 +95,8 @@ def _row(route_key: str, voyage_idx: int, sh_base: int, route: dict,
     orc = s.get("oracle_ref", {})
     return {
         "route": route_key, "voyage_idx": voyage_idx, "sh_base": sh_base,
-        "eta_h": route["eta"], "L_nm": round(s["L_nm"], 2),
+        "eta_h": route["eta"], "partition": s.get("partition", ""),
+        "L_nm": round(s["L_nm"], 2),
         "oracle_sr": round(orc.get("sr", float("nan")), 3),
         "oracle_luo": round(orc.get("luo", float("nan")), 3),
         "naive_mt": s["naive_mt"],
@@ -86,7 +111,7 @@ def _row(route_key: str, voyage_idx: int, sh_base: int, route: dict,
 
 
 def run_voyage(route_key: str, route: dict, voyage_idx: int, sh_base: int,
-               out_dir: Path, skip_oracle: bool) -> dict:
+               out_dir: Path, skip_oracle: bool, partition: str = "geo") -> dict:
     print(f"\n=== {route_key} voyage {voyage_idx:02d}  sh_base={sh_base} ===", flush=True)
     v_dir = out_dir / route_key / f"voyage_{voyage_idx:02d}"
     summ = v_dir / "summary.json"
@@ -103,14 +128,15 @@ def run_voyage(route_key: str, route: dict, voyage_idx: int, sh_base: int,
     oracle_sr = oracle_luo = float("nan")
     if not skip_oracle:
         t0 = time.time()
-        oracle_sr = mode_c_fuel("dp_SR", route, sh_base, [])
-        oracle_luo = mode_c_fuel("dp_luo", route, sh_base, ["--res_nm", "1.0"])
+        oracle_sr = mode_c_fuel("dp_SR", route, sh_base, [], partition)
+        oracle_luo = mode_c_fuel("dp_luo", route, sh_base, ["--res_nm", "1.0"], partition)
         print(f"  oracle: SR={oracle_sr:.3f}  Luo={oracle_luo:.3f}  ({time.time()-t0:.0f}s)", flush=True)
 
     cmd = [str(BIN / "dp_run_rh"),
            "--yaml", str(route["yaml"]), "--h5", str(route["h5"]),
            "--eta", str(route["eta"]), "--sh_base", str(sh_base),
-           "--label", route_key, "--out_dir", str(v_dir)]
+           "--label", route_key, "--out_dir", str(v_dir),
+           "--partition", partition]
     if not skip_oracle:
         cmd += ["--oracle_sr", str(oracle_sr), "--oracle_luo", str(oracle_luo)]
     t0 = time.time()
@@ -121,7 +147,8 @@ def run_voyage(route_key: str, route: dict, voyage_idx: int, sh_base: int,
     res, g = s["results"], s["gates"]
     row = {
         "route": route_key, "voyage_idx": voyage_idx, "sh_base": sh_base,
-        "eta_h": route["eta"], "L_nm": round(s["L_nm"], 2),
+        "eta_h": route["eta"], "partition": partition,
+        "L_nm": round(s["L_nm"], 2),
         "oracle_sr": round(oracle_sr, 3), "oracle_luo": round(oracle_luo, 3),
         "naive_mt": s["naive_mt"],
         "rh_sr_mt": res["sr"]["realised_mt"], "rh_luo_mt": res["luo"]["realised_mt"],
@@ -144,6 +171,7 @@ def main() -> int:
     ap.add_argument("--routes", default="route2,route1")
     ap.add_argument("--max_voyages", type=int, default=0, help="first N voyages per route (0=all)")
     ap.add_argument("--skip_oracle", action="store_true")
+    ap.add_argument("--partition", choices=["geo", "waypoint"], default="geo")
     ap.add_argument("--out_dir", default=str(ROOT / "runs" / "2026_06_15_rh_cpp_chain"))
     args = ap.parse_args()
 
@@ -156,17 +184,20 @@ def main() -> int:
     t_start = time.time()
     for route_key in chosen:
         route = ROUTES[route_key]
-        shbs = route["sh_bases"]
+        shbs = chain_sh_bases(route["h5"], float(route["eta"]),
+                               int(route["sh_first"]))
         if args.max_voyages > 0:
             shbs = shbs[:args.max_voyages]
         for vi, sh in enumerate(shbs):
             try:
-                rows.append(run_voyage(route_key, route, vi, sh, out_dir, args.skip_oracle))
+                rows.append(run_voyage(route_key, route, vi, sh, out_dir,
+                                        args.skip_oracle, args.partition))
             except Exception as e:
                 print(f"  !! {route_key} voyage {vi:02d} sh={sh} FAILED: {e}", flush=True)
                 rows.append({
                     "route": route_key, "voyage_idx": vi, "sh_base": sh,
-                    "eta_h": route["eta"], "L_nm": float("nan"),
+                    "eta_h": route["eta"], "partition": args.partition,
+                    "L_nm": float("nan"),
                     "oracle_sr": float("nan"), "oracle_luo": float("nan"),
                     "naive_mt": float("nan"), "rh_sr_mt": float("nan"),
                     "rh_luo_mt": float("nan"), "rh_sr_vs_naive_pct": float("nan"),

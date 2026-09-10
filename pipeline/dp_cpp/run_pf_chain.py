@@ -50,9 +50,9 @@ ROUTES = {
 
 CSV_HEADER = [
     "route", "label", "voyage_idx", "sh_base", "eta_h", "partition",
-    "sr_fuel_mt", "luo_fuel_mt", "gap_mt", "gap_pct",
+    "sr_fuel_mt", "luo_fuel_mt", "naive_fuel_mt", "gap_mt", "gap_pct",
     "sr_voyage_time_h", "luo_voyage_time_h",
-    "sr_n_nodes", "sr_n_edges", "sr_wall_s", "luo_wall_s",
+    "sr_n_nodes", "sr_n_edges", "sr_wall_s", "luo_wall_s", "naive_wall_s",
 ]
 
 # dp_SR prints both a rounded and a full-precision total; prefer the latter.
@@ -111,6 +111,11 @@ def main() -> int:
                     help="Directory holding dp_SR and dp_luo")
     ap.add_argument("--out_dir", default=str(ROOT / "runs" / "pf_chain"))
     ap.add_argument("--node_first", action="store_true")
+    ap.add_argument("--naive_only", action="store_true",
+                    help="Run only the Naive baseline (dp_luo --baseline). Reuses the "
+                         "same computed departures, so rows line up with a prior sweep.")
+    ap.add_argument("--with_naive", action="store_true",
+                    help="Also run the Naive baseline alongside SR and Luo.")
     args = ap.parse_args()
 
     binroot = Path(args.bin)
@@ -134,23 +139,40 @@ def main() -> int:
               f"partition={args.partition}  voyages={len(shs)} ===", flush=True)
 
         extra_sr = ["--node_first"] if args.node_first else []
+        want_naive = args.naive_only or args.with_naive
+        blank = {"fuel": "", "time_h": "", "n_nodes": "", "n_edges": "", "wall_s": ""}
         for i, sh in enumerate(shs):
-            sr = run_one(binroot / "dp_SR", route, sh, args.partition, extra_sr)
-            luo = run_one(binroot / "dp_luo", route, sh, args.partition, [])
-            gap_mt = luo["fuel"] - sr["fuel"]
-            gap_pct = 100.0 * gap_mt / luo["fuel"] if luo["fuel"] else float("nan")
-            print(f"  [{i:02d}] sh={sh:5d}  SR {sr['fuel']:9.3f}  "
-                  f"Luo {luo['fuel']:9.3f}  gap {gap_mt:+7.3f} mt "
-                  f"({gap_pct:+6.3f} %)  [{sr['wall_s']:.0f}+{luo['wall_s']:.0f}s]",
-                  flush=True)
+            if args.naive_only:
+                sr = luo = blank
+            else:
+                sr = run_one(binroot / "dp_SR", route, sh, args.partition, extra_sr)
+                luo = run_one(binroot / "dp_luo", route, sh, args.partition, [])
+            naive = (run_one(binroot / "dp_luo", route, sh, args.partition, ["--baseline"])
+                     if want_naive else blank)
+
+            if args.naive_only:
+                gap_mt = gap_pct = ""
+                print(f"  [{i:02d}] sh={sh:5d}  Naive {naive['fuel']:9.3f}  "
+                      f"[{naive['wall_s']:.0f}s]", flush=True)
+            else:
+                gap_mt = luo["fuel"] - sr["fuel"]
+                gap_pct = 100.0 * gap_mt / luo["fuel"] if luo["fuel"] else float("nan")
+                nv = f"  Naive {naive['fuel']:9.3f}" if want_naive else ""
+                print(f"  [{i:02d}] sh={sh:5d}  SR {sr['fuel']:9.3f}  "
+                      f"Luo {luo['fuel']:9.3f}{nv}  gap {gap_mt:+7.3f} mt "
+                      f"({gap_pct:+6.3f} %)  [{sr['wall_s']:.0f}+{luo['wall_s']:.0f}s]",
+                      flush=True)
+                gap_mt = round(gap_mt, 6); gap_pct = round(gap_pct, 6)
             rows.append({
                 "route": rk, "label": route["label"], "voyage_idx": i,
                 "sh_base": sh, "eta_h": route["eta"], "partition": args.partition,
                 "sr_fuel_mt": sr["fuel"], "luo_fuel_mt": luo["fuel"],
-                "gap_mt": round(gap_mt, 6), "gap_pct": round(gap_pct, 6),
+                "naive_fuel_mt": naive["fuel"],
+                "gap_mt": gap_mt, "gap_pct": gap_pct,
                 "sr_voyage_time_h": sr["time_h"], "luo_voyage_time_h": luo["time_h"],
                 "sr_n_nodes": sr["n_nodes"], "sr_n_edges": sr["n_edges"],
                 "sr_wall_s": sr["wall_s"], "luo_wall_s": luo["wall_s"],
+                "naive_wall_s": naive["wall_s"],
             })
 
     csv_path = out_dir / "results.csv"
@@ -162,8 +184,12 @@ def main() -> int:
     print(f"Total wall time: {(time.time() - t_start) / 60:.1f} min")
 
     for rk in sorted({r["route"] for r in rows}):
-        g = [r["gap_pct"] for r in rows if r["route"] == rk]
-        print(f"  {rk}: mean gap {sum(g) / len(g):+.3f} %  n={len(g)}")
+        g = [r["gap_pct"] for r in rows if r["route"] == rk and r["gap_pct"] != ""]
+        if g:
+            print(f"  {rk}: mean gap {sum(g) / len(g):+.3f} %  n={len(g)}")
+        n = [r["naive_fuel_mt"] for r in rows if r["route"] == rk and r["naive_fuel_mt"] != ""]
+        if n:
+            print(f"  {rk}: mean Naive {sum(n) / len(n):.3f} mt  n={len(n)}")
     return 0
 
 
