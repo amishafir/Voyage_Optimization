@@ -51,12 +51,14 @@
 Ship speed is the most immediate lever for cutting marine fuel use and greenhouse-gas emissions, but
 the convexity of fuel consumption in speed, which makes a constant speed optimal in uniform
 conditions, penalises a constant speed when weather varies along a voyage. This suggests that
-resolving the speed decision finely, cell by cell, should save fuel; yet state-of-the-art methods hold
+resolving the speed decision finely, wherever the conditions change, should save fuel; yet
+state-of-the-art methods hold
 speed constant across coarse forecast-cycle stages, because the space of candidate speed profiles grows
 exponentially with the number of stages, and whether finer resolution actually pays has not been
 established. We formulate deterministic speed control as a shortest-path problem on a directed acyclic
-graph in the time--distance plane, allowing the speed to change at every weather-cell crossing and
-heading change while remaining solvable in a single polynomial-time Bellman sweep. We embed this
+graph in the time--distance plane, allowing the speed to change wherever the sea conditions are
+resolved and at every heading change, while remaining solvable in a single polynomial-time Bellman
+sweep. We embed this
 program (SR: speed chosen freely at every boundary) in a rolling-horizon scheme driven by real
 operational weather forecasts, and evaluate it with a data-driven voyage simulation against both a
 fixed-speed operational policy and the state-of-the-art per-block formulation of \citet{luo2024} (Luo:
@@ -99,14 +101,15 @@ one speed per voyage leg or per planning stage, with weather treated as constant
 along the route and over the voyage, the very convexity that rewards a constant speed under uniform
 conditions \emph{penalises} it under varying ones, holding a single speed through changing weather
 forces the engine through inefficient excursions and, by Jensen's inequality, wastes fuel relative to a
-plan that adapts. This is precisely why a finer speed decision, one that tracks the weather cell by
-cell, should save fuel. Yet the state-of-the-art multistage-graph method of \citet{luo2024} still
+plan that adapts. This is precisely why a finer speed decision, one that tracks the conditions as closely as the data
+resolve them, should save fuel. Yet the state-of-the-art multistage-graph method of \citet{luo2024} still
 resolves speed coarsely, holding it constant across each forecast-cycle stage; the reason is structural
 rather than incidental, the space of candidate speed profiles grows as $K^{N}$ in the number of
 stages, so refining the stages to the resolution at which the weather actually varies would inflate the
 very combinatorial cost the coarse staging exists to contain.
 
-Three questions therefore remain open. \emph{Can} per-cell speed resolution be reached tractably,
+Three questions therefore remain open. \emph{Can} speed resolution at the scale on which the
+conditions are resolved be reached tractably,
 without the exponential blow-up? \emph{Does} it pay; does finer granularity yield a real fuel
 saving on a like-for-like comparison, something never established? And does any such advantage
 \emph{survive} realistic operation, when the plan is driven not by perfect knowledge but by imperfect
@@ -114,7 +117,8 @@ weather forecasts refreshed periodically as the voyage unfolds?
 
 This paper answers all three. We formulate deterministic speed control as a shortest-path problem on a
 directed acyclic graph in the time--distance plane, in which the speed may change at every boundary
-where the operative data change, each $0.08\degree$ weather-cell crossing and each heading change, rather than being locked across coarse stages. This per-cell resolution, unreachable by stage-based
+where the operative data change, each point at which the sea conditions are resolved and each heading
+change, rather than being locked across coarse stages. This resolution, unreachable by stage-based
 formulations without prohibitive growth of the profile space, is obtained here in a single Bellman
 sweep at polynomial cost. We then embed the program in a rolling-horizon scheme driven by \emph{real}
 operational forecasts, assuming no probabilistic model linking forecast to realisation and tying the
@@ -174,7 +178,8 @@ number of candidate speed profiles grows as $K^{N}$ in the number of stages (wit
 levels), so the formulation keeps stages coarse to contain that combinatorial cost, and refining it to
 the resolution at which the weather actually varies would inflate the very profile space it exists to
 limit (we describe this baseline in detail in Section~\ref{sec:data}). Two questions therefore remain
-open. First, no prior formulation reaches a per-cell speed resolution \emph{tractably}. Second, and
+open. First, no prior formulation reaches a speed resolution matching that of the data
+\emph{tractably}. Second, and
 more fundamental, whether such resolution actually pays, whether finer granularity yields a real
 fuel saving, has never been established on a like-for-like comparison. Our first contribution
 answers both: the granularity of the speed decision is the binding factor, and the finest useful
@@ -218,10 +223,11 @@ routes.
 
 \subsection{Contributions}
 \begin{enumerate}
-\item \textbf{A tractable dynamic program with adaptive, per-cell speed resolution.} We formulate the
+\item \textbf{A tractable dynamic program with adaptive speed resolution.} We formulate the
 deterministic speed-control problem so that speed may change at every boundary where the operative
-data change, each weather-cell crossing, heading change, or six-hour time block, rather than
-being held constant across the coarse forecast-cycle stages of prior multistage-graph formulations. This fine resolution,
+data change, each point at which the sea conditions are resolved, each heading change, and each
+six-hour time block, rather than being held constant across the coarse forecast-cycle stages of prior
+multistage-graph formulations. This fine resolution,
 which such formulations cannot reach without a prohibitive growth of the speed-profile space, is
 obtained tractably by a single Bellman sweep over a directed acyclic graph.
 \item \textbf{Speed control under real forecast uncertainty.} We embed the program in a
@@ -517,8 +523,8 @@ We define the sub-segment of a given distance $d$ within the voyage by $i(d) = \
 \caption{An initial state and its candidate successors within one rectangular sub-space: a
 subsegment of $5$ NM, $d\in[d_i,d_{i+1}]=[240,245]$ NM, inside a six-hour epoch,
 $t\in[t_j,t_{j+1}]=[24,30]$ h. The coordinates are illustrative rather than drawn from a particular
-voyage, chosen so that both grids can be read off the axes; $5$ NM is the width of a
-$0.08\degree$ cell at the latitudes of the two study routes. Distance increases to the right and time
+voyage, chosen so that both grids can be read off the axes; $5$ NM is the interval at which the sea
+conditions were sampled along the North Atlantic route (Section~\ref{sec:sampling}). Distance increases to the right and time
 downwards, so the distance lines $d_i,d_{i+1}$ are the vertical edges and the time lines
 $t_j,t_{j+1}$ the horizontal ones.
 \emph{Both} sources lie on the left distance line at $d_i$; the panels differ only in how late in the
@@ -1302,8 +1308,8 @@ Hvattum2013}; we use the same property from the other side, under \emph{varying}
 constant-speed or coarse-stage plan carries a systematic Jensen penalty, and we measure it. Against
 the state-of-the-art multistage-graph formulation of \citet{luo2024}, which holds speed constant across
 each forecast-cycle stage to keep the $K^{N}$ profile space tractable, our contribution is twofold and
-empirical: the per-cell resolution that stage-based formulations cannot reach without combinatorial
-blow-up is obtained here in a single polynomial-time pass over a directed acyclic graph, and, on a
+empirical: the resolution that stage-based formulations cannot reach without combinatorial blow-up is
+obtained here in a single polynomial-time pass over a directed acyclic graph, and, on a
 like-for-like comparison, that finer resolution is shown to \emph{pay} under perfect information by a
 margin worth having, and to carry a cost under imperfect information that the coarser formulation does
 not.
