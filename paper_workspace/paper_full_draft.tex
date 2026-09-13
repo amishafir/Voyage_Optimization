@@ -49,8 +49,8 @@
 
 \begin{abstract}
 Ship speed is the most immediate lever for cutting marine fuel use and greenhouse-gas emissions, but
-the convexity of fuel consumption in speed --- which makes a constant speed optimal in uniform
-conditions --- penalises a constant speed when weather varies along a voyage. This suggests that
+the convexity of fuel consumption in speed, which makes a constant speed optimal in uniform
+conditions, penalises a constant speed when weather varies along a voyage. This suggests that
 resolving the speed decision finely, cell by cell, should save fuel; yet state-of-the-art methods hold
 speed constant across coarse forecast-cycle stages, because the space of candidate speed profiles grows
 exponentially with the number of stages, and whether finer resolution actually pays has not been
@@ -61,8 +61,8 @@ program (SR: speed chosen freely at every boundary) in a rolling-horizon scheme 
 operational weather forecasts, and evaluate it with a data-driven voyage simulation against both a
 fixed-speed operational policy and the state-of-the-art per-block formulation of \citet{luo2024} (Luo:
 speed held constant within each forecast-cycle block), over nineteen voyages on two contrasting routes.
-Under perfect foresight SR burned less fuel than Luo on all nineteen voyages --- by up to a
-few percent of voyage fuel, several tonnes of bunker fuel per voyage --- with the saving growing with
+Under perfect foresight SR burned less fuel than Luo on all nineteen voyages, by up to a
+few percent of voyage fuel, several tonnes of bunker fuel per voyage, with the saving growing with
 weather variability. The advantage persisted under realistic, imperfect-forecast operation, where SR
 re-planning reduced fuel on 17 of 19 voyages while Luo, though it
 re-planned more often, did not. The granularity of the speed decision, not the quality of the forecast
@@ -83,7 +83,7 @@ Maritime shipping carries the great majority of world trade and accounts for clo
 greenhouse-gas emissions, and both tightening regulation and fuel cost make reducing that footprint
 urgent \citep{IMO2023, Bouman2017}. Among the operational levers available to an existing vessel on a
 fixed route, none is as immediate or as powerful as \emph{speed}: because the fuel-consumption rate
-rises steeply --- roughly with the cube of speed --- even modest speed reductions yield large fuel
+rises steeply, roughly with the cube of speed, even modest speed reductions yield large fuel
 savings, a relationship understood since the earliest work on the problem \citep{Ronen2011,
 Psaraftis2013}. The operational question is therefore not \emph{whether} to optimise speed but
 \emph{how finely}: at what spatial and temporal resolution the speed should be allowed to change as the
@@ -94,36 +94,35 @@ speed is fuel-optimal, and much of the speed-optimisation literature builds on e
 one speed per voyage leg or per planning stage, with weather treated as constant over the span
 \citep{Norstad2011, Hvattum2013}. But the ocean is not uniform. When wind and current change
 along the route and over the voyage, the very convexity that rewards a constant speed under uniform
-conditions \emph{penalises} it under varying ones --- holding a single speed through changing weather
+conditions \emph{penalises} it under varying ones, holding a single speed through changing weather
 forces the engine through inefficient excursions and, by Jensen's inequality, wastes fuel relative to a
 plan that adapts. This is precisely why a finer speed decision, one that tracks the weather cell by
 cell, should save fuel. Yet the state-of-the-art multistage-graph method of \citet{luo2024} still
 resolves speed coarsely, holding it constant across each forecast-cycle stage; the reason is structural
-rather than incidental --- the space of candidate speed profiles grows as $K^{N}$ in the number of
+rather than incidental, the space of candidate speed profiles grows as $K^{N}$ in the number of
 stages, so refining the stages to the resolution at which the weather actually varies would inflate the
 very combinatorial cost the coarse staging exists to contain.
 
 Three questions therefore remain open. \emph{Can} per-cell speed resolution be reached tractably,
-without the exponential blow-up? \emph{Does} it pay --- does finer granularity yield a real fuel
+without the exponential blow-up? \emph{Does} it pay; does finer granularity yield a real fuel
 saving on a like-for-like comparison, something never established? And does any such advantage
 \emph{survive} realistic operation, when the plan is driven not by perfect knowledge but by imperfect
 weather forecasts refreshed periodically as the voyage unfolds?
 
 This paper answers all three. We formulate deterministic speed control as a shortest-path problem on a
 directed acyclic graph in the time--distance plane, in which the speed may change at every boundary
-where the operative data change --- each $0.08\degree$ weather-cell crossing and each heading change ---
-rather than being locked across coarse stages. This per-cell resolution, unreachable by stage-based
+where the operative data change, each $0.08\degree$ weather-cell crossing and each heading change, rather than being locked across coarse stages. This per-cell resolution, unreachable by stage-based
 formulations without prohibitive growth of the profile space, is obtained here in a single Bellman
 sweep at polynomial cost. We then embed the program in a rolling-horizon scheme driven by \emph{real}
 operational forecasts, assuming no probabilistic model linking forecast to realisation and tying the
 re-plan cadence to the forecast refresh cycle. Finally, we evaluate the method with a voyage simulation
 driven by real sea-conditions data, benchmarking it against both an operational fixed-speed policy and
-the method of \citet{luo2024}, over nineteen voyages --- consecutive departures on two contrasting
+the method of \citet{luo2024}, over nineteen voyages, consecutive departures on two contrasting
 routes, a mild passage (Persian Gulf to the Strait of Malacca) and a harsher one (the North Atlantic).
 
 The results are directional and clear. Under perfect foresight SR consumed less
-fuel than Luo on all nineteen voyages, by up to a few percent --- several tonnes
-of bunker fuel per voyage --- and the advantage grew with weather variability, larger on the rougher
+fuel than Luo on all nineteen voyages, by up to a few percent, several tonnes
+of bunker fuel per voyage, and the advantage grew with weather variability, larger on the rougher
 Atlantic route than on the calm Gulf passage, exactly the signature the convexity argument predicts.
 The advantage survived realistic rolling-horizon operation against imperfect forecasts, where
 Luo re-planned more often yet gained less because it lacked the resolution to act on
@@ -153,12 +152,12 @@ precise speed exponent debated \citep{Psaraftis2023}; this convexity is the work
 under uniform conditions it implies that a constant speed is fuel-optimal \citep{Hvattum2013}, a property exploited by recursive-smoothing
 and shortest-path formulations \citep{Norstad2011, Fagerholt2010} and by the linear and mixed-integer
 programs used for fleet and routing problems \citep{Bektas2011, Wang2012}. These models share a common
-feature: they resolve the speed decision \emph{coarsely} --- one speed per voyage leg or per planning
+feature: they resolve the speed decision \emph{coarsely}, one speed per voyage leg or per planning
 segment, with conditions treated as constant over that span. When the environment varies in time and
 space, however, the same convexity that rewards a constant speed under uniform conditions
 \emph{penalises} it under varying ones, since holding a single speed across changing weather forces the
 engine through inefficient excursions (Section~\ref{sec:discussion}). This is the reason to expect that
-a finer speed decision --- one that tracks the weather as it changes along the route --- should save
+a finer speed decision, one that tracks the weather as it changes along the route, should save
 fuel, and it motivates the graph and dynamic-programming formulations that optimise speed over a
 space--time grid \citep{Zaccone2018}, together with fuel models that distinguish still-water speed from
 speed over ground \citep{yang2020}.
@@ -166,14 +165,14 @@ speed over ground \citep{yang2020}.
 The state of the art for fuel-minimising speed control under varying weather is the multistage-graph
 formulation of \citet{luo2024}, which we adopt as our benchmark. Like its predecessors it resolves
 speed coarsely: the voyage is divided into stages of one meteorological forecast cycle, and \emph{speed
-is held constant across an entire stage}. This coarseness is structural rather than incidental --- the
+is held constant across an entire stage}. This coarseness is structural rather than incidental: the
 number of candidate speed profiles grows as $K^{N}$ in the number of stages (with $K$ discrete speed
 levels), so the formulation keeps stages coarse to contain that combinatorial cost, and refining it to
 the resolution at which the weather actually varies would inflate the very profile space it exists to
 limit (we describe this baseline in detail in Section~\ref{sec:data}). Two questions therefore remain
 open. First, no prior formulation reaches a per-cell speed resolution \emph{tractably}. Second, and
-more fundamental, whether such resolution actually pays --- whether finer granularity yields a real
-fuel saving --- has never been established on a like-for-like comparison. Our first contribution
+more fundamental, whether such resolution actually pays, whether finer granularity yields a real
+fuel saving, has never been established on a like-for-like comparison. Our first contribution
 answers both: the granularity of the speed decision is the binding factor, and the finest useful
 granularity is made tractable by a single pass over a directed acyclic graph.
 
@@ -202,7 +201,7 @@ cadence to the forecast refresh, and show that the granularity advantage persist
 
 \subsection{Evaluation against realistic data and baselines}
 Many speed-optimisation studies are validated on constant or synthetic weather, or on a single voyage,
-and commonly treat fuel as a function of speed alone --- equating still-water speed with speed over
+and commonly treat fuel as a function of speed alone, equating still-water speed with speed over
 ground and omitting the weather correction between them, as slow-steaming analyses typically do
 \citep{Cariou2011}. Operational practice, by contrast, targets an arrival time, as the prevalence of
 virtual-arrival agreements attests \citep{Jia2017}. The fuel benefit of speed control is strongly weather-dependent
@@ -217,7 +216,7 @@ routes.
 \begin{enumerate}
 \item \textbf{A tractable dynamic program with adaptive, per-cell speed resolution.} We formulate the
 deterministic speed-control problem so that speed may change at every boundary where the operative
-data change --- each weather-cell crossing, heading change, or six-hour time block --- rather than
+data change, each weather-cell crossing, heading change, or six-hour time block, rather than
 being held constant across the coarse forecast-cycle stages of prior multistage-graph formulations. This fine resolution,
 which such formulations cannot reach without a prohibitive growth of the speed-profile space, is
 obtained tractably by a single Bellman sweep over a directed acyclic graph.
@@ -231,7 +230,7 @@ imperfect-forecast operation.
 voyage simulation driven by real sea-conditions data and use it to benchmark the proposed model
 against an operational fixed-speed policy and the method of \citet{luo2024}, over many consecutive
 voyages on two contrasting routes. We demonstrate fuel savings of up to a few percent in rough
-conditions --- several metric tonnes of bunker fuel per voyage --- attributable to finer speed
+conditions, several metric tonnes of bunker fuel per voyage, attributable to finer speed
 control.
 \end{enumerate}
 
@@ -244,7 +243,7 @@ In this paper we study the problem of controlling the speed of sea vessels with 
 \begin{description}
 	\item[Route] A route is defined by a set by sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly referred to in the literature as expected time of arrival (ETA).
-	\item [Sea conditions]    The sea conditions are given by the wind speed and direction, summarised by the Beaufort number, and by the sea current speed and direction. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours and the space to \emph{cells} of $0.08\degree \times 0.08\degree$ latitude and longitude. Recall that a degree of latitude is 60 NM (111 km) everywhere, while a degree of longitude is 60 NM at the equator and shrinks with the cosine of the latitude; a $0.08\degree$ cell is therefore roughly 5 NM across on the routes studied here. This discretization level was chosen because it is the native resolution at which the global weather and forecast services used in this study deliver their fields (Section~\ref{sec:data}).  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
+	\item [Sea conditions]    The sea conditions are given by the wind speed and direction, summarised by the Beaufort number, and by the sea current speed and direction. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours, and the space to \emph{subsegments}, consecutive stretches of the route delimited by the points at which the sea conditions were sampled along it (Section~\ref{sec:methods}). The weather and forecast services used in this study deliver their fields on native grids of about $0.08\degree$; recall that a degree of latitude is 60 NM (111 km) everywhere, while a degree of longitude is 60 NM at the equator and shrinks with the cosine of the latitude, so $0.08\degree$ is roughly 5 NM on the routes studied here. That resolution bounds the spatial detail the data can resolve; the sampling interval actually used along each route is an experimental parameter and is reported in Section~\ref{sec:data}.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
 	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtains this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, which is described in Appendix~\ref{app:fcr}.  We assume that the vessel characteristics are fixed.  The vessel course is fixed at that of the route segment.  It is assumed that the FCR is an increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
 \end{description}
 
@@ -266,7 +265,7 @@ In the stochastic version of the problem, speed decisions are made based on the 
 \subsection{Speed over ground}
 \label{sec:sog}
 The vessel's \emph{still-water speed} (SWS) $V_s$ is the speed it would make in calm water at a given
-power setting; the \emph{speed over ground} (SOG) $V_g$ is $V_s$ modified by the environment --- wind
+power setting; the \emph{speed over ground} (SOG) $V_g$ is $V_s$ modified by the environment, wind
 reduces it, while the along-track component of the current adds to or subtracts from it.
 Following the resistance-correction model of \citet{yang2020},
 \begin{equation}
@@ -301,7 +300,7 @@ with a hard arrival constraint and the SOG of every leg confined to the band $[V
 the zero-speed option of Eq.~\eqref{eq:speed-set} covers no distance and so contributes no term to the
 sum, it only consumes part of the time budget $T$ at the origin or at the destination.
 Because fuel depends on SWS while the plan targets SOG, holding a target SOG through varying weather
-forces the SWS to vary, and the convex FCR penalises that variation --- the mechanism the paper
+forces the SWS to vary, and the convex FCR penalises that variation, the mechanism the paper
 exploits (Section~\ref{sec:methods}).
 
 In addition to the deterministic problem described above we study a more realistic \emph{stochastic speed control problem}, where the future sea conditions and each location along the planned voyage is unknown but some noisy indications about it are represented by a published weather forecast. The forecast is given in the same discretization units is the weather conditions described above and is updated every six hours.  The goal of the planner is to use the forecast data in order to minimize the expected fuel consumption of  the vessel during to voyage.   However, no probabilistic information about the dependency between the forecast and the actual weather realization is available to the planer.
@@ -367,7 +366,7 @@ V_g \;=\; V_s - \Delta V_{\text{wind}} + V_{c,\parallel},
 Two properties are used later. First, for fixed weather $V_g$ increases monotonically with $V_s$, so
 the relation is invertible: a target SOG implies a unique required SWS, $V_s=g^{-1}(V_g;w)$, obtained
 here by binary search (Section~\ref{sec:methods}). Second, that required SWS rises as conditions
-worsen --- holding a target SOG through adverse weather demands more SWS. Both properties underlie
+worsen, holding a target SOG through adverse weather demands more SWS. Both properties underlie
 the convexity mechanism of Section~\ref{sec:mechanism}.
 
 \subsection{Fuel consumption}
@@ -377,7 +376,7 @@ Fuel consumption rate is a cubic function of still-water speed \citep{yang2020}:
 \fcr(V_s) \;=\; 0.000706\, V_s^{3} \quad [\text{mt/h},\; V_s \text{ in kn}].
 \end{equation}
 This cubic form is the central structural property of the problem: \textbf{FCR is strictly convex in
-$V_s$.} Crucially, fuel depends on SWS --- the speed the engine must produce --- not on SOG. When a
+$V_s$.} Crucially, fuel depends on SWS (the speed the engine must produce), not on SOG. When a
 target SOG is held through varying weather, the required SWS varies, and the convex FCR penalises
 that variation (Section~\ref{sec:mechanism}). The fuel for leg $i$ is the rate times the leg's
 transit time,
@@ -388,7 +387,7 @@ F_i \;=\; \fcr(V_{s,i})\, \frac{d_i}{V_{g,i}},
 and total voyage fuel is the sum over legs, $F_{\text{total}}=\sum_{i=1}^{N} F_i$.
 
 \subsection{Decision variable and objective}
-This study optimises \textbf{SOG}, not SWS --- a choice termed SOG-targeting. A speed plan specifies
+This study optimises \textbf{SOG}, not SWS, a choice termed SOG-targeting. A speed plan specifies
 a target SOG for each leg (or, for the baseline, each block); the SWS required to realise it follows
 from the inverse SOG relation under the prevailing weather. The optimisation problem is
 \begin{equation}
@@ -398,7 +397,7 @@ from the inverse SOG relation under the prevailing weather. The optimisation pro
 \end{equation}
 The arrival constraint is hard; the still-water speed is bounded by the engine envelope. The two
 formulations compared in this study (Section~\ref{sec:methods}) differ only in the granularity at
-which the target SOG may be chosen --- freely per leg, or once per time block.
+which the target SOG may be chosen, freely per leg, or once per time block.
 \end{comment}
 %% ============================================================ 4. METHODS
 \section{Methods}
@@ -414,11 +413,11 @@ $v=0$.
 
 Three structural properties reduce this continuous-control problem, without loss of optimality, to
 one with finitely many decision epochs. First, the heading is constant in each route segment (hence
-in each leg). Second, the sea conditions are constant within each sea cell and time block.
+in each leg). Second, the sea conditions are constant within each subsegment (defined below) and time block.
 Third, the FCR is a convex function of the SOG (see Section~\ref{sec:problem}).
-Therefore, under optimal control the SOG remains constant as long as the vessel is in the same leg and within the same time block; the remaining continuum --- where exactly on a boundary the vessel arrives --- is handled by the grid of Section~\ref{sec:states}.
+Therefore, under optimal control the SOG remains constant as long as the vessel is in the same leg and within the same time block; the remaining continuum, where exactly on a boundary the vessel arrives, is handled by the grid of Section~\ref{sec:states}.
 
-As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. Each time the route crosses a $0.08\degree$ latitude or longitude line, a new subsegment starts, so a subsegment is about 5 NM long. Within each time block, the sea conditions are assumed constant throughout a subsegment but they may change when the vessel enters a new sea cell. In addition, at the end of a (major) segment, the vessel changes its heading, which changes the relative wind and current directions it is facing. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular the last breakpoint is the end of the route, $d_M = D$, and we use the two interchangeably from here on.
+As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. A new subsegment starts at every point along the route at which the sea conditions were sampled, so a subsegment is one sampling interval long; that interval is a property of the data collection and differs between the two routes (Section~\ref{sec:data}). Within each time block the sea conditions are assumed constant throughout a subsegment, taking the value observed at the point where it begins, and may change only at a subsegment boundary. The sampling points include every point at which the route changes heading, so no subsegment spans a course change and the relative wind and current angles the vessel faces are constant along it. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular the last breakpoint is the end of the route, $d_M = D$, and we use the two interchangeably from here on.
 
 % ==== NEW (forward pointer to φ instead of a second fuel-rate symbol) ====
 The FCR of the vessel steaming at speed $v \in \mathcal{V}(d)$ therefore depends only on the subsegment and the time block it is in; Section~\ref{sec:states} makes this precise through the function $\phi(t,d;v)$. Idling is free of propulsion fuel, $\phi(t,d;0)=0$, so a wait at $d=0$ or at $d=D$ costs time but no fuel; auxiliary (hotel) consumption is outside the scope of this model.
@@ -560,7 +559,7 @@ the minimum fuel to arrive on time at each state $(t,d)$ or infinity if it is no
 % ==== NEW (node-first: realised speed of the optimal incoming leg) ====
 
 %V^{*}(d,t)=\frac{d-\tilde d^{\star}}{t-\tilde t^{\star}},\qquad
-%(\tilde d^{\star},\tilde t^{\star})=\arg\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\,:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
+%(\tilde d^{\star},\tilde t^{\star})=\arg\min_{\substack{(\tilde d,\tilde t)\in\mathcal{S}\:\,(d,t)\in\mathcal{A}(\tilde d,\tilde t)\\ (d-\tilde d)/(t-\tilde t)\,\in\,\mathcal{V}}}
 %\Bigl[\, C^{*}(\tilde d,\tilde t)+(t-\tilde t)\,\phi\bigl(\tilde d,\tilde t;\tfrac{d-\tilde d}{t-\tilde t}\bigr)\,\Bigr].
 
 
@@ -573,7 +572,7 @@ $(t,d)\to(\tilde t,\tilde d)$ with $(\tilde t,\tilde d)\in\mathcal{A}(t,d)$ is a
 its leg fuel, $(\tilde t-t)\,\phi(t,d;(\tilde d-d)/(\tilde t-t))$. Minimising the voyage fuel
 subject to the ETA is then a \emph{shortest-path problem} on this graph: the minimum voyage fuel is
 the shortest distance from $(0,0)$ to the destination, and the optimal speed schedule \emph{is} the
-shortest path itself --- each of its arcs read as a leg sailed at the slope
+shortest path itself, each of its arcs read as a leg sailed at the slope
 $(\tilde d-d)/(\tilde t-t)$. Because every arc strictly increases time, the graph is acyclic, so the
 shortest path requires no label-correcting method; the next section computes it in a single forward
 pass.
@@ -605,7 +604,7 @@ Equations~\eqref{eq:state-space} and~\eqref{eq:neighbors} already define the sta
 and, for every state, its admissible successors $\mathcal{A}(d,t)$; the recursion of
 Eq.~\eqref{eq:cost-to-arrive} is therefore well posed on a finite graph. Three things remain before it
 can be evaluated efficiently. First, to bound the size of $\mathcal{S}$ and of the induced arc set.
-Second, to enumerate --- out of the full grid --- only the states actually \emph{reachable} from the
+Second, to enumerate, out of the full grid, only the states actually \emph{reachable} from the
 origin and only the arcs whose realised speed is admissible, since these are typically a small
 fraction of the whole. Third, to sweep the recursion over the resulting graph. We bound first, then
 give the enumeration, the backward sweep, and the schedule extraction as a single pseudocode
@@ -623,14 +622,14 @@ final. Algorithm~1 organises this into three stages, each answering one question
 from Section~\ref{sec:states} would ask. Stage~1 (\emph{forward closure},
 Section~\ref{sec:enumerate}) asks \emph{which decisions exist}: starting from $(0,0)$ it discovers
 the reachable states and, for each, materialises the successor set $\mathcal{A}(d,t)$ as arcs priced
-with the fuel term of Eq.~\eqref{eq:cost-to-arrive} --- building the graph is precisely the
+with the fuel term of Eq.~\eqref{eq:cost-to-arrive}; building the graph is precisely the
 calculation the backpropagation needs. Stage~2 (\emph{backpropagation}, Section~\ref{sec:sweep})
 asks \emph{what each decision costs from there to the destination}: it evaluates
 Eq.~\eqref{eq:cost-to-arrive} once per state, in an order that guarantees every successor is already
 valued, recording the minimising successor. Stage~3 (\emph{extraction}, Section~\ref{sec:extract})
 asks \emph{which decisions to take}: two closing lines read the optimal fuel at the origin and
 unroll the speed schedule by walking forward along the recorded successors. The pseudocode
-introduces no new mathematics --- every line evaluates an object already defined in
+introduces no new mathematics; every line evaluates an object already defined in
 Section~\ref{sec:states}; what the algorithm adds is the \emph{order} of evaluation. Line numbers
 are referenced throughout the walkthrough below.
 \end{comment}
@@ -645,16 +644,16 @@ $\mathcal{S}$ (Eq.~\eqref{eq:state-space}), the successor set $\mathcal{A}(d,t)$
 decision. Discovering the reachable states, placing them on the discrete grid, and computing the FCR
 price of every arc are not three steps but \emph{one}: a single forward pass (lines~1--10 of
 Algorithm~1) enumerates, from each state, only the grid nodes actually reachable within
-$\mathcal{V}$ --- and each node it emits arrives already discretised, already carrying its leg speed
+$\mathcal{V}$, and each node it emits arrives already discretised, already carrying its leg speed
 $\bar v=(\tilde d-d)/(\tilde t-t)$, and already priced at $\phi(d,t;\bar v)\,(\tilde t-t)$, the fuel
 term of Eq.~\eqref{eq:cost-to-arrive}. This is the optimised graph construction: when the pass ends,
-the graph is not merely built --- it is fully priced, and the expensive physics (one
+the graph is not merely built; it is fully priced, and the expensive physics (one
 still-water-speed inversion and FCR evaluation per arc) has been paid exactly once per arc. Solving
 the problem then costs a single \emph{backward} sweep (lines~11--14): one evaluation of
 Eq.~\eqref{eq:cost-to-arrive} per state, in an order that guarantees every successor is already
-valued, yielding the optimal outgoing speed of \emph{every} reachable state --- a full policy, not
+valued, yielding the optimal outgoing speed of \emph{every} reachable state, a full policy, not
 one path. Two closing lines (15--16) read the optimal fuel at the origin and unroll the speed
-schedule. The pseudocode introduces no new mathematics --- every line evaluates an object already
+schedule. The pseudocode introduces no new mathematics; every line evaluates an object already
 defined in Section~\ref{sec:states}; the walkthrough below follows its line numbers.
 \end{comment}
 % ==== NEW (2026-08-06: matched to Tal's Aug-5 Algorithm 1 — ONE forward pass does discovery, discretisation,
@@ -677,7 +676,7 @@ Extraction of the actual journey is then performed (lines~10--15).  The voyage t
 Eq.~\eqref{eq:speed-set} zero is the only speed available on the last distance layer, so an early
 arrival continues to the deadline at zero speed and every optimal plan can be read off the single
 terminal state $(T,D)$ rather than off a set of candidate arrival times. The first layer admits zero
-speed too --- there alongside the ordinary band --- so a plan may equally postpone its departure. The
+speed too, there alongside the ordinary band, so a plan may equally postpone its departure. The
 optimal journey $J^{\star}$ is read by backtracking the recorded predecessors to the origin.
 
 % ==== Algorithm 1 box (moved up from after the enumeration prose, 2026-08-04 restructure: box first, walkthrough after) ====
@@ -690,7 +689,7 @@ optimal journey $J^{\star}$ is read by backtracking the recorded predecessors to
 xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 \textbf{Input:} distance lines $d_0<\dots<d_M{=}D$, time lines $t_0<\dots<t_\Theta{=}T$, speed sets $\mathcal{V}(\cdot)$ of \eqref{eq:speed-set} with band $[V_{\min},V_{\max}]$, snaps $\delta,\tau$, FCR $\phi$\\
 \textbf{Output:}  Speed schedule and total fuel consumption \\
-{\small$\triangleright$ \emph{Stage 1 --- forward closure: discover all reachable states and calculate their values}}\\
+{\small$\triangleright$ \emph{Stage 1: forward closure: discover all reachable states and calculate their values}}\\
 {\scriptsize 1}\> $C^*(0,0) \leftarrow 0$; \quad $C^*(t,d) \leftarrow \infty$ \, for all $(t,d) \ne (0,0)$;\\
 {\scriptsize 2}\>  Define priority queue $Q\leftarrow[(0,0)]$\\
 {\scriptsize 3}\> \textbf{while} $Q$ not empty \textbf{do}\\
@@ -702,7 +701,7 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 {\scriptsize 7}\>\>\>\> $C^{*}(\tilde t,\tilde d) \leftarrow C^*(t,d)+ \phi(t,d;(\tilde d-d)/(\tilde t-t))\,(\tilde t-t)$; \quad{\small$\triangleright$ update state value, see \eqref{eq:cost-to-arrive}}\\
 {\scriptsize 8}\>\>\>\> $pred(\tilde t,\tilde d) \leftarrow (t,d)$; \\
 {\scriptsize 9}\>\>\> \textbf{if} $(t,d) \notin Q$ then $push(Q,(t,d))$; \\
-{\small$\triangleright$ \emph{Stage 2 --- extraction}}\\
+{\small$\triangleright$ \emph{Stage 2: extraction}}\\
 {\scriptsize 10}\> $curr \leftarrow (T,D)$; \\
 {\scriptsize 11}\> $J^{\star} \leftarrow [curr]$; \\
 {\scriptsize 12}\> \textbf{while} $curr \ne (0,0)$ \textbf{do}\\
@@ -714,6 +713,26 @@ xxx\=xx\=xx\=xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
 \end{center}
 
 
+
+
+
+\subsection{Containment of block-locked formulations}
+\label{sec:nesting}
+A formulation that holds the speed constant over intervals of the voyage is a restriction of the
+program above whenever its intervals are aligned with the grid. Concretely, suppose a competing
+formulation (i) fixes a single SOG over each of a set of intervals whose endpoints are a subset of
+the time lines of $\mathcal{S}$, (ii) draws that SOG from the same band $\mathcal{V}(d)$, and
+(iii) resolves distance on the same quantum. Then every plan it admits is reproducible here: hold
+its interval speed on every sub-arc inside that interval. The feasible set of the program above
+therefore contains the competitor's, and its optimum is no worse, whenever both are optimised
+against the same sea conditions.
+
+Two consequences are used later. First, any fuel advantage measured under perfect foresight
+(Section~\ref{sec:res-oracle}) is a property of the formulation rather than an empirical tendency;
+what the experiment measures is its \emph{magnitude}. Second, the containment is stated with respect
+to the conditions each program optimises against, so when both are given a \emph{forecast} rather
+than the realised conditions, the guarantee applies to fuel evaluated against that forecast, and not
+to fuel realised against the weather that actually occurs. Section~\ref{sec:res-rh} returns to this.
 
 
 %% ============================================================ 5. DATA & EXPERIMENTAL DESIGN
@@ -775,105 +794,162 @@ The two routes are depicted in Figure~\ref{fig:routes} and their waypoints are d
 
 \subsubsection{Sea conditions data}
 The sea conditions were obtained from the Open-Meteo API \citep{openmeteo}, which redistributes the
-outputs of operational \emph{numerical weather prediction} (NWP) models --- physics-based forecasting
-systems that integrate the governing equations of the atmosphere and ocean forward in time from an estimated initial state, and that periodically re-initialise on a fixed cycle.  The source models provide these measurements on native grids of approximately $0.08\degree$ --- between 3 and 5 NM, depending on latitude --- at hourly resolution. The 6 h interval used throughout this study is a sampling choice made for tractability and API budget, not a property of the source data. At each sampling point a forecast was retrieved for the following 168 hours (a week) at hourly lead-time resolution.
+outputs of operational \emph{numerical weather prediction} (NWP) models, physics-based forecasting
+systems that integrate the governing equations of the atmosphere and ocean forward in time from an
+estimated initial state, and that periodically re-initialise on a fixed cycle. Wind (10\,m speed and
+direction) is served by the API's automatic model selection; the grid coordinates returned along both
+routes describe an octahedral reduced-Gaussian grid, with latitude rows $0.0703\degree$ apart and a
+within-row longitude spacing of $0.1584\degree$ whose point count varies by row, giving cells of
+approximately 9\,km, consistent with the ECMWF \emph{Integrated Forecasting System} (IFS)
+high-resolution configuration. Ocean currents (velocity and direction) come from the M\'et\'eo-France
+SMOC model at $0.08\degree$. Both are therefore delivered at roughly $0.08\degree$, about 5\,NM on the
+routes studied here, at hourly resolution.
 
-\begin{itemize}
-\item \textbf{Wind} (10 m speed and direction) --- served by the API's automatic model selection, as the
-request does not pin a specific model. The grid coordinates returned along both routes describe an
-octahedral reduced-Gaussian grid, with latitude rows $0.0703\degree$ apart and a within-row longitude
-spacing of $0.1584\degree$ whose point count varies by row; the resulting cells are approximately 9 km,
-equivalent to $0.08\degree$. This is consistent with the ECMWF \emph{Integrated Forecasting System} (IFS)
-high-resolution configuration. Re-initialised every 6 h, retrieved to a 168 h horizon.
-\item \textbf{Ocean currents} (velocity and direction) --- the M\'et\'eo-France SMOC ocean model, at
-$0.08\degree$ resolution, re-initialised once daily, retrieved to a 168 h horizon.
-\end{itemize}
+Two records were collected along each route and stored separately: the \emph{actual} weather (the
+conditions ultimately realised) and the \emph{predicted} weather (every forecast cycle issued
+ahead of those conditions, retrieved to a 168\,h horizon at hourly lead-time resolution). Collection
+ran for $\sim$170 days at a 6\,h cadence. The actual record provides the ground-truth conditions
+against which a voyage is evaluated; the predicted record is an archive of genuine operational
+forecasts, not a perturbation model, and provides what a planner would have had at each decision
+point.
 
-For each route, 
-two records were collected at every
-waypoint on a 6 h sampling cadence over $\sim$170 days and stored in HDF5 with separate tables: the
-\emph{actual} weather --- the conditions ultimately realised --- and the \emph{predicted} weather ---
-every forecast cycle issued ahead of those conditions. The actual record provides the ground-truth
-conditions against which a voyage is evaluated; the predicted record provides the forecasts available
-to a planner at each decision point.
-
-\paragraph{NWP model refresh cycle.} Each product refreshes on its own fixed cycle, which sets the
-re-plan cadence used later. The wind product refreshes every 6 h and SMOC (currents) every 24 h.
-The predicted-weather record confirms this: at a 1 h query cadence, 86\% of consecutive wind values
-were identical to the previous hour, and 97\% of consecutive current values.
-Re-planning more frequently than 6 h therefore acts on no new wind information, which is why the 6 h
+\paragraph{NWP refresh cycle.} Each product refreshes on its own fixed cycle, and this sets the
+re-plan cadence used later, a separate quantity from the collection cadence above. The wind
+product refreshes every 6\,h and SMOC every 24\,h. The predicted record confirms it: queried hourly,
+86\% of consecutive wind values and 97\% of consecutive current values were identical to the previous
+hour. Re-planning more often than 6\,h therefore acts on no new wind information, so the 6\,h re-plan
 cadence used below is set by the data rather than tuned.
 
+\subsubsection{Spatial sampling and the decision partition}
+\label{sec:sampling}
+The source grids could supply a value about every 4.8\,NM, but how often conditions were actually
+sampled \emph{along a route} was a collection choice, and the two routes differ. Route~1 was sampled
+every 25.0\,NM (131 sample points); Route~2 every 5.0\,NM (389 sample points). Decision boundaries are
+placed at these sample points, so the mean interval over which the model holds conditions fixed is
+27.15\,NM on Route~1 and 5.04\,NM on Route~2. Expressed against the 6\,h time block that the
+block-locked baseline uses, each block contains 2.0--2.9 speed decisions on Route~1 and 10.7--15.5 on
+Route~2.
 
-Because the sea conditions change over time, different departure times implies different problem instances.  In our experiment we tested each route with 25 different departure times during the spring of 2026, spaced three days apart.  Each of the $2 \times 25$ route-departure time combinations were tested.
-The ETA  (the required length of the voyage) also affect the problem instance. Therefore, an instance in our numerical experiment is determined by the route, departure time and ETA.
-With 3 ETA levels corresponding to an average sailing speed of 10, 12, and 14 NM, we obtain a benchmark set consisting of 150  instances. 
+This asymmetry is a limitation of the data collection and is stated as such: Route~1's blocks are
+27\,NM long because that is how often it was sampled, not because the conditions are known to be
+uniform over 27\,NM. It also confounds any comparison \emph{between} the routes, since the two differ
+both in block length, by a factor of $5.4$, and in weather regime, and in opposite directions. No
+ordering across routes can therefore be attributed to either cause alone.
 
+The sample points subdivide each leg between consecutive control points of Table~\ref{tab:waypoints},
+so every control point is itself a sample point and every change of heading already carries a decision
+boundary; the heading assigned to each block matches the route's own leg heading to within
+$0.88\degree$. A block therefore never spans a course change, which is what licenses the per-leg
+freedom described in Section~\ref{sec:planners}.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\caption{The two routes as problem instances. Sample spacing is a property of the data collection;
+block length is the interval over which the model holds sea conditions fixed.}
+\label{tab:instances}
+\begin{tabular}{lrr}
+\toprule
+ & Route 1 (Indian Ocean) & Route 2 (North Atlantic) \\
+\midrule
+Voyage distance $D$ (nm)            & 3{,}393 & 1{,}955 \\
+ETA $T$ (h)                          & 280     & 168 \\
+Implied mean SOG $D/T$ (kn)          & 12.1    & 11.6 \\
+\midrule
+Weather sample spacing (nm)          & 25.0    & 5.0 \\
+Weather sample points                & 131     & 389 \\
+Mean block length (nm)               & 27.15   & 5.04 \\
+Speed decisions per 6\,h block       & 2.0--2.9 & 10.7--15.5 \\
+Time blocks per voyage               & 47      & 28 \\
+\midrule
+Mean wind speed (km/h)               & 20.2    & 29.7 \\
+Median Beaufort number               & 3       & 4 \\
+\midrule
+Voyages evaluated                    & 15      & 26 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Experimental design}
-The deterministic dynamic program of Section~\ref{sec:methods} is exercised across two independent
-axes: the \emph{granularity} of the speed decision and the \emph{information} available when the plan
-% ==== OLD (common grid of 61 SOG values) — superseded by the band 𝒱; kept, not rendered ====
-\begin{comment}
-is made. Throughout, the speed search uses a common grid of 61 SOG values spanning the mean voyage
-speed $L/T \pm 3$ kn, and the arrival time $T$ was binding in every run (zero slack) --- so all
-comparisons are at equal voyage time, isolating the effect of the setting rather than the schedule's
-duration.
-\end{comment}
-% ==== NEW (speed drawn from the band 𝒱; enumeration is node-first, §4.2) ====
-is made. Throughout, the speed at each decision is drawn from a common band spanning the mean voyage
-speed $D/T \pm 3$ kn, that is $V_{\min}=D/T-3$ and $V_{\max}=D/T+3$ --- the band of
-Eq.~\eqref{eq:speed-set}, enumerated node-first on the $\delta,\tau$ grid --- and the arrival time $T$
-was binding in every run (zero slack) --- so all comparisons are at equal voyage time, isolating the
-effect of the setting rather than the schedule's duration. Because the arrival constraint bound in
-every run, the zero-speed option that Eq.~\eqref{eq:speed-set} makes available at $d=0$ and $d=D$ was
-never exercised: no optimal plan chose to idle.
+Three planners are compared under two information regimes. Throughout, the speed at each decision is
+drawn from a common band spanning the mean voyage speed $D/T \pm 3$ kn, that is $V_{\min}=D/T-3$ and
+$V_{\max}=D/T+3$; this is the band of Eq.~\eqref{eq:speed-set}, enumerated node-first on the
+$\delta,\tau$ grid. The arrival time $T$ was binding in every run, with zero slack, so all
+comparisons are at equal voyage time and isolate the effect of the setting rather than the
+schedule's duration. Because
+the arrival constraint bound in every run, the zero-speed option that Eq.~\eqref{eq:speed-set} makes
+available at $d=0$ and $d=D$ was never exercised: no optimal plan chose to idle.
 
-\subsubsection{Speed-decision granularity}
-\textbf{SR (this paper).} The method under test is the dynamic program of Section~\ref{sec:methods} applied
-without restriction: the speed is re-chosen at every boundary crossing, so the plan adapts to each
-change of heading or sea conditions along the route.
+\subsubsection{Planners compared}
+\label{sec:planners}
+\textbf{SR (this paper).} The dynamic program of Section~\ref{sec:methods} applied without
+restriction: the speed is re-chosen at every boundary crossing, so the plan adapts to each change of
+heading or sea conditions along the route.
 
-\noindent\textbf{Luo (2024).} The state-of-the-art baseline of \citet{luo2024}
-restricts the speed to be constant within each time block. Its graph is a lattice of (column,
-distance) nodes, where columns mark times $0,\Delta t,2\Delta t,\dots$; each arc spans one block and
-is traversed at a single constant SOG equal to the block distance divided by $\Delta t$. The arc cost
-is obtained by walking the weather sub-segments within the block and summing fuel at that fixed block
-SOG, and the minimum-fuel path to the ETA column is found by shortest path. The defining restriction
-is that speed cannot vary in response to weather that changes inside a block. This baseline was
-implemented independently from its published description --- with its own lattice and arc evaluation,
-not as SR subject to an added equality constraint --- so the comparison reflects
-Luo's actual method rather than a weakened variant. Any fuel difference from SR is
-therefore attributable to decision granularity alone.
+\noindent\textbf{Luo (2024).} The state-of-the-art baseline of \citet{luo2024} restricts the speed to
+be constant within each time block. Its graph is a lattice of (column, distance) nodes, where columns
+mark times $0,\Delta t,2\Delta t,\dots$; each arc spans one block and is traversed at a single
+constant SOG equal to the block distance divided by $\Delta t$. The arc cost is obtained by walking
+the sub-segments within the block and summing fuel at that fixed block SOG, and the minimum-fuel path
+to the ETA column is found by shortest path. The defining restriction is that speed cannot vary in
+response to conditions that change inside a block. This baseline was implemented independently from
+its published description, with its own lattice and arc evaluation, not as SR subject to an added
+equality constraint, so the comparison reflects Luo's actual method rather than a weakened variant.
 
-\noindent\textbf{Fixed-speed (Naive).} The operational reference is a set-and-forget policy that
-sails a single fixed mean SOG ($D/T$) through the actual time-varying weather, with no optimisation
-and no re-planning.
+\noindent\textbf{Fixed-speed (Naive).} The operational reference is a set-and-forget policy that sails
+a single fixed mean SOG ($D/T$) through the actual time-varying conditions, with no optimisation and
+no re-planning. Because it targets a SOG it also arrives exactly at $T$, so it sits at equal voyage
+time with the other two.
 
-\subsubsection{Information regime}
-\textbf{Perfect foresight (oracle).} Each leg is evaluated against the actual weather recorded at the
-voyage's departure sample hour, giving the planner perfect knowledge of conditions. This bounds the
-achievable advantage (Section~\ref{sec:res-oracle}).
+\paragraph{Containment.} On both routes the conditions of Section~\ref{sec:nesting} are met: the time
+lines of $\mathcal{S}$ are the 6\,h grid and coincide exactly with Luo's blocks (47 on Route~1 and 28
+on Route~2, Table~\ref{tab:instances}), both planners draw speed from the same band $D/T \pm 3$ kn,
+and their distance quanta agree. SR's feasible set therefore contains Luo's, and SR is guaranteed to
+be no worse whenever both are optimised against the same conditions. This is compatible with the
+independent implementation noted above: the two solvers share no code, and the containment is a
+property of their feasible sets, not of the implementation. Within an instance both planners see the
+same conditions, the same band and the same arrival constraint, so any fuel difference is
+attributable to decision granularity; across routes the comparison is confounded as described in
+Section~\ref{sec:sampling}.
 
-\noindent\textbf{Rolling horizon.} The planner is re-solved at 6 h decision steps. At each step the
-first 6 h block is planned against actual (nowcast) weather and the remainder against the most recent
-available predicted cycle; only the first block is committed before advancing and re-planning.
-Realised fuel is the sum of the committed blocks. The 6 h cadence equals the wind model's NWP cycle (above).
-Both SR and Luo are exercised under this regime.
+\subsubsection{Information regimes}
+\textbf{Perfect foresight (oracle).} The planner is given the actual conditions along the whole
+voyage: the active sample hour advances with voyage time, so a leg sailed at hour 96 is costed
+against the conditions realised at hour 96 at that location. This is an upper bound on the achievable
+advantage, not a departure snapshot.
+
+\noindent\textbf{Rolling horizon.} The planner is re-solved at 6\,h decision steps. At each step the
+first 6\,h block is planned against actual (nowcast) conditions and the remainder against the most
+recent available predicted cycle; only the first block is committed before advancing and re-planning.
+Realised fuel is the sum of the committed blocks. The 6\,h cadence equals the wind model's refresh
+cycle (above). Both SR and Luo are exercised under this regime; Naive does not re-plan and is
+identical in both. No intermediate arm, planning once against the departure forecast and sailing
+that plan unchanged, was evaluated; this is noted in Section~\ref{sec:limitations}.
 
 \subsubsection{Evaluation protocol}
 \label{sec:protocol}
 Each route was evaluated as a \emph{consecutive-voyage chain} in which voyage $N{+}1$ departs at the
-sample hour at which voyage $N$ arrives. Fixing the step to the ETA guaranteed that every planner
-encountered identical departure weather at every voyage. Under perfect foresight, thirteen voyages were
-run on the Indian Ocean route and twenty-two on the North Atlantic route --- 35 in total --- spanning the full collection window to
-date ($\sim$155 days). Rolling-horizon evaluation currently covers the original 19-voyage subset (seven
-on the Indian Ocean route, twelve on the North Atlantic route --- the first $\sim$80 days of the same chain); extending it to the full
-35 is left to future work (Section~\ref{sec:limitations}). At each departure SR and Luo were run under
-the perfect-foresight oracle and, on the 19-voyage subset, the 6 h rolling horizon, with the
-rolling-horizon result compared against the Naive baseline. Because identical departure weather was
-presented to all planners, the reported differences are attributable to the experimental setting ---
-decision granularity and information regime --- not to sampling.
+sample hour at which voyage $N$ arrives. Because the arrival constraint binds with zero slack for
+every planner, all planners share the same departure hours, so the chain is common to all and
+per-voyage differences are paired. Departure hours were derived from the extent of the collected
+record rather than fixed in advance, giving \textbf{41 voyages, 15 on Route~1 and 26 on Route~2}, spanning the full $\sim$170-day collection window. The ETA is a fixed property of each route
+(280\,h and 168\,h, Table~\ref{tab:instances}) and is not varied in this study. Both information
+regimes cover all 41 voyages, on the same partition and the same departures; the rolling-horizon
+harness reproduces the perfect-foresight solve to the reported precision, which is what permits the
+two to be compared voyage by voyage.
+
+\subsubsection{Reported quantities}
+\label{sec:quantities}
+\emph{Realised fuel} is the fuel accumulated by sailing a committed plan through the actual
+conditions; it is the quantity reported for every planner. Two derived quantities describe how much
+of the available benefit a planner captured. The \emph{optimisation span} is Naive minus the oracle:
+the fuel a perfect planner could have saved relative to sailing a constant speed. The \emph{forecast
+cost} is the rolling-horizon result minus the oracle: the part of that span lost to imperfect
+information. Their ratio gives the \emph{share of span captured}, $1-\text{cost}/\text{span}$.
+
+Per-voyage comparisons are made on realised fuel, paired by departure hour. Aggregates are reported
+as a ratio of means, and spread as a 95\% paired bootstrap confidence interval; the mean of
+per-voyage percentages differs slightly and is not used.
 
 %% ============================================================ 7. RESULTS
 \section{Results}
@@ -1086,7 +1162,7 @@ were subsequently revised.
 
 \noindent\textbf{The two formulations re-planned differently.} A single-voyage diagnostic recorded how
 often a refreshed forecast changed the committed first-block speed: rolling-horizon Luo revised on 17
-of 27 re-plans (63\%), against 12 of 27 (44\%) for rolling-horizon SR --- yet those more frequent
+of 27 re-plans (63\%), against 12 of 27 (44\%) for rolling-horizon SR, yet those more frequent
 adjustments yielded no net saving over set-and-forget, whereas SR's translated into the
 fuel reductions above.
 
@@ -1106,11 +1182,11 @@ The result follows from a single structural property: the fuel-consumption rate 
 (Section~\ref{sec:problem}), so holding one speed across a block of varying weather forces the
 still-water speed to vary and, by Jensen's inequality, wastes fuel relative to per-leg freedom. Two
 qualitative predictions of this argument were borne out. First, the gap was signed and systematic:
-under perfect foresight SR consumed less fuel than Luo on all 35 of 35 voyages --- the directional
+under perfect foresight SR consumed less fuel than Luo on all 35 of 35 voyages, the directional
 signature of Jensen's inequality, not an average tendency. Second, the gap scaled with weather
 variability: proportionally larger on the harsher Atlantic route (2.60\%) than on Malacca (1.80\%), as
-expected for a penalty driven by within-block weather spread. The empirical magnitude --- roughly
-6 mt per voyage --- is thus explained, not merely reported.
+expected for a penalty driven by within-block weather spread. The empirical magnitude, roughly
+6 mt per voyage, is thus explained, not merely reported.
 
 \subsection{Decision granularity, not data, is the limiting factor}
 That the SR advantage persisted under realistic rolling-horizon operation
@@ -1118,20 +1194,19 @@ That the SR advantage persisted under realistic rolling-horizon operation
 diagnostic makes the point concrete: Luo revised its committed first-block speed on
 17 of 27 re-plans, against 12 of 27 for SR, yet only the latter's revisions turned
 into fuel savings. Luo re-planned \emph{more} often under refreshed forecasts and
-still gained less, because it lacked the within-block resolution to act on the new information --- it
+still gained less, because it lacked the within-block resolution to act on the new information; it
 can shift the single speed it holds over an entire stage, but cannot place a slower leg exactly where
 and when the weather worsens. The limiting factor is therefore decision granularity, not data: better
 information helps only a planner able to exploit it at the resolution at which the weather varies.
 
-\subsection{When re-planning helps --- and when it does not}
+\subsection{When re-planning helps, and when it does not}
 \label{sec:disc-bound}
 The rolling-horizon benefit over set-and-forget is real but bounded, and is not claimed to be
 universal. On 2 of 19 voyages the SR RH plan consumed slightly more fuel than the Naive
 baseline, and the Luo RH plan did so on several. The reason is the same convexity seen from the
 other side: on near-uniform weather a constant speed is itself fuel-optimal, so any forecast-driven
 speed variation can only add a Jensen penalty unless the weather-routing gain exceeds it. The value of
-re-planning is therefore bounded by how much the weather actually varies over a departure's window ---
-largest on variable departures, vanishing or reversing on calm ones. This is best read as a
+re-planning is therefore bounded by how much the weather actually varies over a departure's window, largest on variable departures, vanishing or reversing on calm ones. This is best read as a
 savings-versus-departure relationship \todo{FIG: savings vs departure} rather than a single figure;
 the relevant gate, stated precisely, is ``realised fuel $\le$ Naive'', satisfied by SR on 17 of 19
 voyages and by Luo on a minority.
@@ -1139,13 +1214,13 @@ voyages and by Luo on a minority.
 \subsection{Relation to prior work}
 Our findings sharpen, rather than overturn, the established picture. The convexity of fuel in speed has
 long been used to argue that a constant speed is optimal under uniform conditions \citep{Ronen2011,
-Hvattum2013}; we use the same property from the other side --- under \emph{varying} conditions a
-constant-speed or coarse-stage plan carries a systematic Jensen penalty --- and we measure it. Against
+Hvattum2013}; we use the same property from the other side, under \emph{varying} conditions a
+constant-speed or coarse-stage plan carries a systematic Jensen penalty, and we measure it. Against
 the state-of-the-art multistage-graph formulation of \citet{luo2024}, which holds speed constant across
 each forecast-cycle stage to keep the $K^{N}$ profile space tractable, our contribution is twofold and
 empirical: the per-cell resolution that stage-based formulations cannot reach without combinatorial
 blow-up is obtained here in a single polynomial-time pass over a directed acyclic graph, and, on a
-like-for-like comparison, that finer resolution is shown to \emph{pay} --- SR
+like-for-like comparison, that finer resolution is shown to \emph{pay}, SR
 consumed less fuel than \citet{luo2024} on all 35 voyages under perfect foresight, with the gap growing
 with weather variability exactly as the convexity argument predicts.
 
@@ -1155,7 +1230,7 @@ ensembles \citep{Vettor2022, Luo2023}, we drive the optimiser with real operatio
 no probabilistic model of the forecast--realisation relationship, and tie the re-plan cadence to the
 forecast refresh cycle rather than choosing it freely \citep{Tzortzis2021, Zheng2023}. Under this
 regime the granularity advantage persists (17 of 19 voyages), and Luo's inability to
-convert refreshed forecasts into savings --- despite re-planning more often --- isolates decision
+convert refreshed forecasts into savings, despite re-planning more often, isolates decision
 granularity, not information, as the binding factor. Finally, in contrast to evaluations on constant or
 synthetic weather, on single voyages, or under the simplification $V_s\!=\!V_g$ \citep{Cariou2011}, our
 benchmark is driven by real sea-conditions data with an explicit still-water-to-ground speed correction
@@ -1182,14 +1257,14 @@ Three conclusions follow. First, Luo's per-block speed-locking is fuel-suboptima
 mechanism: because the fuel-consumption rate is convex in still-water speed, holding one speed across a
 block of varying weather forces inefficient speed excursions, and SR's per-leg freedom recovers the
 loss (Jensen's inequality). Second, under perfect foresight SR's advantage was realised on every one
-of 35 voyages --- comparable in absolute fuel across routes ($\sim$6 mt) but proportionally larger on
+of 35 voyages, comparable in absolute fuel across routes ($\sim$6 mt) but proportionally larger on
 the shorter, harsher voyage. Third, the advantage survived realistic 6 h rolling-horizon operation
 against real forecasts, on the 19-voyage subset evaluated to date: SR re-planning saved fuel relative
 to set-and-forget on 17 of 19 voyages, whereas Luo re-planning did not, its value bounded by weather
 variability.
 
-The practical implication is that the resolution of the speed decision --- not the availability of
-re-planning or fresh forecasts --- is the binding factor: Luo cannot convert better
+The practical implication is that the resolution of the speed decision, not the availability of
+re-planning or fresh forecasts, is the binding factor: Luo cannot convert better
 information into fuel savings, while SR can. The expected saving can be anticipated
 from the variability of the route's weather. Future work includes extending the rolling-horizon
 comparison to the full 35-voyage chain, extending the route set to establish the route-length scaling
