@@ -84,9 +84,9 @@ def aggregate_table(per: dict) -> str:
         r"\begin{table}[ht]", r"\centering",
         r"\caption{Rolling-horizon realised fuel relative to the Naive set-and-forget baseline.}",
         r"\label{tab:rh}",
-        r"\begin{tabular}{lrrrr}", r"\toprule",
+        r"\begin{tabular}{lrrrrrr}", r"\toprule",
         (r"Route & $n$ & RH-SR vs Naive (mean \%) & RH-Luo vs Naive (mean \%) & "
-         r"RH-SR saves on \\"),
+         r"RH-SR saves on & worse than Luo & worse than Naive \\"),
         r"\midrule",
     ]
     for rk, label, _eta, _tag in ROUTES:
@@ -96,8 +96,39 @@ def aggregate_table(per: dict) -> str:
         sm = st.mean([r["sr_pct"] for r in rows])
         lm = st.mean([r["luo_pct"] for r in rows])
         wins = sum(1 for r in rows if r["sr_pct"] < 0)
+        w_luo = sum(1 for r in rows if r["sr"] > r["luo"])
+        w_nai = sum(1 for r in rows if r["sr_pct"] > 0)
         out.append(f"{label} & {len(rows)} & ${sm:.1f}$ & ${lm:.1f}$ & "
-                   f"{wins}/{len(rows)} \\\\")
+                   f"{wins}/{len(rows)} & {w_luo}/{len(rows)} & {w_nai}/{len(rows)} \\\\")
+    out += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    return "\n".join(out)
+
+
+
+def span_table(per: dict) -> str:
+    """The span vs forecast-cost decomposition: what was available to win, what
+    imperfect information cost, and how much of the span survived."""
+    out = [
+        r"\begin{table}[ht]", r"\centering",
+        r"\caption{Optimisation span and the cost of imperfect information, per route. "
+        r"Span is Naive minus the oracle; forecast cost is the rolling-horizon SR result minus "
+        r"the oracle (Section~\ref{sec:quantities}). Means over voyages.}",
+        r"\label{tab:span}",
+        r"\begin{tabular}{lrrrrr}", r"\toprule",
+        (r"Route & $n$ & Span (mt) & Forecast cost (mt) & Span captured (\%) & "
+         r"Cost exceeds span \\"),
+        r"\midrule",
+    ]
+    for rk, label, _eta, _tag in ROUTES:
+        rows = per[rk]
+        if not rows:
+            continue
+        span = [r["naive"] - r["oracle_sr"] for r in rows]
+        cost = [r["sr_vs_oracle"] for r in rows]
+        cap = 100.0 * (st.mean(span) - st.mean(cost)) / st.mean(span)
+        over = sum(1 for a, b in zip(span, cost) if b > a)
+        out.append(f"{label} & {len(rows)} & {st.mean(span):.2f} & {st.mean(cost):.2f} & "
+                   f"{cap:.1f} & {over}/{len(rows)} \\\\")
     out += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     return "\n".join(out)
 
@@ -191,7 +222,7 @@ def main() -> int:
         sys.exit(f"no summary.json found under {run_dir}")
     blocks = [
         f"% rolling horizon, {n} voyages, from {run_dir.name}",
-        aggregate_table(per), "",
+        aggregate_table(per), "", span_table(per), "",
     ]
     for rk, label, eta, tag in ROUTES:
         if per[rk]:

@@ -60,13 +60,16 @@ heading change while remaining solvable in a single polynomial-time Bellman swee
 program (SR: speed chosen freely at every boundary) in a rolling-horizon scheme driven by real
 operational weather forecasts, and evaluate it with a data-driven voyage simulation against both a
 fixed-speed operational policy and the state-of-the-art per-block formulation of \citet{luo2024} (Luo:
-speed held constant within each forecast-cycle block), over nineteen voyages on two contrasting routes.
-Under perfect foresight SR burned less fuel than Luo on all nineteen voyages, by up to a
-few percent of voyage fuel, several tonnes of bunker fuel per voyage, with the saving growing with
-weather variability. The advantage persisted under realistic, imperfect-forecast operation, where SR
-re-planning reduced fuel on 17 of 19 voyages while Luo, though it
-re-planned more often, did not. The granularity of the speed decision, not the quality of the forecast
-data, is the binding factor.
+speed held constant within each forecast-cycle block), over 41 voyages on two contrasting routes.
+The per-leg program contains the per-block one as a special case, so under perfect foresight it cannot
+burn more fuel; what the experiment measures is the size of that advantage, 1.4 to 2.4\% of voyage
+fuel, several tonnes of bunker fuel per voyage. Under realistic, imperfect-forecast operation the
+advantage is conditional. On the milder route rolling-horizon SR saved fuel on every voyage; on the
+North Atlantic route it was beaten by the block-locked formulation on 12 of 26 voyages and by a
+constant-speed policy on 11 of 26. Because the finer program is guaranteed to fit the forecast at
+least as well, it is also the more exposed when the forecast is wrong, and the coarser block acts as
+a regulariser. What governs the outcome is the ratio between the fuel spread a route makes available
+and the error in the forecast used to exploit it, which we measure.
 \end{abstract}
 
 \begin{keyword}
@@ -117,13 +120,14 @@ sweep at polynomial cost. We then embed the program in a rolling-horizon scheme 
 operational forecasts, assuming no probabilistic model linking forecast to realisation and tying the
 re-plan cadence to the forecast refresh cycle. Finally, we evaluate the method with a voyage simulation
 driven by real sea-conditions data, benchmarking it against both an operational fixed-speed policy and
-the method of \citet{luo2024}, over nineteen voyages, consecutive departures on two contrasting
+the method of \citet{luo2024}, over 41 voyages, consecutive departures on two contrasting
 routes, a mild passage (Persian Gulf to the Strait of Malacca) and a harsher one (the North Atlantic).
 
-The results are directional and clear. Under perfect foresight SR consumed less
-fuel than Luo on all nineteen voyages, by up to a few percent, several tonnes
-of bunker fuel per voyage, and the advantage grew with weather variability, larger on the rougher
-Atlantic route than on the calm Gulf passage, exactly the signature the convexity argument predicts.
+The results separate a guarantee from a measurement. Under perfect foresight the per-leg program
+contains the per-block one, so it cannot burn more fuel; what the experiment establishes is that the
+guaranteed advantage is worth having, 1.4 to 2.4\% of voyage fuel, several tonnes of bunker fuel per
+voyage. Under real forecasts the same containment works against the finer program: it fits the
+forecast at least as well, and is correspondingly more exposed when the forecast is wrong.
 The advantage survived realistic rolling-horizon operation against imperfect forecasts, where
 Luo re-planned more often yet gained less because it lacked the resolution to act on
 the refreshed information. The binding factor, in short, is the granularity of the speed decision, not
@@ -954,21 +958,22 @@ per-voyage percentages differs slightly and is not used.
 %% ============================================================ 7. RESULTS
 \section{Results}
 \label{sec:results}
-Throughout, SR denotes the Shafir--Raviv per-leg free-speed dynamic program and Luo the per-block
-speed-locked formulation of \citet{luo2024}.
+Throughout, SR denotes the per-leg free-speed dynamic program of Section~\ref{sec:methods} and Luo
+the per-block speed-locked formulation of \citet{luo2024}. All figures are realised fuel over the 41
+voyages of Section~\ref{sec:protocol}, on the partition of Section~\ref{sec:sampling}.
 
 \subsection{Fuel under perfect foresight}
 \label{sec:res-oracle}
-We evaluated 35 voyages, 13 on the Indian Ocean route and 22 on the North Atlantic route, spanning the full collection window to date
-($\sim$155 days). In every voyage both SR and Luo consumed the full time budget (zero arrival slack).
-We also report Naive, the fixed mean-SOG policy of Section~\ref{sec:methods} sailed through the same
-actual weather, as a third reference point. Per-voyage fuel is reported in Tables~\ref{tab:modec-r1}
-and~\ref{tab:modec-r2}; aggregates are in Table~\ref{tab:modec}.
+Under perfect foresight the ordering is not in question: by the containment of
+Section~\ref{sec:nesting}, SR cannot burn more fuel than Luo when both optimise against the same
+conditions, and indeed SR was the cheaper plan on all 41 voyages. What the experiment measures is the
+\emph{size} of that guaranteed advantage. Per-voyage fuel is reported in
+Tables~\ref{tab:modec-r1} and~\ref{tab:modec-r2}; aggregates are in Table~\ref{tab:modec}.
 
 \begin{table}[ht]
 \centering
 \tiny
-\caption{Perfect-foresight aggregates (35 voyages). Naive is the fixed mean-SOG constant speed under
+\caption{Perfect-foresight aggregates (41 voyages). Naive is the fixed mean-SOG constant speed under
 the same actual weather. Spread is a 95\% paired bootstrap CI (a paired $t$-interval cross-check
 agreed closely throughout, not shown); negative gap = the first method burns less fuel.}
 \label{tab:modec}
@@ -976,8 +981,8 @@ agreed closely throughout, not shown); negative gap = the first method burns les
 \toprule
 Route & $n$ & SR (mt) & Luo (mt) & Naive (mt) & SR$-$Luo (\%) & SR$-$Naive (\%) & Luo$-$Naive (\%) \\
 \midrule
-Indian Ocean  & 13 & 346.48 [341.6, 351.4] & 352.84 [347.7, 358.1] & 355.07 [349.7, 360.6] & $-1.80$ [$-2.10,-1.50$] & $-2.41$ [$-2.71,-2.12$] & $-0.62$ [$-0.74,-0.51$] \\
-North Atlantic & 22 & 196.75 [192.1, 201.8] & 202.01 [197.2, 207.2] & 203.88 [198.9, 209.3] & $-2.60$ [$-2.89,-2.31$] & $-3.48$ [$-3.80,-3.14$] & $-0.91$ [$-1.05,-0.76$] \\
+Indian Ocean & 15 & 345.46 [341.2, 349.6] & 354.06 [349.5, 358.5] & 355.11 [350.4, 359.8] & $-2.43$ [$-2.70,-2.20$] & $-2.72$ [$-3.00,-2.47$] & $-0.30$ [$-0.40,-0.20$] \\
+North Atlantic & 26 & 198.78 [195.0, 203.0] & 201.61 [197.4, 206.2] & 203.26 [199.0, 207.9] & $-1.40$ [$-1.65,-1.15$] & $-2.20$ [$-2.48,-1.91$] & $-0.81$ [$-0.93,-0.69$] \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -998,19 +1003,21 @@ sample hour. Negative gap = SR burns less fuel than Luo.}
 \toprule
 {Voyage} & {$\mathrm{sh}_0$} & {SR (mt)} & {Luo (mt)} & {Naive (mt)} & {SR$-$Luo (\%)} \\
 \midrule
-1  & 6    & 354.91 & 361.67 & 362.74 & -1.87 \\
-2  & 286  & 355.23 & 364.68 & 367.03 & -2.59 \\
-3  & 566  & 338.25 & 343.32 & 345.42 & -1.48 \\
-4  & 846  & 348.53 & 353.30 & 354.74 & -1.35 \\
-5  & 1126 & 337.61 & 340.89 & 342.68 & -0.96 \\
-6  & 1406 & 335.23 & 344.18 & 346.19 & -2.60 \\
-7  & 1686 & 347.23 & 353.32 & 356.03 & -1.72 \\
-8  & 1966 & 331.99 & 339.19 & 340.29 & -2.12 \\
-9  & 2246 & 339.48 & 343.81 & 346.05 & -1.26 \\
-10 & 2526 & 349.29 & 355.70 & 358.69 & -1.80 \\
-11 & 2806 & 356.37 & 366.29 & 368.50 & -2.71 \\
-12 & 3086 & 347.89 & 354.20 & 356.87 & -1.78 \\
-13 & 3366 & 362.26 & 366.40 & 370.62 & -1.13 \\
+1  & 6    & 353.05 & 360.43 & 360.48 & -2.05 \\
+2  & 286  & 352.86 & 365.40 & 366.06 & -3.43 \\
+3  & 566  & 336.18 & 344.57 & 344.92 & -2.43 \\
+4  & 846  & 345.13 & 352.62 & 353.28 & -2.12 \\
+5  & 1126 & 336.15 & 342.21 & 342.55 & -1.77 \\
+6  & 1406 & 336.15 & 345.21 & 345.69 & -2.62 \\
+7  & 1686 & 344.01 & 351.90 & 353.88 & -2.24 \\
+8  & 1966 & 330.10 & 339.12 & 339.35 & -2.66 \\
+9  & 2246 & 336.70 & 345.29 & 346.47 & -2.49 \\
+10 & 2526 & 349.20 & 356.87 & 359.14 & -2.15 \\
+11 & 2806 & 353.31 & 366.55 & 368.21 & -3.61 \\
+12 & 3086 & 345.26 & 354.19 & 355.81 & -2.52 \\
+13 & 3366 & 358.64 & 365.44 & 367.64 & -1.86 \\
+14 & 3646 & 349.27 & 357.18 & 357.94 & -2.21 \\
+15 & 3926 & 355.84 & 364.00 & 365.26 & -2.24 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1031,71 +1038,77 @@ sample hour. Negative gap = SR burns less fuel than Luo.}
 \toprule
 {Voyage} & {$\mathrm{sh}_0$} & {SR (mt)} & {Luo (mt)} & {Naive (mt)} & {SR$-$Luo (\%)} \\
 \midrule
-1  & 0    & 203.36 & 210.48 & 212.61 & -3.38 \\
-2  & 168  & 204.24 & 209.52 & 212.78 & -2.52 \\
-3  & 336  & 197.05 & 202.78 & 203.65 & -2.82 \\
-4  & 504  & 206.33 & 212.69 & 214.54 & -2.99 \\
-5  & 672  & 216.28 & 223.58 & 225.98 & -3.26 \\
-6  & 840  & 190.73 & 197.30 & 200.50 & -3.33 \\
-7  & 1008 & 227.91 & 233.82 & 237.09 & -2.53 \\
-8  & 1176 & 194.46 & 198.31 & 200.43 & -1.95 \\
-9  & 1344 & 195.83 & 198.53 & 199.35 & -1.36 \\
-10 & 1512 & 193.11 & 197.17 & 198.99 & -2.06 \\
-11 & 1680 & 199.51 & 204.09 & 206.86 & -2.25 \\
-12 & 1848 & 198.93 & 204.79 & 206.10 & -2.86 \\
-13 & 2016 & 214.21 & 220.09 & 222.48 & -2.67 \\
-14 & 2184 & 185.26 & 190.53 & 192.45 & -2.76 \\
-15 & 2352 & 186.96 & 190.85 & 191.62 & -2.04 \\
-16 & 2520 & 193.81 & 200.40 & 201.60 & -3.29 \\
-17 & 2688 & 179.34 & 187.47 & 188.51 & -4.33 \\
-18 & 2856 & 178.68 & 183.26 & 185.41 & -2.50 \\
-19 & 3024 & 190.52 & 196.15 & 197.61 & -2.87 \\
-20 & 3192 & 188.98 & 192.51 & 194.09 & -1.83 \\
-21 & 3360 & 188.62 & 193.37 & 194.52 & -2.45 \\
-22 & 3528 & 194.27 & 196.57 & 198.10 & -1.17 \\
+1  & 0    & 205.25 & 210.06 & 211.70 & -2.29 \\
+2  & 168  & 207.53 & 210.57 & 213.11 & -1.45 \\
+3  & 336  & 199.90 & 203.32 & 204.48 & -1.68 \\
+4  & 504  & 206.39 & 212.05 & 212.91 & -2.67 \\
+5  & 672  & 218.38 & 224.41 & 226.03 & -2.68 \\
+6  & 840  & 197.03 & 198.41 & 200.75 & -0.69 \\
+7  & 1008 & 228.97 & 233.79 & 236.60 & -2.06 \\
+8  & 1176 & 195.88 & 198.59 & 199.28 & -1.36 \\
+9  & 1344 & 197.25 & 198.62 & 199.28 & -0.69 \\
+10 & 1512 & 193.43 & 196.44 & 198.42 & -1.53 \\
+11 & 1680 & 199.85 & 203.51 & 206.19 & -1.80 \\
+12 & 1848 & 202.41 & 204.25 & 204.83 & -0.90 \\
+13 & 2016 & 216.81 & 220.75 & 222.83 & -1.78 \\
+14 & 2184 & 188.18 & 190.25 & 192.24 & -1.09 \\
+15 & 2352 & 190.13 & 191.21 & 192.07 & -0.56 \\
+16 & 2520 & 196.36 & 199.41 & 201.80 & -1.53 \\
+17 & 2688 & 185.02 & 187.70 & 188.92 & -1.43 \\
+18 & 2856 & 181.93 & 182.89 & 185.46 & -0.52 \\
+19 & 3024 & 193.69 & 196.72 & 197.71 & -1.54 \\
+20 & 3192 & 190.64 & 192.46 & 194.29 & -0.94 \\
+21 & 3360 & 192.59 & 193.64 & 195.04 & -0.54 \\
+22 & 3528 & 195.76 & 196.48 & 197.51 & -0.36 \\
+23 & 3696 & 201.92 & 204.07 & 205.68 & -1.05 \\
+24 & 3864 & 192.98 & 196.66 & 198.45 & -1.87 \\
+25 & 4032 & 202.39 & 206.00 & 208.06 & -1.75 \\
+26 & 4200 & 187.66 & 189.55 & 191.03 & -1.00 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\noindent\textbf{SR consumed less fuel than Luo on every voyage.} SR was more fuel-efficient on all 35
-of 35 voyages, with no exception on either route. The per-voyage advantage ranged from 3.28 to 9.92 mt
-on the Indian Ocean route and from 2.30 to 8.12 mt on the North Atlantic route.
+\noindent\textbf{The advantage is a few percent of voyage fuel.} SR saved 2.43\% on the Indian Ocean
+route and 1.40\% on the North Atlantic route relative to Luo, and 2.72\% and 2.20\% relative to
+Naive. In absolute terms the mean saving over Luo was 8.61 mt and 2.82 mt respectively, with
+per-voyage advantages ranging from 6.06 to 13.24 mt on the Indian Ocean route and from 0.72 to
+6.03 mt on the North Atlantic route. The smallest advantage observed on any voyage was 0.72 mt.
 
-\noindent\textbf{The absolute advantage was comparable across routes, but proportionally larger on
-the shorter voyage.} The mean saving was similar in absolute terms: 6.36 mt on the Indian Ocean route and 5.27 mt on
-the North Atlantic route, even though the North Atlantic route takes roughly half the time. As a fraction of total fuel, the advantage is
-therefore larger on the shorter, harsher Atlantic route (2.60\%) than on Malacca (1.80\%); the 95\% CIs
-in Table~\ref{tab:modec} do not overlap. This is the scaling we expect from the convexity of fuel
-consumption in speed (Section~\ref{sec:problem}).
+\noindent\textbf{The two routes are not comparable on this axis.} The larger proportional advantage
+on the Indian Ocean route coincides with its longer decision blocks, 27.15 NM against 5.04 NM
+(Table~\ref{tab:instances}). Because the two routes differ both in block length, by a factor of
+$5.4$, and in weather regime, and in opposite directions, neither cause can be isolated from this
+pair of routes, and no ordering between them is attributed here to either.
 
-\noindent\textbf{Both SR and Luo also beat Naive, with SR by the larger margin.} SR saved 2.41\% of
-fuel relative to Naive on the Indian Ocean route and 3.48\% on the North Atlantic route. Luo's saving relative to Naive was smaller,
-0.62\% and 0.91\%. This is because Luo can change its speed only once per block, while SR can change
-it on every leg.
+\noindent\textbf{Luo's advantage over Naive is small.} Restricted to one speed per six-hour block,
+Luo recovered 0.30\% and 0.81\% relative to a constant speed, against SR's 2.72\% and 2.20\%. Most of
+what is available to a planner under perfect information therefore lies below the resolution of a
+block-locked formulation.
 
-\noindent\textbf{Departure weather dominated voyage-to-voyage fuel variation.} On the North Atlantic route, under the
-same formulation, the worst departure (227.91 mt) consumed 27.5\% more fuel than the best (178.68 mt).
-This spread is far larger than the entire SR--Luo gap. The Atlantic fuel spread (27.6\%) was about
-three times that of Malacca (9.1\%).
+\noindent\textbf{Departure conditions dominate voyage-to-voyage variation.} On the North Atlantic
+route the most expensive departure consumed 25.9\% more fuel than the cheapest (228.97 against
+181.93 mt); on the Indian Ocean route the spread was 8.6\% (358.64 against 330.10 mt). Both are far
+larger than any difference between planners, which is why the chain protocol pairs every comparison
+by departure hour.
 
 \subsection{Fuel under rolling-horizon planning (real forecasts)}
 \label{sec:res-rh}
-To test whether the advantage survives realistic operation, SR and Luo were embedded in the
-6 h rolling-horizon scheme (Section~\ref{sec:protocol}) and compared against the Naive set-and-forget
-baseline, over the original 19-voyage subset of the full chain (Section~\ref{sec:protocol}). Realised
-fuel relative to Naive is reported per voyage in Tables~\ref{tab:rh-r1} and~\ref{tab:rh-r2} and
-summarised in Table~\ref{tab:rh}.
+The guarantee of Section~\ref{sec:nesting} is stated with respect to the conditions each planner
+optimises against. Under the rolling horizon both planners optimise against the same \emph{forecast},
+so SR still fits that forecast at least as well as Luo; but fuel is realised against the weather that
+actually occurs, and there the guarantee does not apply. This section reports what happens when it
+lapses.
 
 \begin{table}[ht]
 \centering
 \caption{Rolling-horizon realised fuel relative to the Naive set-and-forget baseline.}
 \label{tab:rh}
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrrrrr}
 \toprule
-Route & $n$ & RH-SR vs Naive (mean \%) & RH-Luo vs Naive (mean \%) & RH-SR saves on \\
+Route & $n$ & RH-SR vs Naive (mean \%) & RH-Luo vs Naive (mean \%) & RH-SR saves on & worse than Luo & worse than Naive \\
 \midrule
-North Atlantic & 12 & $-1.8$ & $0.0$  & 11/12 \\
-Indian Ocean   & 7  & $-1.3$ & $-0.0$ & 6/7 \\
+North Atlantic & 26 & $-0.3$ & $-0.1$ & 15/26 & 12/26 & 11/26 \\
+Indian Ocean & 15 & $-1.5$ & $0.1$ & 15/15 & 0/15 & 0/15 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1109,13 +1122,21 @@ departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline
 \toprule
 $\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & RH-Luo vs Naive (\%) \\
 \midrule
-6    & 362.64 & 357.37 & 362.57 & $-1.45$ & $-0.02$ \\
-286  & 367.03 & 358.72 & 367.72 & $-2.27$ & $+0.19$ \\
-566  & 344.58 & 344.91 & 344.51 & $+0.10$ & $-0.02$ \\
-846  & 354.52 & 350.75 & 354.36 & $-1.06$ & $-0.05$ \\
-1126 & 342.67 & 339.82 & 341.69 & $-0.83$ & $-0.29$ \\
-1406 & 346.14 & 342.21 & 346.57 & $-1.14$ & $+0.12$ \\
-1686 & 355.60 & 346.69 & 355.10 & $-2.50$ & $-0.14$ \\
+6    & 360.48 & 355.57 & 360.72 & $-1.36$ & $+0.07$ \\
+286  & 366.06 & 357.49 & 367.18 & $-2.34$ & $+0.31$ \\
+566  & 344.92 & 339.25 & 345.65 & $-1.64$ & $+0.21$ \\
+846  & 353.28 & 347.46 & 353.01 & $-1.65$ & $-0.08$ \\
+1126 & 342.55 & 340.10 & 343.12 & $-0.71$ & $+0.17$ \\
+1406 & 345.69 & 339.72 & 345.81 & $-1.73$ & $+0.03$ \\
+1686 & 353.88 & 345.85 & 352.66 & $-2.27$ & $-0.34$ \\
+1966 & 339.35 & 334.45 & 341.67 & $-1.44$ & $+0.68$ \\
+2246 & 346.47 & 343.96 & 347.55 & $-0.72$ & $+0.31$ \\
+2526 & 359.14 & 352.78 & 358.50 & $-1.77$ & $-0.18$ \\
+2806 & 368.21 & 363.68 & 370.25 & $-1.23$ & $+0.55$ \\
+3086 & 355.81 & 348.31 & 354.12 & $-2.11$ & $-0.48$ \\
+3366 & 367.64 & 365.56 & 365.95 & $-0.57$ & $-0.46$ \\
+3646 & 357.94 & 353.31 & 358.94 & $-1.29$ & $+0.28$ \\
+3926 & 365.26 & 361.25 & 366.59 & $-1.10$ & $+0.36$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1129,64 +1150,119 @@ departure sample hour. Negative \% = saving vs the Naive set-and-forget baseline
 \toprule
 $\mathrm{sh}_0$ & Naive (mt) & RH-SR (mt) & RH-Luo (mt) & RH-SR vs Naive (\%) & RH-Luo vs Naive (\%) \\
 \midrule
-0    & 212.47 & 204.62 & 212.12 & $-3.69$ & $-0.16$ \\
-168  & 212.32 & 210.17 & 211.41 & $-1.01$ & $-0.43$ \\
-336  & 203.42 & 198.61 & 203.42 & $-2.36$ & $-0.00$ \\
-504  & 214.49 & 213.48 & 216.01 & $-0.47$ & $+0.71$ \\
-672  & 225.66 & 220.26 & 224.90 & $-2.39$ & $-0.33$ \\
-840  & 200.19 & 193.81 & 199.04 & $-3.19$ & $-0.57$ \\
-1008 & 237.01 & 232.47 & 235.33 & $-1.92$ & $-0.71$ \\
-1176 & 200.22 & 196.75 & 200.71 & $-1.73$ & $+0.25$ \\
-1344 & 197.83 & 198.61 & 200.49 & $+0.39$ & $+1.34$ \\
-1512 & 198.27 & 195.20 & 198.28 & $-1.55$ & $+0.01$ \\
-1680 & 206.25 & 202.00 & 205.70 & $-2.06$ & $-0.27$ \\
-1848 & 205.82 & 202.99 & 206.27 & $-1.38$ & $+0.22$ \\
+0    & 211.70 & 206.99 & 211.99 & $-2.22$ & $+0.14$ \\
+168  & 213.11 & 212.10 & 211.34 & $-0.48$ & $-0.83$ \\
+336  & 204.48 & 201.93 & 203.77 & $-1.25$ & $-0.35$ \\
+504  & 212.91 & 213.86 & 214.97 & $+0.45$ & $+0.97$ \\
+672  & 226.03 & 225.57 & 225.93 & $-0.20$ & $-0.04$ \\
+840  & 200.75 & 200.29 & 200.64 & $-0.23$ & $-0.06$ \\
+1008 & 236.60 & 232.72 & 234.76 & $-1.64$ & $-0.78$ \\
+1176 & 199.28 & 197.51 & 200.39 & $-0.89$ & $+0.55$ \\
+1344 & 199.28 & 199.41 & 199.78 & $+0.07$ & $+0.25$ \\
+1512 & 198.42 & 198.67 & 197.62 & $+0.13$ & $-0.40$ \\
+1680 & 206.19 & 203.06 & 204.19 & $-1.51$ & $-0.97$ \\
+1848 & 204.83 & 206.46 & 204.89 & $+0.79$ & $+0.03$ \\
+2016 & 222.83 & 220.96 & 222.52 & $-0.84$ & $-0.14$ \\
+2184 & 192.24 & 191.19 & 190.67 & $-0.54$ & $-0.82$ \\
+2352 & 192.07 & 194.55 & 191.96 & $+1.29$ & $-0.06$ \\
+2520 & 201.80 & 199.45 & 201.31 & $-1.17$ & $-0.24$ \\
+2688 & 188.92 & 189.74 & 188.56 & $+0.44$ & $-0.19$ \\
+2856 & 185.46 & 184.52 & 185.04 & $-0.51$ & $-0.23$ \\
+3024 & 197.71 & 200.64 & 198.36 & $+1.48$ & $+0.33$ \\
+3192 & 194.29 & 194.26 & 192.85 & $-0.02$ & $-0.74$ \\
+3360 & 195.04 & 196.69 & 195.67 & $+0.85$ & $+0.33$ \\
+3528 & 197.51 & 198.56 & 197.15 & $+0.53$ & $-0.18$ \\
+3696 & 205.68 & 206.43 & 208.63 & $+0.37$ & $+1.43$ \\
+3864 & 198.45 & 194.87 & 197.45 & $-1.80$ & $-0.50$ \\
+4032 & 208.06 & 208.78 & 208.12 & $+0.35$ & $+0.03$ \\
+4200 & 191.03 & 190.57 & 190.00 & $-0.24$ & $-0.54$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\noindent\textbf{SR re-planning saved fuel; Luo re-planning did not.} Rolling-horizon
-SR reduced realised fuel relative to set-and-forget on 17 of 19 voyages (mean $-1.8\%$ on the North Atlantic route,
-$-1.3\%$ on the Indian Ocean route; best $-3.69\%$). The two exceptions were marginal ($+0.10\%$ on the Indian Ocean route,
-$+0.39\%$ on the North Atlantic route), where committing early speeds against forecasts that were later revised cost
-slightly more than holding the mean. Rolling-horizon Luo was statistically indistinguishable from
-set-and-forget (mean within $0.05\%$ of Naive on both routes): its fixed block speed left no room to
-exploit the refreshed forecasts. The SR--Luo contrast established under perfect foresight therefore
-persisted under realistic, imperfect-forecast operation, on both routes and across the full departure
-window.
+\noindent\textbf{On the mild route, re-planning paid on every voyage.} Rolling-horizon SR reduced
+realised fuel relative to set-and-forget on 15 of 15 Indian Ocean voyages, by 1.46\% on average.
+Rolling-horizon Luo did not: it averaged $+0.10\%$, slightly worse than sailing a constant speed.
 
-\noindent\textbf{Realised fuel fell within the oracle--Naive envelope.} On every voyage the realised
-RH fuel satisfied $\text{oracle}\le\text{RH}\le\text{Naive}$. Rolling-horizon SR sat between 1.3 and
-8.0 mt above its oracle, the gap representing the cost of committing speeds against forecasts that
-were subsequently revised.
+\noindent\textbf{On the harsh route, finer planning lost to simpler alternatives.} Rolling-horizon SR
+averaged only $-0.26\%$ against Naive on the North Atlantic route and saved on 15 of 26 voyages. It
+was beaten by rolling-horizon Luo on 12 of those 26 voyages, by up to 2.59 mt, and by the
+constant-speed baseline on 11 of 26. The two failure sets overlap on 8 voyages, so on 15 of 26 North
+Atlantic voyages the finest-grained planner was beaten by something simpler. No such failure occurred
+on the Indian Ocean route.
 
-\noindent\textbf{The two formulations re-planned differently.} A single-voyage diagnostic recorded how
-often a refreshed forecast changed the committed first-block speed: rolling-horizon Luo revised on 17
-of 27 re-plans (63\%), against 12 of 27 (44\%) for rolling-horizon SR, yet those more frequent
-adjustments yielded no net saving over set-and-forget, whereas SR's translated into the
-fuel reductions above.
+\noindent\textbf{This is the containment result running in reverse.} SR is guaranteed to fit the
+forecast at least as well as Luo, and is therefore the more exposed of the two when the forecast is
+wrong: it commits to detail the forecast does not reliably carry. Luo cannot express that detail, and
+its six-hour block accordingly acts as a regulariser. The exposure scales with the freedom available:
+each six-hour block contains 10.7--15.5 SR speed decisions on the North Atlantic route against
+2.0--2.9 on the Indian Ocean route (Table~\ref{tab:instances}).
+
+\noindent\textbf{Both formulations re-planned, but only one converted it.} Rolling-horizon Luo
+revised its committed first-block speed on 464 of 690 re-plans on the Indian Ocean route and 557 of
+702 on the North Atlantic route, against 274 and 288 for rolling-horizon SR. Luo therefore revised
+roughly twice as often and still finished level with or behind a constant speed. Re-planning
+frequency is not what converts fresh information into fuel.
+
+\subsection{What the forecast costs}
+\label{sec:res-span}
+The two preceding subsections can be read together by separating what was available to win from what
+imperfect information cost, using the quantities of Section~\ref{sec:quantities}.
+
+\begin{table}[ht]
+\centering
+\caption{Optimisation span and the cost of imperfect information, per route. Span is Naive minus the oracle; forecast cost is the rolling-horizon SR result minus the oracle (Section~\ref{sec:quantities}). Means over voyages.}
+\label{tab:span}
+\begin{tabular}{lrrrrr}
+\toprule
+Route & $n$ & Span (mt) & Forecast cost (mt) & Span captured (\%) & Cost exceeds span \\
+\midrule
+North Atlantic & 26 & 4.47 & 3.90 & 12.8 & 11/26 \\
+Indian Ocean & 15 & 9.66 & 4.46 & 53.8 & 0/15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent On the Indian Ocean route the span between a constant speed and the oracle averaged
+9.66 mt and the forecast cost 4.46 mt, leaving 53.8\% of the span captured and no voyage on which the
+cost exceeded the span. On the North Atlantic route the span was less than half as large, 4.47 mt,
+while the forecast cost was almost unchanged at 3.90 mt: 12.8\% of the span survived, and on 11 of 26
+voyages the cost exceeded the entire span, which is precisely when rolling-horizon SR finishes behind
+Naive.
+
+\noindent\textbf{The governing quantity is the ratio of span to forecast error, not the severity of
+the weather.} A route offers a planner something to win only insofar as the spread of attainable fuel
+outcomes exceeds the error in the information used to choose between them. The North Atlantic route
+is the rougher of the two and yet the less rewarding, because its forecast error grew fast enough to
+consume a span that was itself smaller. Where the two are comparable in size, fine-grained planning
+converts the remainder into a loss rather than a saving.
 
 \subsection{Supporting observations}
 Two measurements underpin the rolling-horizon design (Section~\ref{sec:data}). First, forecast
-accuracy degraded systematically with lead time (wind RMSE roughly doubled over 133 h on the Indian Ocean route;
-$+286\%$ over 144 h on the North Atlantic route), establishing why realised RH fuel exceeded the oracle. Second, the
-6 h re-plan cadence was fixed to the wind model's re-initialisation cycle, of which 86\% of hourly queries returned
-identical data, so sub-6 h re-planning carried no new information.
+accuracy degraded systematically with lead time, which is what the forecast cost of
+Table~\ref{tab:span} measures. Second, the 6 h re-plan cadence was fixed to the wind model's
+re-initialisation cycle, of which 86\% of hourly queries returned identical data, so sub-6 h
+re-planning carried no new information.
 
 %% ============================================================ 8. DISCUSSION
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{Convexity predicted the result}
-The result follows from a single structural property: the fuel-consumption rate is convex in speed
-(Section~\ref{sec:problem}), so holding one speed across a block of varying weather forces the
-still-water speed to vary and, by Jensen's inequality, wastes fuel relative to per-leg freedom. Two
-qualitative predictions of this argument were borne out. First, the gap was signed and systematic:
-under perfect foresight SR consumed less fuel than Luo on all 35 of 35 voyages, the directional
-signature of Jensen's inequality, not an average tendency. Second, the gap scaled with weather
-variability: proportionally larger on the harsher Atlantic route (2.60\%) than on Malacca (1.80\%), as
-expected for a penalty driven by within-block weather spread. The empirical magnitude, roughly
-6 mt per voyage, is thus explained, not merely reported.
+\subsection{What convexity explains, and what it does not}
+The \emph{direction} of the perfect-foresight result requires no appeal to convexity: the per-leg
+program contains the per-block one (Section~\ref{sec:nesting}), so it cannot burn more fuel when both
+optimise against the same conditions. What convexity explains is the \emph{magnitude}. Because the
+fuel-consumption rate is convex in speed (Section~\ref{sec:problem}), holding one speed across a block
+of varying conditions forces the still-water speed to vary and, by Jensen's inequality, wastes fuel in
+proportion to the spread of conditions within the block. That the measured advantage is a few percent
+of voyage fuel, and not a rounding error, is the content of the empirical claim.
+
+Convexity also predicts what that magnitude should scale with: the spread of conditions \emph{within a
+block}, which is set jointly by how long the block is and how fast conditions change along it. The two
+routes studied here differ in both, by a factor of $5.4$ in block length and in weather regime, and in
+opposite directions (Section~\ref{sec:sampling}). They therefore cannot separate the two, and no
+scaling law is claimed from them. Establishing one requires holding the weather fixed and varying the
+block length alone, which the present data do not support (Section~\ref{sec:limitations}).
 
 \subsection{Decision granularity, not data, is the limiting factor}
 That the SR advantage persisted under realistic rolling-horizon operation
@@ -1201,15 +1277,23 @@ information helps only a planner able to exploit it at the resolution at which t
 
 \subsection{When re-planning helps, and when it does not}
 \label{sec:disc-bound}
-The rolling-horizon benefit over set-and-forget is real but bounded, and is not claimed to be
-universal. On 2 of 19 voyages the SR RH plan consumed slightly more fuel than the Naive
-baseline, and the Luo RH plan did so on several. The reason is the same convexity seen from the
-other side: on near-uniform weather a constant speed is itself fuel-optimal, so any forecast-driven
-speed variation can only add a Jensen penalty unless the weather-routing gain exceeds it. The value of
-re-planning is therefore bounded by how much the weather actually varies over a departure's window, largest on variable departures, vanishing or reversing on calm ones. This is best read as a
-savings-versus-departure relationship \todo{FIG: savings vs departure} rather than a single figure;
-the relevant gate, stated precisely, is ``realised fuel $\le$ Naive'', satisfied by SR on 17 of 19
-voyages and by Luo on a minority.
+The rolling-horizon benefit over set-and-forget is real, bounded, and on one of the two routes
+frequently absent. Rolling-horizon SR consumed more fuel than the Naive baseline on 11 of 26 North
+Atlantic voyages and on none of the 15 Indian Ocean voyages
+(Section~\ref{sec:res-rh}). Section~\ref{sec:res-span} gives the condition that separates the two
+cases: re-planning pays when the fuel spread a departure makes available exceeds the error in the
+forecast used to exploit it, and not otherwise. On the North Atlantic route the forecast cost
+consumed the entire available span on 11 of 26 departures, which are exactly the departures on which
+re-planning lost.
+
+Two mechanisms compound there. The first is the one convexity describes from the other side: on
+near-uniform conditions a constant speed is itself fuel-optimal, so forecast-driven speed variation
+adds a Jensen penalty unless the routing gain exceeds it. The second is specific to fine granularity.
+Because the per-leg program is guaranteed to fit the forecast at least as well as the block-locked one
+(Section~\ref{sec:nesting}), it commits to structure the forecast does not reliably carry; the
+block constraint, which costs fuel under perfect information, limits that exposure. The relevant gate,
+stated precisely, is ``realised fuel $\le$ Naive'', satisfied by rolling-horizon SR on 30 of 41
+voyages overall and on all 15 of the milder route.
 
 \subsection{Relation to prior work}
 Our findings sharpen, rather than overturn, the established picture. The convexity of fuel in speed has
@@ -1220,31 +1304,35 @@ the state-of-the-art multistage-graph formulation of \citet{luo2024}, which hold
 each forecast-cycle stage to keep the $K^{N}$ profile space tractable, our contribution is twofold and
 empirical: the per-cell resolution that stage-based formulations cannot reach without combinatorial
 blow-up is obtained here in a single polynomial-time pass over a directed acyclic graph, and, on a
-like-for-like comparison, that finer resolution is shown to \emph{pay}, SR
-consumed less fuel than \citet{luo2024} on all 35 voyages under perfect foresight, with the gap growing
-with weather variability exactly as the convexity argument predicts.
+like-for-like comparison, that finer resolution is shown to \emph{pay} under perfect information by a
+margin worth having, and to carry a cost under imperfect information that the coarser formulation does
+not.
 
 The result also speaks to the forecast-uncertainty literature. Where earlier work established the value
 of finer or adaptive planning only under perfect information, or represented uncertainty through
 ensembles \citep{Vettor2022, Luo2023}, we drive the optimiser with real operational forecasts, assume
 no probabilistic model of the forecast--realisation relationship, and tie the re-plan cadence to the
 forecast refresh cycle rather than choosing it freely \citep{Tzortzis2021, Zheng2023}. Under this
-regime the granularity advantage persists (17 of 19 voyages), and Luo's inability to
-convert refreshed forecasts into savings, despite re-planning more often, isolates decision
-granularity, not information, as the binding factor. Finally, in contrast to evaluations on constant or
+regime the granularity advantage is conditional rather than automatic, and Luo's inability to convert
+refreshed forecasts into savings, despite revising its committed speed roughly twice as often, shows
+that re-planning frequency is not what turns fresh information into fuel. Finally, in contrast to evaluations on constant or
 synthetic weather, on single voyages, or under the simplification $V_s\!=\!V_g$ \citep{Cariou2011}, our
 benchmark is driven by real sea-conditions data with an explicit still-water-to-ground speed correction
 and SOG-targeted arrival, over many consecutive voyages on two contrasting routes.
 
 \subsection{Limitations}
 \label{sec:limitations}
-(i) Two routes were studied; the route-length scaling of the gap is reported as a contrast, not a
-curve. (ii) The arrival constraint was hard and binding (zero slack) throughout, so results describe
+(i) Two routes were studied, and they differ simultaneously in decision-block length and in weather
+regime (Section~\ref{sec:sampling}), so no scaling of the advantage with either can be identified from
+them; establishing one requires varying block length with the conditions held fixed. Relatedly, the
+two routes were sampled at different intervals along their length, 25.0 NM and 5.0 NM, against source
+grids able to supply about 4.8 NM on both, so the coarser of the two under-uses the available data. (ii) The arrival constraint was hard and binding (zero slack) throughout, so results describe
 fuel at equal voyage time; relaxing the ETA is left to future work. (iii) The rolling-horizon nowcast
 assumes the current 6 h block is observable; its realism depends on onboard sensing. (iv) Luo, though
-implemented faithfully, is one of several possible block-locked formulations. (v) The perfect-foresight
-comparison was extended to the full 35-voyage chain; the rolling-horizon comparison (Section~\ref{sec:res-rh})
-still covers the original 19-voyage subset, and extending it to match is left to future work.
+implemented faithfully, is one of several possible block-locked formulations. (v) Both information regimes cover the same 41-voyage chain, so the two are directly comparable; the
+intermediate regime, planning once against the departure forecast and sailing that plan unchanged, was
+not evaluated, and would separate the cost of re-planning from the cost of forecast-driven
+optimisation in general.
 
 %% ============================================================ 9. CONCLUSION
 \section{Conclusion}
@@ -1253,15 +1341,19 @@ This study compared SR (the Shafir--Raviv per-leg speed-freedom formulation) aga
 per-block speed-locked formulation of \citet{luo2024}, for fuel-minimising ship routing under
 time-varying weather, on two routes spanning two weather regimes.
 
-Three conclusions follow. First, Luo's per-block speed-locking is fuel-suboptimal by a structural
-mechanism: because the fuel-consumption rate is convex in still-water speed, holding one speed across a
-block of varying weather forces inefficient speed excursions, and SR's per-leg freedom recovers the
-loss (Jensen's inequality). Second, under perfect foresight SR's advantage was realised on every one
-of 35 voyages, comparable in absolute fuel across routes ($\sim$6 mt) but proportionally larger on
-the shorter, harsher voyage. Third, the advantage survived realistic 6 h rolling-horizon operation
-against real forecasts, on the 19-voyage subset evaluated to date: SR re-planning saved fuel relative
-to set-and-forget on 17 of 19 voyages, whereas Luo re-planning did not, its value bounded by weather
-variability.
+Three conclusions follow. First, per-block speed-locking is fuel-suboptimal by construction, not by
+tendency: the per-leg formulation contains the per-block one, so under equal information it cannot do
+worse, and convexity of the fuel-consumption rate in still-water speed explains why the difference is
+large enough to matter. Measured over 41 voyages it is 8.61 mt on the Indian Ocean route and 2.82 mt
+on the North Atlantic route. Second, that guarantee is stated with respect to the conditions each
+formulation optimises against, and under real forecasts it does not transfer to realised fuel: on the
+North Atlantic route the finer formulation was beaten by the block-locked one on 12 of 26 voyages and
+by a constant-speed policy on 11 of 26, while on the milder route it saved fuel on all 15. Precisely
+because it fits the forecast at least as well, it is the more exposed when the forecast is wrong.
+Third, what separates the two cases is measurable: re-planning pays when the fuel spread a departure
+makes available exceeds the error in the forecast used to exploit it. On the milder route that spread
+was 9.66 mt against a forecast cost of 4.46 mt; on the North Atlantic route it was 4.47 mt against
+3.90 mt, and on 11 of 26 departures the cost exceeded the spread entirely.
 
 The practical implication is that the resolution of the speed decision, not the availability of
 re-planning or fresh forecasts, is the binding factor: Luo cannot convert better
