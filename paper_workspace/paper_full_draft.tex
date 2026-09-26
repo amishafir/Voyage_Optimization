@@ -973,7 +973,6 @@ voyages of Section~\ref{sec:protocol}, on the partition of Section~\ref{sec:samp
 
 \begin{table}[ht]
 \centering
-\small
 \caption{Fuel by route and information regime, over the 41 voyages of
 Section~\ref{sec:protocol}. Naive is the constant mean-SOG policy sailed through the actual weather;
 it does not re-plan and is therefore identical in both regimes, which is what makes the two rows of a
@@ -982,15 +981,15 @@ means less fuel than the comparator. The last two columns count the voyages on w
 and are the dispersion the means conceal. Per-voyage figures behind every cell are in
 \ref{app:pervoyage}.}
 \label{tab:regimes}
-\begin{tabular}{llrrrrrrr}
+\begin{tabular}{llrrrrr}
 \toprule
-Route & Regime & $n$ & Naive (mt) & SR vs Naive (\%) & Luo vs Naive (\%) & SR vs Luo (\%) & SR $\le$ Naive & SR $\le$ Luo \\
+Route & Regime & $n$ & Naive (mt) & SR vs Luo (\%) & SR $\le$ Naive & SR $\le$ Luo \\
 \midrule
-Indian Ocean   & Perfect foresight & 15 & 355.11 & $-2.72$ & $-0.30$ & $-2.43$ & 15/15 & 15/15 \\
-Indian Ocean   & Rolling horizon   & 15 & 355.11 & $-1.46$ & $+0.09$ & $-1.56$ & 15/15 & 15/15 \\
+Indian Ocean   & Perfect foresight & 15 & 355.11 & $-2.43$ & 15/15 & 15/15 \\
+Indian Ocean   & Rolling horizon   & 15 & 355.11 & $-1.56$ & 15/15 & 15/15 \\
 \midrule
-North Atlantic & Perfect foresight & 26 & 203.26 & $-2.20$ & $-0.81$ & $-1.40$ & 26/26 & 26/26 \\
-North Atlantic & Rolling horizon   & 26 & 203.26 & $-0.28$ & $-0.12$ & $-0.17$ & 15/26 & 14/26 \\
+North Atlantic & Perfect foresight & 26 & 203.26 & $-1.40$ & 26/26 & 26/26 \\
+North Atlantic & Rolling horizon   & 26 & 203.26 & $-0.17$ & 15/26 & 14/26 \\
 \bottomrule
 \end{tabular}
 \end{table}
