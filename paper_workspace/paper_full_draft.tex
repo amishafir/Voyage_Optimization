@@ -272,7 +272,7 @@ Given the input above a solution of the deterministic speed control problem is t
 \end{equation}
 so the vessel never idles in mid-ocean, and once it has reached $d=D$ it cannot move again. The voyage can be divided into intervals during which the course, the sea conditions and the time block are all fixed; an interval ends where the vessel crosses a subsegment boundary or where a six-hour block turns over, and at no other point. Because the FCR is a convex function of the speed, in an optimal solution the SOG is constant on each such interval. A speed plan is therefore a list of these intervals together with the SOG held in each, and the points at which a plan may change speed are exactly the subsegment boundaries and the six-hour block boundaries.
 
-\paragraph{Still-water speed and speed over ground.}
+\paragraph{Still-water speed and speed over ground}
 Fuel is burned to produce the vessel's \emph{still-water speed} (SWS) $V_s$, the speed it would make
 in calm water at a given power setting, while a plan is expressed in speed over ground. The two are
 linked by a speed-correction model, $V_g=g(V_s;w)$, in which the wind reduces the speed made good and
@@ -282,7 +282,7 @@ For fixed conditions $V_g$ increases monotonically with $V_s$, so the relation i
 SOG implies a unique required SWS, written $V_s=g^{-1}(V_g;w)$; and that required SWS rises as the
 conditions worsen, so holding a target SOG through adverse weather demands more still-water speed.
 
-\paragraph{Objective.}
+\paragraph{Objective}
 The fuel burned on an interval $i$ of length $d_i$, sailed at a constant SOG $V_{g,i}$ under
 conditions $w_i$, is the fuel-consumption rate times the transit time,
 \begin{equation}
@@ -301,7 +301,7 @@ $[V_{\min},V_{\max}]$; the zero-speed option that Eq.~\eqref{eq:speed-set} admit
 the route covers no distance and so contributes no term to the sum, it only consumes part of the time
 budget $T$ at the origin or at the destination.
 
-\paragraph{The convexity mechanism.}
+\paragraph{The convexity mechanism}
 Fuel depends on the still-water speed while a plan targets the speed over ground, so holding one
 target SOG through changing conditions forces the required SWS to vary along the way. Because the FCR
 is strictly convex in SWS, that induced variation costs fuel relative to a plan that resets the target
@@ -309,7 +309,7 @@ as the conditions change, and the coarser the interval over which a single targe
 that penalty a plan incurs; this is the mechanism the rest of the paper exploits
 (Section~\ref{sec:methods}).
 
-\paragraph{The stochastic version.}
+\paragraph{The stochastic version}
 In the stochastic version of the problem the sea conditions at each location and time along the
 planned voyage are unknown, and the only information about them is a published weather forecast, given
 on the same discretisation as the conditions themselves and refreshed periodically. Speed decisions
@@ -319,7 +319,7 @@ between a forecast and the realisation that follows it is available to the plann
 stochastic version is solved in a rolling-horizon framework that uses the solution method for the
 deterministic problem as a building block.
 
-\paragraph{The benchmark formulation.}
+\paragraph{The benchmark formulation}
 The state of the art for fuel-minimising speed control under dynamic meteorological conditions is the
 multistage-graph formulation of \citet{luo2024}, which we adopt as our benchmark. It divides the
 voyage into segments aligned to the cycle on which the numerical weather prediction product is
@@ -344,7 +344,7 @@ forecast, with only the first segment's speed committed before the vessel advanc
 horizon in their own terms. Their objective and their arrival requirement are those of
 Eq.~\eqref{eq:obj}; what differs is the set of plans the formulation admits.
 
-\paragraph{The fuel model is an interface.}
+\paragraph{The fuel model is an interface}
 Neither formulation contains a fuel model. Both obtain one through the same interface: a position
 along the route and a time select the sea conditions prevailing there, and the model is then asked at
 what rate fuel would be burned if the vessel held a chosen speed under those conditions
@@ -387,7 +387,7 @@ both formulations.}
 \label{fig:fcr-model}
 \end{figure}
 
-\paragraph{How the two formulations differ.}
+\paragraph{How the two formulations differ}
 The two formulations minimise the same objective, Eq.~\eqref{eq:obj}, subject to the same arrival
 deadline and the same speed band, and both price fuel through the interface above. They differ in one
 thing only: what triggers a speed decision. In \citet{luo2024} the trigger is the passage of time. A
@@ -824,7 +824,7 @@ against which a voyage is evaluated; the predicted record is an archive of genui
 forecasts, not a perturbation model, and provides what a planner would have had at each decision
 point.
 
-\paragraph{NWP refresh cycle.} Each product refreshes on its own fixed cycle, and this sets the
+\paragraph{NWP refresh cycle} Each product refreshes on its own fixed cycle, and this sets the
 re-plan cadence used later, a separate quantity from the collection cadence above. The wind
 product refreshes every 6\,h and SMOC every 24\,h. The predicted record confirms it: queried hourly,
 86\% of consecutive wind values and 97\% of consecutive current values were identical to the previous
@@ -914,7 +914,7 @@ a single fixed mean SOG ($D/T$) through the actual time-varying conditions, with
 no re-planning. Because it targets a SOG it also arrives exactly at $T$, so it sits at equal voyage
 time with the other two.
 
-\paragraph{Containment.} On both routes the conditions of Section~\ref{sec:nesting} are met: the time
+\paragraph{Containment} On both routes the conditions of Section~\ref{sec:nesting} are met: the time
 lines of $\mathcal{S}$ are the 6\,h grid and coincide exactly with Luo's blocks (47 on Route~1 and 28
 on Route~2, Table~\ref{tab:instances}), both planners draw speed from the same band $D/T \pm 3$ kn,
 and their distance quanta agree. SR's feasible set therefore contains Luo's, and SR is guaranteed to
