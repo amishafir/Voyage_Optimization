@@ -256,7 +256,7 @@ In this paper we study the problem of controlling the speed of sea vessels with 
 	\item[Route] A route is defined by a sequence of geographical waypoints assuming the vessel starts its voyage at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly referred to in the literature as expected time of arrival (ETA).
 	\item [Sea conditions]    The sea conditions are given by the wind speed and direction, summarised by the Beaufort number, and by the sea current speed and direction. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours, and the space to \emph{subsegments}, consecutive stretches of the route delimited by the points at which the sea conditions were sampled along it (Section~\ref{sec:sampling}). A subsegment boundary is therefore a point at which a value was actually sampled, not a point at which the ocean is known to change: the resolution of the partition is the resolution of the data. The interval at which the conditions were sampled along a route is a property of the data collection rather than of the formulation, and is reported in Section~\ref{sec:sampling}.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
-	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtains this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, whose fuel-consumption-rate function is derived in Appendix~\ref{app:fcr} and whose accompanying correction from still-water speed to speed over ground is given in Appendix~\ref{app:sog}.  We assume that the vessel characteristics are fixed.  The vessel course is fixed at that of the route segment.  It is assumed that the FCR is an increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
+	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtains this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, whose fuel-consumption-rate function is derived in \ref{app:fcr} and whose accompanying correction from still-water speed to speed over ground is given in \ref{app:sog}.  We assume that the vessel characteristics are fixed.  The vessel course is fixed at that of the route segment.  It is assumed that the FCR is an increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
 \end{description}
 
 
@@ -277,7 +277,7 @@ Fuel is burned to produce the vessel's \emph{still-water speed} (SWS) $V_s$, the
 in calm water at a given power setting, while a plan is expressed in speed over ground. The two are
 linked by a speed-correction model, $V_g=g(V_s;w)$, in which the wind reduces the speed made good and
 the along-track component of the current adds to or subtracts from it; the model is that of
-\citet{yang2020} and is given in Appendix~\ref{app:sog}. Only two of its properties are used here.
+\citet{yang2020} and is given in \ref{app:sog}. Only two of its properties are used here.
 For fixed conditions $V_g$ increases monotonically with $V_s$, so the relation inverts and a target
 SOG implies a unique required SWS, written $V_s=g^{-1}(V_g;w)$; and that required SWS rises as the
 conditions worsen, so holding a target SOG through adverse weather demands more still-water speed.
@@ -351,13 +351,13 @@ what rate fuel would be burned if the vessel held a chosen speed under those con
 (Figure~\ref{fig:fcr-model}). How that rate is arrived at is exogenous to the optimisation and does
 not enter the formulation. In this paper the interface is implemented by the resistance decomposition of
 \citet{yang2020}: the conditions determine the still-water speed required to hold the target SOG
-(Appendix~\ref{app:sog}), and the still-water speed determines the fuel rate through a cubic law
-(Appendix~\ref{app:fcr}). \citet{luo2024} implement the same interface with a learned model, a
+(\ref{app:sog}), and the still-water speed determines the fuel rate through a cubic law
+(\ref{app:fcr}). \citet{luo2024} implement the same interface with a learned model, a
 feed-forward artificial neural network $f_{\mathrm{ANN}}(v,w,u)$ over the sailing speed $v$, six
 meteorological variables $w$, and the draught and loading condition $u$, trained on ship noon reports
-fused with ECMWF ERA5 reanalysis; it is described in Appendix~\ref{app:fcr-luo}. Because the question
+fused with ECMWF ERA5 reanalysis; it is described in \ref{app:fcr-luo}. Because the question
 of this paper is when the speed may change and not how fuel is estimated, both formulations are run on
-the same fuel model throughout, the one of Appendix~\ref{app:fcr}; giving each formulation its own
+the same fuel model throughout, the one of \ref{app:fcr}; giving each formulation its own
 would confound the granularity of the speed decision with the error of the fuel model.
 
 \begin{figure}[H]
@@ -371,7 +371,7 @@ would confound the granularity of the speed decision with the error of the fuel 
 ]
 \node[inp] (where) at (0,1.15)  {position $d$ and time $t$\\[1pt]\scriptsize select the sea conditions $w$};
 \node[inp] (speed) at (0,-1.15) {chosen speed $v$};
-\node[mdl] (model) at (5.0,0)   {fuel-consumption-rate model\\[1pt]\scriptsize Appendix~\ref{app:fcr} or Appendix~\ref{app:fcr-luo}};
+\node[mdl] (model) at (5.0,0)   {fuel-consumption-rate model\\[1pt]\scriptsize \ref{app:fcr} or \ref{app:fcr-luo}};
 \node[outp] (rate)  at (9.4,0)   {$\fcr$\;\;[mt/h]};
 \draw[->] (where) -- (model);
 \draw[->] (speed) -- (model);
@@ -381,8 +381,8 @@ would confound the granularity of the speed decision with the error of the fuel 
 position along the route and a time select the sea conditions; given those conditions and a chosen
 speed, the function returns a fuel-consumption rate. The formulation of this paper and the benchmark
 of \citet{luo2024} evaluate the same function and differ only in how it is implemented, a resistance
-decomposition (Appendix~\ref{app:fcr}) in the first case and a trained neural network
-(Appendix~\ref{app:fcr-luo}) in the second. All results reported in this paper use the former for
+decomposition (\ref{app:fcr}) in the first case and a trained neural network
+(\ref{app:fcr-luo}) in the second. All results reported in this paper use the former for
 both formulations.}
 \label{fig:fcr-model}
 \end{figure}
@@ -1380,7 +1380,7 @@ of the conclusions to the fuel-speed exponent.
 
 The problem of Section~\ref{sec:problem} is stated in terms of speed over ground, while fuel is burned
 to produce still-water speed. This appendix records the correction that links the two. Like the
-fuel-consumption-rate function of Appendix~\ref{app:fcr}, it is an input to the formulation and its
+fuel-consumption-rate function of \ref{app:fcr}, it is an input to the formulation and its
 derivation is not a contribution of this paper.
 
 The vessel's \emph{still-water speed} (SWS) $V_s$ is the speed it would make in calm water at a given
@@ -1407,7 +1407,7 @@ required SWS, $V_s=g^{-1}(V_g;w)$. The inverse has no closed form, because $\Del
 itself depends on $V_s$ through the Froude number, and is evaluated numerically by binary search on
 $V_s$. Second, the required SWS rises as the conditions worsen: holding a target SOG through adverse
 weather demands more still-water speed and hence, through the convex fuel law of
-Appendix~\ref{app:fcr}, disproportionately more fuel. Together these are what make the granularity of
+\ref{app:fcr}, disproportionately more fuel. Together these are what make the granularity of
 the speed decision matter at all.
 
 \section{Derivation of the fuel-consumption-rate function}
@@ -1418,7 +1418,7 @@ The optimisation takes the fuel-consumption-rate (FCR) function as an exogenous 
 documents how the cubic form used in Eq.~\eqref{eq:fcr} is obtained, following the method of
 \citet{yang2020}, and states the assumptions under which it holds. The scope here is the
 \emph{still-water} relation between FCR and still-water speed (SWS); the separate mapping from SWS to
-speed over ground under weather is the speed-correction model of Appendix~\ref{app:sog}.
+speed over ground under weather is the speed-correction model of \ref{app:sog}.
 
 \subsection{The DTU--SDU power chain}
 \label{app:fcr-chain}
@@ -1510,7 +1510,7 @@ the operating speed band, which is what licenses the pure cubic in Eq.~\eqref{eq
 approximation degrades outside that band (e.g.\ near hump speed or at very low load).
 \item \textbf{Still-water reference.} Eq.~\eqref{eq:fcr} relates FCR to \emph{still-water} speed.
 Weather does not enter the FCR function directly; it enters by changing the SWS required to hold a
-given SOG (Appendix~\ref{app:sog}). Fuel for a leg is then $\fcr(V_s)\,d_i/V_{g,i}$
+given SOG (\ref{app:sog}). Fuel for a leg is then $\fcr(V_s)\,d_i/V_{g,i}$
 (Eq.~\eqref{eq:legfuel}).
 \item \textbf{Single representative engine map.} A single SFOC value is used rather than a
 load-dependent curve; over the operating band this contributes to the verification error reported
@@ -1524,7 +1524,7 @@ The benchmark formulation of Section~\ref{sec:problem} obtains its fuel-consumpt
 learned model rather than from a resistance decomposition. It is recorded here because the shared
 function of Figure~\ref{fig:fcr-model} is what allows the two formulations to be compared at all;
 it is not used to produce any number reported in this paper, since both formulations are run on the
-fuel model of Appendix~\ref{app:fcr}.
+fuel model of \ref{app:fcr}.
 
 \citet{luo2024} predict the fuel-consumption rate with a feed-forward artificial neural network,
 $f_{\mathrm{ANN}}(v,w,u)$, in which $v$ is the sailing speed, $w$ collects six meteorological
@@ -1540,7 +1540,7 @@ reports, and the meteorological features from the ECMWF ERA5 reanalysis, which r
 entries recorded on board; the authors identify those on-board entries as the least reliable part of a
 noon report, which is the reason for the substitution.
 
-Two differences from the model of Appendix~\ref{app:fcr} are worth recording once. First, the learned
+Two differences from the model of \ref{app:fcr} are worth recording once. First, the learned
 model consumes the sea state directly, through significant wave height and mean wave period, whereas
 the resistance decomposition of \citet{yang2020} carries the sea state only through the Beaufort
 number. Second, a learned model is calibrated to the vessel and the operating envelope of its training
