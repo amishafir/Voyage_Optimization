@@ -250,10 +250,10 @@ control.
 \section{Problem formulation}
 \label{sec:problem}
 
-In this paper we study the problem of controlling the speed of sea vessels with the goal of minimizing its total voyage fuel consumption considering dynamic and stochastic sea conditions and utilizing noisy weather forecasts.  As a first step, we define a dynamic deterministic version of the problem where the sea conditions at each location along the planned route at each time during the planning horizon  are known. We then extend the problem to a stochastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem, the decision variable and the objective. We then describe the benchmark formulation of \citet{luo2024}, state the sense in which both formulations obtain the fuel consumption rate from the same kind of black box, and set out the single structural difference between them. The physical models behind that black box are inputs to the formulation rather than part of it, and are given in the appendices. 
+In this paper we study the problem of controlling the speed of sea vessels with the goal of minimizing its total voyage fuel consumption considering dynamic and stochastic sea conditions and utilizing noisy weather forecasts.  As a first step, we define a dynamic deterministic version of the problem where the sea conditions at each location along the planned route at each time during the planning horizon  are known. We then extend the problem to a stochastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem, the decision variable and the objective. We then describe the benchmark formulation of \citet{luo2024}, state the sense in which both formulations obtain the fuel consumption rate from the same exogenous function, and set out the single structural difference between them. The physical models that supply that function are inputs to the formulation rather than part of it, and are given in the appendices. 
 
 \begin{description}
-	\item[Route] A route is defined by a sequence of geographical waypoints assuming the vessel starts its route at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
+	\item[Route] A route is defined by a sequence of geographical waypoints assuming the vessel starts its voyage at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
 	\item[T]  Total required voyage time (in hours),  commonly referred to in the literature as expected time of arrival (ETA).
 	\item [Sea conditions]    The sea conditions are given by the wind speed and direction, summarised by the Beaufort number, and by the sea current speed and direction. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours, and the space to \emph{subsegments}, consecutive stretches of the route delimited by the points at which the sea conditions were sampled along it (Section~\ref{sec:sampling}). A subsegment boundary is therefore a point at which a value was actually sampled, not a point at which the ocean is known to change: the resolution of the partition is the resolution of the data. The interval at which the conditions were sampled along a route is a property of the data collection rather than of the formulation, and is reported in Section~\ref{sec:sampling}.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
 	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtains this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, whose fuel-consumption-rate function is derived in Appendix~\ref{app:fcr} and whose accompanying correction from still-water speed to speed over ground is given in Appendix~\ref{app:sog}.  We assume that the vessel characteristics are fixed.  The vessel course is fixed at that of the route segment.  It is assumed that the FCR is an increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
@@ -348,8 +348,8 @@ Eq.~\eqref{eq:obj}; what differs is the set of plans the formulation admits.
 Neither formulation contains a fuel model. Both obtain one through the same interface: a position
 along the route and a time select the sea conditions prevailing there, and the model is then asked at
 what rate fuel would be burned if the vessel held a chosen speed under those conditions
-(Figure~\ref{fig:fcr-blackbox}). What lies inside is exogenous to the optimisation and does not enter
-the formulation. In this paper the interface is implemented by the resistance decomposition of
+(Figure~\ref{fig:fcr-model}). How that rate is arrived at is exogenous to the optimisation and does
+not enter the formulation. In this paper the interface is implemented by the resistance decomposition of
 \citet{yang2020}: the conditions determine the still-water speed required to hold the target SOG
 (Appendix~\ref{app:sog}), and the still-water speed determines the fuel rate through a cubic law
 (Appendix~\ref{app:fcr}). \citet{luo2024} implement the same interface with a learned model, a
@@ -365,25 +365,26 @@ would confound the granularity of the speed decision with the error of the fuel 
 \begin{tikzpicture}[
   >={Stealth[length=2.2mm]},
   inp/.style={draw, rounded corners=2pt, align=center, font=\small, inner sep=4pt},
-  bbx/.style={draw, thick, fill=black!8, align=center, font=\small, inner sep=6pt,
+  mdl/.style={draw, thick, fill=black!8, align=center, font=\small, inner sep=6pt,
               minimum width=42mm, minimum height=16mm},
   outp/.style={draw, rounded corners=2pt, align=center, font=\small, inner sep=4pt}
 ]
 \node[inp] (where) at (0,1.15)  {position $d$ and time $t$\\[1pt]\scriptsize select the sea conditions $w$};
 \node[inp] (speed) at (0,-1.15) {chosen speed $v$};
-\node[bbx] (model) at (5.0,0)   {fuel-consumption-rate model\\[1pt]\scriptsize Appendix~\ref{app:fcr} or Appendix~\ref{app:fcr-luo}};
+\node[mdl] (model) at (5.0,0)   {fuel-consumption-rate model\\[1pt]\scriptsize Appendix~\ref{app:fcr} or Appendix~\ref{app:fcr-luo}};
 \node[outp] (rate)  at (9.4,0)   {$\fcr$\;\;[mt/h]};
 \draw[->] (where) -- (model);
 \draw[->] (speed) -- (model);
 \draw[->] (model) -- (rate);
 \end{tikzpicture}
-\caption{The fuel model as a black box. A position along the route and a time select the sea
-conditions; given those conditions and a chosen speed, the model returns a fuel-consumption rate.
-The formulation of this paper and the benchmark of \citet{luo2024} use the same interface and differ
-only in what lies behind it, a resistance decomposition (Appendix~\ref{app:fcr}) in the first case and
-a trained neural network (Appendix~\ref{app:fcr-luo}) in the second. All results reported in this
-paper use the former for both formulations.}
-\label{fig:fcr-blackbox}
+\caption{Both formulations obtain the fuel-consumption rate from the same exogenous function. A
+position along the route and a time select the sea conditions; given those conditions and a chosen
+speed, the function returns a fuel-consumption rate. The formulation of this paper and the benchmark
+of \citet{luo2024} evaluate the same function and differ only in how it is implemented, a resistance
+decomposition (Appendix~\ref{app:fcr}) in the first case and a trained neural network
+(Appendix~\ref{app:fcr-luo}) in the second. All results reported in this paper use the former for
+both formulations.}
+\label{fig:fcr-model}
 \end{figure}
 
 \paragraph{How the two formulations differ.}
@@ -1520,8 +1521,8 @@ above.
 \label{app:fcr-luo}
 
 The benchmark formulation of Section~\ref{sec:problem} obtains its fuel-consumption rate from a
-learned model rather than from a resistance decomposition. It is recorded here because the black-box
-interface of Figure~\ref{fig:fcr-blackbox} is what allows the two formulations to be compared at all;
+learned model rather than from a resistance decomposition. It is recorded here because the shared
+function of Figure~\ref{fig:fcr-model} is what allows the two formulations to be compared at all;
 it is not used to produce any number reported in this paper, since both formulations are run on the
 fuel model of Appendix~\ref{app:fcr}.
 
