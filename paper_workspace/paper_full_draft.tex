@@ -1,5 +1,5 @@
 %% ============================================================================
-%% FULL PAPER — ASSEMBLED DRAFT (LaTeX, 2026-06-08) — Overleaf-ready.
+%% FULL PAPER: ASSEMBLED DRAFT (LaTeX, 2026-06-08). Overleaf-ready.
 %% Generated from paper_workspace/drafts/*.md. Compiles with pdfLaTeX (elsarticle).
 %% Open items are rendered in red via \todo{...} so they are visible and the file
 %% still compiles. Source of truth for prose: drafts/ ; for numbers: 00_design/G1.
@@ -429,7 +429,7 @@ Therefore, under optimal control the SOG remains constant as long as the vessel 
 
 As a preprocessing step we divide each segment of the vessel route into \emph{subsegments}. A new subsegment starts at every point along the route at which the sea conditions were sampled, so a subsegment is one sampling interval long; that interval is a property of the data collection and differs between the two routes (Section~\ref{sec:data}). Within each time block the sea conditions are assumed constant throughout a subsegment, taking the value observed at the point where it begins, and may change only at a subsegment boundary. The sampling points include every point at which the route changes heading, so no subsegment spans a course change and the relative wind and current angles the vessel faces are constant along it. We denote the number of subsegments in the vessel route by $M$; $l_i$ is the length of subsegment $i$, and $d_i = d_{i-1} + l_{i}$ with $d_0 = 0$ is the cumulative distance from the beginning of the route. In particular the last breakpoint is the end of the route, $d_M = D$, and we use the two interchangeably from here on.
 
-% ==== NEW (forward pointer to φ instead of a second fuel-rate symbol) ====
+% ==== NEW (forward pointer to \phi instead of a second fuel-rate symbol) ====
 The FCR of the vessel steaming at speed $v \in \mathcal{V}(d)$ therefore depends only on the subsegment and the time block it is in; Section~\ref{sec:states} makes this precise through the function $\phi(t,d;v)$. Idling is free of propulsion fuel, $\phi(t,d;0)=0$, so a wait at $d=0$ or at $d=D$ costs time but no fuel; auxiliary (hotel) consumption is outside the scope of this model.
 
 
@@ -551,7 +551,7 @@ When the vessel is steaming in a sub-segment that starts at point $d$ at time $t
 The problem of minimizing the total fuel consumption of the voyage can be formulated as the following forward Bellman equation:
 
 
-% ==== NEW (node-first: min over the neighbour set 𝒜; realised leg speed v̄ = Δd/Δt) ====
+% ==== NEW (node-first: min over the neighbour set \mathcal{A}; realised leg speed vbar = Delta d / Delta t) ====
 \begin{equation}
 \label{eq:cost-to-arrive}
 C^{*}(t,d)=\min_{\substack{(\tilde t,\tilde d) \in\mathcal{A}^{-1}( t, d)}}   \begin{cases}     \infty & \tilde t =  t_{\Theta} , d < d_M \\
@@ -574,7 +574,7 @@ the minimum fuel to arrive on time at each state $(t,d)$ or infinity if it is no
 
 
 
-% ==== NEW (2026-08-06, approved in the Aug-5 meeting — item 1C): the shortest-path reading, as a bridge into §4.2.
+% ==== NEW (2026-08-06, approved in the Aug-5 meeting, item 1C): the shortest-path reading, as a bridge into Sec. 4.2.
 % ==== Direction-neutral wording (C* semantics left to Eq. 6 / Algorithm 1, pending Tal's direction reconciliation) ====
 The states and their successor sets give the problem a compact graph reading: the states of
 $\mathcal{S}$ are the vertices of a directed graph, and each admissible leg
@@ -593,13 +593,13 @@ pass.
 \label{sec:snap}\label{sec:enumerate}\label{sec:sweep}\label{sec:extract}\label{sec:tractability}
 
 
-% ==== OLD (predecessor / incoming / back-tracking — wording predates the cost-to-go flip; its own formula was already outgoing) — superseded; kept, not rendered ====
+% ==== OLD (predecessor / incoming / back-tracking; wording predates the cost-to-go flip, its own formula was already outgoing). Superseded; kept, not rendered ====
 %for each state we record the minimising predecessor and the realised leg speed $\bar v= (\tilde d- d)/(\tilde t-t)$ of the incoming arc, from which the optimal speed schedule is recovered by back-tracking to the origin.
-% ==== OLD (standalone recovery sentence — its content is absorbed into the intro below and Stages 2-3; 2026-08-04 restructure) ====
+% ==== OLD (standalone recovery sentence; its content is absorbed into the intro below and Stages 2-3; 2026-08-04 restructure) ====
 %For each state we record the minimising successor $(\tilde d^{\star},\tilde t^{\star})$ and the realised leg speed $\bar v=(\tilde d^{\star}- d)/(\tilde t^{\star}-t)$ of the outgoing arc, from which the optimal speed schedule is recovered by walking forward from the origin.
 
 
-% ==== OLD (S had to be "made finite" — written before §4.1 defined the explicit grid) — superseded; kept, not rendered ====
+% ==== OLD (S had to be "made finite", written before Sec. 4.1 defined the explicit grid). Superseded; kept, not rendered ====
 \begin{comment}
 Equation~\eqref{eq:cost-to-arrive} defines the cost-to-arrive at any reachable state, but two things
 must be settled before it can be evaluated. First, the state set $\mathcal{S}$ of
@@ -607,7 +607,7 @@ Eq.~\eqref{eq:state-space} has to be made not merely finite but of tractable siz
 and the speed transitions between its states have to be enumerated so the recursion can be swept. We
 address discretisation first, then give the enumeration and the sweep as pseudocode.
 \end{comment}
-% ==== OLD ("Three things remain: bound, enumerate, sweep" — organized around the old two-algorithm split) ====
+% ==== OLD ("Three things remain: bound, enumerate, sweep"; organized around the old two-algorithm split) ====
 % ==== superseded by the stage-mirrored walkthrough (2026-08-04 restructure); kept, not rendered ====
 \begin{comment}
 Equations~\eqref{eq:state-space} and~\eqref{eq:neighbors} already define the state grid $\mathcal{S}$
@@ -620,7 +620,7 @@ fraction of the whole. Third, to sweep the recursion over the resulting graph. W
 give the enumeration, the backward sweep, and the schedule extraction as a single pseudocode
 (Algorithm~1).
 \end{comment}
-% ==== OLD intro (subsection-roadmap version, referenced §4.2.1-4.2.3) — superseded by the flat rewrite (2026-08-04); kept, not rendered ====
+% ==== OLD intro (subsection-roadmap version, referenced Sec. 4.2.1-4.2.3). Superseded by the flat rewrite (2026-08-04); kept, not rendered ====
 \begin{comment}
 Section~\ref{sec:states} supplies every mathematical object the solution requires: the state grid
 $\mathcal{S}$ (Eq.~\eqref{eq:state-space}), the successor set $\mathcal{A}(d,t)$ of each state
@@ -643,7 +643,7 @@ introduces no new mathematics; every line evaluates an object already defined in
 Section~\ref{sec:states}; what the algorithm adds is the \emph{order} of evaluation. Line numbers
 are referenced throughout the walkthrough below.
 \end{comment}
-% ==== OLD (2026-08-04 flat rewrite: build+price in one pass, then one BACKWARD sweep) — superseded by Tal's
+% ==== OLD (2026-08-04 flat rewrite: build+price in one pass, then one BACKWARD sweep). Superseded by Tal's
 % ==== Aug-5 algorithm (forward one-pass relaxation + backtrack extraction); kept, not rendered ====
 \begin{comment}
 Section~\ref{sec:states} supplies every mathematical object the solution requires: the state grid
@@ -666,7 +666,7 @@ one path. Two closing lines (15--16) read the optimal fuel at the origin and unr
 schedule. The pseudocode introduces no new mathematics; every line evaluates an object already
 defined in Section~\ref{sec:states}; the walkthrough below follows its line numbers.
 \end{comment}
-% ==== NEW (2026-08-06: matched to Tal's Aug-5 Algorithm 1 — ONE forward pass does discovery, discretisation,
+% ==== NEW (2026-08-06: matched to Tal's Aug-5 Algorithm 1; ONE forward pass does discovery, discretisation,
 % ==== pricing AND valuation; only the winning predecessor is stored; extraction backtracks from the terminal state) ====
 Section~\ref{sec:states} supplies every mathematical object the solution requires: the state grid
 $\mathcal{S}$ (Eq.~\eqref{eq:state-space}), the successor set $\mathcal{A}(t,d)$ of each state
