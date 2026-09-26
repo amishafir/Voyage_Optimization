@@ -756,7 +756,7 @@ We first present the input data that define the problem instances: the physical 
 
 In this section we describe the input data that constitute our test bed problem instances:
 
-\subsubsection{The physical route}
+\paragraph{The physical route}
 %Each voyage is a fixed route of total length $L$ to be completed within a required arrival time $T$
 Two routes were used to benchmark our algorithm:
 \begin{enumerate}
@@ -803,7 +803,7 @@ The two routes are depicted in Figure~\ref{fig:routes} and their waypoints are d
 \end{table}
 
 
-\subsubsection{Sea conditions data}
+\paragraph{Sea conditions data}
 The sea conditions were obtained from the Open-Meteo API \citep{openmeteo}, which redistributes the
 outputs of operational \emph{numerical weather prediction} (NWP) models, physics-based forecasting
 systems that integrate the governing equations of the atmosphere and ocean forward in time from an
@@ -824,14 +824,14 @@ against which a voyage is evaluated; the predicted record is an archive of genui
 forecasts, not a perturbation model, and provides what a planner would have had at each decision
 point.
 
-\paragraph{NWP refresh cycle} Each product refreshes on its own fixed cycle, and this sets the
+\noindent\textbf{NWP refresh cycle.} Each product refreshes on its own fixed cycle, and this sets the
 re-plan cadence used later, a separate quantity from the collection cadence above. The wind
 product refreshes every 6\,h and SMOC every 24\,h. The predicted record confirms it: queried hourly,
 86\% of consecutive wind values and 97\% of consecutive current values were identical to the previous
 hour. Re-planning more often than 6\,h therefore acts on no new wind information, so the 6\,h re-plan
 cadence used below is set by the data rather than tuned.
 
-\subsubsection{Spatial sampling and the decision partition}
+\paragraph{Spatial sampling and the decision partition}
 \label{sec:sampling}
 The source grids could supply a value about every 4.8\,NM, but how often conditions were actually
 sampled \emph{along a route} was a collection choice, and the two routes differ. Route~1 was sampled
@@ -891,7 +891,7 @@ schedule's duration. Because
 the arrival constraint bound in every run, the zero-speed option that Eq.~\eqref{eq:speed-set} makes
 available at $d=0$ and $d=D$ was never exercised: no optimal plan chose to idle.
 
-\subsubsection{Planners compared}
+\paragraph{Planners compared}
 \label{sec:planners}
 \textbf{SR (this paper).} The dynamic program of Section~\ref{sec:methods} applied without
 restriction: the speed is re-chosen at every boundary crossing, so the plan adapts to each change of
@@ -914,7 +914,7 @@ a single fixed mean SOG ($D/T$) through the actual time-varying conditions, with
 no re-planning. Because it targets a SOG it also arrives exactly at $T$, so it sits at equal voyage
 time with the other two.
 
-\paragraph{Containment} On both routes the conditions of Section~\ref{sec:nesting} are met: the time
+\noindent\textbf{Containment.} On both routes the conditions of Section~\ref{sec:nesting} are met: the time
 lines of $\mathcal{S}$ are the 6\,h grid and coincide exactly with Luo's blocks (47 on Route~1 and 28
 on Route~2, Table~\ref{tab:instances}), both planners draw speed from the same band $D/T \pm 3$ kn,
 and their distance quanta agree. SR's feasible set therefore contains Luo's, and SR is guaranteed to
@@ -925,7 +925,7 @@ same conditions, the same band and the same arrival constraint, so any fuel diff
 attributable to decision granularity; across routes the comparison is confounded as described in
 Section~\ref{sec:sampling}.
 
-\subsubsection{Information regimes}
+\paragraph{Information regimes}
 \textbf{Perfect foresight (oracle).} The planner is given the actual conditions along the whole
 voyage: the active sample hour advances with voyage time, so a leg sailed at hour 96 is costed
 against the conditions realised at hour 96 at that location. This is an upper bound on the achievable
@@ -939,7 +939,7 @@ cycle (above). Both SR and Luo are exercised under this regime; Naive does not r
 identical in both. No intermediate arm, planning once against the departure forecast and sailing
 that plan unchanged, was evaluated; this is noted in Section~\ref{sec:limitations}.
 
-\subsubsection{Evaluation protocol}
+\subsection{Evaluation protocol and reported quantities}
 \label{sec:protocol}
 Each route was evaluated as a \emph{consecutive-voyage chain} in which voyage $N{+}1$ departs at the
 sample hour at which voyage $N$ arrives. Because the arrival constraint binds with zero slack for
@@ -951,7 +951,7 @@ regimes cover all 41 voyages, on the same partition and the same departures; the
 harness reproduces the perfect-foresight solve to the reported precision, which is what permits the
 two to be compared voyage by voyage.
 
-\subsubsection{Reported quantities}
+\paragraph{Reported quantities}
 \label{sec:quantities}
 \emph{Realised fuel} is the fuel accumulated by sailing a committed plan through the actual
 conditions; it is the quantity reported for every planner. Two derived quantities describe how much
