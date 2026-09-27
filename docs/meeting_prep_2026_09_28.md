@@ -2,13 +2,13 @@
 
 Continues from [meeting_agenda_2026_09_14.md](meeting_agenda_2026_09_14.md).
 
-**Two-week gap.** No work since 2026-09-14 21:45 (vacation; the Sep-21 slot was not held). Nothing in
-this prep is new research — it is the §3 rewrite that was applied at the end of the 14th, verified,
-plus everything the 14th left unanswered.
+**Two-week gap.** No research since 2026-09-14 (vacation; the Sep-21 slot was not held). **No
+experiment has run since 09-09 and none needs to.** Everything below is writing and structure.
 
-**One-line status:** the §3 rewrite Tal asked for is **written, reviewed, fixed and committed**
-(`88de49c`, `f5f5242`). Three defects found in review are repaired (§2 below). **The experiments do
-not need re-running** — what is left is writing, plus one open experimental decision (§6).
+**One-line status:** three pieces of work to walk through — the **§3 rewrite** Tal directed on the
+14th, now reviewed and fixed; **§5 flattened** to three numbered subsections; and **§6 restructured**
+so the body carries aggregates and the per-voyage numbers move to a new Appendix D (§1 below). All
+committed and pushed. What remains is writing, plus one open experimental decision (§6).
 
 ---
 
@@ -16,20 +16,25 @@ not need re-running** — what is left is writing, plus one open experimental de
 
 | | State |
 |---|---|
-| Draft | 35 pages, builds clean, **0 errors, 0 undefined references** |
-| Last commit | `f5f5242` 2026-09-26 — the three consistency fixes |
+| Draft | 36 pages, builds clean, **0 errors, 0 undefined references** |
+| Last paper commit | `cb3f45f` 2026-09-26 — Table 3's two versus-Naive columns dropped |
+| Pushed | Yes — `origin/main` at `3e06d09`, verified against the GitHub API |
 | Working tree | Clean. The built PDF stays untracked pending decision #7 |
-| §3 Problem formulation | **Rewritten and committed.** Flat prose, 7 run-in paragraphs, 0 subsections |
-| §4 Methods | Untouched, as the scope guard required — verified by hunk range |
-| §5–§9 | Untouched |
-| Appendices | A speed correction (new) · B FCR derivation · C Luo's ANN (new) |
-| Experiments | Unchanged since 2026-09-09. No new runs |
+| §3 Problem formulation | **Rewritten.** Flat prose, 7 run-in paragraphs, 0 subsections |
+| §4 Methods | **Untouched** — verified by hunk range, the scope guard held |
+| §5 Data and experimental design | **Flattened** to 5.1 / 5.2 / 5.3; was 5.1.1–5.2.4 |
+| §6 Results | **Restructured.** 7 tables and 88 rows → 2 tables, 1 figure, 6 rows |
+| §7–§9 | Untouched |
+| Appendices | A speed correction · B FCR derivation · C Luo's ANN · **D per-voyage results (new)** |
+| Experiments | Unchanged since 2026-09-09. **No new runs, and none needed** |
 
 ---
 
-## 1. The §3 rewrite — the walkthrough
+## 1. What changed since the 14th — the walkthrough
 
-This is the main thing to show. It implements the direction Tal gave on the 14th: inputs → decision
+### 1.1 §3 Problem formulation — rewritten
+
+This implements the direction Tal gave on the 14th: inputs → decision
 variable → objective → benchmark → shared fuel interface → the one structural difference, with the
 physics pushed to the appendices.
 
@@ -45,7 +50,7 @@ physics pushed to the appendices.
 | 6 | *The convexity mechanism* | Fuel tracks SWS, the plan targets SOG; holding one target through changing weather forces SWS to vary and the convex FCR charges for it |
 | 7 | *The stochastic version* | The two old stochastic paragraphs merged into one |
 | 8 | *The benchmark formulation* | `luo2024` in full: segments on the NWP cycle Δt, speed constant per segment, multistage graph over **remaining distance** on quantum ζ, edge ⇔ speed, shortest path, re-solved each cycle with only the first speed committed. **The disclosure footnote hangs here** |
-| 9 | *The fuel model is an interface* | Neither formulation contains a fuel model; both reach one through the same interface. TikZ black-box figure (`fig:fcr-blackbox`). States explicitly that **both run on the same fuel model**, so granularity is not confounded with fuel-estimation error |
+| 9 | *The fuel model is an interface* | Neither formulation contains a fuel model; both obtain the rate from **the same exogenous function** (`fig:fcr-model`, TikZ). States explicitly that **both run on the same fuel model**, so granularity is not confounded with fuel-estimation error |
 | 10 | *How the two formulations differ* | The payload. *They decide on time only; we decide on time **and** on conditions.* Decision points are **nested, not disjoint** → admissible-set containment → cannot do worse. Forward pointer to `sec:nesting` |
 
 **What this closes from the 14th:** Tal's items 1–4 are all delivered — the lit-review reference, the
@@ -55,6 +60,62 @@ black box with per-formulation appendices.
 **Point worth making out loud:** the containment is now visible in §3 as *structure*, before any
 algorithm appears. A reader meets "their decision points are a subset of ours" in the formulation
 section and only then meets the lemma in §4.
+
+**Wording change worth flagging:** "black box" is gone. Both formulations now obtain the rate from
+"the same **exogenous function**", the physical models "supply that function" rather than sitting
+behind a box, and the figure caption opens on a full sentence. One framing instead of two metaphors,
+and "exogenous" was already the word the paragraph used.
+
+### 1.2 §5 — flattened to three numbered subsections
+
+§5 carried two levels of numbering, 5.1.1 through 5.2.4. It now carries one:
+
+| | |
+|---|---|
+| **5.1** | Data |
+| **5.2** | Experimental design |
+| **5.3** | Evaluation protocol and reported quantities (the two former subsubsections, merged) |
+
+Nothing below the numbered level was lost — the six subsubsections became run-in `\paragraph`
+headings and the two that were already `\paragraph` became bold run-ins, the third level §5.2 and
+§6–§7 already use. All five labels survive; they resolve one level coarser (`sec:sampling` was 5.1.3,
+now 5.1), and every one of the eighteen references still reads correctly.
+
+### 1.3 §6 — aggregates in the body, per-voyage numbers in Appendix D
+
+**The biggest change, and the one to walk Tal through.** Designed first
+([section6_design_2026_09_26.md](section6_design_2026_09_26.md)), then applied.
+
+| | Before | After |
+|---|---|---|
+| Tables | 7 | 2 |
+| Figures | **0** | 1 |
+| Data rows | 88 | **6** |
+
+- **Table 3 (new)** — fuel by route **and information regime**, four rows. Merges the two former
+  aggregate tables. The enabling fact is that Naive does not re-plan and is identical in both
+  regimes, so the two rows of a route are directly comparable.
+- **Figure 4 (new)** — optimisation span against forecast cost, one point per voyage, with the
+  break-even diagonal. **Eleven of twenty-six North Atlantic voyages sit above the line and no Indian
+  Ocean voyage does**, reproducing the span table's "cost exceeds span" column by an independent
+  path. Built from the existing 09-09 run; no new experiment.
+- **Appendix D (new)** — the four per-voyage tables, 82 rows, intact.
+
+**Why the figure became necessary.** §6 had no figure at all, and stripping 82 rows removes the
+reader's only access to dispersion; a mean and a count cannot show that the two routes fail
+*differently*. This is **Sep-14 decision #5**, which was optional then and is load-bearing now — it
+was implemented on a default and Tal should be told so.
+
+**What made this cheap:** all eight run-in findings in §6.1–§6.2 state their evidence as derived
+aggregates — "ranging from 6.06 to 13.24 mt", "beaten by Luo on 12 of those 26" — and **not one reads
+a row out of a per-voyage table**. All eight survived untouched. The per-voyage tables were
+corroboration, not support.
+
+**One convention was settled in passing.** §5.3 requires aggregates as a ratio of means; the
+perfect-foresight table already obeyed that and the rolling-horizon table did not. Table 3 uses it
+throughout, so two figures in §6.2's prose moved to match: $-0.26\%$ → $-0.28\%$ and $+0.10\%$ →
+$+0.09\%$. **The quantities are unchanged** — the same voyages, the same fuel — but §6 no longer
+prints two conventions at once. Worth a sentence to Tal, since these are numbers he has read.
 
 ---
 
@@ -247,6 +308,16 @@ narrow the claim and don't.** Everything else on the list is writing.
 - [ ] Confirm the stride sweep is dropped (§6.4)
 - [ ] Commit the built PDF? (§4 #7)
 
+**Arising from the §6 restructure (§1.3):**
+
+- [ ] **Figure 4 approved?** Sep-14 decision #5, implemented on a default because the restructure
+      needs it
+- [ ] **The ratio-of-means convention**, and the two prose figures that moved with it
+- [ ] Should §6 be organised around weather severity? **Not adopted** — it contradicts §6.1 and §6.3,
+      which say the governing quantity is span-to-error ratio and that the two routes are confounded.
+      Reopening those two is the precondition, not an edit
+- [ ] Is Appendix D the right home, or should the per-voyage numbers leave the paper entirely?
+
 ## 8. Decisions made during the session
 
 | Decision | Outcome | Follow-up |
@@ -263,7 +334,8 @@ narrow the claim and don't.** Everything else on the list is writing.
 
 ## 10. Verification record — what was actually checked, and how
 
-Run 2026-09-26 against the uncommitted working tree.
+### 10.1 is the §5/§6 work; this first table is the §3 rewrite, run 2026-09-26 against the
+then-uncommitted working tree.
 
 | Check | Method | Result |
 |---|---|---|
@@ -284,6 +356,30 @@ Run 2026-09-26 against the uncommitted working tree.
 0 errors, 0 undefined references; the fix diff was exactly three hunks, one per defect; working tree
 clean apart from the untracked PDF. A marked-up `latexdiff` of the whole change against the
 pre-rewrite baseline `f153e1c` is at `paper_workspace/build/section3_review_diff_2026_09_28.pdf`.
+
+### 10.2 The §5 and §6 work, verified 2026-09-27
+
+| Check | Method | Result |
+|---|---|---|
+| Build after every change | `paper_full_draft.log` | 36 pages, 0 errors, 0 undefined references |
+| §5 has one level of numbering | `grep` for `subsubsection` in 749–967 | zero |
+| All five §5 labels survive | `newlabel` in the `.aux` | `sec:data` 5, `sec:sampling` 5.1, `sec:planners` 5.2, `sec:protocol` and `sec:quantities` both 5.3 |
+| No sentence cites both `sec:protocol` and `sec:quantities` | `grep` | none — they would now print the same number twice |
+| §6 body reduced | counted rows ending `\\` with `&` | 2 tables, 1 figure, 6 data rows (was 7 tables, 88 rows) |
+| Appendix D received everything | same, over the appendix | 4 tables, 82 data rows |
+| **Every Table 3 cell recomputed from the run output** | `results.csv`, 41 rows | perfect-foresight values reproduce the old aggregate table exactly; rolling-horizon values reproduce §6.2's prose |
+| The two cells the design could not source | same | 15/15 and 26/26, as containment predicts |
+| Figure 4 against the span table | independent derivation from `oracle_sr`, `naive_mt`, `rh_sr_mt` | 0/15 and 11/26 above the diagonal — matches "cost exceeds span" |
+| Appendix D not colliding with the references | `.aux` page numbers | tables on 30–33 consecutively, references after. Fixed by `[H]` plus a `\clearpage`; they had been landing on 30, 33, 34, 35 with the bibliography threaded between |
+| 17 doubled `Appendix Appendix B` references | `.aux` shows `\ref{app:fcr}` → `Appendix~B` | all 17 corrected; regular `Section~\ref` unaffected and left alone |
+| 9 doubled periods in run-in headings | `elsarticle.cls:1070` appends the stop itself | all 9 corrected; the manual `\textbf` run-ins supply their own and were left |
+| Source is pure ASCII | scan for codepoints > 127 | none. The 12 em-dashes and 5 Unicode maths characters were all inside `%` comments and never rendered |
+| Rendered prose has no em-dashes | count `---` in rendered text | 2, both "not applicable" cells in the vessel table. The purge happened on 09-13, from 68 |
+| Pushed | GitHub API and `ls-remote` | `origin/main` = `3e06d09` |
+
+**Style patterns deliberately left alone.** "precisely" appears 3 times in the 2026-08-25 draft and
+"rather than" 14 times, both well before this month's rewrites, so they are the author's own habits
+and the newer uses were not edited toward a different voice.
 
 **Not checked:** Gmail returned an auth-scope error and Calendar needs authentication, so anything
 Tal may have sent during the two-week gap has not been read, and the Monday slot is unconfirmed.
