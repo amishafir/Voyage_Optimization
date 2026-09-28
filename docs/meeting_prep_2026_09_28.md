@@ -323,12 +323,17 @@ narrow the claim and don't.** Everything else on the list is writing.
 | # | Decision | Outcome | Follow-up |
 |---|---|---|---|
 | 1 | **§6 must compare all three methods: Naive, `luo2024` and ours** | Agreed | Table 3 to carry the three-way comparison, not only SR against Luo |
+| 2 | **Report paired t-tests per comparison per regime** | Agreed | Computed; 7 of 8 decisive, see live log item 2 |
+| 3 | **More voyages wanted, for power** | Raised, not settled | Costs 1.8–4.2 years of weather; bounded-effect alternative offered, see item 3 |
 
 ## 9. Actions assigned
 
 | # | Action | Owner | Due |
 |---|---|---|---|
 | 1 | Restore the three-way comparison in §6's Table 3 | Ami | before 10-05 |
+| 2 | Add the paired t-tests (SR vs Naive, SR vs Luo; both regimes) to the paper | Ami | before 10-05 |
+| 3 | Commit the t-test as a generator script, not transcribed numbers | Ami | before 10-05 |
+| 4 | Decide: collect more weather, or report the two nulls as bounded effects | Tal | 10-05 |
 
 ---
 
@@ -367,6 +372,64 @@ The numbers are already computed — Indian Ocean 355.11 / 354.06 / 345.46 and N
 
 **Open:** which of (a), (b) or (c). Ask before editing rather than guess, since the columns were
 removed deliberately two days ago.
+
+### Item 2 — paired t-tests: SR vs Naive and SR vs Luo, both regimes
+
+**Raised by Tal.** Report significance tests per comparison per regime.
+
+**Status: computed on the existing 41 voyages, not yet written into the paper.**
+
+- [ ] **Task.** Add the paired t-tests to §6 (or §5.3 as the stated method) — SR vs Naive and SR vs
+      Luo, under perfect foresight and under the rolling horizon, per route
+- [ ] **Task.** Commit the test as a generator script alongside `make_pf_tables.py` so the numbers
+      are reproducible rather than transcribed
+- [ ] **Task.** Decide where they live: extra columns in Table 3, a separate table, or Appendix D
+
+**What the tests say** (paired on departure hour, two-sided, 95% CI on the mean difference in mt):
+
+| Route | Regime | Test | Mean diff (mt) | 95% CI | t | p | Cohen's $d_z$ |
+|---|---|---|---|---|---|---|---|
+| Indian Ocean | Perfect foresight | SR vs Naive | $-9.66$ | $[-10.72, -8.60]$ | $-17.86$ | 5e-11 | $-4.61$ |
+| Indian Ocean | Perfect foresight | SR vs Luo | $-8.61$ | $[-9.58, -7.63]$ | $-17.28$ | 8e-11 | $-4.46$ |
+| Indian Ocean | Rolling horizon | SR vs Naive | $-5.19$ | $[-6.19, -4.20]$ | $-10.23$ | 7e-08 | $-2.64$ |
+| Indian Ocean | Rolling horizon | SR vs Luo | $-5.53$ | $[-6.58, -4.48]$ | $-10.28$ | 7e-08 | $-2.65$ |
+| North Atlantic | Perfect foresight | SR vs Naive | $-4.47$ | $[-5.13, -3.82]$ | $-13.38$ | 7e-13 | $-2.62$ |
+| North Atlantic | Perfect foresight | SR vs Luo | $-2.82$ | $[-3.38, -2.27]$ | $-9.96$ | 3e-10 | $-1.95$ |
+| **North Atlantic** | **Rolling horizon** | **SR vs Naive** | $-0.57$ | $[-1.33, +0.19]$ | $-1.48$ | **0.152** | $-0.29$ |
+| **North Atlantic** | **Rolling horizon** | **SR vs Luo** | $-0.34$ | $[-1.03, +0.36]$ | $-0.95$ | **0.352** | $-0.19$ |
+
+**Seven of eight are decisive on the data we already have.** The two that are not are the North
+Atlantic rolling-horizon rows — and that null *is* §7.3's finding, not a gap in it: on the harsh route
+under a real forecast, SR's advantage disappears. The paper already says so in words; these two rows
+are the number behind the words.
+
+### Item 3 — create more voyages
+
+**Raised by Tal**, to give the tests more power.
+
+- [ ] **Task.** Decide whether to collect more weather, or to report the bound instead (below)
+- [ ] **Task.** If collecting: scope a new collection run and re-run both regimes on the longer record
+- [ ] **Task.** If not: state the two nulls as bounded effects rather than as absences
+
+**What it would cost.** The current record is ~175 days (Indian Ocean) and ~182 days (North Atlantic);
+consecutive chaining already extracts every voyage it holds, 15 and 26. To power the two null tests at
+80%:
+
+| Test | Observed $d_z$ | $n$ needed | Weather needed | Have |
+|---|---|---|---|---|
+| NA rolling horizon, SR vs Naive | $-0.29$ | $\approx 94$ | **1.8 years** | 182 days |
+| NA rolling horizon, SR vs Luo | $-0.19$ | $\approx 218$ | **4.2 years** | 182 days |
+
+**The trap to avoid.** More voyages can be manufactured from the *same* window by sliding the
+departure hour instead of chaining — roughly 650 departures at a 6 h stride. **Those voyages overlap
+and are not independent**, so a paired t-test on them would be anti-conservative: the p-values would
+fall without any new information arriving. If overlapping departures are used, the dependence has to
+be carried through the inference (block bootstrap or a cluster-robust standard error), not ignored.
+
+**The cheaper alternative, worth putting to Tal.** The nulls are already *bounded*, which is a
+stronger statement than "not significant": on the North Atlantic under a real forecast, SR's advantage
+over Naive lies within $[-1.33, +0.19]$ mt and over Luo within $[-1.03, +0.36]$ mt. That is a precise
+claim, it needs no new data, and it says exactly what §7.3 wants to say.
 
 ---
 
