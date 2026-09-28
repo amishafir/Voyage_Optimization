@@ -320,15 +320,53 @@ narrow the claim and don't.** Everything else on the list is writing.
 
 ## 8. Decisions made during the session
 
-| Decision | Outcome | Follow-up |
-|---|---|---|
-| | | |
+| # | Decision | Outcome | Follow-up |
+|---|---|---|---|
+| 1 | **§6 must compare all three methods: Naive, `luo2024` and ours** | Agreed | Table 3 to carry the three-way comparison, not only SR against Luo |
 
 ## 9. Actions assigned
 
-| Action | Owner | Due |
+| # | Action | Owner | Due |
+|---|---|---|---|
+| 1 | Restore the three-way comparison in §6's Table 3 | Ami | before 10-05 |
+
+---
+
+## 9a. Live log — 2026-09-28 session
+
+_Requests as they come up. Append below._
+
+### Item 1 — §6: compare Naive, `luo2024` and ours
+
+**Raised by Tal.** §6 should show the comparison across all three methods, not just SR against Luo.
+
+**Status: logged, not applied.**
+
+**Context this needs, so it is not applied blindly.** Table 3 *did* carry the three-way comparison
+until `cb3f45f` on the 26th, when its `SR vs Naive (%)` and `Luo vs Naive (%)` columns were removed
+at the author's request. The table currently reads:
+
+| Route | Regime | $n$ | Naive (mt) | SR vs Luo (%) | SR $\le$ Naive | SR $\le$ Luo |
+
+So Naive survives only as a fuel level and as a count; the two columns that actually compared against
+it are gone. Restoring the comparison is a revert of `cb3f45f`, in whole or in part.
+
+**Three ways to satisfy it — decide which before editing.**
+
+| | Shape | Cost |
 |---|---|---|
-| | | |
+| (a) Revert `cb3f45f` | the two percentage columns return; nine columns, needs `\small` again | exact restoration of what was there |
+| (b) Absolute fuel for all three | `Naive (mt)`, `Luo (mt)`, `SR (mt)` replace the percentages; the reader computes ratios | seven columns, all three visible as tonnage, no convention question |
+| (c) Both | absolutes plus one percentage column | widest |
+
+**(b) is worth considering** over a straight revert: it shows all three methods side by side, which is
+what was asked, and it sidesteps the ratio-of-means question entirely since no percentage is printed.
+The numbers are already computed — Indian Ocean 355.11 / 354.06 / 345.46 and North Atlantic
+203.26 / 201.61 / 198.78 under perfect foresight, 355.11 / 355.45 / 349.92 and 203.26 / 203.02 /
+202.68 under the rolling horizon.
+
+**Open:** which of (a), (b) or (c). Ask before editing rather than guess, since the columns were
+removed deliberately two days ago.
 
 ---
 
