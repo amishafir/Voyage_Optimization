@@ -326,6 +326,7 @@ narrow the claim and don't.** Everything else on the list is writing.
 | 2 | **Report paired t-tests per comparison per regime** | Agreed | Computed; 7 of 8 decisive, see live log item 2 |
 | 3 | **More voyages wanted, for power** | Raised, not settled | Costs 1.8–4.2 years of weather; bounded-effect alternative offered, see item 3 |
 | 4 | **"Rolling horizon" → "stochastic setting" paper-wide** | Agreed | ~85 strings; the rolling-horizon *method* keeps its name, only the regime is renamed — see item 4 |
+| 5 | **Analyse the weather; learn the parameter error on both routes** | Agreed | Data in hand, no collection needed; scope to the 4 consumed fields and propagate to fuel — see item 5 |
 
 ## 9. Actions assigned
 
@@ -337,6 +338,8 @@ narrow the claim and don't.** Everything else on the list is writing.
 | 4 | Decide: collect more weather, or report the two nulls as bounded effects | Tal | 10-05 |
 | 5 | Rename the regime "rolling horizon" → "stochastic" paper-wide, keeping the method's name | Ami | before 10-05 |
 | 6 | Decide the counterpart name for the oracle regime before that pass starts | Tal | 10-05 |
+| 7 | Weather analysis: forecast error per parameter, per route, by lead time | Ami | 10-05 |
+| 8 | Propagate that parameter error into fuel error, to close the §7.3 ratio | Ami | 10-05 |
 
 ---
 
@@ -490,6 +493,57 @@ findable. **Ask before the pass** — the two names travel together and the pass
 Roughly 85 strings across §1, §3, §5, §6, §7, Table 3 and Appendix D. Mechanical but wide — and it
 collides with the **method-naming decision** (SR / Luo / Naive, carried since the 14th), which touches
 the same tables. **Settle both, then do one pass.**
+
+### Item 5 — weather analysis: quantify forecast error per parameter, per route
+
+**Raised by Tal.** Analyse the weather and learn the error in the parameters on both routes.
+
+**Status: logged, not applied.**
+
+- [ ] **Task.** Compute forecast error against actuals, per weather parameter, per route, as a
+      function of lead time
+- [ ] **Task.** Propagate parameter error into fuel error (below) — this is the version that answers §6
+- [ ] **Task.** Decide where it lands: a §5.1 subsection, a new §6 subsection, or an appendix
+
+**This fills a claim the paper currently asserts without evidence.** §6.4 states that "forecast
+accuracy degraded systematically with lead time, which is what the forecast cost of
+Table~\ref{tab:span} measures". Nothing in the paper measures it. §5.1 reports only *persistence* —
+86% of hourly wind queries and 97% of current queries returned the previous value — which is a
+property of the refresh cycle, not of accuracy.
+
+**Data is in hand; no collection needed.** Both HDF5 files carry `/actual_weather` and
+`/predicted_weather` side by side, keyed so the error is a subtraction:
+
+| Route | File | Size |
+|---|---|---|
+| Indian Ocean | `paper_workspace/data/experiment_b_138wp_v4_sep07.h5` | 269 MB |
+| North Atlantic | `paper_workspace/data/experiment_d_391wp_v4_sep07.h5` | 632 MB |
+
+`sample_hour` is the forecast's **issue** time and `forecast_hour` is the time it is **about**, so the
+lead is their difference and the error is `predicted(node, issue, lead) − actual(node, issue+lead)`.
+
+**Scope it to the fields the model consumes — four, not six.** Wind speed, wind direction, current
+velocity, current direction. **Wave height is not an input to any formula**, in our code or in
+`yang2020` (settled 2026-09-08, `afb9056`); sea state enters through the Beaufort number. Analysing
+wave error would be effort spent on a field that cannot move a result.
+
+**Two traps to write into the method before anyone runs it.**
+
+1. **Direction is circular.** Wind and current direction wrap at 360°. A plain difference makes a 359°
+   vs 1° pair look like a 358° error instead of 2°, and a plain mean of angles is meaningless. Errors
+   must be wrapped to $[-180°, +180°]$ and summarised with circular statistics.
+2. **Parameter error is not the quantity of interest — fuel error is.** A 5 km/h wind error costs
+   almost nothing at Beaufort 3 and a great deal at Beaufort 7, and a current error matters only
+   through its along-track component. The analysis that answers §6 propagates the parameter errors
+   through the speed correction and the FCR into **mt of fuel**, which is the same unit as the
+   forecast cost in Table~\ref{tab:span}.
+
+**Why this is worth doing beyond filling a gap.** It is the missing half of Figure 4. §6.3 reports
+that the North Atlantic's forecast cost consumed almost its whole span, and §7.3 asserts the governing
+quantity is the ratio of span to forecast error — but the *error* side of that ratio has never been
+measured, only inferred from the fuel outcome. Measuring it directly would either confirm the
+mechanism or reveal that the two routes' forecasts are comparably accurate and the difference is
+entirely in the span. **Either answer is a result**, and the second would sharpen §7.3 considerably.
 
 ---
 
