@@ -325,6 +325,7 @@ narrow the claim and don't.** Everything else on the list is writing.
 | 1 | **§6 must compare all three methods: Naive, `luo2024` and ours** | Agreed | Table 3 to carry the three-way comparison, not only SR against Luo |
 | 2 | **Report paired t-tests per comparison per regime** | Agreed | Computed; 7 of 8 decisive, see live log item 2 |
 | 3 | **More voyages wanted, for power** | Raised, not settled | Costs 1.8–4.2 years of weather; bounded-effect alternative offered, see item 3 |
+| 4 | **"Rolling horizon" → "stochastic setting" paper-wide** | Agreed | ~85 strings; the rolling-horizon *method* keeps its name, only the regime is renamed — see item 4 |
 
 ## 9. Actions assigned
 
@@ -334,6 +335,8 @@ narrow the claim and don't.** Everything else on the list is writing.
 | 2 | Add the paired t-tests (SR vs Naive, SR vs Luo; both regimes) to the paper | Ami | before 10-05 |
 | 3 | Commit the t-test as a generator script, not transcribed numbers | Ami | before 10-05 |
 | 4 | Decide: collect more weather, or report the two nulls as bounded effects | Tal | 10-05 |
+| 5 | Rename the regime "rolling horizon" → "stochastic" paper-wide, keeping the method's name | Ami | before 10-05 |
+| 6 | Decide the counterpart name for the oracle regime before that pass starts | Tal | 10-05 |
 
 ---
 
@@ -430,6 +433,63 @@ be carried through the inference (block bootstrap or a cluster-robust standard e
 stronger statement than "not significant": on the North Atlantic under a real forecast, SR's advantage
 over Naive lies within $[-1.33, +0.19]$ mt and over Luo within $[-1.03, +0.36]$ mt. That is a precise
 claim, it needs no new data, and it says exactly what §7.3 wants to say.
+
+### Item 4 — rename the regime: "rolling horizon" → "stochastic setting", paper-wide
+
+**Raised by Tal.** Change from rolling horizon to stochastic settings throughout.
+
+**Status: logged, not applied.**
+
+- [ ] **Task.** Rename the *information regime* from "rolling horizon" to "stochastic" everywhere it
+      names the regime
+- [ ] **Task.** Decide the counterpart (below) before starting — the two regime names travel together
+- [ ] **Task.** Rename `sec:res-rh`, and `sec:res-oracle` if the counterpart changes; rename the
+      `RH-SR` / `RH-Luo` row labels in Table 3 and Appendix D
+- [ ] **Task.** Do it in one pass, not incrementally — it touches every results table and §7
+
+**Why this is the right change.** §3 already defines the problem in exactly these words: a
+*deterministic* version and a *stochastic* version. §5 and §6 then call the same two things "perfect
+foresight" and "rolling horizon". The paper is using two vocabularies for one distinction, and §3's is
+the one that belongs.
+
+**The distinction that must survive the rename.** §3 line 319 reads:
+
+> In this study the **stochastic version** is solved in a **rolling-horizon framework** that uses the
+> solution method for the deterministic problem as a building block.
+
+So *stochastic* is the problem and the regime; *rolling horizon* is the **solution method** for it.
+A blanket find-and-replace would collapse that and leave the paper unable to say how the stochastic
+problem is actually solved. **The method keeps its name; only the regime is renamed.**
+
+**The counterpart question, which must be answered first.** If the forecast regime becomes
+"stochastic", then for symmetry the oracle regime should become "deterministic", matching §3. Leaving
+it as "perfect foresight" pairs a §3 word with a §5 word and reads worse than either pair alone.
+Three options:
+
+| | Oracle regime | Forecast regime |
+|---|---|---|
+| (a) | Deterministic | Stochastic |
+| (b) | Perfect foresight | Stochastic |
+| (c) | Perfect foresight (deterministic) | Stochastic (rolling horizon) — gloss on first use |
+
+**(a) is the consistent choice**; (c) is the safe one if Tal wants the operational words kept
+findable. **Ask before the pass** — the two names travel together and the pass is not worth doing twice.
+
+**Scope, counted on the current draft:**
+
+| String | Count |
+|---|---|
+| "rolling horizon" / "rolling-horizon" | 35 |
+| `RH` standalone | 15 |
+| `RH-SR`, `RH-Luo` | 4 each |
+| "perfect foresight" | 13 |
+| "oracle" | 9 |
+| `sec:res-rh` | 1 definition, 4 references |
+| `sec:res-oracle` | 1 definition, 2 references |
+
+Roughly 85 strings across §1, §3, §5, §6, §7, Table 3 and Appendix D. Mechanical but wide — and it
+collides with the **method-naming decision** (SR / Luo / Naive, carried since the 14th), which touches
+the same tables. **Settle both, then do one pass.**
 
 ---
 
