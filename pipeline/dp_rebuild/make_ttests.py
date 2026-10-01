@@ -1,7 +1,7 @@
 """Paired t-tests for the paper's planner comparisons (Section 6).
 
 Four comparisons per route: SR against Naive and Luo against Naive, under each
-of the two information regimes. Both planners are measured against the same
+of the two information regimes (deterministic = perfect foresight, stochastic = forecast-driven). Both planners are measured against the same
 baseline rather than against each other. Pairing is by departure hour -- every planner sails
 the same 41 departures (Section 5.3), so the per-voyage differences are paired
 and the departure-to-departure variation, which dwarfs the planner differences,
@@ -38,10 +38,10 @@ ROUTE_NAME = {"route1": "Indian Ocean", "route2": "North Atlantic"}
 # re-plan, and it is identical under both regimes, so each row is readable on
 # its own and the two planners are never measured against each other.
 COMPARISONS = [
-    ("Perfect foresight", "SR vs Naive", "oracle_sr", "naive_mt"),
-    ("Perfect foresight", "Luo vs Naive", "oracle_luo", "naive_mt"),
-    ("Rolling horizon", "SR vs Naive", "rh_sr_mt", "naive_mt"),
-    ("Rolling horizon", "Luo vs Naive", "rh_luo_mt", "naive_mt"),
+    ("Deterministic", "SR vs Naive", "oracle_sr", "naive_mt"),
+    ("Deterministic", "Luo vs Naive", "oracle_luo", "naive_mt"),
+    ("Stochastic", "SR vs Naive", "rh_sr_mt", "naive_mt"),
+    ("Stochastic", "Luo vs Naive", "rh_luo_mt", "naive_mt"),
 ]
 
 
