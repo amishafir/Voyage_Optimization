@@ -140,3 +140,37 @@ it occurs, and it is steepest around the beam-to-following transition.
       the forecast error **in Beaufort units directly**, which `make_forecast_error.py` already
       reports, may be the more honest input to the factorial than the error in km/h. Cheap to check
 
+### Item 2 — does `luo2024` have route segments, and does the heading change?
+
+**Raised by Tal. Open — to be answered from the `luo2024` paper itself, not from our implementation.**
+
+**The question.** Does their formulation model a route of several waypoints with a course change at
+each, or a single course? And if the course does change, where in their method does it enter?
+
+**Why it matters — "segment" means two different things.** In our paper a *segment* is geometric,
+waypoint to waypoint, and a *subsegment* is the stretch between two sampling points. In `luo2024`, as
+§3 describes it, a segment is a unit of **time**: one per cycle of the weather product, with the speed
+held constant across it and the graph built over remaining distance. If their segments are purely
+temporal then their route may carry no course structure at all, and the two papers are using one word
+for two unrelated objects — which §3 should say explicitly if so.
+
+**What to look for in the paper:** whether the route is a sequence of waypoints or a single rhumb
+line; whether a heading appears in their resistance or fuel model at all; and whether the relative
+wind angle is computed against a per-leg course or a fixed one.
+
+**Context from our side, for when the answer comes back.** Our implementation takes the heading
+**once per block**, at the block's starting position (`luo_main.cpp:81`), and holds it across the
+whole block even though it re-resolves the *weather* at every subsegment inside it. SR takes a heading
+**per subsegment** (`atomic_edges.cpp:70`). Blocks run about 70–72 NM, and the routes have 11 and 9
+interior course changes, so **up to 23% of Indian Ocean blocks and 32% of North Atlantic blocks could
+span a course change** and be priced at the heading they started with.
+
+**If that is not what `luo2024` does, it is a second fidelity difference and it runs the opposite way
+to the one already disclosed.** §3's footnote discloses that our benchmark is *more* generous than the
+published method on cost evaluation. A block-constant heading would make it *less* generous. Both
+should be stated, or the disclosure is one-sided.
+
+- [ ] Read `luo2024` on the route model and the heading
+- [ ] If their course is per-leg, quantify what the block-constant heading costs our Luo, and extend
+      the §3 footnote
+
