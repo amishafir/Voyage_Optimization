@@ -983,20 +983,22 @@ between planners, cancels.
 Section~\ref{sec:protocol}. Naive is the constant mean-SOG policy sailed through the actual weather;
 it does not re-plan and is therefore identical in both regimes, which is what makes the two rows of a
 route directly comparable. Both planners are measured against Naive rather than against each other,
-so every column shares one reference. Percentages are ratios of means
-(Section~\ref{sec:quantities}); negative means less fuel than Naive. The last two columns count the
-voyages on which each planner was no worse than Naive, and are the dispersion the means conceal. Per-voyage figures behind every cell are in
+so every column shares one reference. A saving is the mean fuel a planner did not burn relative to
+Naive, in tonnes and as a fraction of the Naive total (Section~\ref{sec:quantities}); a negative
+saving is fuel burned in excess of a constant speed. Significance is in Table~\ref{tab:ttests}. Per-voyage figures behind every cell are in
 \ref{app:pervoyage}.}
 \label{tab:regimes}
 \begin{tabular}{llrrrrrr}
 \toprule
-Route & Regime & $n$ & Naive (mt) & SR vs Naive (\%) & Luo vs Naive (\%) & SR $\le$ Naive & Luo $\le$ Naive \\
+ & & & & \multicolumn{2}{c}{SR saving} & \multicolumn{2}{c}{Luo saving} \\
+\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+Route & Regime & $n$ & Naive (mt) & (mt) & (\%) & (mt) & (\%) \\
 \midrule
-Indian Ocean   & Deterministic & 15 & 355.11 & $-2.72$ & $-0.30$ & 15/15 & 15/15 \\
-Indian Ocean   & Stochastic & 15 & 355.11 & $-1.46$ & $+0.09$ & 15/15 & 5/15 \\
+Indian Ocean   & Deterministic & 15 & 355.11 & $9.66$ & $2.72$ & $1.05$ & $0.30$ \\
+Indian Ocean   & Stochastic & 15 & 355.11 & $5.19$ & $1.46$ & $-0.34$ & $-0.09$ \\
 \midrule
-North Atlantic & Deterministic & 26 & 203.26 & $-2.20$ & $-0.81$ & 26/26 & 26/26 \\
-North Atlantic & Stochastic & 26 & 203.26 & $-0.28$ & $-0.12$ & 15/26 & 17/26 \\
+North Atlantic & Deterministic & 26 & 203.26 & $4.47$ & $2.20$ & $1.65$ & $0.81$ \\
+North Atlantic & Stochastic & 26 & 203.26 & $0.57$ & $0.28$ & $0.24$ & $0.12$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1004,23 +1006,23 @@ North Atlantic & Stochastic & 26 & 203.26 & $-0.28$ & $-0.12$ & 15/26 & 17/26 \\
 \begin{table}[ht]
 \centering
 \caption{Paired $t$-tests on per-voyage realised fuel, pairing by departure hour
-(Section~\ref{sec:protocol}). A negative mean difference is fuel saved against Naive. The
+(Section~\ref{sec:protocol}). A positive mean saving is fuel the planner did not burn. The
 interval is a 95\% confidence interval on that difference. Per-voyage figures are in
 \ref{app:pervoyage}.}
 \label{tab:ttests}
 \begin{tabular}{lllrrrrr}
 \toprule
-Route & Regime & Test & $n$ & Mean diff.\ (mt) & 95\% CI (mt) & $t$ & $p$ \\
+Route & Regime & Planner & $n$ & Mean saving (mt) & 95\% CI (mt) & $t$ & $p$ \\
 \midrule
-Indian Ocean & Deterministic & SR vs Naive & 15 & $-9.66$ & [$-10.71$, $-8.60$] & $-17.86$ & $5\times 10^{-11}$ \\
-Indian Ocean & Deterministic & Luo vs Naive & 15 & $-1.05$ & [$-1.43$, $-0.67$] & $-5.43$ & $9\times 10^{-5}$ \\
-Indian Ocean & Stochastic & SR vs Naive & 15 & $-5.19$ & [$-6.19$, $-4.20$] & $-10.23$ & $7\times 10^{-8}$ \\
-Indian Ocean & Stochastic & Luo vs Naive & 15 & $0.34$ & [$-0.29$, $0.96$] & $1.05$ & $0.314$ \\
+Indian Ocean & Deterministic & SR & 15 & $9.66$ & [$8.60$, $10.71$] & $17.86$ & $5\times 10^{-11}$ \\
+Indian Ocean & Deterministic & Luo & 15 & $1.05$ & [$0.67$, $1.43$] & $5.43$ & $9\times 10^{-5}$ \\
+Indian Ocean & Stochastic & SR & 15 & $5.19$ & [$4.20$, $6.19$] & $10.23$ & $7\times 10^{-8}$ \\
+Indian Ocean & Stochastic & Luo & 15 & $-0.34$ & [$-0.96$, $0.29$] & $-1.05$ & $0.314$ \\
 \midrule
-North Atlantic & Deterministic & SR vs Naive & 26 & $-4.47$ & [$-5.13$, $-3.82$] & $-13.38$ & $7\times 10^{-13}$ \\
-North Atlantic & Deterministic & Luo vs Naive & 26 & $-1.65$ & [$-1.91$, $-1.39$] & $-12.49$ & $3\times 10^{-12}$ \\
-North Atlantic & Stochastic & SR vs Naive & 26 & $-0.57$ & [$-1.33$, $0.19$] & $-1.48$ & $0.152$ \\
-North Atlantic & Stochastic & Luo vs Naive & 26 & $-0.24$ & [$-0.68$, $0.21$] & $-1.04$ & $0.306$ \\
+North Atlantic & Deterministic & SR & 26 & $4.47$ & [$3.82$, $5.13$] & $13.38$ & $7\times 10^{-13}$ \\
+North Atlantic & Deterministic & Luo & 26 & $1.65$ & [$1.39$, $1.91$] & $12.49$ & $3\times 10^{-12}$ \\
+North Atlantic & Stochastic & SR & 26 & $0.57$ & [$-0.19$, $1.33$] & $1.48$ & $0.152$ \\
+North Atlantic & Stochastic & Luo & 26 & $0.24$ & [$-0.21$, $0.68$] & $1.04$ & $0.306$ \\
 \bottomrule
 \end{tabular}
 \end{table}
