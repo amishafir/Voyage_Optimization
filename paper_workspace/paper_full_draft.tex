@@ -970,6 +970,10 @@ per-voyage percentages differs slightly and is not used.
 Throughout, SR denotes the per-leg free-speed dynamic program of Section~\ref{sec:methods} and Luo
 the per-block speed-locked formulation of \citet{luo2024}. All figures are realised fuel over the 41
 voyages of Section~\ref{sec:protocol}, on the partition of Section~\ref{sec:sampling}.
+Table~\ref{tab:regimes} gives the aggregate fuel of the three planners under both regimes and
+Table~\ref{tab:ttests} the paired significance tests behind it. Every comparison is paired by
+departure hour, so the departure-to-departure variation, which is far larger than any difference
+between planners, cancels.
 
 \begin{table}[ht]
 \centering
@@ -990,6 +994,30 @@ Indian Ocean   & Rolling horizon   & 15 & 355.11 & $-1.56$ & 15/15 & 15/15 \\
 \midrule
 North Atlantic & Perfect foresight & 26 & 203.26 & $-1.40$ & 26/26 & 26/26 \\
 North Atlantic & Rolling horizon   & 26 & 203.26 & $-0.17$ & 15/26 & 14/26 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Paired $t$-tests on per-voyage realised fuel, pairing by departure hour
+(Section~\ref{sec:protocol}). A negative mean difference is fuel saved by SR. The
+interval is a 95\% confidence interval on that difference. Per-voyage figures are in
+\ref{app:pervoyage}.}
+\label{tab:ttests}
+\begin{tabular}{lllrrrrr}
+\toprule
+Route & Regime & Test & $n$ & Mean diff.\ (mt) & 95\% CI (mt) & $t$ & $p$ \\
+\midrule
+Indian Ocean & Perfect foresight & SR vs Naive & 15 & $-9.66$ & [$-10.71$, $-8.60$] & $-17.86$ & $5\times 10^{-11}$ \\
+Indian Ocean & Perfect foresight & SR vs Luo & 15 & $-8.61$ & [$-9.58$, $-7.63$] & $-17.28$ & $8\times 10^{-11}$ \\
+Indian Ocean & Rolling horizon & SR vs Naive & 15 & $-5.19$ & [$-6.19$, $-4.20$] & $-10.23$ & $7\times 10^{-8}$ \\
+Indian Ocean & Rolling horizon & SR vs Luo & 15 & $-5.53$ & [$-6.58$, $-4.48$] & $-10.28$ & $7\times 10^{-8}$ \\
+\midrule
+North Atlantic & Perfect foresight & SR vs Naive & 26 & $-4.47$ & [$-5.13$, $-3.82$] & $-13.38$ & $7\times 10^{-13}$ \\
+North Atlantic & Perfect foresight & SR vs Luo & 26 & $-2.82$ & [$-3.38$, $-2.27$] & $-9.96$ & $3\times 10^{-10}$ \\
+North Atlantic & Rolling horizon & SR vs Naive & 26 & $-0.57$ & [$-1.33$, $0.19$] & $-1.48$ & $0.152$ \\
+North Atlantic & Rolling horizon & SR vs Luo & 26 & $-0.34$ & [$-1.03$, $0.36$] & $-0.95$ & $0.352$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1043,7 +1071,11 @@ averaged only $-0.28\%$ against Naive on the North Atlantic route and saved on 1
 was beaten by rolling-horizon Luo on 12 of those 26 voyages, by up to 2.59 mt, and by the
 constant-speed baseline on 11 of 26. The two failure sets overlap on 8 voyages, so on 15 of 26 North
 Atlantic voyages the finest-grained planner was beaten by something simpler. No such failure occurred
-on the Indian Ocean route.
+on the Indian Ocean route. These are the only two comparisons in Table~\ref{tab:ttests} that are not
+significant: against Naive the paired difference is $-0.57$ mt ($p=0.152$) and against Luo $-0.34$ mt
+($p=0.352$), so on this route and under a real forecast the advantage is not merely small but
+indistinguishable from none. The intervals bound it: SR's advantage lies within $[-1.33, +0.19]$ mt
+of Naive and within $[-1.03, +0.36]$ mt of Luo.
 
 \noindent\textbf{This is the containment result running in reverse.} SR is guaranteed to fit the
 forecast at least as well as Luo, and is therefore the more exposed of the two when the forecast is
