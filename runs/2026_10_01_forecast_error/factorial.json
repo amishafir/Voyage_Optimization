@@ -1,0 +1,24 @@
+{
+ "Indian Ocean|Indian Ocean": 0.06601271640945924,
+ "Indian Ocean|North Atlantic": 0.09508563972774478,
+ "North Atlantic|Indian Ocean": 0.07824969729137718,
+ "North Atlantic|North Atlantic": 0.10611106658240498,
+ "_ci": {
+  "error_magnitude": [
+   1.44,
+   1.31,
+   1.56
+  ],
+  "conditions": [
+   1.19,
+   1.07,
+   1.29
+  ],
+  "total": [
+   1.61,
+   1.46,
+   1.75
+  ],
+  "interaction": 0.94
+ }
+}

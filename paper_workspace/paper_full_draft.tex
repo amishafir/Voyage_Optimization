@@ -824,6 +824,16 @@ against which a voyage is evaluated; the predicted record is an archive of genui
 forecasts, not a perturbation model, and provides what a planner would have had at each decision
 point.
 
+\noindent\textbf{Forecast error.} The forecast record is scored against the actuals so that the
+error in each field can be reported in Section~\ref{sec:res-why}. A forecast row carries the hour it
+was issued and the lead from that issue, so it is valid at their sum; the reading was confirmed
+against the data rather than assumed, by scoring both it and the alternative and keeping the one that
+verifies. Wind and current direction are circular, so every direction error is folded into
+$[-180\degree,180\degree]$ before it is averaged. Only the four fields the speed model consumes are
+scored. Significant wave height is not among them, for the reason given above, and the Beaufort
+number is a deterministic function of wind speed and so is never counted as a separate source of
+error. Actuals are recorded every six hours, so only leads that are multiples of six can be verified.
+
 \noindent\textbf{NWP refresh cycle.} Each product refreshes on its own fixed cycle, and this sets the
 re-plan cadence used later, a separate quantity from the collection cadence above. The wind
 product refreshes every 6\,h and SMOC every 24\,h. The predicted record confirms it: queried hourly,
@@ -1122,12 +1132,98 @@ is the rougher of the two and yet the less rewarding, because its forecast error
 consume a span that was itself smaller. Where the two are comparable in size, fine-grained planning
 converts the remainder into a loss rather than a saving.
 
-\subsection{Supporting observations}
-Two measurements underpin the rolling-horizon design (Section~\ref{sec:data}). First, forecast
-accuracy degraded systematically with lead time, which is what the forecast cost of
-Table~\ref{tab:span} measures. Second, the 6 h re-plan cadence was fixed to the wind model's
-re-initialisation cycle, of which 86\% of hourly queries returned identical data, so sub-6 h
-re-planning carried no new information.
+\subsection{Why imperfect information costs more on one route}
+\label{sec:res-why}
+Section~\ref{sec:res-span} leaves a question open. The two routes differ far less in what was
+available to win than in how much of it survived: per nautical mile the span differs by a fifth while
+the cost of imperfect information differs by half, and it is the second that this section explains.
+The span term is not addressed here; the two routes differ in block length as well as in weather
+(Section~\ref{sec:res-det}) and nothing in this study separates those.
+
+\begin{table}[ht]
+\centering
+\caption{Forecast error in the fields the speed model consumes, averaged over lead
+times and weighted by how often the rolling horizon relies on each lead, taken from the
+re-plan logs. Error is the mean absolute difference between the forecast and the
+conditions that were realised at the same place and time; direction errors are wrapped
+to $[-180\degree,180\degree]$ before averaging. Lead-by-lead values with confidence
+intervals are in \ref{app:fcsterr} and Figure~\ref{fig:forecast-error}.}
+\label{tab:fcsterr}
+\begin{tabular}{lrrr}
+\toprule
+Field & Indian Ocean & North Atlantic & Ratio \\
+\midrule
+Wind speed (km/h) & 4.08 & 6.37 & 1.56 \\
+Wind direction (deg) & 25.72 & 24.81 & 0.96 \\
+Current speed (km/h) & 0.26 & 0.37 & 1.45 \\
+Current direction (deg) & 24.41 & 40.08 & 1.64 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/forecast_error.pdf}
+\caption{Mean absolute forecast error against lead time, by field and route. Shaded bands are 95\%
+intervals from a bootstrap over forecast issues, which is the unit of resampling because readings at
+neighbouring nodes and adjacent hours are not independent of one another. Three of the four fields
+are forecast worse on the North Atlantic at every lead. Wind direction is the exception and crosses
+over near three days: it is the better forecast of the two in the short range and the worse one
+beyond.}
+\label{fig:forecast-error}
+\end{figure}
+
+Table~\ref{tab:fcsterr} and Figure~\ref{fig:forecast-error} give the first half of the answer. The
+forecasts available on the North Atlantic are less accurate in wind speed, in current speed and in
+current direction at every lead, and they degrade faster: wind-speed error grows from 4.5 to
+10.2\,km/h across the range of leads there against 3.2 to 4.7\,km/h on the Indian Ocean. Wind
+direction runs the other way at short lead and crosses over near three days.
+
+A larger error is not the same thing as a costlier one. Fuel is a convex function of still-water
+speed and the speed required to hold a target rises as conditions worsen, so the same error in the
+wind buys more fuel on a route whose conditions sit higher on that curve. The two explanations are
+separated in Table~\ref{tab:fcstfac} by perturbing each route's realised conditions by each route's
+measured error and crossing the two factors, which avoids assuming that the response is linear in
+either.
+
+\begin{table}[ht]
+\centering
+\caption{Separating the two explanations. Each route's realised conditions are
+perturbed by each route's measured forecast error, all four fields at once, and the
+change in fuel-consumption rate recorded. Crossing the two factors separates a larger
+error from a costlier one without assuming the response is linear in either. Intervals
+are 95\% bootstrap intervals over the sampled conditions.}
+\label{tab:fcstfac}
+\begin{tabular}{lrr}
+\toprule
+Mean $|\Delta\mathrm{FCR}|$ (mt/h) & \multicolumn{2}{c}{perturbed by the error of} \\
+\cmidrule(lr){2-3}
+evaluated at the conditions of & Indian Ocean & North Atlantic \\
+\midrule
+Indian Ocean & 0.0660 & 0.0951 \\
+North Atlantic & 0.0782 & 0.1061 \\
+\midrule
+\multicolumn{3}{l}{\emph{Decomposition}} \\
+\quad effect of the larger error & \multicolumn{2}{r}{$1.44$ \; [$1.31$, $1.56$]} \\
+\quad effect of the harsher conditions & \multicolumn{2}{r}{$1.19$ \; [$1.07$, $1.29$]} \\
+\quad both together & \multicolumn{2}{r}{$1.61$ \; [$1.46$, $1.75$]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both factors are present and the larger error is the stronger of the two: carrying the North
+Atlantic's error to the Indian Ocean's conditions raises the fuel disturbance by
+$1.44\times$, while carrying the Indian Ocean's error to the North Atlantic's conditions raises it by
+$1.19\times$, and the two together by $1.61\times$. For comparison, the forecast cost measured in
+Section~\ref{sec:res-span} is $1.46\times$ higher per hour on the North Atlantic. The agreement
+should be read as consistency rather than as an attribution: the perturbation treats the error in
+each field as independent of the others, which the atmosphere does not, and it prices a disturbance
+to the plan rather than tracing it through a re-planning loop.
+
+Two measurements underpin the stochastic design itself (Section~\ref{sec:data}). The 6\,h re-plan
+cadence was fixed to the wind model's re-initialisation cycle, of which 86\% of hourly queries
+returned identical data, so sub-6\,h re-planning carried no new information; and the lead times the
+planner actually relies on are weighted accordingly in Table~\ref{tab:fcsterr}.
 
 %% ============================================================ 8. DISCUSSION
 \section{Discussion}
@@ -1173,10 +1269,11 @@ re-planning lost.
 
 Two mechanisms compound there. The first is the one convexity describes from the other side: on
 near-uniform conditions a constant speed is itself fuel-optimal, so forecast-driven speed variation
-adds a Jensen penalty unless the routing gain exceeds it. The second is specific to fine granularity.
-Because the per-leg program is guaranteed to fit the forecast at least as well as the block-locked one
-(Section~\ref{sec:nesting}), it commits to structure the forecast does not reliably carry; the
-block constraint, which costs fuel under perfect information, limits that exposure. The relevant gate,
+adds a Jensen penalty unless the routing gain exceeds it. The second is a property of the route
+rather than of the planner, and Section~\ref{sec:res-why} measures it: the forecasts available on the
+North Atlantic are less accurate than those on the Indian Ocean in three of the four fields the model
+consumes and degrade faster with lead, and because the conditions there sit higher on a convex fuel
+curve the same error in the wind converts into more fuel. The relevant gate,
 stated precisely, is ``realised fuel $\le$ Naive'', satisfied by SR on 30 of 41
 voyages overall and on all 15 of the milder route.
 
@@ -1584,6 +1681,111 @@ $\mathrm{sh}_0$ & Naive (mt) & SR (mt) & Luo (mt) & SR vs Naive (\%) & Luo vs Na
 \end{table}
 
 \clearpage
+
+\section{Forecast error in full}
+\label{app:fcsterr}
+
+Mean absolute forecast error by field and lead time, for both routes, behind
+Table~\ref{tab:fcsterr} and Figure~\ref{fig:forecast-error}. Intervals are 95\% bootstrap
+intervals resampling forecast issues, of which there are 715 on the Indian Ocean route and 727 on
+the North Atlantic; the issue is the unit of resampling because readings at neighbouring nodes and
+adjacent hours are not independent. Beaufort number is listed for completeness and is a
+deterministic function of wind speed.
+
+\begin{table}[H]
+\centering
+\caption{Wind speed: mean absolute forecast error by lead time (km/h), with 95\%
+cluster-bootstrap intervals over forecast issues.}
+\label{tab:fe-wind-speed-10m-kmh}
+\begin{tabular}{lrr}
+\toprule
+Lead (h) & Indian Ocean & North Atlantic \\
+\midrule
+6-11 & $3.201$ [$3.159$, $3.242$] & $4.456$ [$4.346$, $4.566$] \\
+12-23 & $3.412$ [$3.377$, $3.451$] & $4.642$ [$4.528$, $4.760$] \\
+24-47 & $3.712$ [$3.677$, $3.746$] & $4.978$ [$4.869$, $5.098$] \\
+48-71 & $4.006$ [$3.970$, $4.041$] & $5.794$ [$5.669$, $5.912$] \\
+72-119 & $4.343$ [$4.305$, $4.384$] & $7.863$ [$7.688$, $8.034$] \\
+120-160 & $4.690$ [$4.631$, $4.749$] & $10.216$ [$9.992$, $10.462$] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Beaufort number: mean absolute forecast error by lead time (BN), with 95\%
+cluster-bootstrap intervals over forecast issues.}
+\label{tab:fe-beaufort-number}
+\begin{tabular}{lrr}
+\toprule
+Lead (h) & Indian Ocean & North Atlantic \\
+\midrule
+6-11 & $0.463$ [$0.443$, $0.486$] & $0.522$ [$0.493$, $0.551$] \\
+12-23 & $0.498$ [$0.479$, $0.519$] & $0.547$ [$0.523$, $0.579$] \\
+24-47 & $0.543$ [$0.522$, $0.566$] & $0.600$ [$0.575$, $0.632$] \\
+48-71 & $0.576$ [$0.557$, $0.598$] & $0.689$ [$0.660$, $0.727$] \\
+72-119 & $0.613$ [$0.597$, $0.630$] & $0.913$ [$0.889$, $0.944$] \\
+120-160 & $0.648$ [$0.630$, $0.668$] & $1.158$ [$1.128$, $1.186$] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Wind direction: mean absolute forecast error by lead time (deg), with 95\%
+cluster-bootstrap intervals over forecast issues.}
+\label{tab:fe-wind-direction-10m-deg}
+\begin{tabular}{lrr}
+\toprule
+Lead (h) & Indian Ocean & North Atlantic \\
+\midrule
+6-11 & $20.672$ [$20.263$, $21.142$] & $16.196$ [$15.758$, $16.617$] \\
+12-23 & $22.073$ [$21.636$, $22.597$] & $16.868$ [$16.417$, $17.293$] \\
+24-47 & $23.946$ [$23.400$, $24.564$] & $18.294$ [$17.851$, $18.753$] \\
+48-71 & $25.373$ [$24.781$, $26.056$] & $21.436$ [$20.843$, $22.012$] \\
+72-119 & $27.200$ [$26.529$, $27.904$] & $31.376$ [$30.664$, $32.089$] \\
+120-160 & $28.890$ [$28.090$, $29.672$] & $44.548$ [$43.298$, $45.866$] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Current speed: mean absolute forecast error by lead time (km/h), with 95\%
+cluster-bootstrap intervals over forecast issues.}
+\label{tab:fe-ocean-current-velocity-kmh}
+\begin{tabular}{lrr}
+\toprule
+Lead (h) & Indian Ocean & North Atlantic \\
+\midrule
+6-11 & $0.181$ [$0.179$, $0.184$] & $0.318$ [$0.313$, $0.323$] \\
+12-23 & $0.196$ [$0.193$, $0.198$] & $0.326$ [$0.320$, $0.331$] \\
+24-47 & $0.221$ [$0.219$, $0.224$] & $0.343$ [$0.338$, $0.348$] \\
+48-71 & $0.249$ [$0.246$, $0.252$] & $0.370$ [$0.365$, $0.374$] \\
+72-119 & $0.282$ [$0.279$, $0.285$] & $0.408$ [$0.404$, $0.413$] \\
+120-160 & $0.315$ [$0.312$, $0.319$] & $0.447$ [$0.441$, $0.452$] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Current direction: mean absolute forecast error by lead time (deg), with 95\%
+cluster-bootstrap intervals over forecast issues.}
+\label{tab:fe-ocean-current-direction-deg}
+\begin{tabular}{lrr}
+\toprule
+Lead (h) & Indian Ocean & North Atlantic \\
+\midrule
+6-11 & $17.831$ [$17.550$, $18.162$] & $33.462$ [$32.711$, $34.190$] \\
+12-23 & $18.991$ [$18.703$, $19.282$] & $34.293$ [$33.517$, $35.027$] \\
+24-47 & $21.275$ [$20.891$, $21.629$] & $36.149$ [$35.354$, $36.901$] \\
+48-71 & $23.517$ [$23.171$, $23.979$] & $39.245$ [$38.497$, $39.887$] \\
+72-119 & $26.561$ [$26.118$, $27.007$] & $44.498$ [$43.886$, $45.221$] \\
+120-160 & $29.756$ [$29.257$, $30.249$] & $50.812$ [$50.190$, $51.497$] \\
+\bottomrule
+\end{tabular}
+\end{table}
 %% ============================================================ REFERENCES
 \bibliographystyle{elsarticle-harv}
 \bibliography{refs}
