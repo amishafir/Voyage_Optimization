@@ -1,7 +1,8 @@
 """Paired t-tests for the paper's planner comparisons (Section 6).
 
-Four comparisons per route: SR against Naive and SR against Luo, under each of
-the two information regimes. Pairing is by departure hour -- every planner sails
+Four comparisons per route: SR against Naive and Luo against Naive, under each
+of the two information regimes. Both planners are measured against the same
+baseline rather than against each other. Pairing is by departure hour -- every planner sails
 the same 41 departures (Section 5.3), so the per-voyage differences are paired
 and the departure-to-departure variation, which dwarfs the planner differences,
 cancels out.
@@ -33,11 +34,14 @@ SRC = ROOT / "runs" / "2026_09_09_rh_chain41_waypoint" / "results.csv"
 ROUTE_NAME = {"route1": "Indian Ocean", "route2": "North Atlantic"}
 
 # (regime label, comparison label, column, baseline column)
+# Every comparison is against Naive: it is the common reference, it does not
+# re-plan, and it is identical under both regimes, so each row is readable on
+# its own and the two planners are never measured against each other.
 COMPARISONS = [
     ("Perfect foresight", "SR vs Naive", "oracle_sr", "naive_mt"),
-    ("Perfect foresight", "SR vs Luo", "oracle_sr", "oracle_luo"),
+    ("Perfect foresight", "Luo vs Naive", "oracle_luo", "naive_mt"),
     ("Rolling horizon", "SR vs Naive", "rh_sr_mt", "naive_mt"),
-    ("Rolling horizon", "SR vs Luo", "rh_sr_mt", "rh_luo_mt"),
+    ("Rolling horizon", "Luo vs Naive", "rh_luo_mt", "naive_mt"),
 ]
 
 
@@ -148,7 +152,7 @@ def print_latex(rows) -> None:
     print(r"\begin{table}[ht]")
     print(r"\centering")
     print(r"\caption{Paired $t$-tests on per-voyage realised fuel, pairing by departure hour")
-    print(r"(Section~\ref{sec:protocol}). A negative mean difference is fuel saved by SR. The")
+    print(r"(Section~\ref{sec:protocol}). A negative mean difference is fuel saved against Naive. The")
     print(r"interval is a 95\% confidence interval on that difference. Per-voyage figures are in")
     print(r"\ref{app:pervoyage}.}")
     print(r"\label{tab:ttests}")
