@@ -972,61 +972,41 @@ per-voyage percentages differs slightly and is not used.
 Throughout, SR denotes the per-leg free-speed dynamic program of Section~\ref{sec:methods} and Luo
 the per-block speed-locked formulation of \citet{luo2024}. All figures are realised fuel over the 41
 voyages of Section~\ref{sec:protocol}, on the partition of Section~\ref{sec:sampling}.
-Table~\ref{tab:regimes} gives the aggregate fuel of the three planners under both regimes and
-Table~\ref{tab:ttests} the paired significance tests behind it. Every comparison is paired by
+Table~\ref{tab:regimes} gives the mean fuel each planner saved against Naive under both regimes,
+with the confidence interval and significance of that saving. Every comparison is paired by
 departure hour, so the departure-to-departure variation, which is far larger than any difference
 between planners, cancels.
 
 \begin{table}[ht]
 \centering
-\caption{Fuel by route and information regime, over the 41 voyages of
-Section~\ref{sec:protocol}. Naive is the constant mean-SOG policy sailed through the actual weather;
-it does not re-plan and is therefore identical in both regimes, which is what makes the two rows of a
-route directly comparable. Both planners are measured against Naive rather than against each other,
-so every column shares one reference. A saving is the mean fuel a planner did not burn relative to
-Naive, in tonnes and as a fraction of the Naive total (Section~\ref{sec:quantities}); a negative
-saving is fuel burned in excess of a constant speed. Significance is in Table~\ref{tab:ttests}. Per-voyage figures behind every cell are in
-\ref{app:pervoyage}.}
+\small
+\caption{Mean fuel saving against the Naive constant-speed baseline, with its
+statistical properties. A positive saving is fuel the planner did not burn; a negative
+saving is fuel burned in excess of a constant speed. Savings are means over the voyages
+of each route, paired by departure hour (Section~\ref{sec:protocol}), so the
+departure-to-departure variation cancels. The interval is a 95\% confidence interval on
+the mean saving and $p$ is a two-sided paired $t$-test against a saving of zero. Both
+planners are measured against the same baseline and never against each other.
+Per-voyage figures are in \ref{app:pervoyage}.}
 \label{tab:regimes}
-\begin{tabular}{llrrrrrr}
+\begin{tabular}{lllrrrrrr}
 \toprule
- & & & & \multicolumn{2}{c}{SR saving} & \multicolumn{2}{c}{Luo saving} \\
-\cmidrule(lr){5-6}\cmidrule(lr){7-8}
-Route & Regime & $n$ & Naive (mt) & (mt) & (\%) & (mt) & (\%) \\
+Route & Regime & Planner & $n$ & Naive (mt) & \multicolumn{2}{c}{Mean saving} & 95\% CI (mt) & $p$ \\
+\cmidrule(lr){6-7}
+ & & & & & (mt) & (\%) & & \\
 \midrule
-Indian Ocean   & Deterministic & 15 & 355.11 & $9.66$ & $2.72$ & $1.05$ & $0.30$ \\
-Indian Ocean   & Stochastic & 15 & 355.11 & $5.19$ & $1.46$ & $-0.34$ & $-0.09$ \\
+Indian Ocean & Deterministic & SR & 15 & 355.11 & $9.66$ & $2.72$ & [$8.60$, $10.71$] & $5\times 10^{-11}$ \\
+Indian Ocean & Deterministic & Luo & 15 & 355.11 & $1.05$ & $0.30$ & [$0.67$, $1.43$] & $9\times 10^{-5}$ \\
+Indian Ocean & Stochastic & SR & 15 & 355.11 & $5.19$ & $1.46$ & [$4.20$, $6.19$] & $7\times 10^{-8}$ \\
+Indian Ocean & Stochastic & Luo & 15 & 355.11 & $-0.34$ & $-0.09$ & [$-0.96$, $0.29$] & $0.314$ \\
 \midrule
-North Atlantic & Deterministic & 26 & 203.26 & $4.47$ & $2.20$ & $1.65$ & $0.81$ \\
-North Atlantic & Stochastic & 26 & 203.26 & $0.57$ & $0.28$ & $0.24$ & $0.12$ \\
+North Atlantic & Deterministic & SR & 26 & 203.26 & $4.47$ & $2.20$ & [$3.82$, $5.13$] & $7\times 10^{-13}$ \\
+North Atlantic & Deterministic & Luo & 26 & 203.26 & $1.65$ & $0.81$ & [$1.39$, $1.91$] & $3\times 10^{-12}$ \\
+North Atlantic & Stochastic & SR & 26 & 203.26 & $0.57$ & $0.28$ & [$-0.19$, $1.33$] & $0.152$ \\
+North Atlantic & Stochastic & Luo & 26 & 203.26 & $0.24$ & $0.12$ & [$-0.21$, $0.68$] & $0.306$ \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\begin{table}[ht]
-\centering
-\caption{Paired $t$-tests on per-voyage realised fuel, pairing by departure hour
-(Section~\ref{sec:protocol}). A positive mean saving is fuel the planner did not burn. The
-interval is a 95\% confidence interval on that difference. Per-voyage figures are in
-\ref{app:pervoyage}.}
-\label{tab:ttests}
-\begin{tabular}{lllrrrrr}
-\toprule
-Route & Regime & Planner & $n$ & Mean saving (mt) & 95\% CI (mt) & $t$ & $p$ \\
-\midrule
-Indian Ocean & Deterministic & SR & 15 & $9.66$ & [$8.60$, $10.71$] & $17.86$ & $5\times 10^{-11}$ \\
-Indian Ocean & Deterministic & Luo & 15 & $1.05$ & [$0.67$, $1.43$] & $5.43$ & $9\times 10^{-5}$ \\
-Indian Ocean & Stochastic & SR & 15 & $5.19$ & [$4.20$, $6.19$] & $10.23$ & $7\times 10^{-8}$ \\
-Indian Ocean & Stochastic & Luo & 15 & $-0.34$ & [$-0.96$, $0.29$] & $-1.05$ & $0.314$ \\
-\midrule
-North Atlantic & Deterministic & SR & 26 & $4.47$ & [$3.82$, $5.13$] & $13.38$ & $7\times 10^{-13}$ \\
-North Atlantic & Deterministic & Luo & 26 & $1.65$ & [$1.39$, $1.91$] & $12.49$ & $3\times 10^{-12}$ \\
-North Atlantic & Stochastic & SR & 26 & $0.57$ & [$-0.19$, $1.33$] & $1.48$ & $0.152$ \\
-North Atlantic & Stochastic & Luo & 26 & $0.24$ & [$-0.21$, $0.68$] & $1.04$ & $0.306$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \subsection{Fuel in the deterministic setting}
 \label{sec:res-det}
 In the deterministic setting the ordering is not in question: by the containment of
@@ -1077,8 +1057,8 @@ was beaten by Luo on 12 of those 26 voyages, by up to 2.59 mt, and by the
 constant-speed baseline on 11 of 26. The two failure sets overlap on 8 voyages, so on 15 of 26 North
 Atlantic voyages the finest-grained planner was beaten by something simpler. No such failure occurred
 on the Indian Ocean route. Neither planner separates from Naive here: against the constant-speed
-baseline SR is $-0.57$ mt ($p=0.152$) and Luo $-0.24$ mt ($p=0.306$), the only two insignificant rows
-of Table~\ref{tab:ttests} on this route. Under a real forecast on the harsh route the advantage is
+baseline SR is $-0.57$ mt ($p=0.152$) and Luo $-0.24$ mt ($p=0.306$), the only two rows of Table~\ref{tab:regimes}
+for this route whose interval spans zero. Under a real forecast on the harsh route the advantage is
 therefore not merely small but indistinguishable from none, and the interval bounds it: SR's advantage
 over Naive lies within $[-1.33, +0.19]$ mt.
 

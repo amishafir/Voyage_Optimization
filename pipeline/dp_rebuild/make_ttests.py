@@ -120,10 +120,14 @@ def results(rows: List[dict]) -> List[Tuple[str, str, str, dict]]:
     out = []
     for route in ("route1", "route2"):
         subset = [r for r in rows if r["route"] == route]
+        naive = sum(float(r["naive_mt"]) for r in subset) / len(subset)
         for regime, label, col, base in COMPARISONS:
             # saving against the baseline: positive means the planner burned less
             diffs = [float(r[base]) - float(r[col]) for r in subset]
-            out.append((ROUTE_NAME[route], regime, label, paired_t(diffs)))
+            stats = paired_t(diffs)
+            stats["naive"] = naive
+            stats["pct"] = 100.0 * stats["mean"] / naive
+            out.append((ROUTE_NAME[route], regime, label, stats))
     return out
 
 
@@ -141,25 +145,32 @@ def fmt_p_tex(p: float) -> str:
 
 
 def print_plain(rows) -> None:
-    head = f"{'Route':16}{'Regime':19}{'Planner':13}{'saving (mt)':>12}{'95% CI':>20}{'t':>8}{'p':>10}{'dz':>8}"
+    head = f"{'Route':16}{'Regime':19}{'Planner':13}{'saving (mt)':>12}{'saving %':>10}{'95% CI':>20}{'t':>8}{'p':>10}{'dz':>8}"
     print(head)
     print("-" * len(head))
     for route, regime, label, s in rows:
         ci = f"[{s['lo']:6.2f},{s['hi']:6.2f}]"
-        print(f"{route:16}{regime:19}{label:13}{s['mean']:12.2f}{ci:>20}{s['t']:8.2f}{fmt_p(s['p']):>10}{s['dz']:8.2f}")
+        print(f"{route:16}{regime:19}{label:13}{s['mean']:12.2f}{s['pct']:10.2f}{ci:>20}{s['t']:8.2f}{fmt_p(s['p']):>10}{s['dz']:8.2f}")
 
 
 def print_latex(rows) -> None:
     print(r"\begin{table}[ht]")
     print(r"\centering")
-    print(r"\caption{Paired $t$-tests on per-voyage realised fuel, pairing by departure hour")
-    print(r"(Section~\ref{sec:protocol}). A positive mean saving is fuel the planner did not burn. The")
-    print(r"interval is a 95\% confidence interval on that difference. Per-voyage figures are in")
-    print(r"\ref{app:pervoyage}.}")
-    print(r"\label{tab:ttests}")
-    print(r"\begin{tabular}{lllrrrrr}")
+    print(r"\small")
+    print(r"\caption{Mean fuel saving against the Naive constant-speed baseline, with its")
+    print(r"statistical properties. A positive saving is fuel the planner did not burn; a negative")
+    print(r"saving is fuel burned in excess of a constant speed. Savings are means over the voyages")
+    print(r"of each route, paired by departure hour (Section~\ref{sec:protocol}), so the")
+    print(r"departure-to-departure variation cancels. The interval is a 95\% confidence interval on")
+    print(r"the mean saving and $p$ is a two-sided paired $t$-test against a saving of zero. Both")
+    print(r"planners are measured against the same baseline and never against each other.")
+    print(r"Per-voyage figures are in \ref{app:pervoyage}.}")
+    print(r"\label{tab:regimes}")
+    print(r"\begin{tabular}{lllrrrrrr}")
     print(r"\toprule")
-    print(r"Route & Regime & Planner & $n$ & Mean saving (mt) & 95\% CI (mt) & $t$ & $p$ \\")
+    print(r"Route & Regime & Planner & $n$ & Naive (mt) & \multicolumn{2}{c}{Mean saving} & 95\% CI (mt) & $p$ \\")
+    print(r"\cmidrule(lr){6-7}")
+    print(r" & & & & & (mt) & (\%) & & \\")
     print(r"\midrule")
     prev = None
     for route, regime, label, s in rows:
@@ -167,8 +178,8 @@ def print_latex(rows) -> None:
             print(r"\midrule")
         prev = route
         ci = f"[${s['lo']:.2f}$, ${s['hi']:.2f}$]"
-        print(f"{route} & {regime} & {label} & {s['n']} & ${s['mean']:.2f}$ & {ci} & "
-              f"${s['t']:.2f}$ & ${fmt_p_tex(s['p'])}$ \\\\")
+        print(f"{route} & {regime} & {label} & {s['n']} & {s['naive']:.2f} & "
+              f"${s['mean']:.2f}$ & ${s['pct']:.2f}$ & {ci} & ${fmt_p_tex(s['p'])}$ \\\\")
     print(r"\bottomrule")
     print(r"\end{tabular}")
     print(r"\end{table}")
