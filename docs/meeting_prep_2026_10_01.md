@@ -174,3 +174,43 @@ should be stated, or the disclosure is one-sided.
 - [ ] If their course is per-leg, quantify what the block-constant heading costs our Luo, and extend
       the §3 footnote
 
+### Item 3 — merge Appendix A into Appendix B
+
+**Raised by Tal.** The speed-correction model and the FCR derivation become one appendix.
+
+**Status: logged, not applied.**
+
+- [ ] **Task.** Merge Appendix A (*The speed-correction model*) and Appendix B (*Derivation of the
+      fuel-consumption-rate function*) into a single appendix, the two becoming subsections of it
+- [ ] **Task.** Retarget all 14 incoming references and re-letter the appendices that follow
+- [ ] **Task.** Rebuild and confirm no reference resolves to the wrong appendix
+
+**Why it is the right merge.** Both appendices are **one model** — `yang2020` — split across two
+sections. A reads the conditions and returns the still-water speed required to hold a target SOG; B
+takes that speed and returns the fuel rate. §3 already describes them as a pair: *"the conditions
+determine the still-water speed required to hold the target SOG (Appendix A), and the still-water
+speed determines the fuel rate through a cubic law (Appendix B)."* Appendix C is a genuinely separate
+object, the benchmark's learned model, and stays as it is.
+
+**Scope — 14 references, across §3, §4 and the appendix itself:**
+
+| Label | Refs | Lines |
+|---|---|---|
+| `app:sog` | 5 | 259, 280, 354, 1394, 1486 |
+| `app:fcr` | 9 | 259, 355, 360, 374, 384, 1356, 1383, 1500, 1516 |
+
+**Shape after the merge.** The merged appendix carries `app:fcr` and gains two subsections, with
+`app:sog` demoted to a subsection label so its five references keep resolving. The existing
+subsections of B (*The DTU–SDU power chain*, *Reduction to the cubic form*, *Calibration of the
+coefficient*, *Assumptions and validity range*) sit under the FCR subsection.
+
+**Re-lettering is the part to watch.** The appendices become A fuel model (was A+B), B benchmark ANN
+(was C), C per-voyage (was D), D forecast error (was E). **Nothing in the body hard-codes a letter** —
+every reference goes through `\ref`, and `elsarticle` expands those to the full designation — so the
+re-lettering is automatic. But §3 and §6.4 name the appendices in prose beside the reference in
+several places, and those sentences must be read rather than trusted.
+
+**Two cheap wins while the appendix is open.** The draft spells `subsegment` 17 times and
+`sub-segment` 4 times; and §3's figure caption and the fuel-model paragraph both point at two
+appendices where they will now point at one.
+
