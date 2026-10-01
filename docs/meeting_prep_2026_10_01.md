@@ -95,3 +95,48 @@ sidesteps the ratio-of-means question entirely.
 ## 5. Live log — 2026-10-01 session
 
 _Append as items come up._
+
+### Item 1 — where does wind speed enter the model, and why does direction matter?
+
+**Raised by Tal.** Checked in the code, not assumed.
+
+**Wind speed enters only through the Beaufort number.** `calculate_speed_over_ground` does not take a
+wind speed at all. Its weather arguments are `beaufort_scale`, `wind_direction`, `ocean_current` and
+`current_direction`. Wind speed is converted to BN by `wind_speed_to_beaufort` and never used again,
+so the model sees a **coarse, integer** version of it:
+
+| wind | 10 | 15 | 20 | 25 | 30 | 35 | 40 | 50 km/h |
+|---|---|---|---|---|---|---|---|---|
+| BN | 2 | 3 | 4 | 4 | 5 | 5 | 6 | 6 |
+
+This is the same fact §3 states for sea state — "sea state enters through BN" — and it has a
+consequence for §6.4 worth noting: **a wind-speed forecast error only costs fuel if it is large enough
+to cross a Beaufort boundary.** That is why the measured Beaufort error ratio between the routes
+(1.10–1.79) is consistently milder than the wind-speed error ratio (1.34–2.18): the banding absorbs
+part of the error.
+
+**Wind direction matters because it multiplies the speed loss.** The direction relative to the ship's
+heading selects $C_\beta$, the direction reduction coefficient of Kwon's model, and the range is
+enormous:
+
+| relative angle | BN 3 | BN 4 | BN 5 | BN 6 |
+|---|---|---|---|---|
+| 0–30° head-on | 2.00 | 2.00 | 2.00 | 2.00 |
+| 31–60° bow | 1.67 | 1.70 | 1.67 | 1.58 |
+| 61–150° beam | 0.36 | 0.66 | 0.84 | 0.90 |
+| 151–180° following | 0.10 | 0.10 | 0.13 | 0.28 |
+
+**At BN 3 or 4 the same wind costs 20× more speed loss head-on than following.** Direction is
+therefore the larger lever of the two: wind speed moves the loss through a banded integer, direction
+scales it by up to twenty.
+
+**This explains the one result in §6.4 that looked anomalous.** The factorial found the Atlantic's
+conditions amplify a *wind-direction* error by 1.72, the largest sensitivity of any field, even though
+the Atlantic's wind-direction forecasts are the one thing it does *better* at short lead. Both follow
+from $C_\beta$: the coefficient is steep in the angle, so an error in direction is expensive wherever
+it occurs, and it is steepest around the beam-to-following transition.
+
+- [ ] **Possible follow-up.** The banding means wind-speed error is only partly transmitted. Measuring
+      the forecast error **in Beaufort units directly**, which `make_forecast_error.py` already
+      reports, may be the more honest input to the factorial than the error in km/h. Cheap to check
+
