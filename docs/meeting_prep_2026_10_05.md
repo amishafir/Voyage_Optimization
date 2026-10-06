@@ -199,5 +199,78 @@ likely place a stale claim is sitting, and it is the one piece of the paper nobo
 
 ## 8. Live log — 2026-10-05 session
 
-_Items as they come up._
+_The decision and action tables above were not filled during the session. Tal's two commits that
+evening, `e809698` and `9f1f8af` rewriting §3, are the record of what came out of it._
+
+### Open question for Tal — how much should the appendix contain?
+
+**Logged 2026-10-06. Nothing changed in the paper pending the answer.**
+
+Two designs exist and are **not** applied:
+[appendix_merge_design](appendix_merge_design_2026_10_06.md) and
+[appendix_audit_design](appendix_audit_design_2026_10_06.md).
+
+#### The question
+
+Should an appendix carry the derivation of a model we adopt, or only the parts of it the paper
+actually uses and the parts a reader cannot get from the citation?
+
+#### What prompted it
+
+Appendices A and B are 142 lines and six equations. Checking which of them the paper uses turned up
+something neither of us expected:
+
+- **No appendix equation is referenced from the body.** Every `\eqref` to `eq:fcr` and `eq:sog` comes
+  from inside the appendix itself.
+- **`eq:app-ct` is referenced by nothing anywhere.**
+- **Appendix A has no incoming reference from the body at all.** The §3 rewrite removed all five.
+  That is a consequence of the rewrite rather than an oversight: $\phi(t,d;v)$ is now defined on
+  **speed over ground**, so the still-water speed and the correction are interior to it and the body
+  never mentions SWS.
+- **`tab:ship` is referenced twice, both from inside the appendix.** The vessel being modelled appears
+  nowhere a reader is sent while reading the experimental setup.
+
+So the five-equation DTU–SDU chain exists to derive a cubic that the body takes as given, and
+Appendix A is reachable only from Appendix B.
+
+#### What a reader demonstrably needs
+
+| | Why |
+|---|---|
+| $\fcr(V_s)=0.000706\,V_s^{3}$ | **Ours.** The coefficient is calibrated for this vessel; no number in the paper reproduces without it |
+| Vessel particulars | Same |
+| Verification accuracy, 6.5\% max and 3.75\% mean | Lets a reader judge the fuel model instead of trusting it |
+| That the correction inverts, by binary search, no closed form | §4's method depends on it |
+| That FCR is strictly convex in SWS | §3's Jensen argument rests on it |
+| Assumptions and validity range | Says when the cubic stops being true |
+
+About 25 lines of the 142. The rest — the power chain, the reduction to the cubic, the full form of
+the speed correction — is `yang2020` via `kristensen2012`.
+
+#### Three ways to go
+
+| | Shape | Argument for it |
+|---|---|---|
+| (a) | **Keep the derivation** as it is | A thesis may be expected to show the chain rather than cite it |
+| (b) | **Cut to what the paper uses**, ~25 lines in one merged appendix | An appendix is for what a reader needs and cannot get elsewhere; a half-derivation is worse than a clean citation |
+| (c) | **Cut in the paper, keep in the thesis** | They are different documents held to different standards, and this is the only option that does not force a single answer |
+
+**Recommendation: (b) for the paper, with (c) if the thesis needs otherwise.** But this is Tal's call,
+not least because he may know what examiners expect.
+
+#### Three smaller ones that travel with it
+
+- **Merge A and B regardless of the answer?** They are two halves of one evaluation of $\phi$, they
+  cross-reference each other four times, and A is orphaned. The merge stands even if nothing is cut
+- **Move `tab:ship` to §5?** It is experimental setup and nothing in the body points at it
+- **Appendix C**, the benchmark's learned fuel model, 34 lines, which its own text says *"is not used
+  to produce any number reported in this paper"*. It substantiates that the fuel model was held
+  fixed — a claim §3 now makes explicitly. Keep and shorten, or keep as is?
+
+#### One inconsistency to settle at the same time
+
+§3 says **bearing** (7 times, all in the new text); the appendices and §4 say **heading** (15). Same
+thing on a rhumb line, but $\phi$ is *defined* at the bearing and *computed* relative to the heading,
+so a reader meets two words for one function's input. **Bearing** follows the text Tal just wrote.
+
 
