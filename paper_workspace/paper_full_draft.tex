@@ -250,165 +250,58 @@ control.
 \section{Problem formulation}
 \label{sec:problem}
 
-In this paper we study the problem of controlling the speed of sea vessels with the goal of minimizing its total voyage fuel consumption considering dynamic and stochastic sea conditions and utilizing noisy weather forecasts.  As a first step, we define a dynamic deterministic version of the problem where the sea conditions at each location along the planned route at each time during the planning horizon  are known. We then extend the problem to a stochastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem, the decision variable and the objective. We then describe the benchmark formulation of \citet{luo2024}, state the sense in which both formulations obtain the fuel consumption rate from the same exogenous function, and set out the single structural difference between them. The physical models that supply that function are inputs to the formulation rather than part of it, and are given in the appendices. 
+In this paper we study the problem of controlling the speed of a sea vessel with the goal of minimizing its total voyage fuel consumption, considering dynamic and stochastic sea conditions and utilizing noisy weather forecasts.  As a first step, we define a dynamic deterministic version of the problem where the sea conditions at each location along the planned route at each time during the planning horizon  are known. We then extend the problem to a stochastic dynamic version where a noisy forecast is given and dynamically updated throughout the voyage.  In this section we describe the input of the problem, the decision variable and the objective.  The input of the minimum fuel consumption problem consists of the following components:
 
 \begin{description}
-	\item[Route] A route is defined by a sequence of geographical waypoints assuming the vessel starts its voyage at the first waypoint, travels on a great circle between each pair of consecutive waypoints in the sequence.   The waypoints are  indexed $0,\ldots, N$ and each pair of waypoints define a \emph{segment} numbered $1,\ldots, N$.
-	\item[T]  Total required voyage time (in hours),  commonly referred to in the literature as expected time of arrival (ETA).
-	\item [Sea conditions]    The sea conditions are given by the wind speed and direction, summarised by the Beaufort number, and by the sea current speed and direction. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. The time, for this end, is discretized to \emph{blocks} of six hours, and the space to \emph{subsegments}, consecutive stretches of the route delimited by the points at which the sea conditions were sampled along it (Section~\ref{sec:sampling}). A subsegment boundary is therefore a point at which a value was actually sampled, not a point at which the ocean is known to change: the resolution of the partition is the resolution of the data. The interval at which the conditions were sampled along a route is a property of the data collection rather than of the formulation, and is reported in Section~\ref{sec:sampling}.  %The forecast is given for each such time and space discrerized unit for an horizon of seven days and is updated every six hours. 
-	\item[FCR function]   Fuel consumption rate (in metric ton of bunker fuel per hour). The FCR is calculated as a function of the weather conditions, the physical characteristics of the vessel, the course (sailing direction)  and the speed over ground (SOG)  of the vessel at each particular time. Our algorithm obtains this function as an input. The calculation or estimation of this function is an independent challenge which is not part of the contribution of this paper. We use the method proposed by \citet{yang2020}, whose fuel-consumption-rate function is derived in \ref{app:fcr} and whose accompanying correction from still-water speed to speed over ground is given in \ref{app:sog}.  We assume that the vessel characteristics are fixed.  The vessel course is fixed at that of the route segment.  It is assumed that the FCR is an increasing convex function of the SOG, meaning that the marginal FCR increases with the speed of the vessel. 
+	\item[Route] A route is defined by a sequence of geographical waypoints. The vessel starts its voyage at the first waypoint and steams along a rhumb line (i.e., at a constant bearing) between each pair of consecutive waypoints in the sequence until the last one.  The waypoints are indexed $0,\ldots, N$, and the stretch of the route between two consecutive waypoints is called a \emph{segment}; the segments are numbered $1,\ldots, N$. We denote the total length of the route (in NM) by $D$.
+	\item[T]  Total required voyage time (in hours), measured from the start of the planning horizon; the resulting deadline is commonly referred to in the literature as the estimated time of arrival (ETA).
+	\item [Sea conditions]    The sea conditions are given by the wind speed, summarized by a Beaufort number, and direction, and by the sea current speed and direction. These are absolute (compass) directions; the FCR function combines them with the bearing of the vessel. In reality these conditions change continuously in time and space but in our model they are assumed fixed for each discretized time and space unit. To this end, time is discretized into \emph{blocks} of six hours and space into \emph{cells} of $0.08^{\degree} \times 0.08^{\degree}$.  Note that the distance between two parallels $1^{\degree}$ apart is 60~NM and this is also the maximum distance between two meridians $1^{\degree}$ apart, attained at the equator.  Therefore each cell is 4.8~NM from north to south and up to this distance east to west. The current data are given on this grid, while the wind data come on a different grid; each cell is assigned the wind of the wind grid point closest to its center.
+  This discretization level is not hard-coded in our model, but it is consistent with the temporal and spatial resolution of  our data source, see Section~\ref{sec:sampling}.
+	\item[FCR function]   Fuel consumption rate (in metric tons of bunker fuel per hour). The FCR is determined by the physical characteristics of the vessel and is calculated as a function of the sea conditions, the bearing (sailing direction)  and the speed over ground (SOG)  of the vessel.   The FCR is an increasing convex function of the SOG. 
 \end{description}
 
 
-Given the input above a solution of the deterministic speed control problem is the SOG of the vessel at any given time during the voyage (denoted $v(t)$) so as to minimize the total fuel consumption of the voyage while satisfying the ETA requirement. While under way the SOG of the vessel is selected from the band $[V_{\min}, V_{\max}]$ knots ($NM/h$), where the upper bound $V_{\max}$ is the fastest speed the vessel can sustain and the lower bound $V_{\min}>0$ is imposed by the minimum stable engine load and by manoeuvrability. The two ends of the route are exceptions, and they are not symmetric. At the origin ($d=0$) the vessel may idle before departing, so zero speed joins the band. At the destination ($d=D$) it has nowhere further to go: zero is the \emph{only} admissible speed there, and the vessel simply idles until the ETA. Writing $d$ for the along-track distance travelled and $D$ for the total length of the route, the set of admissible speeds is therefore
+The calculation of the FCR is an independent challenge which is not part of the contribution of this paper. We use the physical model proposed by \citet{yang2020}, whose fuel-consumption-rate function is explained in \ref{app:fcr} for completeness. However, it should be noted that any other method to calculate the FCR could be plugged in. 
+
+
+Given the input above, a solution of the deterministic speed control problem specifies the SOG of the vessel, denoted $v(t)$, at every time $t$ during the voyage, and the goal is to minimize the total fuel consumption of the voyage while satisfying the ETA requirement. While under way the SOG of the vessel is selected from the band $[V_{\min}, V_{\max}]$ knots (NM/h), where the upper bound $V_{\max}$ is the fastest speed the vessel can sustain and the lower bound $V_{\min}>0$ is imposed by the minimum stable engine load and by maneuverability requirements. We assume that every SOG in $[V_{\min},V_{\max}]$ is attainable under all sea conditions met along the route. 
+
+The two ends of the route are exceptions, and they are not symmetric.  Let $d$ denote the along-track distance from the first waypoint.  At the origin ($d=0$) the vessel may idle before departing, so zero speed joins the band. At the destination ($d=D$) it has nowhere further to go: zero is the \emph{only} admissible speed there, and the vessel simply idles until the ETA. The set of admissible speeds is therefore
 \begin{equation}
 	\label{eq:speed-set}
 	\mathcal{V}(d)=
 	\begin{cases}
 		\{0\}\cup[V_{\min},V_{\max}], & d=0,\\[2pt]
 		[V_{\min},V_{\max}], & 0<d<D,\\[2pt]
-		\{0\}, & d=D,
+		\{0\}, & d=D.
 	\end{cases}
 \end{equation}
-so the vessel never idles in mid-ocean, and once it has reached $d=D$ it cannot move again. The voyage can be divided into intervals during which the course, the sea conditions and the time block are all fixed; an interval ends where the vessel crosses a subsegment boundary or where a six-hour block turns over, and at no other point. Because the FCR is a convex function of the speed, in an optimal solution the SOG is constant on each such interval. A speed plan is therefore a list of these intervals together with the SOG held in each, and the points at which a plan may change speed are exactly the subsegment boundaries and the six-hour block boundaries.
 
-\paragraph{Still-water speed and speed over ground}
-Fuel is burned to produce the vessel's \emph{still-water speed} (SWS) $V_s$, the speed it would make
-in calm water at a given power setting, while a plan is expressed in speed over ground. The two are
-linked by a speed-correction model, $V_g=g(V_s;w)$, in which the wind reduces the speed made good and
-the along-track component of the current adds to or subtracts from it; the model is that of
-\citet{yang2020} and is given in \ref{app:sog}. Only two of its properties are used here.
-For fixed conditions $V_g$ increases monotonically with $V_s$, so the relation inverts and a target
-SOG implies a unique required SWS, written $V_s=g^{-1}(V_g;w)$; and that required SWS rises as the
-conditions worsen, so holding a target SOG through adverse weather demands more still-water speed.
+Each segment is further divided into \emph{subsegments} at the points where the route crosses a cell boundary. A subsegment is thus a maximal stretch of the route that lies within one segment and one cell, and it ends either at a waypoint, where the bearing changes, or at a cell boundary. Subsegments are defined in space only; time is partitioned separately into blocks. Along a subsegment the bearing is fixed, and so are the sea conditions within each time block.
 
-\paragraph{Objective}
-The fuel burned on an interval $i$ of length $d_i$, sailed at a constant SOG $V_{g,i}$ under
-conditions $w_i$, is the fuel-consumption rate times the transit time,
-\begin{equation}
-\label{eq:legfuel}
-F_i \;=\; \fcr\!\big(g^{-1}(V_{g,i};w_i)\big)\,\frac{d_i}{V_{g,i}} .
-\end{equation}
-Writing $M$ for the number of intervals, the deterministic speed-control problem is to choose the SOG
-of each interval so as to minimise total voyage fuel subject to the arrival deadline,
-\begin{equation}
-\label{eq:obj}
-\min_{\{V_{g,i}\in[V_{\min},V_{\max}]\}}\; \sum_{i=1}^{M} \fcr\!\big(g^{-1}(V_{g,i};w_i)\big)\,\frac{d_i}{V_{g,i}}
-\qquad\text{s.t.}\qquad \sum_{i=1}^{M}\frac{d_i}{V_{g,i}} \le T .
-\end{equation}
-The arrival constraint is hard and the SOG of every interval is confined to the band
-$[V_{\min},V_{\max}]$; the zero-speed option that Eq.~\eqref{eq:speed-set} admits at the two ends of
-the route covers no distance and so contributes no term to the sum, it only consumes part of the time
-budget $T$ at the origin or at the destination.
 
-\paragraph{The convexity mechanism}
-Fuel depends on the still-water speed while a plan targets the speed over ground, so holding one
-target SOG through changing conditions forces the required SWS to vary along the way. Because the FCR
-is strictly convex in SWS, that induced variation costs fuel relative to a plan that resets the target
-as the conditions change, and the coarser the interval over which a single target is held, the more of
-that penalty a plan incurs; this is the mechanism the rest of the paper exploits
-(Section~\ref{sec:methods}).
+\paragraph{Mathematical statement}
+We describe the voyage in the time--distance plane, where $t\in[0,T]$ is the time elapsed since the start of the planning horizon and $d\in[0,D]$ is the along-track distance from the first waypoint. The bearing depends on $d$ alone and the sea conditions on $(t,d)$, and both are fixed within each subsegment during each time block. We denote by $\phi(t,d;v)$ the FCR of the vessel when it is at distance $d$ at time $t$ and steams at SOG $v$, that is, the FCR function evaluated at the bearing at $d$ and at the sea conditions prevailing at $(t,d)$. For every $(t,d)$ the function $\phi(t,d;\cdot)$ is increasing and convex on $[V_{\min},V_{\max}]$, and $\phi(t,d;0)=0$ since an idle vessel burns no propulsion fuel. A solution is a piecewise-continuous speed profile $v(t)$, $t\in[0,T]$, and $d(t)$ denotes the distance covered by time $t$. The deterministic speed control problem is
+\begin{subequations}
+	\label{eq:det}
+	\begin{align}
+		\min_{v(\cdot)}\quad & \int_{0}^{T}\phi\bigl(t,d(t);v(t)\bigr)\,dt \label{eq:obj}\\
+		\text{s.t.}\quad & d(t)=\int_{0}^{t}v(u)\,du, && t\in[0,T], \label{eq:motion}\\
+		& v(t)\in\mathcal{V}\bigl(d(t)\bigr), && t\in[0,T], \label{eq:band}\\
+		& d(T)=D. \label{eq:eta}
+	\end{align}
+\end{subequations}
+The objective \eqref{eq:obj} is the total fuel of the voyage, \eqref{eq:motion} links the position of the vessel to its SOG, \eqref{eq:band} restricts the SOG to the admissible set \eqref{eq:speed-set}, and \eqref{eq:eta} is the ETA requirement. Since $\mathcal{V}(D)=\{0\}$, a vessel that reaches the destination before $T$ idles there at no cost, so \eqref{eq:eta} requires arrival no later than $T$ rather than exactly at $T$; likewise $0\in\mathcal{V}(0)$ allows a delayed departure. The problem is feasible if and only if $D\le V_{\max}T$.
+
+It suffices to consider speed profiles in which the SOG is constant within each subsegment and time block. To see this, take any feasible speed profile and an interval $[t',t'']$ during which the vessel is under way within one subsegment and one time block, so that $\phi(t,d(t);v)$ depends on $v$ alone there. Replacing $v(t)$ on $[t',t'']$ by the average speed $(d(t'')-d(t'))/(t''-t')$ leaves the position of the vessel at $t'$ and $t''$ unchanged, keeps the speed within $[V_{\min},V_{\max}]$, and by Jensen's inequality does not increase the fuel consumed in the interval. The problem therefore reduces to choosing one speed per subsegment and time block. It is not, however, a finite nonlinear program in these speeds: the time block in which the vessel enters a subsegment depends on the speeds chosen earlier, so the sequence of subsegment and block pairs visited is itself part of the decision. Section~\ref{sec:methods} handles this with a dynamic program over the time--distance plane.
+
 
 \paragraph{The stochastic version}
-In the stochastic version of the problem the sea conditions at each location and time along the
-planned voyage are unknown, and the only information about them is a published weather forecast, given
-on the same discretisation as the conditions themselves and refreshed periodically. Speed decisions
-are made from the conditions observed so far and from the most recent forecast, and the planner's goal
-is to minimise the fuel consumed over the voyage; no probabilistic information about the relationship
-between a forecast and the realisation that follows it is available to the planner. In this study the
-stochastic version is solved in a rolling-horizon framework that uses the solution method for the
-deterministic problem as a building block.
+In the stochastic version the sea conditions ahead of the vessel are not known, and the planner relies on published weather forecasts, given on the same discretization as the conditions themselves and refreshed periodically. At the start of each time block, at times $0=s_0<s_1<\cdots$, the planner knows the current conditions along the route and the most recent forecast issued no later than $s_k$; no probabilistic model linking a forecast to the conditions that follow it is available. Let $\hat\phi_k(t,d;v)$ be the FCR obtained when this information replaces the actual conditions: the current conditions for the time block starting at $s_k$, the forecast for later blocks, and, beyond the last forecast hour, the conditions forecast for that hour. Since decisions are expressed as SOG, the trajectory $d(t)$ is determined by the speed profile alone, so the ETA is met whatever the weather and the uncertainty affects only the fuel. A policy chooses $v(t)$ using only the information available at the latest $s_k\le t$. Without a probabilistic model the expected fuel of a policy is not defined, so we do not seek an optimal policy in that sense. The rolling-horizon policy solves at each $s_k$ problem \eqref{eq:det} restricted to $[s_k,T]$, with initial position $d(s_k)$ and with $\phi$ replaced by $\hat\phi_k$, and holds the resulting speeds until $s_{k+1}$. Once the voyage is completed and the weather conditions are realized, we compute the actual value of the objective \eqref{eq:obj} for the speed profile the policy produced, using the actual $\phi$; we call it the \emph{realized fuel} of the policy, and it is the measure by which policies are evaluated and compared. Every speed profile produced by a policy is feasible for \eqref{eq:det}, so the optimal value of \eqref{eq:det} under the actual conditions is a lower bound on the realized fuel of any policy, on every voyage.
 
 \paragraph{The benchmark formulation}
-The state of the art for fuel-minimising speed control under dynamic meteorological conditions is the
-multistage-graph formulation of \citet{luo2024}, which we adopt as our benchmark. It divides the
-voyage into segments aligned to the cycle on which the numerical weather prediction product is
-refreshed, one segment per cycle of length $\Delta t$, with the first and the last segment partial,
-and it assumes that the sailing speed remains unchanged during any one segment of the voyage. The
-voyage is then represented as a multistage graph in which the nodes of stage $i$ are indexed by the
-distance still remaining to the destination, discretised on a distance quantum $\zeta$, and in which
-edges join nodes of adjacent stages only. The two remaining distances that an edge connects, together
-with the fixed duration $\Delta t$ of the segment it spans, determine the speed at which that edge is
-traversed, so choosing an edge \emph{is} choosing that segment's speed; the weight of the edge is the
-fuel required to cover the segment at that speed.\footnote{\citet{luo2024} price a segment with a
-single meteorological sample, taken at the segment's starting node and assumed to represent the whole
-segment. The implementation of the benchmark used here is more generous than that: it walks each
-segment at subsegment and sample-hour resolution and prices every piece against the conditions
-prevailing at that position and that time, holding only the \emph{speed} constant across the segment.
-Both formulations compared in this paper are therefore costed against sea-conditions data of the same
-resolution, and the benchmark is evaluated on strictly more weather information than its published
-description requires. Any advantage reported here for the finer formulation is measured against a
-benchmark so strengthened.} The plan is the minimum-weight path through this graph, found by shortest
-path, and in operation the graph is rebuilt and re-solved at each forecast cycle on the latest
-forecast, with only the first segment's speed committed before the vessel advances, which is a rolling
-horizon in their own terms. Their objective and their arrival requirement are those of
-Eq.~\eqref{eq:obj}; what differs is the set of plans the formulation admits.
+The state of the art for fuel-minimizing speed control under dynamic meteorological conditions is the multistage-graph formulation of \citet{luo2024}, which we adopt as our benchmark. It divides the voyage into stages aligned to the cycle on which the numerical weather prediction product is refreshed, one stage per cycle, with the first and the last stage partial, and it assumes that the sailing speed remains unchanged during any one stage of the voyage. The voyage is then represented as a multistage graph in which the nodes of each stage are indexed by the distance still remaining to the destination, discretized on a fixed distance step, and in which edges join nodes of adjacent stages only. The two remaining distances that an edge connects, together with the fixed duration of the stage it spans, determine the speed at which that edge is traversed, so choosing an edge \emph{is} choosing that stage's speed; the weight of the edge is the fuel required to cover the stage at that speed.\footnote{\citet{luo2024} price a stage with a single meteorological sample, taken at the stage's starting node and assumed to represent the whole stage. The implementation of the benchmark used here is more generous than that: it walks each stage at subsegment and time-block resolution and prices every piece against the conditions prevailing at that position and that time, holding only the \emph{speed} constant across the stage. Both formulations compared in this paper are therefore costed against sea-conditions data of the same resolution, and the benchmark is evaluated on strictly more weather information than its published description requires. Any advantage reported here for the finer formulation is measured against a benchmark so strengthened.} The plan is the minimum-weight path through this graph, and in operation the graph is rebuilt and re-solved at each forecast cycle on the latest forecast, with only the first stage's speed committed before the vessel advances, which is a rolling horizon in their own terms. In the notation of \eqref{eq:det}, the formulation of \citet{luo2024} keeps the objective and the constraints and adds one more: the SOG must be the same at any two times $t,t'$ in the same stage at which the vessel is under way, $0<d(t),d(t')<D$. Every plan it admits is therefore feasible for \eqref{eq:det}; Section~\ref{sec:nesting} shows that this containment carries over to the discretized formulations. Although \citet{luo2024} estimate the FCR with a learned model (\ref{app:fcr-luo}), both formulations are run here on the model of \ref{app:fcr}, so that any difference in fuel is due to the formulation and not to the fuel model.
 
-\paragraph{The fuel model is an interface}
-Neither formulation contains a fuel model. Both obtain one through the same interface: a position
-along the route and a time select the sea conditions prevailing there, and the model is then asked at
-what rate fuel would be burned if the vessel held a chosen speed under those conditions
-(Figure~\ref{fig:fcr-model}). How that rate is arrived at is exogenous to the optimisation and does
-not enter the formulation. In this paper the interface is implemented by the resistance decomposition of
-\citet{yang2020}: the conditions determine the still-water speed required to hold the target SOG
-(\ref{app:sog}), and the still-water speed determines the fuel rate through a cubic law
-(\ref{app:fcr}). \citet{luo2024} implement the same interface with a learned model, a
-feed-forward artificial neural network $f_{\mathrm{ANN}}(v,w,u)$ over the sailing speed $v$, six
-meteorological variables $w$, and the draught and loading condition $u$, trained on ship noon reports
-fused with ECMWF ERA5 reanalysis; it is described in \ref{app:fcr-luo}. Because the question
-of this paper is when the speed may change and not how fuel is estimated, both formulations are run on
-the same fuel model throughout, the one of \ref{app:fcr}; giving each formulation its own
-would confound the granularity of the speed decision with the error of the fuel model.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  >={Stealth[length=2.2mm]},
-  inp/.style={draw, rounded corners=2pt, align=center, font=\small, inner sep=4pt},
-  mdl/.style={draw, thick, fill=black!8, align=center, font=\small, inner sep=6pt,
-              minimum width=42mm, minimum height=16mm},
-  outp/.style={draw, rounded corners=2pt, align=center, font=\small, inner sep=4pt}
-]
-\node[inp] (where) at (0,1.15)  {position $d$ and time $t$\\[1pt]\scriptsize select the sea conditions $w$};
-\node[inp] (speed) at (0,-1.15) {chosen speed $v$};
-\node[mdl] (model) at (5.0,0)   {fuel-consumption-rate model\\[1pt]\scriptsize \ref{app:fcr} or \ref{app:fcr-luo}};
-\node[outp] (rate)  at (9.4,0)   {$\fcr$\;\;[mt/h]};
-\draw[->] (where) -- (model);
-\draw[->] (speed) -- (model);
-\draw[->] (model) -- (rate);
-\end{tikzpicture}
-\caption{Both formulations obtain the fuel-consumption rate from the same exogenous function. A
-position along the route and a time select the sea conditions; given those conditions and a chosen
-speed, the function returns a fuel-consumption rate. The formulation of this paper and the benchmark
-of \citet{luo2024} evaluate the same function and differ only in how it is implemented, a resistance
-decomposition (\ref{app:fcr}) in the first case and a trained neural network
-(\ref{app:fcr-luo}) in the second. All results reported in this paper use the former for
-both formulations.}
-\label{fig:fcr-model}
-\end{figure}
-
-\paragraph{How the two formulations differ}
-The two formulations minimise the same objective, Eq.~\eqref{eq:obj}, subject to the same arrival
-deadline and the same speed band, and both price fuel through the interface above. They differ in one
-thing only: what triggers a speed decision. In \citet{luo2024} the trigger is the passage of time. A
-new segment begins when the forecast cycle turns over and at no other moment, so the speed may change
-once every $\Delta t$ hours and is then held through whatever the vessel meets in between. In the
-formulation of this paper the speed may change when the time block turns over \emph{and} wherever the
-sea conditions along the route are resolved by the data, that is at every point at which the
-conditions were sampled, and therefore also at every change of heading, since the sampling points
-include the control points of the route (Section~\ref{sec:sampling}). Resolution here means the
-resolution of the data and not of the ocean: a conditions boundary is a point at which a value was
-observed, and how often that happened is a property of the data collection, reported in
-Section~\ref{sec:sampling}.
-
-The decision points of the two formulations are therefore not different sets but nested ones. Every
-boundary at which \citet{luo2024} may change speed is a boundary at which we may, and we have others
-besides; a plan that is block-locked in their sense is one of our plans that happens to repeat a single
-value across each block. The admissible set of the formulation of this paper accordingly contains the
-benchmark's, so optimising over the larger set cannot yield a worse objective whenever both are
-optimised against the same sea conditions. Section~\ref{sec:nesting} states this containment
-precisely, with the conditions under which it holds, and draws the two consequences that
-Sections~\ref{sec:res-det} and~\ref{sec:res-stoch} rely on.
 
 %% ============================================================ 4. METHODS
 \section{Methods}
