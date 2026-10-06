@@ -318,4 +318,47 @@ is exactly the kind of thing that belongs in an appendix and currently is not th
       sentence noting it is assumed; if the second, the appendix needs the argument
 - [ ] Settle on one variable for every convexity claim in the paper
 
+#### Checked 2026-10-06: it is true, and it is not true for the easy reason
+
+**It holds.** $\phi(v)=\fcr\bigl(g^{-1}(v;w)\bigr)$ was evaluated on a 25-point grid across the band
+$D/T\pm3$ kn at **800 sampled weather states**, 400 per route, drawn from the actual record. Convex at
+**800 of 800**. Two Atlantic states initially failed, both at a magnitude matching the inversion's
+0.001 kn tolerance; tightening it to $10^{-9}$ removed them, so they were numerical and not the model.
+
+**But the obvious proof does not work.** The composition rule needs $g^{-1}$ convex and increasing.
+It is increasing — that is the monotonicity Appendix A already states — but it is **concave**: mean
+second difference $-1.9\times10^{-4}$ over the same states. The reason is visible in the model.
+Kwon's speed-reduction coefficient is a quadratic in Froude number with **negative** coefficients at
+this vessel's block coefficient, $C_U = 2.6 - 13.1\,F_n - 15.1\,F_n^{2}$, so the speed loss grows
+faster than linearly in $V_s$, which makes $g$ convex and its inverse concave.
+
+**So convexity of $\phi$ is quantitative, not structural.** Writing $h=g^{-1}$,
+
+$$\phi''(v) \;=\; a\bigl[\,6\,h(h')^{2} \;+\; 3\,h^{2}h''\,\bigr], \qquad h''<0,$$
+
+so $\phi$ is convex **iff $2(h')^{2} > h\,|h''|$** — the cube law's curvature must outweigh the
+correction's. On these routes it does, comfortably: $\phi$'s mean second difference is
+$+1.0\times10^{-3}$ against $h$'s $-1.9\times10^{-4}$.
+
+**Why this matters for the appendix question.** It is the sharpest case yet for an appendix. The
+result is ours, not `yang2020`'s, because it is our formulation that is stated in SOG; it cannot be
+obtained from the citation; §3's Jensen reduction and therefore §4's entire dynamic program rest on
+it; and it is **not** a one-line consequence of the cube law, which is what the paper currently
+implies by asserting it without argument.
+
+**Three ways to discharge it, in increasing strength:**
+
+| | Form | Cost |
+|---|---|---|
+| (a) | State it as an **assumption** of the formulation in §3, as `luo2024` and most of the field do | one sentence |
+| (b) | **Verify numerically** and report it: the condition, the 800 states, the margin | a short appendix subsection; already computed |
+| (c) | **Prove** it for the model: substitute Kwon's quadratic $C_U$, show $2(h')^2 > h\|h''\|$ holds on $[V_{\min},V_{\max}]$ for $C_b$ in the tanker range | real work, and the result may need a stated speed band |
+
+**Recommendation: (b), with (a) as the fallback.** (b) is honest, the computation exists, and it
+states the condition under which the claim holds rather than asserting the claim. (c) is the strongest
+but the condition is vessel- and band-dependent, so it would likely end up as (b) with extra algebra.
+
+- [ ] **For Tal: (a), (b) or (c)?** This is the one place where cutting the appendix would remove
+      something the paper actually needs
+
 
