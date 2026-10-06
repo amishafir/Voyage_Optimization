@@ -197,6 +197,7 @@ likely place a stale claim is sitting, and it is the one piece of the paper nobo
 |---|---|---|
 | | | |
 
-## 8. Running notes
+## 8. Live log — 2026-10-05 session
 
-_Append during the session._
+_Items as they come up._
+
