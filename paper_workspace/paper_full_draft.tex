@@ -1376,8 +1376,8 @@ the operating speed band, which is what licenses the pure cubic in Eq.~\eqref{eq
 approximation degrades outside that band (e.g.\ near hump speed or at very low load).
 \item \textbf{Still-water reference.} Eq.~\eqref{eq:fcr} relates FCR to \emph{still-water} speed.
 Weather does not enter the FCR function directly; it enters by changing the SWS required to hold a
-given SOG (\ref{app:sog}). Fuel for a leg is then $\fcr(V_s)\,d_i/V_{g,i}$
-(Eq.~\eqref{eq:legfuel}).
+given SOG (\ref{app:sog}). Fuel for a leg of length $d_i$ held at SOG $V_{g,i}$ is then
+$\fcr(V_s)\,d_i/V_{g,i}$.
 \item \textbf{Single representative engine map.} A single SFOC value is used rather than a
 load-dependent curve; over the operating band this contributes to the verification error reported
 above.
@@ -1387,10 +1387,11 @@ above.
 \label{app:fcr-luo}
 
 The benchmark formulation of Section~\ref{sec:problem} obtains its fuel-consumption rate from a
-learned model rather than from a resistance decomposition. It is recorded here because the shared
-function of Figure~\ref{fig:fcr-model} is what allows the two formulations to be compared at all;
-it is not used to produce any number reported in this paper, since both formulations are run on the
-fuel model of \ref{app:fcr}.
+learned model rather than from a resistance decomposition. It is recorded here because both
+formulations take the fuel-consumption-rate function as an exogenous input
+(Section~\ref{sec:problem}), which is what allows them to be compared at all; it is not used to
+produce any number reported in this paper, since both formulations are run on the fuel model of
+\ref{app:fcr}.
 
 \citet{luo2024} predict the fuel-consumption rate with a feed-forward artificial neural network,
 $f_{\mathrm{ANN}}(v,w,u)$, in which $v$ is the sailing speed, $w$ collects six meteorological
