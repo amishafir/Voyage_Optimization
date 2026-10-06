@@ -273,4 +273,49 @@ not least because he may know what examiners expect.
 thing on a rhumb line, but $\phi$ is *defined* at the bearing and *computed* relative to the heading,
 so a reader meets two words for one function's input. **Bearing** follows the text Tal just wrote.
 
+#### What changes the answer: Jensen needs convexity in SOG, and nothing establishes it
+
+**Raised 2026-10-06.** §3 states the problem and reduces it by Jensen's inequality; the solution in §4
+is built on that reduction. So the appendix is not only "what lets a reader reproduce our numbers" —
+**it has to establish the property the reduction rests on.** Checking which property that is turned up
+a gap.
+
+§3 asserts it in **speed over ground**:
+
+> For every $(t,d)$ the function $\phi(t,d;\cdot)$ is increasing and **convex** on
+> $[V_{\min},V_{\max}]$
+
+and the reduction follows immediately: replacing a speed profile by its average over an interval
+*"by Jensen's inequality does not increase the fuel consumed"*. That is what licenses one speed per
+subsegment and time block, and therefore the whole dynamic program.
+
+**The appendix establishes convexity in still-water speed, not in speed over ground.** Appendix B:
+*"strictly convex in SWS, the structural property the paper exploits"*. Appendix A gives the link
+between the two as **monotonicity only**: *"$V_g$ increases monotonically with $V_s$, so the relation
+is invertible"*.
+
+Monotonicity is not enough. $\phi(v)=\fcr\bigl(g^{-1}(v;w)\bigr)$ is convex when $\fcr$ is convex and
+increasing **and $g^{-1}$ is convex and increasing**. Convexity of $g^{-1}$ is stated nowhere, and it
+is not obvious: $\Delta V_{\text{wind}}$ depends on $V_s$ through the Froude number, so $g$ is not
+affine.
+
+The paper is also **inconsistent about which variable it means**, which is how this stayed hidden:
+
+| Where | Convex in |
+|---|---|
+| §3 (new), §3 inputs list | **SOG** |
+| §6.4, §8, Appendix B | **SWS** |
+| §7.1 | "speed", unqualified |
+
+**Consequence for the appendix question.** Option (b), cutting to what reproduces the numbers, is
+*not* sufficient on its own: whatever is cut, the appendix must still carry the step from convexity in
+SWS to convexity in SOG, or §3's reduction is asserted rather than argued. That step is **not** part
+of `yang2020`'s derivation — it is ours, because it is our formulation that is stated in SOG — so it
+is exactly the kind of thing that belongs in an appendix and currently is not there.
+
+- [ ] **For Tal.** Is the convexity of $\phi$ in SOG meant as an assumption of the formulation, or as
+      something the fuel model delivers? If the first, §3 should say so and the appendix needs a
+      sentence noting it is assumed; if the second, the appendix needs the argument
+- [ ] Settle on one variable for every convexity claim in the paper
+
 
