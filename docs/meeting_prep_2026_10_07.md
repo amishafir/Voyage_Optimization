@@ -126,3 +126,72 @@ nothing else in it has been checked against the paper it now sits in.
 ## 8. Live log — 2026-10-07 session
 
 _Items as they come up._
+
+### Item 1 — Tal, by message: the sampling points are not the subsegments
+
+**His message.** The weather sampling is every 5 NM from each waypoint on the Atlantic and every
+25 NM on the Indian Ocean, and these points are *"only coincidentally related to our subsegments"*.
+Either we resample on a database of route-by-cell intersections, or we discretise the route uniformly
+every 5 NM and hold the weather of the nearest preceding sample. **Either way the Indian Ocean must be
+resampled.**
+
+#### He is right, and the paper currently contradicts itself
+
+This is not only a data question. §3 and §5 describe **two different partitions**:
+
+> **§3, line 280 (his own rewrite):** "Each segment is further divided into *subsegments* at the points
+> where the route crosses a **cell boundary** … it ends either at a waypoint, where the bearing
+> changes, or at a cell boundary."
+
+> **§5, line 741:** "Route 1 was sampled every 25.0 NM (131 sample points); Route 2 every 5.0 NM (389
+> sample points). **Decision boundaries are placed at these sample points.**"
+
+So §3 defines the partition by **cell crossings** and §5 by **fixed-interval sampling**. The
+experiments implement §5. **§3 currently describes a partition the results were not produced with**,
+and that is true today, in the pushed draft.
+
+#### The two options, and what each costs
+
+| | Option A — resample on cell crossings | Option B — uniform 5 NM |
+|---|---|---|
+| Matches §3 as written | **yes** | no — §3 would need rewriting |
+| Subsegment length | variable; **very short ones where the route clips a cell corner**, which he flags | uniform 5 NM except the last in each segment |
+| Atlantic | resample | **already 5 NM — no resampling** |
+| Indian Ocean | resample | resample |
+| New collection | a route × cell intersection database | reuse, at 5 NM |
+| Re-run | all experiments | all experiments |
+
+**The re-run is unavoidable under both**, because the Indian Ocean needs resampling either way. That
+is the dominant cost and it is the same for both options, so the choice should be made on which
+partition is *right*, not on which is cheaper.
+
+#### The consequence worth saying out loud
+
+**Resampling the Indian Ocean to 5 NM would remove the paper's largest confound.** §6.1 currently
+concedes:
+
+> the two routes differ both in block length, by a factor of $5.4$, and in weather regime, and in
+> opposite directions, neither cause can be isolated from this pair of routes
+
+At equal sampling that sentence can go, and the route comparison becomes interpretable for the first
+time. §7.3's argument, §6.4's factorial and the span-versus-cost reading all currently carry that
+caveat. **This is a methodological gain, not just a tidy-up** — and it is the strongest argument for
+doing the resample rather than papering over it.
+
+#### What it costs us
+
+Every number in §6 moves: Table 3, Figure 4, the $t$-tests, §6.4's factorial, Appendix D, the
+decision-count ladder. §6.4's **forecast-error** analysis is a property of the weather product rather
+than of the route sampling, so it should survive in shape, but its node set changes.
+
+- [ ] **Decide A or B.** A is correct and matches §3; B is simpler and avoids degenerate subsegments.
+      Recommend **A**, since the re-run cost is identical and B requires rewriting §3 to describe a
+      partition chosen for convenience
+- [ ] If **B**: §3's subsegment definition must be rewritten to distance-based, and the "cell" framing
+      he just introduced comes out
+- [ ] If **A**: decide what to do with subsegments shorter than some threshold, which is the problem
+      he anticipated
+- [ ] Either way: **resample the Indian Ocean at 5 NM**, which removes the §6.1 confound
+- [ ] Until it is resolved, §3 and §5 disagree in the pushed draft; if nothing else is done this week,
+      one of them should be marked
+
