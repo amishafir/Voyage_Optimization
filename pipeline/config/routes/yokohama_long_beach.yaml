@@ -1,11 +1,16 @@
 name: Yokohama to Long Beach (North Pacific Great Circle)
 description: >
-  Great Circle route across the North Pacific, 4,782 nm, ~17 days at 12 kn.
+  Great Circle route across the North Pacific, 4,849 nm, ~17 days at 12 kn.
   Arcs north to 47.65°N through the Aleutian storm track — one of the harshest
   commercial shipping corridors (winter BN 8-10, waves 4-6m mean, 8-20m storms).
   Crosses the International Date Line near WP04-WP05.
+# Revised 2026-10-14 so that no leg crosses land (Natural Earth 1:10M coastline; legs
+# keep >= 0.5 NM from it outside the harbour approaches). Revisions: two waypoints
+# moved and two added, the route grows from 4,781.1 to 4,848.5 NM, mostly because it
+# now leaves Tokyo Bay through the Uraga Channel instead of crossing the Boso Peninsula.
 waypoints:
-  - {lat: 35.45, lon: 139.64, name: "Yokohama"}
+  - {lat: 35.44, lon: 139.76, name: "Yokohama"}                      # moved 5.9 NM from (35.45, 139.64), on the harbour front, into the Tokyo Bay fairway
+  - {lat: 34.76, lon: 139.73, name: "Uraga Channel Exit (added)"}    # added: the leg to Kuroshio Extension crossed the Boso Peninsula
   - {lat: 39.29, lon: 147.37, name: "Kuroshio Extension"}
   - {lat: 42.55, lon: 155.93, name: "NW Pacific"}
   - {lat: 45.12, lon: 165.32, name: "Emperor Seamounts"}
@@ -16,4 +21,5 @@ waypoints:
   - {lat: 44.17, lon: -142.91, name: "NE Pacific"}
   - {lat: 41.30, lon: -133.85, name: "Offshore Oregon"}
   - {lat: 37.78, lon: -125.64, name: "Offshore California"}
-  - {lat: 33.75, lon: -118.22, name: "Long Beach"}
+  - {lat: 34.38, lon: -120.45, name: "Off Point Conception (added)"}  # added: the leg to Long Beach crossed the California coast
+  - {lat: 33.69, lon: -118.27, name: "Long Beach"}                    # moved 4.4 NM from (33.75, -118.22), inside the harbour, so that the final leg clears Palos Verdes

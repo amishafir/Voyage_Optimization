@@ -18,7 +18,7 @@ PIPELINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PIPELINE))
 
 from shared.rhumb import RhumbLeg  # noqa: E402
-from shared.subsegments import partition_route  # noqa: E402
+from shared.subsegments import PORT_TRIM_NM, partition_route, trim_route  # noqa: E402
 from shared.weather_grids import (  # noqa: E402
     CURRENT_GRID, DEFAULT_GRIDS, WIND_GRID, OctahedralGaussianGrid, boundaries_by_search,
 )
@@ -145,10 +145,10 @@ def test_gaussian_boundaries_do_not_depend_on_search_step():
 
 # --- subsegments.py -----------------------------------------------------------
 
-def _check_partition(waypoints):
-    subs = partition_route(waypoints)
-    legs = [RhumbLeg(a["lat"], a["lon"], b["lat"], b["lon"])
-            for a, b in zip(waypoints, waypoints[1:])]
+def _check_partition(waypoints, trim_nm=PORT_TRIM_NM):
+    subs = partition_route(waypoints, port_trim_nm=trim_nm)
+    points = trim_route(waypoints, trim_nm, trim_nm)
+    legs = [RhumbLeg(*a, *b) for a, b in zip(points, points[1:])]
     total = sum(leg.length_nm for leg in legs)
 
     assert math.isclose(sum(s.length_nm for s in subs), total, rel_tol=1e-12)
@@ -160,8 +160,8 @@ def _check_partition(waypoints):
             assert a.cells != b.cells, "a boundary with no change of cell"
         else:
             # A new leg starts exactly at its waypoint.
-            wp = waypoints[b.leg]
-            assert abs(b.start_lat - wp["lat"]) < 1e-9 and abs(b.start_lon - wp["lon"]) < 1e-9
+            wp = points[b.leg]
+            assert abs(b.start_lat - wp[0]) < 1e-9 and abs(b.start_lon - wp[1]) < 1e-9
 
     # Every subsegment lies inside the cells it reports, up to 1e-6 NM from its ends.
     rng = random.Random(0)
@@ -184,18 +184,42 @@ def _check_partition(waypoints):
 def test_partition_routes():
     for route in ROUTES:
         _check_partition(_waypoints(route))
+        _check_partition(_waypoints(route), trim_nm=0.0)
 
 
 def test_partition_accepts_tuples_and_skips_repeated_waypoints():
-    a = partition_route([(50.0, -30.0), (50.0, -30.0), (51.0, -29.0)])
-    b = partition_route([(50.0, -30.0), (51.0, -29.0)])
+    a = partition_route([(50.0, -30.0), (50.0, -30.0), (51.0, -29.0)], port_trim_nm=0)
+    b = partition_route([(50.0, -30.0), (51.0, -29.0)], port_trim_nm=0)
     assert [s.length_nm for s in a] == [s.length_nm for s in b]
-    assert all(s.leg == 1 for s in a)
+    assert all(s.leg == 0 for s in a)  # leg indices refer to trim_route() points
 
 
 def test_east_west_and_north_south_legs():
     _check_partition([{"lat": 40.0, "lon": -20.0}, {"lat": 40.0, "lon": -18.0},
-                      {"lat": 41.0, "lon": -18.0}])
+                      {"lat": 41.0, "lon": -18.0}], trim_nm=0.0)
+
+
+def test_trim_route():
+    for route in ROUTES:
+        wps = [(w["lat"], w["lon"]) for w in _waypoints(route)]
+        full = sum(RhumbLeg(*a, *b).length_nm for a, b in zip(wps, wps[1:]))
+        pts = trim_route(wps, 2.0, 2.0)
+        assert len(pts) == len(wps) and pts[1:-1] == wps[1:-1]
+        assert math.isclose(sum(RhumbLeg(*a, *b).length_nm for a, b in zip(pts, pts[1:])),
+                            full - 4.0, rel_tol=1e-12)
+        # The cut points lie 2 NM inside the route, on the first and last legs.
+        for end, inner, nxt in ((wps[0], pts[0], wps[1]), (wps[-1], pts[-1], wps[-2])):
+            assert math.isclose(RhumbLeg(*end, *inner).length_nm, 2.0, rel_tol=1e-9)
+            assert math.isclose(RhumbLeg(*end, *inner).bearing_deg,
+                                RhumbLeg(*end, *nxt).bearing_deg, abs_tol=1e-7)
+
+
+def test_trim_across_a_short_leg():
+    wps = [(50.0, -30.0), (50.0, -29.98), (51.0, -29.0)]   # first leg about 0.77 NM
+    pts = trim_route(wps, 2.0, 0.0)
+    assert len(pts) == 2 and pts[1] == wps[2]
+    assert math.isclose(RhumbLeg(*wps[1], *pts[0]).length_nm,
+                        2.0 - RhumbLeg(*wps[0], *wps[1]).length_nm, rel_tol=1e-9)
 
 
 if __name__ == "__main__":

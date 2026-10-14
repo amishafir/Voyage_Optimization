@@ -10,6 +10,10 @@ grid or of the current grid (see shared/weather_grids.py).
 This replaces the old scheme of sampling every 5 or 25 NM, whose sample
 spacing had no relation to where the weather can actually change.
 
+The first and last PORT_TRIM_NM of a route are cut off: leaving and entering
+port is not part of voyage planning, and next to the coast the weather APIs
+substitute nearby sea cells for land-masked ones.
+
 Usage:
     from shared.subsegments import partition_route
     subsegments = partition_route([(47.57, -52.71), (48.80, -47.50), ...])
@@ -32,15 +36,18 @@ from shared.weather_grids import DEFAULT_GRIDS
 # the route passes through a corner of a cell and crosses two edges at once.
 MERGE_TOL_NM = 1e-6
 
+# Distance cut off at each end of the route (port departure and arrival).
+PORT_TRIM_NM = 2.0
+
 
 @dataclass(frozen=True)
 class Subsegment:
     index: int                    # 0-based position along the route
-    leg: int                      # runs from waypoint `leg` to waypoint `leg + 1`
+    leg: int                      # runs from point `leg` to `leg + 1` of trim_route()
     start_lat: float
     start_lon: float
     length_nm: float
-    start_nm: float               # distance of the start from the route origin
+    start_nm: float               # distance from the start of the trimmed route
     bearing_deg: float            # constant along the leg
     cells: Dict[str, Hashable]    # grid name -> cell the whole subsegment lies in
 
@@ -57,7 +64,38 @@ def _as_lat_lon(waypoint) -> Tuple[float, float]:
     return float(lat), float(lon)
 
 
-def partition_route(waypoints: Sequence, grids: Optional[Mapping] = None) -> List[Subsegment]:
+def trim_route(waypoints: Sequence, start_nm: float = PORT_TRIM_NM,
+               end_nm: float = PORT_TRIM_NM) -> List[Tuple[float, float]]:
+    """The route without its first `start_nm` and its last `end_nm`.
+
+    Returns (lat, lon) points: a new first point `start_nm` along the route,
+    the waypoints strictly between the two cuts, and a new last point
+    `end_nm` before the end. The new end points lie on the original legs, so
+    every leg keeps its bearing.
+    """
+    points = [_as_lat_lon(w) for w in waypoints]
+    if len(points) < 2:
+        raise ValueError("a route needs at least two waypoints")
+    legs = [RhumbLeg(*a, *b) for a, b in zip(points, points[1:])]
+    total = sum(leg.length_nm for leg in legs)
+    d0, d1 = start_nm, total - end_nm
+    if min(start_nm, end_nm) < 0 or d1 - d0 < MERGE_TOL_NM:
+        raise ValueError(f"cannot trim {start_nm} + {end_nm} NM from a {total:.2f} NM route")
+
+    out: List[Tuple[float, float]] = []
+    a = 0.0
+    for i, leg in enumerate(legs):
+        b = a + leg.length_nm
+        if b > d0 and a < d1 and leg.length_nm >= MERGE_TOL_NM:
+            if not out:
+                out.append(leg.point_at((d0 - a) / leg.length_nm) if d0 > a else points[i])
+            out.append(leg.point_at((d1 - a) / leg.length_nm) if d1 < b else points[i + 1])
+        a = b
+    return out
+
+
+def partition_route(waypoints: Sequence, grids: Optional[Mapping] = None,
+                    port_trim_nm: float = PORT_TRIM_NM) -> List[Subsegment]:
     """Split the route through `waypoints` into subsegments.
 
     Args:
@@ -66,15 +104,14 @@ def partition_route(waypoints: Sequence, grids: Optional[Mapping] = None) -> Lis
             Consecutive waypoints are joined by rhumb lines.
         grids: Mapping from a name to a weather grid. Defaults to the wind
             and current grids of shared.weather_grids.
+        port_trim_nm: Distance cut off at each end of the route; see trim_route.
 
     Returns:
-        The subsegments in sailing order. Their lengths add up to the route
-        length, and each one starts at the previous one's end.
+        The subsegments in sailing order. Their lengths add up to the length
+        of the trimmed route, and each one starts at the previous one's end.
     """
     grids = DEFAULT_GRIDS if grids is None else grids
-    points = [_as_lat_lon(w) for w in waypoints]
-    if len(points) < 2:
-        raise ValueError("a route needs at least two waypoints")
+    points = trim_route(waypoints, port_trim_nm, port_trim_nm)
 
     subsegments: List[Subsegment] = []
     route_nm = 0.0
@@ -132,15 +169,16 @@ def _main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("route_yaml", help="route file with a 'waypoints:' list")
     ap.add_argument("--csv", help="write the subsegments to this CSV file")
+    ap.add_argument("--port-trim-nm", type=float, default=PORT_TRIM_NM)
     args = ap.parse_args()
 
     with open(args.route_yaml) as f:
         waypoints = yaml.safe_load(f)["waypoints"]
-    subs = partition_route(waypoints)
+    subs = partition_route(waypoints, port_trim_nm=args.port_trim_nm)
     lengths = [s.length_nm for s in subs]
     total = sum(lengths)
-    print(f"{args.route_yaml}: {len(waypoints)} waypoints, {total:.2f} NM, "
-          f"{len(subs)} subsegments")
+    print(f"{args.route_yaml}: {len(waypoints)} waypoints, {total:.2f} NM after cutting "
+          f"{args.port_trim_nm} NM at each end, {len(subs)} subsegments")
     print(f"  length (NM): min {min(lengths):.4f}, median {statistics.median(lengths):.3f}, "
           f"mean {total / len(subs):.3f}, max {max(lengths):.3f}")
     for cut in (0.01, 0.1, 0.5):

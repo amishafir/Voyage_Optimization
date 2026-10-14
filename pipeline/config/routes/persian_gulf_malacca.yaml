@@ -1,15 +1,20 @@
 name: Persian Gulf to Strait of Malacca
+# Waypoints from Table 8 of the reference paper, revised 2026-10-14 so that no leg
+# crosses land (Natural Earth 1:10M coastline; legs keep >= 0.5 NM from it). Revisions:
+# three waypoints moved and two added, the route grows from 3,393.6 to 3,419.1 NM.
 waypoints:
-  - {lat: 24.75, lon: 52.83, name: "Port A (Persian Gulf)"}
+  - {lat: 24.72, lon: 52.84, name: "Port A (Persian Gulf)"}   # moved 1.9 NM from (24.75, 52.83): leg 1 crossed Zirku Island
   - {lat: 26.55, lon: 56.45, name: "Gulf of Oman"}
+  - {lat: 25.77, lon: 57.30, name: "Gulf of Oman 2 (added)"}  # added: the leg to Arabian Sea 1 crossed the Iranian coast west of Jask
   - {lat: 24.08, lon: 60.88, name: "Arabian Sea 1"}
   - {lat: 21.73, lon: 65.73, name: "Arabian Sea 2"}
   - {lat: 17.96, lon: 69.19, name: "Arabian Sea 3"}
   - {lat: 14.18, lon: 72.07, name: "Arabian Sea 4"}
   - {lat: 10.45, lon: 75.16, name: "Indian Ocean 1"}
-  - {lat:  7.00, lon: 78.46, name: "Indian Ocean 2"}
+  - {lat:  6.34, lon: 78.15, name: "Indian Ocean 2"}          # moved 43.7 NM from (7.00, 78.46) in the Gulf of Mannar: its legs crossed southern India and Sri Lanka
   - {lat:  5.64, lon: 82.12, name: "Bay of Bengal"}
   - {lat:  4.54, lon: 87.04, name: "Indian Ocean 3"}
   - {lat:  5.20, lon: 92.27, name: "Andaman Sea 1"}
+  - {lat:  5.77, lon: 95.03, name: "Off Banda Aceh (added)"}  # added: the leg to Andaman Sea 2 crossed northern Aceh
   - {lat:  5.64, lon: 97.16, name: "Andaman Sea 2"}
-  - {lat:  1.81, lon: 100.10, name: "Port B (Strait of Malacca)"}
+  - {lat:  2.40, lon: 100.59, name: "Port B (Strait of Malacca)"}  # moved 46.0 NM from (1.81, 100.10), which is on land in Sumatra

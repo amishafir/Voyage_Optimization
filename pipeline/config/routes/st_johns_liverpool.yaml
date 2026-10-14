@@ -1,10 +1,13 @@
 name: St. John's to Liverpool (North Atlantic Storm Track)
 description: >
-  Realistic shipping route across the North Atlantic, 1,955 nm, ~6.8 days at 12 kn.
+  Realistic shipping route across the North Atlantic, 1,959 nm, ~6.8 days at 12 kn.
   Crosses the heart of the North Atlantic storm track (45-56°N) — the most extreme
   wave climate on Earth (NASA). Winter BN 8-10, mean significant wave height 4-6m,
   extreme waves 18m+. Route goes north around Ireland via Malin Head and the North
   Channel into the Irish Sea.
+# Revised 2026-10-14 so that no leg crosses land (Natural Earth 1:10M coastline; legs
+# keep >= 0.5 NM from it outside the harbour approaches). Revisions: two waypoints
+# moved and one added, the route grows from 1,954.7 to 1,958.7 NM.
 waypoints:
   - {lat: 47.57, lon: -52.71, name: "St. John's"}
   - {lat: 48.80, lon: -47.50, name: "Grand Banks"}
@@ -14,6 +17,7 @@ waypoints:
   - {lat: 54.20, lon: -18.50, name: "Rockall Bank"}
   - {lat: 55.50, lon: -11.00, name: "West of Ireland"}
   - {lat: 55.80, lon: -7.00,  name: "Malin Head"}
-  - {lat: 55.20, lon: -5.20,  name: "North Channel"}
-  - {lat: 54.20, lon: -3.80,  name: "Irish Sea North"}
+  - {lat: 55.10, lon: -5.32,  name: "North Channel"}               # moved 7.3 NM from (55.20, -5.20) in the Firth of Clyde: the leg from Malin Head crossed Kintyre
+  - {lat: 54.74, lon: -5.21,  name: "North Channel South (added)"} # added: the leg to Irish Sea North crossed the Rhins of Galloway
+  - {lat: 54.22, lon: -3.80,  name: "Irish Sea North"}             # moved 1.2 NM from (54.20, -3.80) to pass between the Mull of Galloway and the Isle of Man
   - {lat: 53.41, lon: -3.01,  name: "Liverpool"}
