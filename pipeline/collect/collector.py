@@ -1,40 +1,55 @@
 """
-Live weather collection by subsegment.
+Live weather collection: archive every model run once, cell by cell.
 
-The route is split into subsegments (shared/subsegments.py): maximal stretches
-of one leg that lie inside one wind cell and one current cell. Open-Meteo
-answers every position inside a cell with the value of that cell's grid point,
-so the weather of a subsegment is the weather of its two cells, and each API
-is asked once per distinct cell rather than once per subsegment:
+Open-Meteo's real-time ("current") value is the latest published run's hourly
+series interpolated to the current 15-minute slot, so sampling it adds
+nothing. The raw data needed later (for 15-minute pseudo real-time and
+forecast series) is every run's full hourly forecast, and that is what is
+stored, in shared/run_archive.py's layout.
 
-    wind     Forecast API with WIND_GRID.api_params    (ECMWF IFS, cell_selection=sea)
-    current  Marine API with CURRENT_GRID.api_params   (Meteo-France SMOC, cell_selection=sea)
+Where to ask. The route is split into subsegments (shared/subsegments.py):
+maximal stretches of one leg inside one wind cell and one current cell. Each
+API is asked once per distinct cell, at the midpoint of the longest subsegment
+inside it (a point the route actually sails through), with the grid's pinned
+api_params from shared/weather_grids.py:
 
-A cell is queried at the midpoint of the longest subsegment inside it, a point
-the route actually sails through. Every response reports the grid point that
-served it. It is compared with the grid point predicted by
-shared/weather_grids.py; a mismatch (near land the API substitutes a nearby sea
-point for a land-masked one) is logged, and the served points are stored with
-each sample.
+    wind     ECMWF IFS (models=ecmwf_ifs), from the Single Runs API, which serves
+             any run by its start time and keeps them (archived since March 2024)
+    current  Meteo-France SMOC (models=meteofrance_currents), from the Marine API,
+             which has no archive: a run can only be read while it is the latest
 
-NaN in a model input (wind speed, which sets the Beaufort number, wind
-direction, current velocity and current direction) is logged as a warning
-with the cells and route distances concerned, and counted in /samples.
+When to ask.
+  Wind, run C (00/06/12/18 UTC): from C + 6 h, probe the Single Runs API for
+  run C at one location every 10 minutes. Once it answers, fetch all cells
+  (forecast_days=16) and cut the series at the run's last non-null hour
+  (+360 h for 00/12 UTC, +144 h for 06/18 UTC). Failed chunks are retried
+  every 10 minutes until done, or until run C + 6 h is published; run C is
+  then logged as missed, and --backfill-wind can fetch it from the archive.
+  Current, run D (00 UTC): from D 11:00 UTC, read Open-Meteo's metadata every
+  10 minutes. When it shows run D, wait until its availability time + 10
+  minutes, then fetch all cells for D 00:00 .. D + 239 h (start_hour/end_hour,
+  so a retry after midnight still gets the first day). Re-read the metadata
+  after the fetch and discard the data if the run changed meanwhile, since it
+  could mix runs. Failed chunks are retried every 10 minutes until done or
+  until run D + 1 is published: a hard deadline, there is no archive.
 
-Wave height is not collected. The speed and fuel model never reads it (see
-docs/weather_resolution_audit_2026_09_06.html), and the currents model
-(meteofrance_currents) has no wave field. Getting it would mean adding a
-second model (meteofrance_wave) to every Marine request for a value nothing
-uses. wave_height_m is therefore NaN by design; the HDF5 attributes say so,
-and the NaN checks above exclude it.
+Every response reports the grid point that served it; it is compared with the
+grid point predicted by shared/weather_grids.py, and a mismatch (near land the
+API substitutes a nearby sea point for a land-masked one) is logged and the
+served points are stored. NaN in a model input (wind speed, which sets the
+Beaufort number, wind direction, current velocity and direction) is logged as
+a warning and counted in the run's attributes.
 
-One sample of one route goes into one HDF5 file (shared/hdf5_io.py), with one
-node per subsegment. The scheduling loop and the command line are in
-run_all.py.
+Wave height is not collected: the speed and fuel model never reads it (see
+docs/weather_resolution_audit_2026_09_06.html) and the currents model has no
+wave field.
+
+The command line and the main loop are in run_all.py.
 """
 
 from __future__ import annotations
 
+import collections
 import hashlib
 import http.client
 import json
@@ -45,23 +60,14 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
-from shared.beaufort import wind_speed_to_beaufort
-from shared.hdf5_io import (
-    SAMPLES_DTYPE,
-    SUBSEGMENT_ACTUAL_DTYPE,
-    SUBSEGMENT_METADATA_DTYPE,
-    append_sample,
-    create_hdf5,
-    get_attrs,
-    get_completed_runs,
-)
+from shared import run_archive
 from shared.rhumb import RhumbLeg
 from shared.subsegments import MERGE_TOL_NM, PORT_TRIM_NM, Subsegment, partition_route, trim_route
 from shared.weather_grids import CURRENT_GRID, WIND_GRID
@@ -71,9 +77,7 @@ logger = logging.getLogger(__name__)
 WIND, CURRENT = "wind", "current"
 GRIDS = {WIND: WIND_GRID, CURRENT: CURRENT_GRID}
 
-# Open-Meteo variable -> HDF5 column. Each variable is requested twice, as
-# current conditions (-> /actual_weather) and as an hourly forecast
-# (-> /predicted_weather).
+# Open-Meteo hourly variable -> stored column.
 API_FIELDS = {
     WIND: {"wind_speed_10m": "wind_speed_10m_kmh",
            "wind_direction_10m": "wind_direction_10m_deg"},
@@ -83,34 +87,50 @@ API_FIELDS = {
 EXPECTED_UNITS = {"wind_speed_10m": "km/h", "wind_direction_10m": "°",
                   "ocean_current_velocity": "km/h", "ocean_current_direction": "°"}
 
-# Request parameters besides locations, variables and the pinned grid.
+# Where runs are read. The Single Runs API serves the same grid points as the
+# live Forecast API (WIND_GRID.api_url), with identical values.
+RUN_API_URLS = {WIND: "https://single-runs-api.open-meteo.com/v1/forecast",
+                CURRENT: CURRENT_GRID.api_url}
 EXTRA_PARAMS = {WIND: {"wind_speed_unit": "kmh"}, CURRENT: {}}
+NOT_AVAILABLE = "model run is not available"   # reason of HTTP 400 for an unpublished run
 
-# Hourly series run from 00:00 UTC of the sample day for this many days, as in
-# the earlier collections. Up to 14 days cost no extra API calls (query_weight).
-FORECAST_DAYS = 7
+HOUR = 3600
+WIND_CYCLE_S = 6 * HOUR             # ECMWF runs at 00/06/12/18 UTC
+WIND_DUE_AFTER_S = 6 * HOUR         # first probe of run C at C + 6 h
+WIND_FORECAST_DAYS = 16             # request window; the run is cut at its last value
+WIND_LAST_LEAD_H = {0: 360, 6: 144, 12: 360, 18: 144}   # by cycle hour, for a check
+CURRENT_CYCLE_S = 24 * HOUR         # SMOC runs once a day, at 00 UTC
+CURRENT_DUE_AFTER_S = 11 * HOUR     # first metadata read for run D at D 11:00 UTC
+CURRENT_SPAN_H = 240                # D 00:00 .. D + 239 h
+SETTLE_S = 600                      # Open-Meteo: wait 10 min after the availability time
+RETRY_S = 600                       # probes, metadata reads and failed chunks
 
 COORD_DECIMALS = 6     # query coordinates as sent (about 0.1 m)
 MATCH_TOL_DEG = 1e-4   # served vs predicted grid point; the API reports float32
 
-# Pacing. A request for n locations counts as n calls, and the free tier allows
-# 600 calls per minute, 5,000 per hour and 10,000 per day per IP.
+# A request for n locations counts as n calls (query_weight); the free tier
+# allows 600 calls per minute, 5,000 per hour and 10,000 per day per IP.
 CHUNK_SIZE = 100            # locations per request; longer URLs risk HTTP 414
 SECONDS_PER_CHUNK = 15.0    # request starts at least this far apart: <= 400 calls/min
-MAX_ATTEMPTS = 5            # per request
+ATTEMPTS = 2                # per request within one round; failed chunks wait RETRY_S
 API_LIMITS = {"minute": 600, "hour": 5000, "day": 10000}
+# Probes per wind run: about 3 for 06/18 UTC runs and 13 for 00/12 UTC runs
+# (published 6.4 h and 8.0 h after the cycle on 2026-10-14); a run probed
+# until the next one is published (about 7 h of probing) costs 42.
+PROBES_PER_DAY_TYPICAL = 32
+PROBES_PER_RUN_MAX = 42
 
-# beaufort_number is int8 and cannot hold NaN; a missing wind speed is stored
-# as -1 (and always logged), never as a real Beaufort number.
-BEAUFORT_MISSING = -1
-
-WAVE_HEIGHT_NOTE = ("not collected: wave_height_m is NaN by design. The speed and fuel model "
-                    "does not use wave height (docs/weather_resolution_audit_2026_09_06.html) "
-                    "and the currents model has no wave field.")
+WAVE_HEIGHT_NOTE = ("not collected. The speed and fuel model does not use wave height "
+                    "(docs/weather_resolution_audit_2026_09_06.html) and the currents model "
+                    "has no wave field.")
 
 
 class ApiError(RuntimeError):
-    """A request that failed for good (after retries, or not worth retrying)."""
+    """A request that failed (after its quick retries, or not worth retrying)."""
+
+
+class RunNotAvailable(ApiError):
+    """The Single Runs API does not (yet) have the requested run."""
 
 
 class DailyLimitExceeded(ApiError):
@@ -118,7 +138,15 @@ class DailyLimitExceeded(ApiError):
 
 
 class PlanMismatch(RuntimeError):
-    """An existing HDF5 file was built from a different route partition."""
+    """An existing archive was built from a different route partition."""
+
+
+def utc(unix: float) -> str:
+    return datetime.fromtimestamp(unix, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _iso_minute(unix: int) -> str:
+    return datetime.fromtimestamp(unix, timezone.utc).strftime("%Y-%m-%dT%H:%M")
 
 
 # ---------------------------------------------------------------------------
@@ -161,16 +189,49 @@ def _as_lat_lon(waypoint) -> Tuple[float, float]:
     return float(lat), float(lon)
 
 
-def _query_point(grid, cell, candidates: Sequence[int], midpoints) -> Tuple[float, float]:
-    """Midpoint of the longest candidate subsegment that, as sent, is still in `cell`."""
-    for i in candidates:
-        lat, lon = (round(x, COORD_DECIMALS) for x in midpoints[i])
-        if grid.cell_of(lat, lon) == cell:
-            return lat, lon
-    lat, lon = (round(x, COORD_DECIMALS) for x in midpoints[candidates[0]])
-    logger.warning("Every candidate query point for %s cell %s leaves the cell when rounded "
-                   "to %d decimals; using (%.6f, %.6f)", grid.name, cell, COORD_DECIMALS, lat, lon)
-    return lat, lon
+# A query point closer than this to its cell's edge may be resolved into the
+# neighboring cell by the server, which works with float32 coordinates (a test
+# point lying exactly on a 1/12 deg edge was served the cell across it).
+MIN_EDGE_MARGIN_NM = 0.05
+_MARGIN_STEPS_NM = (0.001, 0.002, 0.005, 0.01, 0.02, 0.05)
+
+
+def _edge_margin(grid, cell, lat: float, lon: float) -> float:
+    """How far (NM, one of _MARGIN_STEPS_NM, or 0) the point can move in any of
+    eight directions and stay in `cell`."""
+    margin = 0.0
+    for r in _MARGIN_STEPS_NM:
+        dlat, dlon = r / 60.0, r / (60.0 * math.cos(math.radians(lat)))
+        if any(grid.cell_of(lat + a * dlat, lon + b * dlon) != cell
+               for a in (-1, 0, 1) for b in (-1, 0, 1) if a or b):
+            break
+        margin = r
+    return margin
+
+
+def _query_point(grid, cell, ids: Sequence[int], point) -> Tuple[float, float]:
+    """A point of the route inside `cell`, as sent: the midpoint of the longest
+    subsegment, or, if that lies within MIN_EDGE_MARGIN_NM of the cell's edge,
+    the point along the cell's subsegments farthest from it."""
+    def sent(i, frac):
+        return tuple(round(x, COORD_DECIMALS) for x in point(i, frac))
+
+    first = sent(ids[0], 0.5)          # ids are sorted by length, longest first
+    if grid.cell_of(*first) == cell and _edge_margin(grid, cell, *first) >= MIN_EDGE_MARGIN_NM:
+        return first
+    best, best_margin = None, -1.0
+    for i in ids:
+        for frac in [0.5] + [k / 20 for k in range(1, 20) if k != 10]:
+            p = sent(i, frac)
+            if grid.cell_of(*p) == cell:
+                m = _edge_margin(grid, cell, *p)
+                if m > best_margin:
+                    best, best_margin = p, m
+    if best is None:
+        logger.warning("No point of the route rounds into %s cell %s; querying (%.6f, %.6f)",
+                       grid.name, cell, *first)
+        return first
+    return best
 
 
 def build_sampling_plan(waypoints: Sequence, route_key: str = "", route_name: str = "",
@@ -219,7 +280,7 @@ def build_sampling_plan(waypoints: Sequence, route_key: str = "", route_name: st
         cells = []
         for k, (cell, ids) in enumerate(members.items()):
             by_length = sorted(ids, key=lambda i: -subs[i].length_nm)
-            qlat, qlon = _query_point(grid, cell, by_length, midpoints)
+            qlat, qlon = _query_point(grid, cell, by_length, lambda i, f: point(subs[i], f))
             glat, glon = grid.center_of(cell)
             cells.append(CellQuery(name, tuple(cell), qlat, qlon, glat, glon, tuple(ids),
                                    sum(subs[i].length_nm for i in ids)))
@@ -243,63 +304,54 @@ def build_sampling_plan(waypoints: Sequence, route_key: str = "", route_name: st
     )
 
 
-def plan_metadata(plan: SamplingPlan) -> pd.DataFrame:
-    """The /metadata table: one node per subsegment (SUBSEGMENT_METADATA_DTYPE)."""
-    rows = []
-    for s in plan.subsegments:
-        w = plan.queries[WIND][plan.cell_index[WIND][s.index]]
-        c = plan.queries[CURRENT][plan.cell_index[CURRENT][s.index]]
-        (mid_lat, mid_lon), (end_lat, end_lon) = plan.midpoints[s.index], plan.endpoints[s.index]
-        rows.append({
-            "node_id": s.index,
-            "lon": mid_lon,
-            "lat": mid_lat,
-            "waypoint_name": f"leg{s.leg:02d}_sub{s.index:05d}",
-            "is_original": s.index == 0 or plan.subsegments[s.index - 1].leg != s.leg,
-            "distance_from_start_nm": s.start_nm,
-            "segment": s.leg,
-            "length_nm": s.length_nm,
-            "bearing_deg": s.bearing_deg,
-            "start_lat": s.start_lat,
-            "start_lon": s.start_lon,
-            "end_lat": end_lat,
-            "end_lon": end_lon,
-            "wind_cell_row": w.cell[0],
-            "wind_cell_col": w.cell[1],
-            "wind_grid_lat": w.grid_lat,
-            "wind_grid_lon": w.grid_lon,
-            "wind_query_lat": w.query_lat,
-            "wind_query_lon": w.query_lon,
-            "current_cell_row": c.cell[0],
-            "current_cell_col": c.cell[1],
-            "current_grid_lat": c.grid_lat,
-            "current_grid_lon": c.grid_lon,
-            "current_query_lat": c.query_lat,
-            "current_query_lon": c.query_lon,
-        })
-    return pd.DataFrame(rows)
+def plan_tables(plan: SamplingPlan) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+    """/plan/subsegments and the per-grid cell tables of shared/run_archive.py."""
+    subs = pd.DataFrame([{
+        "index": s.index, "leg": s.leg, "start_nm": s.start_nm, "length_nm": s.length_nm,
+        "bearing_deg": s.bearing_deg, "start_lat": s.start_lat, "start_lon": s.start_lon,
+        "mid_lat": plan.midpoints[s.index][0], "mid_lon": plan.midpoints[s.index][1],
+        "end_lat": plan.endpoints[s.index][0], "end_lon": plan.endpoints[s.index][1],
+        "wind_cell": int(plan.cell_index[WIND][s.index]),
+        "current_cell": int(plan.cell_index[CURRENT][s.index]),
+    } for s in plan.subsegments])
+    cells = {g: pd.DataFrame([{
+        "index": k, "row": q.cell[0], "col": q.cell[1], "grid_lat": q.grid_lat,
+        "grid_lon": q.grid_lon, "query_lat": q.query_lat, "query_lon": q.query_lon,
+        "length_nm": q.length_nm, "first_subsegment": q.subsegments[0],
+        "n_subsegments": len(q.subsegments),
+    } for k, q in enumerate(plan.queries[g])]) for g in (WIND, CURRENT)}
+    return subs, cells
 
 
 # ---------------------------------------------------------------------------
 # API budget
 # ---------------------------------------------------------------------------
 
-def query_weight(n_variables: int, forecast_days: float, n_models: int = 1) -> float:
+def query_weight(n_variables: int, days: float, n_models: int = 1) -> float:
     """API calls that Open-Meteo counts for one location of a request.
 
     Mirrors calculateQueryWeight() of the Open-Meteo server
     (open-meteo/open-meteo, Sources/App/Helper/Writer/ForecastApiResult.swift):
-    with V = requested variables (current + hourly + ...) times models,
-    a location costs max(1, V / 10, V / 10 * days / 14) calls.
+    with V = requested variables (current + hourly + ...) times models and
+    `days` the length of the requested time range, a location costs
+    max(1, V / 10, V / 10 * days / 14) calls.
     """
     v = n_variables * n_models / 10.0
-    return max(1.0, v, v * forecast_days / 14.0)
+    return max(1.0, v, v * days / 14.0)
 
 
-def calls_per_sample(plan: SamplingPlan, forecast_days: int = FORECAST_DAYS) -> Dict[str, float]:
-    """API calls one sample of the route costs, per grid."""
-    return {g: len(plan.queries[g]) * query_weight(2 * len(API_FIELDS[g]), forecast_days)
-            for g in plan.queries}
+WEIGHT = {WIND: query_weight(len(API_FIELDS[WIND]), WIND_FORECAST_DAYS),
+          CURRENT: query_weight(len(API_FIELDS[CURRENT]), CURRENT_SPAN_H / 24)}
+
+
+def daily_calls(plan: SamplingPlan) -> Dict[str, float]:
+    """Planned calls per day for one route, without retries."""
+    wind = len(plan.queries[WIND]) * WEIGHT[WIND] * (24 * HOUR // WIND_CYCLE_S)
+    current = len(plan.queries[CURRENT]) * WEIGHT[CURRENT] * (24 * HOUR // CURRENT_CYCLE_S)
+    runs = 24 * HOUR // WIND_CYCLE_S
+    return {"wind": wind, "current": current,
+            "probes_typical": PROBES_PER_DAY_TYPICAL * WEIGHT[WIND],
+            "probes_max": PROBES_PER_RUN_MAX * runs * WEIGHT[WIND]}
 
 
 # ---------------------------------------------------------------------------
@@ -328,25 +380,6 @@ class Pacer:
         self._last = self.clock()
 
 
-def request_params(grid_key: str, grid, chunk: Sequence[CellQuery],
-                   forecast_days: int = FORECAST_DAYS) -> dict:
-    """Query parameters for one request; the grid's model and cell selection always win."""
-    if not {"models", "cell_selection"} <= set(grid.api_params):
-        raise ValueError(f"{grid.name}.api_params must pin models and cell_selection")
-    variables = ",".join(API_FIELDS[grid_key])
-    return {
-        "latitude": ",".join(f"{q.query_lat:.{COORD_DECIMALS}f}" for q in chunk),
-        "longitude": ",".join(f"{q.query_lon:.{COORD_DECIMALS}f}" for q in chunk),
-        "current": variables,
-        "hourly": variables,
-        "timezone": "GMT",
-        "timeformat": "unixtime",
-        "forecast_days": forecast_days,
-        **EXTRA_PARAMS[grid_key],
-        **grid.api_params,
-    }
-
-
 def _error_reason(e: urllib.error.HTTPError) -> str:
     try:
         return str(json.loads(e.read().decode("utf-8", "replace")).get("reason", e))
@@ -354,61 +387,92 @@ def _error_reason(e: urllib.error.HTTPError) -> str:
         return str(e)
 
 
-def request_with_retry(url: str, pacer: Pacer, get: Callable = http_get_json,
-                       max_attempts: int = MAX_ATTEMPTS):
-    """GET `url` as JSON, waiting out rate limits and transient failures."""
-    for attempt in range(1, max_attempts + 1):
-        pacer.wait()
+class ApiClient:
+    """Paced JSON requests to Open-Meteo, counting every attempt as API calls."""
+
+    def __init__(self, get: Callable = http_get_json, pacer: Optional[Pacer] = None,
+                 clock: Callable[[], float] = time.time, attempts: int = ATTEMPTS):
+        self.get, self.pacer, self.clock, self.attempts = get, pacer or Pacer(), clock, attempts
+        self.calls = 0.0                  # Open-Meteo's count, all attempts
+        self.requests = 0
+        self._recent = collections.deque()   # (time, calls) of the last 24 h
+
+    def calls_last_24h(self) -> float:
+        cutoff = self.clock() - 24 * HOUR
+        while self._recent and self._recent[0][0] < cutoff:
+            self._recent.popleft()
+        return sum(c for _, c in self._recent)
+
+    def get_json(self, url: str, weight: float):
+        """GET `url`; a failure is retried once after a short wait within the round."""
+        for attempt in range(1, self.attempts + 1):
+            self.pacer.wait()
+            self.requests += 1
+            self.calls += weight
+            self._recent.append((self.clock(), weight))
+            try:
+                return self.get(url)
+            except urllib.error.HTTPError as e:
+                reason = _error_reason(e)
+                if e.code == 400 and NOT_AVAILABLE in reason:
+                    raise RunNotAvailable(reason) from None
+                if e.code == 429:
+                    if "daily" in reason.lower():
+                        raise DailyLimitExceeded(reason) from None
+                    if "hourly" in reason.lower():
+                        raise ApiError(f"HTTP 429: {reason}") from None
+                    wait = 60
+                elif e.code >= 500:
+                    wait = 30
+                else:
+                    raise ApiError(f"HTTP {e.code}: {reason}") from None
+                problem = f"HTTP {e.code}: {reason}"
+            except (OSError, ValueError, http.client.HTTPException) as e:   # network, timeouts, bad JSON
+                wait, problem = 30, repr(e)
+            if attempt == self.attempts:
+                raise ApiError(problem)
+            logger.warning("Request to %s failed (%s); retrying in %d s",
+                           urllib.parse.urlsplit(url).netloc, problem, wait)
+            self.pacer.sleep(wait)
+
+    def model_run(self, grid) -> Tuple[int, int]:
+        """(initialization, availability) Unix times of the newest published run of
+        the grid's model, from the static metadata file behind
+        open-meteo.com/en/docs/model-updates (not the forecast API); (-1, -1) if
+        it cannot be read."""
+        parts = urllib.parse.urlsplit(grid.api_url)
+        url = f"{parts.scheme}://{parts.netloc}/data/{grid.api_params['models']}/static/meta.json"
         try:
-            return get(url)
-        except urllib.error.HTTPError as e:
-            reason = _error_reason(e)
-            if e.code == 429:
-                if "daily" in reason.lower():
-                    raise DailyLimitExceeded(reason) from None
-                wait = 900 if "hourly" in reason.lower() else 60
-            elif e.code >= 500:
-                wait = 30 * attempt
-            else:
-                raise ApiError(f"HTTP {e.code}: {reason}") from None
-            problem = f"HTTP {e.code}: {reason}"
-        except (OSError, ValueError, http.client.HTTPException) as e:   # network, timeouts, bad JSON
-            wait, problem = 30 * attempt, repr(e)
-        if attempt == max_attempts:
-            raise ApiError(f"giving up after {max_attempts} attempts: {problem}")
-        logger.warning("Request to %s failed (attempt %d/%d): %s; retrying in %d s",
-                       urllib.parse.urlsplit(url).netloc, attempt, max_attempts, problem, wait)
-        pacer.sleep(wait)
+            meta = self.get(url)
+            return int(meta["last_run_initialisation_time"]), int(meta["last_run_availability_time"])
+        except Exception as e:
+            logger.warning("Could not read model metadata %s: %r", url, e)
+            return -1, -1
 
 
-def fetch_cells(grid_key: str, grid, queries: Sequence[CellQuery], pacer: Pacer,
-                get: Callable = http_get_json, chunk_size: int = CHUNK_SIZE,
-                forecast_days: int = FORECAST_DAYS) -> List[dict]:
-    """One JSON response per query, in order, requested `chunk_size` locations at a time."""
-    bodies: List[dict] = []
-    for start in range(0, len(queries), chunk_size):
-        chunk = queries[start:start + chunk_size]
-        url = f"{grid.api_url}?{urllib.parse.urlencode(request_params(grid_key, grid, chunk, forecast_days))}"
-        body = request_with_retry(url, pacer, get)
-        body = body if isinstance(body, list) else [body]
-        if len(body) != len(chunk):
-            raise ApiError(f"{grid.api_url} returned {len(body)} results for {len(chunk)} locations")
-        bodies.extend(body)
-    return bodies
+def run_params(grid_key: str, grid, chunk: Sequence[CellQuery], run_init: int) -> dict:
+    """Query parameters for one chunk of one run; the grid's model and cell selection win."""
+    if not {"models", "cell_selection"} <= set(grid.api_params):
+        raise ValueError(f"{grid.name}.api_params must pin models and cell_selection")
+    if grid_key == WIND:
+        window = {"run": _iso_minute(run_init), "forecast_days": WIND_FORECAST_DAYS}
+    else:
+        window = {"start_hour": _iso_minute(run_init),
+                  "end_hour": _iso_minute(run_init + (CURRENT_SPAN_H - 1) * HOUR)}
+    return {
+        "latitude": ",".join(f"{q.query_lat:.{COORD_DECIMALS}f}" for q in chunk),
+        "longitude": ",".join(f"{q.query_lon:.{COORD_DECIMALS}f}" for q in chunk),
+        "hourly": ",".join(API_FIELDS[grid_key]),
+        **window,
+        "timezone": "GMT",
+        "timeformat": "unixtime",
+        **EXTRA_PARAMS[grid_key],
+        **grid.api_params,
+    }
 
 
-def model_run(grid, get: Callable = http_get_json) -> Tuple[int, int]:
-    """(initialization, availability) Unix times of the newest run of the grid's
-    model on Open-Meteo, or (-1, -1) if unavailable. Reads the static metadata file
-    behind open-meteo.com/en/docs/model-updates, not the forecast API."""
-    parts = urllib.parse.urlsplit(grid.api_url)
-    url = f"{parts.scheme}://{parts.netloc}/data/{grid.api_params['models']}/static/meta.json"
-    try:
-        meta = get(url)
-        return int(meta["last_run_initialisation_time"]), int(meta["last_run_availability_time"])
-    except Exception as e:
-        logger.warning("Could not read model metadata %s: %r", url, e)
-        return -1, -1
+def run_url(grid_key: str, grid, chunk: Sequence[CellQuery], run_init: int) -> str:
+    return f"{RUN_API_URLS[grid_key]}?{urllib.parse.urlencode(run_params(grid_key, grid, chunk, run_init))}"
 
 
 # ---------------------------------------------------------------------------
@@ -416,80 +480,67 @@ def model_run(grid, get: Callable = http_get_json) -> Tuple[int, int]:
 # ---------------------------------------------------------------------------
 
 @dataclass
-class GridWeather:
-    """All responses for one grid in one sample, one row per cell query."""
+class GridRun:
+    """One run of one grid for all cells of a route."""
     served_lat: np.ndarray            # (n_cells,) grid point the API used
     served_lon: np.ndarray
-    current: Dict[str, np.ndarray]    # HDF5 column -> (n_cells,)
-    hourly_time: np.ndarray           # (n_times,) Unix seconds, shared by all cells
-    hourly: Dict[str, np.ndarray]     # HDF5 column -> (n_cells, n_times)
+    time: np.ndarray                  # (n_hours,) Unix seconds
+    values: Dict[str, np.ndarray]     # column -> (n_cells, n_hours), NaN for null
 
 
-def parse_responses(grid_key: str, bodies: Sequence[dict]) -> GridWeather:
-    """Collect the JSON bodies of one grid into arrays; null values become NaN."""
+def parse_run(grid_key: str, bodies: Sequence[dict]) -> GridRun:
+    """Collect the JSON bodies (one per cell, in cell order) into arrays."""
     try:
-        return _parse_responses(grid_key, bodies)
+        fields = API_FIELDS[grid_key]
+        if not bodies:
+            raise ApiError(f"no {grid_key} responses")
+        time_axis = np.asarray(bodies[0]["hourly"]["time"], dtype=np.int64)
+        values = {col: np.full((len(bodies), len(time_axis)), np.nan) for col in fields.values()}
+        for i, b in enumerate(bodies):
+            units = b.get("hourly_units", {})
+            for var in fields:
+                if units.get(var) != EXPECTED_UNITS[var]:
+                    raise ApiError(f"{var} in {units.get(var)!r}, expected {EXPECTED_UNITS[var]!r}")
+            if not np.array_equal(np.asarray(b["hourly"]["time"], dtype=np.int64), time_axis):
+                raise ApiError(f"{grid_key}: hourly time axes differ between locations")
+            for var, col in fields.items():
+                values[col][i] = np.array(b["hourly"][var], dtype=float)   # None -> NaN
+        return GridRun(np.array([float(b["latitude"]) for b in bodies]),
+                       np.array([float(b["longitude"]) for b in bodies]), time_axis, values)
     except (KeyError, TypeError, ValueError) as e:
         raise ApiError(f"malformed {grid_key} response: {e!r}") from None
 
 
-def _parse_responses(grid_key: str, bodies: Sequence[dict]) -> GridWeather:
-    fields = API_FIELDS[grid_key]
-    n = len(bodies)
-    if n == 0:
-        raise ApiError(f"no {grid_key} responses")
-    served_lat = np.array([float(b["latitude"]) for b in bodies])
-    served_lon = np.array([float(b["longitude"]) for b in bodies])
-    hourly_time = np.asarray(bodies[0]["hourly"]["time"], dtype=np.int64)
-    current = {col: np.full(n, np.nan) for col in fields.values()}
-    hourly = {col: np.full((n, len(hourly_time)), np.nan) for col in fields.values()}
-    for i, b in enumerate(bodies):
-        for section in ("current", "hourly"):
-            units = b.get(f"{section}_units", {})
-            for var in fields:
-                if units.get(var) != EXPECTED_UNITS[var]:
-                    raise ApiError(f"{section} {var} in {units.get(var)!r}, expected "
-                                   f"{EXPECTED_UNITS[var]!r}")
-        if not np.array_equal(np.asarray(b["hourly"]["time"], dtype=np.int64), hourly_time):
-            raise ApiError(f"{grid_key}: hourly time axes differ between locations")
-        for var, col in fields.items():
-            value = b["current"][var]
-            current[col][i] = np.nan if value is None else float(value)
-            hourly[col][i] = np.array(b["hourly"][var], dtype=float)   # None -> NaN
-    return GridWeather(served_lat, served_lon, current, hourly_time, hourly)
+def cut_to_span(run: GridRun) -> GridRun:
+    """Keep the hours from the run's first to its last non-null value (any cell)."""
+    has = np.zeros(len(run.time), dtype=bool)
+    for arr in run.values.values():
+        has |= ~np.isnan(arr).all(axis=0)
+    idx = np.flatnonzero(has)
+    if len(idx) == 0:
+        raise ApiError("the run returned no values")
+    a, b = idx[0], idx[-1] + 1
+    return GridRun(run.served_lat, run.served_lon, run.time[a:b],
+                   {c: v[:, a:b] for c, v in run.values.items()})
 
 
-def find_substitutions(queries: Sequence[CellQuery], gw: GridWeather,
+def find_substitutions(queries: Sequence[CellQuery], run: GridRun,
                        tol_deg: float = MATCH_TOL_DEG) -> List[int]:
     """Cells served by a different grid point than predicted."""
     out = []
     for k, q in enumerate(queries):
-        dlat = abs(gw.served_lat[k] - q.grid_lat)
-        dlon = abs((gw.served_lon[k] - q.grid_lon + 180.0) % 360.0 - 180.0)
+        dlat = abs(run.served_lat[k] - q.grid_lat)
+        dlon = abs((run.served_lon[k] - q.grid_lon + 180.0) % 360.0 - 180.0)
         if not (dlat <= tol_deg and dlon <= tol_deg):   # NaN coordinates count as a mismatch
             out.append(k)
     return out
 
 
-def find_nan_cells(gw: GridWeather) -> Dict[int, Tuple[List[str], int, int]]:
-    """Cells with NaN in a model input: k -> (columns NaN in the current
-    conditions, NaN hourly values, hourly values)."""
-    cols = list(gw.current)
-    cur_nan = np.stack([np.isnan(gw.current[c]) for c in cols], axis=1)        # (n, fields)
-    hourly_nan = np.stack([np.isnan(gw.hourly[c]) for c in cols], axis=1)      # (n, fields, t)
-    n_hourly = hourly_nan.shape[1] * hourly_nan.shape[2]
-    out = {}
-    for k in np.flatnonzero(cur_nan.any(axis=1) | hourly_nan.any(axis=(1, 2))):
-        out[int(k)] = ([c for c, bad in zip(cols, cur_nan[k]) if bad],
-                       int(hourly_nan[k].sum()), n_hourly)
-    return out
-
-
-def _where(plan: SamplingPlan, q: CellQuery) -> str:
-    a = plan.subsegments[q.subsegments[0]].start_nm
-    b = plan.subsegments[q.subsegments[-1]].end_nm
-    return (f"cell {q.cell} at {a:.1f}-{b:.1f} NM "
-            f"(query {q.query_lat:.4f}, {q.query_lon:.4f})")
+def find_nan_cells(run: GridRun) -> Dict[int, Tuple[int, int]]:
+    """Cells with NaN in a model input within the run's span: k -> (NaN values, values)."""
+    nan = np.stack([np.isnan(v) for v in run.values.values()], axis=1)   # (n, fields, t)
+    n_all = nan.shape[1] * nan.shape[2]
+    return {int(k): (int(nan[k].sum()), n_all) for k in np.flatnonzero(nan.any(axis=(1, 2)))}
 
 
 def _nm_apart(lat1, lon1, lat2, lon2) -> float:
@@ -498,143 +549,63 @@ def _nm_apart(lat1, lon1, lat2, lon2) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Rows
+# One route: its plan, its archive and the status of its runs
 # ---------------------------------------------------------------------------
 
-def _beaufort(wind_speed_kmh: float) -> int:
-    return wind_speed_to_beaufort(wind_speed_kmh) if math.isfinite(wind_speed_kmh) \
-        else BEAUFORT_MISSING
+def _floor(t: float, period: int) -> int:
+    return int(t // period * period)
 
 
-_beaufort_array = np.vectorize(_beaufort, otypes=[np.int8])
+@dataclass
+class _Work:
+    """Progress of one run of one route within this process (lost on restart)."""
+    next_try: int
+    first_probe_success: int = -1
+    availability: int = -1
+    fetch_meta: Optional[Tuple[int, int]] = None   # currents: metadata when the fetch began
+    chunks: Dict[int, list] = field(default_factory=dict)
+    fetch_start: int = -1
 
 
-def build_rows(plan: SamplingPlan, weather: Mapping[str, GridWeather], sample_hour: int,
-               reference_unix: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """/actual_weather and /predicted_weather rows: every subsegment gets the
-    weather of its wind cell and of its current cell.
+class RouteRuns:
+    """The archive file of one route and the status of every expected run.
 
-    forecast_hour counts hours from reference_unix (the time sample_hour stands
-    for) to the forecast's valid time. Only times both APIs returned are kept.
-    """
-    wind, cur = weather[WIND], weather[CURRENT]
-    w_idx, c_idx = plan.cell_index[WIND], plan.cell_index[CURRENT]
-    n = len(plan.subsegments)
-    node_id = np.arange(n, dtype=np.int32)
-
-    ws_now = wind.current["wind_speed_10m_kmh"]
-    actual = pd.DataFrame({
-        "node_id": node_id,
-        "sample_hour": np.full(n, sample_hour, dtype=np.int32),
-        "wind_speed_10m_kmh": ws_now[w_idx],
-        "wind_direction_10m_deg": wind.current["wind_direction_10m_deg"][w_idx],
-        "beaufort_number": _beaufort_array(ws_now)[w_idx],
-        "wave_height_m": np.full(n, np.nan),
-        "ocean_current_velocity_kmh": cur.current["ocean_current_velocity_kmh"][c_idx],
-        "ocean_current_direction_deg": cur.current["ocean_current_direction_deg"][c_idx],
-        "wind_served_lat": wind.served_lat[w_idx],
-        "wind_served_lon": wind.served_lon[w_idx],
-        "current_served_lat": cur.served_lat[c_idx],
-        "current_served_lon": cur.served_lon[c_idx],
-    })
-
-    times = np.intersect1d(wind.hourly_time, cur.hourly_time)
-    if len(times) == 0:
-        raise ApiError("the wind and current forecasts share no hourly time")
-    if len(times) < max(len(wind.hourly_time), len(cur.hourly_time)):
-        logger.warning("Hourly forecasts differ in time span: wind %d h, current %d h; "
-                       "keeping the %d h both cover", len(wind.hourly_time),
-                       len(cur.hourly_time), len(times))
-    lead_s = times - int(reference_unix)
-    if np.any(lead_s % 3600):
-        raise ValueError("forecast times are not whole hours after the reference time")
-    lead = (lead_s // 3600).astype(np.int32)
-    wi = np.searchsorted(wind.hourly_time, times)
-    ci = np.searchsorted(cur.hourly_time, times)
-    nt = len(times)
-
-    ws = wind.hourly["wind_speed_10m_kmh"][:, wi]
-    predicted = pd.DataFrame({
-        "node_id": np.repeat(node_id, nt),
-        "forecast_hour": np.tile(lead, n),
-        "sample_hour": np.full(n * nt, sample_hour, dtype=np.int32),
-        "wind_speed_10m_kmh": ws[w_idx].ravel(),
-        "wind_direction_10m_deg": wind.hourly["wind_direction_10m_deg"][:, wi][w_idx].ravel(),
-        "beaufort_number": _beaufort_array(ws)[w_idx].ravel(),
-        "wave_height_m": np.full(n * nt, np.nan),
-        "ocean_current_velocity_kmh": cur.hourly["ocean_current_velocity_kmh"][:, ci][c_idx].ravel(),
-        "ocean_current_direction_deg": cur.hourly["ocean_current_direction_deg"][:, ci][c_idx].ravel(),
-    })
-    return actual, predicted
-
-
-# ---------------------------------------------------------------------------
-# One route, one HDF5 file
-# ---------------------------------------------------------------------------
-
-def utc(unix: float) -> str:
-    return datetime.fromtimestamp(unix, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-
-def previous_slot(now_unix: float, interval_hours: int, offset_hours: int) -> int:
-    """Latest scheduled sample time at or before `now_unix`.
-
-    Samples are due at offset_hours + k * interval_hours UTC (interval_hours
-    must divide 24), e.g. 02, 08, 14, 20 UTC for interval 6 and offset 8.
-    """
-    period = interval_hours * 3600
-    phase = (offset_hours % interval_hours) * 3600
-    return int((now_unix - phase) // period * period + phase)
-
-
-class RouteCollector:
-    """Collects samples of one route into its HDF5 file.
-
-    sample_hour counts hours from the file's first scheduled sample (attribute
-    epoch_unix) to the sample's scheduled time, so a missed cycle leaves a gap
-    instead of shifting later samples.
+    Expected runs start with the newest run that was due when the file was
+    created (attributes first_wind_run_unix, first_current_run_unix) and
+    continue with every later cycle, so a restart finds the runs that came
+    due meanwhile.
     """
 
     def __init__(self, label: str, plan: SamplingPlan, path: str,
-                 sample_interval_hours: int, nwp_offset_hours: int,
-                 max_run_age_hours: Optional[Mapping[str, float]] = None,
-                 get: Callable = http_get_json):
-        self.label, self.plan, self.path = label, plan, path
-        self.sample_interval_hours = sample_interval_hours
-        self.nwp_offset_hours = nwp_offset_hours
-        self.max_run_age_hours = dict(max_run_age_hours or {})
-        self.get = get
-        self.epoch_unix: Optional[int] = None
-        self._last_substitutions: Dict[str, Optional[dict]] = {g: None for g in plan.queries}
+                 clock: Callable[[], float] = time.time):
+        self.label, self.plan, self.path, self.clock = label, plan, path, clock
+        self.rows: Dict[Tuple[str, int], dict] = {}
+        self.work: Dict[Tuple[str, int], _Work] = {}
+        self.attrs: Optional[dict] = None
+        self._last_substitutions: Dict[str, Optional[dict]] = {WIND: None, CURRENT: None}
         if os.path.exists(path):
-            self.epoch_unix = self._check_file()
+            self.attrs = run_archive.read_attrs(path)
+            if self.attrs.get("layout") != run_archive.LAYOUT:
+                raise PlanMismatch(f"{path} is not a model-run archive; choose another file")
+            if self.attrs.get("plan_fingerprint") != plan.fingerprint:
+                raise PlanMismatch(
+                    f"{path} was built from a different partition of {plan.route_key} "
+                    f"(fingerprint {self.attrs.get('plan_fingerprint')}, now {plan.fingerprint}): "
+                    "the route waypoints or the grids changed. Start a new file (move this one "
+                    "away or use another --data-dir); appending would mismatch cell indices.")
+            for row in run_archive.read_runs(path).to_dict("records"):
+                self.rows[(row["grid"], int(row["run_init_unix"]))] = row
+            for (g, init), row in self.rows.items():
+                if row["status"] == "pending" and run_archive.has_run(path, g, init):
+                    self._set(row, "complete", "found stored at restart")
 
-    # --- file -------------------------------------------------------------
-
-    def _check_file(self) -> int:
-        attrs = get_attrs(self.path)
-        if attrs.get("sampling") != "subsegments":
-            raise PlanMismatch(f"{self.path} is not a subsegment collection; "
-                               "choose another output file")
-        if attrs.get("plan_fingerprint") != self.plan.fingerprint:
-            raise PlanMismatch(
-                f"{self.path} was built from a different partition of {self.plan.route_key} "
-                f"(fingerprint {attrs.get('plan_fingerprint')}, now {self.plan.fingerprint}): "
-                "the route waypoints or the grids changed. Start a new file (move this one "
-                "away or use another --data-dir); appending would mismatch node ids.")
-        for key, now in (("sample_interval_hours", self.sample_interval_hours),
-                         ("nwp_offset_hours", self.nwp_offset_hours)):
-            if int(attrs[key]) != now:
-                raise PlanMismatch(f"{self.path} was collected with {key}={attrs[key]}, now "
-                                   f"{now}: its samples would leave the 6-hourly grid. Start a "
-                                   "new file.")
-        return int(attrs["epoch_unix"])
-
-    def _create_file(self, epoch_unix: int) -> None:
+    def create(self, now: float) -> None:
+        """Create the archive; the first expected runs are the newest already due."""
         p = self.plan
+        first_wind = _floor(now - WIND_DUE_AFTER_S, WIND_CYCLE_S)
+        first_current = _floor(now - CURRENT_DUE_AFTER_S, CURRENT_CYCLE_S)
         attrs = {
             "source": "live_collection",
-            "sampling": "subsegments",
             "route_label": self.label,
             "route_key": p.route_key,
             "route_name": p.route_name,
@@ -642,145 +613,369 @@ class RouteCollector:
             "port_trim_nm": p.port_trim_nm,
             "plan_fingerprint": p.fingerprint,
             "n_subsegments": len(p.subsegments),
-            "epoch_unix": int(epoch_unix),
-            "epoch_utc": utc(epoch_unix),
-            "sample_interval_hours": self.sample_interval_hours,
-            "nwp_offset_hours": self.nwp_offset_hours,
-            "forecast_days": FORECAST_DAYS,
-            "sample_hour_definition": "hours from epoch_utc to the scheduled time of the sample",
-            "forecast_hour_definition": "hours from the scheduled time of the sample "
-                                        "(epoch_unix + 3600 * sample_hour) to the forecast valid time",
-            "actual_weather_definition": "Open-Meteo current conditions at query time "
-                                         "(see /samples query_start_unix)",
-            "node_definition": "one node per subsegment (shared/subsegments.py); lat/lon is its "
-                               "midpoint, distance_from_start_nm its start on the trimmed route, "
-                               "segment its leg, is_original marks the first subsegment of a leg",
-            "wave_height_m": WAVE_HEIGHT_NOTE,
-            "beaufort_missing_value": BEAUFORT_MISSING,
+            "first_wind_run_unix": first_wind,
+            "first_wind_run_utc": utc(first_wind),
+            "first_current_run_unix": first_current,
+            "first_current_run_utc": utc(first_current),
+            "wind_cycle_hours": WIND_CYCLE_S // HOUR,
+            "current_cycle_hours": CURRENT_CYCLE_S // HOUR,
+            "time_definition": "time_unix: forecast valid times, UTC Unix seconds; a run's "
+                               "lead is time_unix - run_init_unix",
+            "wave_height": WAVE_HEIGHT_NOTE,
         }
         for g, grid in p.grids.items():
             attrs[f"{g}_grid"] = grid.name
-            attrs[f"{g}_api_url"] = grid.api_url
+            attrs[f"{g}_api_url"] = RUN_API_URLS[g]
             attrs[f"{g}_api_params_json"] = json.dumps(grid.api_params)
-            attrs[f"{g}_variables_json"] = json.dumps(list(API_FIELDS[g]))
+            attrs[f"{g}_variables_json"] = json.dumps(API_FIELDS[g])
             attrs[f"n_{g}_cells"] = len(p.queries[g])
-        create_hdf5(self.path, plan_metadata(p), attrs,
-                    metadata_dtype=SUBSEGMENT_METADATA_DTYPE,
-                    actual_dtype=SUBSEGMENT_ACTUAL_DTYPE,
-                    samples_dtype=SAMPLES_DTYPE)
-        self.epoch_unix = int(epoch_unix)
-        logger.info("[%s] Created %s: %d subsegments, epoch %s", self.label, self.path,
-                    len(p.subsegments), utc(epoch_unix))
+        subs, cells = plan_tables(p)
+        run_archive.create_archive(self.path, subs, cells, attrs)
+        self.attrs = run_archive.read_attrs(self.path)
+        logger.info("[%s] Created %s: %d subsegments, %d wind and %d current cells; first runs: "
+                    "wind %s, current %s", self.label, self.path, len(p.subsegments),
+                    len(p.queries[WIND]), len(p.queries[CURRENT]), utc(first_wind),
+                    utc(first_current))
 
-    def sample_hour(self, reference_unix: int) -> int:
-        epoch = reference_unix if self.epoch_unix is None else self.epoch_unix
-        return int(reference_unix - epoch) // 3600
+    # --- runs table -------------------------------------------------------
 
-    def has_sample(self, reference_unix: int) -> bool:
-        if self.epoch_unix is None:
-            return False
-        return self.sample_hour(reference_unix) in set(get_completed_runs(self.path))
+    def add_due_runs(self, now: float) -> None:
+        for g, first, cycle, due in (
+                (WIND, self.attrs["first_wind_run_unix"], WIND_CYCLE_S, WIND_DUE_AFTER_S),
+                (CURRENT, self.attrs["first_current_run_unix"], CURRENT_CYCLE_S, CURRENT_DUE_AFTER_S)):
+            init = int(first)
+            while init + due <= now:
+                if (g, init) not in self.rows:
+                    self.rows[(g, init)] = {
+                        "grid": g, "run_init_unix": init, "status": "pending",
+                        "probe_attempts": 0, "fetch_requests": 0, "api_calls": 0.0,
+                        "first_probe_success_unix": -1, "availability_unix": -1,
+                        "fetch_start_unix": -1, "fetch_end_unix": -1,
+                        "updated_unix": int(now), "note": ""}
+                init += cycle
 
-    # --- checks and logging ----------------------------------------------
+    def next_due(self, now: float) -> int:
+        """When the next run that is not yet due becomes due."""
+        out = []
+        for first, cycle, due in ((self.attrs["first_wind_run_unix"], WIND_CYCLE_S, WIND_DUE_AFTER_S),
+                                  (self.attrs["first_current_run_unix"], CURRENT_CYCLE_S,
+                                   CURRENT_DUE_AFTER_S)):
+            k = max(0, math.floor((now - due - first) / cycle) + 1)
+            out.append(int(first + k * cycle + due))
+        return min(out)
 
-    def _log_runs(self, reference_unix: int) -> Dict[str, int]:
-        runs = {}
-        for g, grid in self.plan.grids.items():
-            init, avail = model_run(grid, self.get)
-            runs[g] = init
-            if init < 0:
+    def pending(self, grid: str) -> List[int]:
+        return sorted(init for (g, init), row in self.rows.items()
+                      if g == grid and row["status"] == "pending")
+
+    def work_for(self, grid: str, init: int) -> _Work:
+        key = (grid, init)
+        if key not in self.work:
+            due = WIND_DUE_AFTER_S if grid == WIND else CURRENT_DUE_AFTER_S
+            row = self.rows[key]
+            self.work[key] = _Work(next_try=init + due,
+                                   first_probe_success=int(row["first_probe_success_unix"]),
+                                   availability=int(row["availability_unix"]))
+        return self.work[key]
+
+    def _set(self, row: dict, status: str, note: str = "") -> None:
+        row["status"] = status
+        if note:
+            row["note"] = note[:200]
+        row["updated_unix"] = int(self.clock())
+
+    def finish(self, grid: str, init: int, status: str, note: str) -> None:
+        self._set(self.rows[(grid, init)], status, note)
+        self.work.pop((grid, init), None)
+        self.flush()
+
+    def flush(self) -> None:
+        if self.attrs is None:
+            return
+        rows = [self.rows[k] for k in sorted(self.rows)]
+        cols = list(run_archive.RUNS_DTYPE.names)
+        run_archive.write_runs(self.path, pd.DataFrame(rows, columns=cols))
+
+
+# ---------------------------------------------------------------------------
+# The collector
+# ---------------------------------------------------------------------------
+
+class RunCollector:
+    """Fetches and archives the runs of every route; drive it with step()."""
+
+    def __init__(self, routes: Sequence[RouteRuns], client: ApiClient,
+                 clock: Callable[[], float] = time.time):
+        self.routes, self.client, self.clock = list(routes), client, clock
+
+    # --- scheduling -------------------------------------------------------
+
+    def step(self) -> int:
+        """Do everything due now; return the time of the next thing to do."""
+        now = self.clock()
+        for r in self.routes:
+            if r.attrs is None:
+                r.create(now)
+            r.add_due_runs(now)
+        wakes: List[int] = []
+        try:
+            # Currents first: they have a hard deadline and no archive.
+            for grid, handler in ((CURRENT, self._current), (WIND, self._wind)):
+                for r in self.routes:
+                    for init in r.pending(grid):
+                        wake = handler(r, init)
+                        if wake is not None:
+                            wakes.append(wake)
+        except DailyLimitExceeded as e:
+            later = int(self.clock()) + RETRY_S
+            logger.error("Open-Meteo's daily limit is used up (%s); trying again at %s",
+                         e, utc(later))
+            for r in self.routes:
+                for w in r.work.values():
+                    w.next_try = max(w.next_try, later)
+            wakes.append(later)
+        finally:
+            for r in self.routes:
+                r.flush()
+        now = self.clock()
+        wakes += [r.next_due(now) for r in self.routes]
+        wakes += [w.next_try for r in self.routes for k, w in r.work.items()
+                  if r.rows[k]["status"] == "pending"]
+        return max(int(now), min(wakes))
+
+    def _wind(self, r: RouteRuns, init: int) -> Optional[int]:
+        w, row, name = r.work_for(WIND, init), r.rows[(WIND, init)], run_archive.run_name(init)
+        now = int(self.clock())
+        if now < w.next_try:
+            return w.next_try
+        meta_init, meta_avail = self.client.model_run(WIND_GRID)
+        if meta_init >= init + WIND_CYCLE_S:
+            note = (f"run {run_archive.run_name(init + WIND_CYCLE_S)} was published before this "
+                    "run was fetched; --backfill-wind can fetch it from the archive")
+            logger.warning("[%s] wind run %s missed: %s", r.label, name, note)
+            r.finish(WIND, init, "missed", note)
+            return None
+        if meta_init == init:
+            w.availability = row["availability_unix"] = meta_avail
+        if w.first_probe_success < 0:
+            q = r.plan.queries[WIND][0]
+            try:
+                self._request(r, row, "probe", run_url(WIND, WIND_GRID, [q], init), WEIGHT[WIND])
+            except RunNotAvailable:
+                w.next_try = now + RETRY_S
+                logger.info("[%s] wind run %s not available yet (probe %d); next probe at %s",
+                            r.label, name, row["probe_attempts"], utc(w.next_try))
+                return w.next_try
+            except DailyLimitExceeded:
+                raise
+            except ApiError as e:
+                w.next_try = now + RETRY_S
+                logger.warning("[%s] wind run %s: probe failed: %s", r.label, name, e)
+                return w.next_try
+            w.first_probe_success = row["first_probe_success_unix"] = int(self.clock())
+            logger.info("[%s] wind run %s available (probe %d at %s)", r.label, name,
+                        row["probe_attempts"], utc(w.first_probe_success))
+        if self._fetch(r, WIND, init, w) and self._store(r, WIND, init, w):
+            return None
+        w.next_try = int(self.clock()) + RETRY_S
+        return w.next_try
+
+    def _current(self, r: RouteRuns, init: int) -> Optional[int]:
+        w, row, name = r.work_for(CURRENT, init), r.rows[(CURRENT, init)], run_archive.run_name(init)
+        now = int(self.clock())
+        if now < w.next_try:
+            return w.next_try
+        row["probe_attempts"] += 1
+        meta_init, meta_avail = self.client.model_run(CURRENT_GRID)
+        if meta_init < 0:
+            w.next_try = now + RETRY_S
+            return w.next_try
+        if meta_init > init:
+            note = (f"run {run_archive.run_name(meta_init)} was published before this run was "
+                    "fetched, and currents have no archive")
+            logger.error("[%s] current run %s missed: %s", r.label, name, note)
+            r.finish(CURRENT, init, "missed", note)
+            return None
+        if meta_init < init:
+            w.next_try = now + RETRY_S
+            logger.info("[%s] current run %s not published yet (newest %s); next check at %s",
+                        r.label, name, run_archive.run_name(meta_init), utc(w.next_try))
+            return w.next_try
+        if w.first_probe_success < 0:
+            w.first_probe_success = row["first_probe_success_unix"] = now
+        w.availability = row["availability_unix"] = meta_avail
+        if now < meta_avail + SETTLE_S:
+            w.next_try = meta_avail + SETTLE_S
+            logger.info("[%s] current run %s published at %s; fetching from %s", r.label, name,
+                        utc(meta_avail), utc(w.next_try))
+            return w.next_try
+        if w.fetch_meta is not None and w.fetch_meta != (meta_init, meta_avail):
+            logger.warning("[%s] current run %s was republished (%s); fetching it again",
+                           r.label, name, utc(meta_avail))
+            w.chunks.clear()
+        if not w.chunks:
+            w.fetch_meta = (meta_init, meta_avail)
+        if self._fetch(r, CURRENT, init, w):
+            after = self.client.model_run(CURRENT_GRID)
+            if after[0] > init:
+                note = (f"run {run_archive.run_name(after[0])} was published during the fetch; "
+                        "data discarded since it could mix runs")
+                logger.error("[%s] current run %s discarded: %s", r.label, name, note)
+                r.finish(CURRENT, init, "discarded", note)
+                return None
+            if after == w.fetch_meta and self._store(r, CURRENT, init, w):
+                return None
+            if after[0] == init and after != w.fetch_meta:
+                logger.warning("[%s] current run %s was republished during the fetch; fetching "
+                               "it again", r.label, name)
+                w.chunks.clear()
+                w.fetch_meta = None
+        w.next_try = int(self.clock()) + RETRY_S
+        return w.next_try
+
+    # --- fetching and storing -----------------------------------------------
+
+    def _request(self, r: RouteRuns, row: dict, kind: str, url: str, weight: float):
+        calls, requests = self.client.calls, self.client.requests
+        try:
+            return self.client.get_json(url, weight)
+        finally:
+            row["api_calls"] += self.client.calls - calls
+            row["probe_attempts" if kind == "probe" else "fetch_requests"] += \
+                self.client.requests - requests
+
+    def _fetch(self, r: RouteRuns, grid: str, init: int, w: _Work) -> bool:
+        """Fetch the chunks still missing; True when all are in."""
+        row, queries = r.rows[(grid, init)], r.plan.queries[grid]
+        n_chunks = -(-len(queries) // CHUNK_SIZE)
+        if w.fetch_start < 0:
+            w.fetch_start = row["fetch_start_unix"] = int(self.clock())
+        for ci in range(n_chunks):
+            if ci in w.chunks:
                 continue
-            age = (reference_unix - init) / 3600.0
-            limit = self.max_run_age_hours.get(g)
-            msg = ("[%s] %s: newest %s run %s, available %s (%.1f h old at the scheduled time)"
-                   % (self.label, g, grid.api_params["models"], utc(init), utc(avail), age))
-            if limit is not None and age > limit:
-                logger.warning("%s; older than the expected %.0f h, is NWP_OFFSET_HOURS too small?",
-                               msg, limit)
-            else:
-                logger.info(msg)
-        return runs
+            chunk = queries[ci * CHUNK_SIZE:(ci + 1) * CHUNK_SIZE]
+            try:
+                body = self._request(r, row, "fetch", run_url(grid, r.plan.grids[grid], chunk, init),
+                                     WEIGHT[grid] * len(chunk))
+                body = body if isinstance(body, list) else [body]
+                if len(body) != len(chunk):
+                    raise ApiError(f"{len(body)} results for {len(chunk)} locations")
+                w.chunks[ci] = body
+            except DailyLimitExceeded:
+                raise
+            except ApiError as e:
+                logger.warning("[%s] %s run %s: chunk %d/%d failed (%s); retrying in %d min",
+                               r.label, grid, run_archive.run_name(init), ci + 1, n_chunks, e,
+                               RETRY_S // 60)
+        return len(w.chunks) == n_chunks
 
-    def _check(self, g: str, gw: GridWeather) -> Tuple[int, int]:
-        """Log substituted and NaN cells of grid g; return their counts."""
-        queries = self.plan.queries[g]
-        subst = find_substitutions(queries, gw)
-        served = {k: (float(gw.served_lat[k]), float(gw.served_lon[k])) for k in subst}
+    def _check(self, r: RouteRuns, grid: str, name: str, run: GridRun) -> Tuple[int, int]:
+        """Log substituted and NaN cells; return their counts."""
+        queries = r.plan.queries[grid]
+        subst = find_substitutions(queries, run)
+        served = {k: (float(run.served_lat[k]), float(run.served_lon[k])) for k in subst}
         if subst:
-            changed = served != self._last_substitutions[g]
-            logger.info("[%s] %s: %d of %d cells served by another grid point than predicted "
-                        "(near land the API substitutes a sea point)%s", self.label, g,
-                        len(subst), len(queries), "" if changed else ", same as last sample")
+            changed = served != r._last_substitutions[grid]
+            logger.info("[%s] %s run %s: %d of %d cells served by another grid point than "
+                        "predicted (near land the API substitutes a sea point)%s", r.label, grid,
+                        name, len(subst), len(queries), "" if changed else ", as before")
             if changed:
                 for k in subst:
                     q, (lat, lon) = queries[k], served[k]
-                    logger.info("[%s] %s:   %s: predicted (%.5f, %.5f), served (%.5f, %.5f), "
-                                "%.1f NM apart", self.label, g, _where(self.plan, q), q.grid_lat,
-                                q.grid_lon, lat, lon, _nm_apart(q.grid_lat, q.grid_lon, lat, lon))
-        else:
-            logger.info("[%s] %s: all %d cells served by the predicted grid point",
-                        self.label, g, len(queries))
-        self._last_substitutions[g] = served
-
-        nan = find_nan_cells(gw)
+                    logger.info("[%s] %s:   cell %s at %.1f NM (query %.4f, %.4f): predicted "
+                                "(%.5f, %.5f), served (%.5f, %.5f), %.1f NM apart", r.label, grid,
+                                q.cell, r.plan.subsegments[q.subsegments[0]].start_nm,
+                                q.query_lat, q.query_lon, q.grid_lat, q.grid_lon, lat, lon,
+                                _nm_apart(q.grid_lat, q.grid_lon, lat, lon))
+        r._last_substitutions[grid] = served
+        nan = find_nan_cells(run)
         if nan:
-            logger.warning("[%s] %s: NaN in model inputs at %d of %d cells (written as NaN)",
-                           self.label, g, len(nan), len(queries))
-            for k, (cols, n_bad, n_all) in nan.items():
-                logger.warning("[%s] %s:   %s: current conditions NaN in %s; %d of %d hourly "
-                               "values NaN", self.label, g, _where(self.plan, queries[k]),
-                               cols or "none", n_bad, n_all)
+            logger.warning("[%s] %s run %s: NaN in model inputs at %d of %d cells (stored as NaN)",
+                           r.label, grid, name, len(nan), len(queries))
+            for k, (n_bad, n_all) in nan.items():
+                q = queries[k]
+                logger.warning("[%s] %s:   cell %s at %.1f NM (query %.4f, %.4f): %d of %d "
+                               "values NaN", r.label, grid, q.cell,
+                               r.plan.subsegments[q.subsegments[0]].start_nm, q.query_lat,
+                               q.query_lon, n_bad, n_all)
         return len(nan), len(subst)
 
-    # --- one sample -------------------------------------------------------
-
-    def collect(self, reference_unix: int, pacer: Pacer) -> bool:
-        """Collect and append the sample scheduled at reference_unix. Returns
-        True if it was written; API failures are logged and nothing is written."""
-        if self.epoch_unix is None:
-            self._create_file(reference_unix)
-        sample_hour = self.sample_hour(reference_unix)
-        if sample_hour < 0:
-            logger.error("[%s] %s is before the file's epoch; skipped", self.label, utc(reference_unix))
-            return False
-        p = self.plan
-        calls = calls_per_sample(p)
-        logger.info("[%s] sample_hour %d (%s): %d subsegments, %s", self.label, sample_hour,
-                    utc(reference_unix), len(p.subsegments),
-                    ", ".join(f"{len(p.queries[g])} {g} cells" for g in p.queries))
-        t0 = time.time()
-        runs = self._log_runs(reference_unix)
-        weather, nan_cells, substituted = {}, {}, {}
+    def _store(self, r: RouteRuns, grid: str, init: int, w: _Work, backfilled: bool = False) -> bool:
+        """Parse, check and store a fully fetched run; False (chunks dropped) if malformed."""
+        row, name = r.rows[(grid, init)], run_archive.run_name(init)
+        bodies = [b for ci in sorted(w.chunks) for b in w.chunks[ci]]
         try:
-            for g, grid in p.grids.items():
-                bodies = fetch_cells(g, grid, p.queries[g], pacer, self.get)
-                weather[g] = parse_responses(g, bodies)
-                nan_cells[g], substituted[g] = self._check(g, weather[g])
-            actual, predicted = build_rows(p, weather, sample_hour, reference_unix)
+            run = cut_to_span(parse_run(grid, bodies))
         except ApiError as e:
-            logger.error("[%s] sample_hour %d not collected: %s", self.label, sample_hour, e)
+            logger.error("[%s] %s run %s: %s; fetching it again", r.label, grid, name, e)
+            w.chunks.clear()
             return False
-        t1 = time.time()
-        samples = pd.DataFrame([{
-            "sample_hour": sample_hour,
-            "reference_time_unix": int(reference_unix),
-            "query_start_unix": int(t0),
-            "query_end_unix": int(t1),
-            "wind_run_init_unix": runs.get(WIND, -1),
-            "current_run_init_unix": runs.get(CURRENT, -1),
-            "wind_nan_cells": nan_cells[WIND],
-            "current_nan_cells": nan_cells[CURRENT],
-            "wind_substituted_cells": substituted[WIND],
-            "current_substituted_cells": substituted[CURRENT],
-        }])
-        append_sample(self.path, actual, predicted, samples)
-        level = logging.WARNING if any(nan_cells.values()) else logging.INFO
-        logger.log(level, "[%s] sample_hour %d written: %d actual + %d predicted rows, "
-                   "%.0f API calls, %.1f min, NaN cells: wind %d, current %d; file %.1f MB",
-                   self.label, sample_hour, len(actual), len(predicted), sum(calls.values()),
-                   (t1 - t0) / 60.0, nan_cells[WIND], nan_cells[CURRENT],
-                   os.path.getsize(self.path) / 2**20)
+        first_lead = int(run.time[0] - init) // HOUR
+        last_lead = int(run.time[-1] - init) // HOUR
+        expected = (WIND_LAST_LEAD_H[datetime.fromtimestamp(init, timezone.utc).hour]
+                    if grid == WIND else CURRENT_SPAN_H - 1)
+        if first_lead != 0 or last_lead != expected:
+            logger.warning("[%s] %s run %s spans +%d..+%d h, expected +0..+%d h", r.label, grid,
+                           name, first_lead, last_lead, expected)
+        n_nan, n_subst = self._check(r, grid, name, run)
+        end = int(self.clock())
+        params = run_params(grid, r.plan.grids[grid], [], init)
+        for k in ("latitude", "longitude"):
+            params.pop(k)
+        run_archive.write_run(r.path, grid, init, run.time, run.values, run.served_lat,
+                              run.served_lon, {
+                                  "run_init_utc": utc(init),
+                                  "availability_unix": w.availability,
+                                  "first_probe_success_unix": w.first_probe_success,
+                                  "fetch_start_unix": w.fetch_start,
+                                  "fetch_end_unix": end,
+                                  "first_lead_hours": first_lead,
+                                  "last_lead_hours": last_lead,
+                                  "nan_cells": n_nan,
+                                  "substituted_cells": n_subst,
+                                  "api_url": RUN_API_URLS[grid],
+                                  "api_params_json": json.dumps(params),
+                                  "backfilled": backfilled,
+                              })
+        row["fetch_end_unix"] = end
+        r.finish(grid, init, "complete", "backfilled" if backfilled else "")
+        level = logging.WARNING if n_nan else logging.INFO
+        logger.log(level, "[%s] %s run %s stored: %d cells x %d h (+%d..+%d h), NaN cells %d, "
+                   "substituted %d; %d requests, %.0f calls, %.1f min; calls in the last 24 h: %.0f",
+                   r.label, grid, name, len(bodies), len(run.time), first_lead, last_lead, n_nan,
+                   n_subst, row["fetch_requests"], row["api_calls"],
+                   (end - w.fetch_start) / 60.0, self.client.calls_last_24h())
         return True
+
+    # --- backfill -----------------------------------------------------------
+
+    def missed_wind_runs(self) -> List[Tuple[RouteRuns, int]]:
+        return [(r, init) for r in self.routes for (g, init), row in sorted(r.rows.items())
+                if g == WIND and row["status"] == "missed"]
+
+    def backfill_wind(self, dry_run: bool = False) -> float:
+        """Fetch missed wind runs from the Single Runs archive. Returns their cost in
+        API calls (planned with dry_run, else spent)."""
+        todo = self.missed_wind_runs()
+        cost = sum(len(r.plan.queries[WIND]) * WEIGHT[WIND] for r, _ in todo)
+        logger.info("Backfill: %d missed wind runs, %.0f API calls%s", len(todo), cost,
+                    "".join(f"\n  [{r.label}] {run_archive.run_name(i)}" for r, i in todo))
+        if dry_run or not todo:
+            return cost
+        spent = self.client.calls
+        try:
+            for r, init in todo:
+                w = _Work(next_try=0)
+                if not (self._fetch(r, WIND, init, w) and self._store(r, WIND, init, w, backfilled=True)):
+                    note = f"backfill at {utc(self.clock())} incomplete; still missed"
+                    r.rows[(WIND, init)]["note"] = note
+                    logger.error("[%s] wind run %s: %s", r.label, run_archive.run_name(init), note)
+        except DailyLimitExceeded as e:
+            logger.error("Backfill stopped, Open-Meteo's daily limit is used up: %s", e)
+        finally:
+            for r in self.routes:
+                r.flush()
+        return self.client.calls - spent
 
 
 # ---------------------------------------------------------------------------
@@ -792,9 +987,9 @@ def collect(config, hdf5_path=None):
 
     The fixed-spacing collector (generate_waypoints every interval_nm, with
     Open-Meteo's default best_match models and cell selection) produced
-    experiments A-D. New collections sample by subsegment with pinned grids:
-    see run_all.py.
+    experiments A-D. New collections archive model runs per subsegment cell
+    with pinned grids: see run_all.py.
     """
     raise RuntimeError("collect.collector.collect() was removed: it sampled at fixed spacing "
-                       "with Open-Meteo's best_match models. Use run_all.py, which samples "
-                       "by subsegment with pinned grids.")
+                       "with Open-Meteo's best_match models. Use run_all.py, which archives "
+                       "every model run per subsegment cell with pinned grids.")

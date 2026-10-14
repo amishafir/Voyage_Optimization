@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""Live weather collector for Route 1 and Route 2, sampled by subsegment.
+"""Live weather collector: archive every model run for Route 1 and Route 2.
 
-Every 6 hours, a few hours after each ECMWF IFS run becomes available, asks
-Open-Meteo once per distinct wind cell and once per distinct current cell of
-each selected route (collect/collector.py) and appends one sample to the
-route's HDF5 file, with one node per subsegment.
+Stores each ECMWF IFS wind run (00/06/12/18 UTC) and each Meteo-France SMOC
+currents run (00 UTC) once, with its full hourly series, for every distinct
+weather cell of the route's subsegments (collect/collector.py), in one HDF5
+archive per route (shared/run_archive.py).
 
-The free API allows 10,000 calls per day per IP. Route 1 costs about 7,400
-calls per day and Route 2 about 5,200, so run one route per machine:
-
-    python3 run_all.py --route 1             # Route 1, Persian Gulf -> Strait of Malacca
-    python3 run_all.py --route 2             # Route 2, St. John's -> Liverpool
-    python3 run_all.py --route all --dry-run # partition and API budget only, no API calls
-    python3 run_all.py --route 2 --once --data-dir /tmp/smoke   # one sample now, then exit
+    python3 run_all.py --route all                # both routes, until stopped
+    python3 run_all.py --route all --dry-run      # partition and API budget only, no API calls
+    python3 run_all.py --route 1 --once           # do whatever is pending now, then exit
+    python3 run_all.py --route all --backfill-wind --dry-run   # missed wind runs and their cost
+    python3 run_all.py --route all --backfill-wind             # fetch them from the archive
 
 Routes are read from config/routes/<name>.yaml at start-up. If the waypoints
-have changed since an output file was created, the program refuses to append
-to it; start a new file instead.
+have changed since an archive was created, the program refuses to add to it;
+start a new file instead.
 
-Stop with Ctrl+C or SIGTERM: the current sample is finished first (a second
-Ctrl+C stops at once). Restarting resumes the same files.
+The schedule survives restarts: the /runs table of each archive lists every
+expected run, and runs that came due while the program was stopped are
+fetched if still possible (wind until the next run is published, currents
+until the next day's run is published) and otherwise logged as missed.
+Missed wind runs can be fetched later with --backfill-wind; missed currents
+are lost.
+
+Stop with Ctrl+C or SIGTERM: the current step is finished first (a second
+Ctrl+C stops at once).
 """
 import argparse
 import logging
@@ -36,85 +41,44 @@ from collect.collector import (  # noqa: E402
     API_LIMITS,
     CHUNK_SIZE,
     CURRENT,
-    FORECAST_DAYS,
+    CURRENT_SPAN_H,
     SECONDS_PER_CHUNK,
     WAVE_HEIGHT_NOTE,
     WIND,
+    WIND_LAST_LEAD_H,
+    ApiClient,
     Pacer,
     PlanMismatch,
-    RouteCollector,
+    RouteRuns,
+    RunCollector,
     build_sampling_plan,
-    calls_per_sample,
-    previous_slot,
+    daily_calls,
     utc,
 )
 from collect.waypoints import load_route_config  # noqa: E402
-from shared.hdf5_io import PREDICTED_DTYPE  # noqa: E402
 
 logger = logging.getLogger("run_all")
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
 ROUTES = {
-    "1": {"name": "Route 1", "route": "persian_gulf_malacca", "hdf5": "route1_subsegments.h5"},
-    "2": {"name": "Route 2", "route": "st_johns_liverpool", "hdf5": "route2_subsegments.h5"},
+    "1": {"name": "Route 1", "route": "persian_gulf_malacca", "hdf5": "route1_runs.h5"},
+    "2": {"name": "Route 2", "route": "st_johns_liverpool", "hdf5": "route2_runs.h5"},
 }
 
-# ---------------------------------------------------------------------------
-# Timing
-# ---------------------------------------------------------------------------
-
-SAMPLE_INTERVAL_HOURS = 6
-
-# Samples are taken at NWP_OFFSET_HOURS after each 00/06/12/18 UTC cycle,
-# i.e. at 02, 08, 14 and 20 UTC.
-#
-# Wind is ECMWF IFS (models=ecmwf_ifs): runs at 00/06/12/18 UTC, updated every
-# 6 h (open-meteo.com/en/docs/ecmwf-api). Open-Meteo's model metadata
-# (api.open-meteo.com/data/ecmwf_ifs/static/meta.json, read 2026-10-14) had
-# the 06 UTC run available on the API at 12:24 UTC, 6.4 h after the cycle
-# start. The 00 and 12 UTC runs reach 15 days, and ECMWF's dissemination
-# schedule ends them about 1 h later than the 144 h runs at 06 and 18 UTC
-# (07:34 vs 12:27 UTC), so they should arrive about 7.5 h after the cycle
-# start. 8 h leaves a margin for all four runs.
-#
-# Currents are Meteo-France SMOC (models=meteofrance_currents): one run per
-# day, updated every 24 h (open-meteo.com/en/docs/marine-weather-api); the
-# metadata had the 00 UTC run available at 12:05 UTC, so the 14 UTC sample is
-# the first to see each new run.
-#
-# Each sample logs and stores (/samples) the run it was served from, and
-# warns when that run is older than MAX_RUN_AGE_HOURS.
-NWP_OFFSET_HOURS = 8
-MAX_RUN_AGE_HOURS = {
-    WIND: NWP_OFFSET_HOURS + SAMPLE_INTERVAL_HOURS / 2,   # one ECMWF cycle behind
-    CURRENT: 36.0,                                         # one SMOC day behind
-}
-
-# A cycle missed by a restart is still collected if it is at most this late;
-# the current conditions are then those of the query time.
-LATE_GRACE_SECONDS = 3600
-
-
-# ---------------------------------------------------------------------------
-# Set-up
-# ---------------------------------------------------------------------------
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--route", required=True, choices=sorted(ROUTES) + ["all"],
-                    help="route to collect: 1, 2 or all (all exceeds the free daily API limit)")
+                    help="route to collect: 1, 2 or all")
     ap.add_argument("--data-dir", default=str(PIPELINE_DIR / "data"),
-                    help="directory of the HDF5 output (default: pipeline/data)")
+                    help="directory of the archives (default: pipeline/data)")
     ap.add_argument("--log-file", help="log file (default: <data-dir>/collector_route<N>.log)")
     ap.add_argument("--dry-run", action="store_true",
-                    help="partition the routes and print the API budget; no API calls")
+                    help="print the API budget (with --backfill-wind: the backfill's cost); "
+                         "no API calls")
     ap.add_argument("--once", action="store_true",
-                    help="collect the most recent scheduled cycle now, however late, then exit")
-    ap.add_argument("--allow-over-budget", action="store_true",
-                    help="run even if the planned calls exceed the free daily limit")
+                    help="do whatever is pending now, then exit")
+    ap.add_argument("--backfill-wind", action="store_true",
+                    help="fetch the missed wind runs from the Single Runs archive, then exit")
     return ap.parse_args(argv)
 
 
@@ -143,33 +107,36 @@ def build_plans(keys):
 
 
 def budget_report(plans):
-    """Lines describing the API budget, and the planned calls per day."""
-    per_day = 24 // SAMPLE_INTERVAL_HOURS
-    lines, total = [], 0.0
+    """Lines describing the daily API budget; returns (lines, worst-case calls per day)."""
+    wind_hours = sum(WIND_LAST_LEAD_H.values()) + len(WIND_LAST_LEAD_H)   # values per cell per day
+    lines, typical, worst, burst = [], 0.0, 0.0, 0.0
     for k, plan in plans.items():
-        calls = calls_per_sample(plan)
-        n = sum(calls.values())
-        total += n
-        chunks = sum(-(-len(plan.queries[g]) // CHUNK_SIZE) for g in plan.queries)
-        n_times = 24 * FORECAST_DAYS        # hourly values per subsegment and sample
-        mb = len(plan.subsegments) * n_times * PREDICTED_DTYPE.itemsize * per_day / 2**20
+        c = daily_calls(plan)
+        n_wind, n_cur = len(plan.queries[WIND]), len(plan.queries[CURRENT])
+        fetch = c["wind"] + c["current"]
+        typical += fetch + c["probes_typical"]
+        worst += fetch + c["probes_max"]
+        burst += n_wind + n_cur
+        mb = (n_wind * wind_hours + n_cur * CURRENT_SPAN_H) * 2 * 4 / 2**20
         lines.append(
             f"{ROUTES[k]['name']} ({plan.route_key}): {len(plan.waypoints)} waypoints, "
             f"{sum(s.length_nm for s in plan.subsegments):.1f} NM after the port trim, "
-            f"{len(plan.subsegments)} subsegments, {len(plan.queries[WIND])} wind cells, "
-            f"{len(plan.queries[CURRENT])} current cells -> {n:.0f} calls per sample, "
-            f"{n * per_day:.0f} per day; {chunks} requests, about "
-            f"{chunks * SECONDS_PER_CHUNK / 60:.1f} min per sample; "
-            f"predicted_weather grows about {mb:.0f} MB per day before compression")
-    lines.append(f"Total: {total:.0f} calls per sample, {total * per_day:.0f} per day at "
-                 f"{per_day} samples per day (limits: {API_LIMITS['day']} per day, "
-                 f"{API_LIMITS['hour']} per hour, {API_LIMITS['minute']} per minute; "
-                 f"paced at <= {CHUNK_SIZE * 60 / SECONDS_PER_CHUNK:.0f} per minute)")
-    return lines, total * per_day
+            f"{len(plan.subsegments)} subsegments; per day {n_wind} wind cells x 4 runs = "
+            f"{c['wind']:.0f} calls, {n_cur} current cells x 1 run = {c['current']:.0f} calls, "
+            f"probes about {c['probes_typical']:.0f} (at most {c['probes_max']:.0f}); "
+            f"{fetch + c['probes_typical']:.0f} calls typical, {fetch + c['probes_max']:.0f} "
+            f"at most; about {mb:.1f} MB of runs per day before compression")
+    lines.append(
+        f"Total: {typical:.0f} calls per day typical, {worst:.0f} at most, before chunk retries "
+        f"and backfills (limit {API_LIMITS['day']} per day per IP). Largest burst, a wind and a "
+        f"currents run fetched in the same hour: {burst:.0f} calls (limit {API_LIMITS['hour']} "
+        f"per hour); requests paced at <= {CHUNK_SIZE * 60 / SECONDS_PER_CHUNK:.0f} calls per "
+        f"minute (limit {API_LIMITS['minute']})")
+    return lines, worst
 
 
 class Shutdown:
-    """First SIGINT/SIGTERM: finish the current sample, then stop. Second: stop now."""
+    """First SIGINT/SIGTERM: finish the current step, then stop. Second: stop now."""
 
     def __init__(self):
         self.requested = False
@@ -180,17 +147,13 @@ class Shutdown:
         if self.requested:
             raise KeyboardInterrupt
         self.requested = True
-        logger.info("Shutdown requested (%s); finishing the current sample",
+        logger.info("Shutdown requested (%s); finishing the current step",
                     signal.Signals(signum).name)
 
     def sleep_until(self, t):
         while not self.requested and time.time() < t:
             time.sleep(min(30.0, max(0.0, t - time.time())))
 
-
-# ---------------------------------------------------------------------------
-# Main loop
-# ---------------------------------------------------------------------------
 
 def main(argv=None):
     args = parse_args(argv)
@@ -202,64 +165,44 @@ def main(argv=None):
     setup_logging(log_file)
 
     plans = build_plans(keys)
-    lines, calls_per_day = budget_report(plans)
+    lines, worst = budget_report(plans)
     for line in lines:
         logger.info(line)
-    over = calls_per_day > API_LIMITS["day"]
-    if over:
-        logger.error("Planned %.0f calls per day exceed the free limit of %d per IP: run one "
-                     "route per machine (--route 1 / --route 2)", calls_per_day, API_LIMITS["day"])
-    if args.dry_run:
-        return 1 if over else 0
-    if over and not args.allow_over_budget:
-        return 2
+    if worst > API_LIMITS["day"]:
+        logger.error("At most %.0f calls per day exceed the free limit of %d per IP: run the "
+                     "routes on separate machines", worst, API_LIMITS["day"])
+        return 1 if args.dry_run else 2
+    if args.dry_run and not args.backfill_wind:
+        return 0
 
+    paths = {k: os.path.join(args.data_dir, ROUTES[k]["hdf5"]) for k in keys}
+    if args.backfill_wind:
+        keys = [k for k in keys if os.path.exists(paths[k])]
+        if not keys:
+            logger.error("No archive to backfill in %s", args.data_dir)
+            return 3
     try:
-        collectors = [
-            RouteCollector(ROUTES[k]["name"], plans[k], os.path.join(args.data_dir, ROUTES[k]["hdf5"]),
-                           SAMPLE_INTERVAL_HOURS, NWP_OFFSET_HOURS, MAX_RUN_AGE_HOURS)
-            for k in keys
-        ]
+        routes = [RouteRuns(ROUTES[k]["name"], plans[k], paths[k]) for k in keys]
     except PlanMismatch as e:
         logger.error("%s", e)
         return 3
+    collector = RunCollector(routes, ApiClient(pacer=Pacer(SECONDS_PER_CHUNK)))
+
+    if args.backfill_wind:
+        collector.backfill_wind(dry_run=args.dry_run)
+        return 0
 
     logger.info("Wave height: %s", WAVE_HEIGHT_NOTE)
-    logger.info("Sampling every %d h at %s UTC; output: %s", SAMPLE_INTERVAL_HOURS,
-                ", ".join(f"{(NWP_OFFSET_HOURS + i * SAMPLE_INTERVAL_HOURS) % 24:02d}:00"
-                          for i in range(24 // SAMPLE_INTERVAL_HOURS)),
-                ", ".join(c.path for c in collectors))
-
+    logger.info("Archives: %s", ", ".join(paths[k] for k in keys))
+    if args.once:
+        collector.step()
+        return 0
     shutdown = Shutdown()
-    pacer = Pacer(SECONDS_PER_CHUNK)
-    attempted = set()
-    period = SAMPLE_INTERVAL_HOURS * 3600
     while not shutdown.requested:
-        now = time.time()
-        slot = previous_slot(now, SAMPLE_INTERVAL_HOURS, NWP_OFFSET_HOURS)
-        due = [c for c in collectors
-               if (c.path, slot) not in attempted and not c.has_sample(slot)]
-        if due and (args.once or now - slot <= LATE_GRACE_SECONDS):
-            if now - slot > 600:
-                logger.warning("Collecting the %s cycle %.0f min late", utc(slot), (now - slot) / 60)
-            for c in due:
-                if shutdown.requested:
-                    break
-                attempted.add((c.path, slot))
-                try:
-                    c.collect(slot, pacer)
-                except Exception:
-                    logger.exception("[%s] sample at %s failed", c.label, utc(slot))
-            if args.once:
-                break
-            continue
-        if args.once:
-            logger.info("The %s cycle is already collected; nothing to do", utc(slot))
-            break
-        target = slot + period
-        logger.info("Next sample at %s (in %.0f min)", utc(target), (target - now) / 60)
-        shutdown.sleep_until(target)
-
+        wake = collector.step()
+        if wake - time.time() > 1800:
+            logger.info("Next action at %s", utc(wake))
+        shutdown.sleep_until(wake)
     logger.info("Collector stopped.")
     return 0
 

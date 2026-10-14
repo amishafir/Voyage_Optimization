@@ -1,13 +1,14 @@
 """
-Offline tests for the subsegment collector (collect/collector.py, run_all.py)
-and the HDF5 extensions it uses (shared/hdf5_io.py). No network: the APIs are
-replaced by fake `get` functions that answer like Open-Meteo.
+Offline tests for the model-run collector (collect/collector.py, run_all.py)
+and its archive (shared/run_archive.py). No network: Open-Meteo is replaced by
+a fake that publishes runs on a fake clock.
 
 Run from anywhere:  python3 pipeline/tests/test_collector.py
 """
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import logging
@@ -21,24 +22,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import yaml
 
 PIPELINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PIPELINE))
 
 from collect import collector as C  # noqa: E402
-from shared.beaufort import wind_speed_to_beaufort  # noqa: E402
-from shared.hdf5_io import (  # noqa: E402
-    ACTUAL_DTYPE, METADATA_DTYPE, PREDICTED_DTYPE, append_actual, append_predicted,
-    create_hdf5, get_attrs, get_completed_runs, read_actual, read_metadata, read_predicted,
-    read_samples,
-)
+from shared import run_archive as A  # noqa: E402
 from shared.weather_grids import CURRENT_GRID, WIND_GRID, RegularLatLonGrid  # noqa: E402
 
+H = 3600
+D0 = int(datetime(2026, 10, 14, tzinfo=timezone.utc).timestamp())   # day D, 00:00 UTC
 ROUTES = ["persian_gulf_malacca", "st_johns_liverpool"]
-T0 = int(datetime(2026, 10, 15, 8, tzinfo=timezone.utc).timestamp())   # a scheduled slot
-DAY0 = T0 - 8 * 3600                                                     # 00:00 UTC that day
 # A short open-ocean route in the mid-Atlantic: a few cells of each grid.
 SHORT_ROUTE = [(52.0, -34.0), (52.06, -33.75), (52.12, -33.62)]
 
@@ -47,6 +42,13 @@ def _waypoints(route):
     with open(PIPELINE / "config" / "routes" / f"{route}.yaml") as f:
         return yaml.safe_load(f)["waypoints"]
 
+
+def _hm(h, m=0, day=0):
+    """Unix time of day D + `day`, h:m UTC."""
+    return D0 + day * 24 * H + h * H + m * 60
+
+
+# --- Log capture ---------------------------------------------------------------
 
 class _Records(logging.Handler):
     def __init__(self):
@@ -60,104 +62,33 @@ class _Records(logging.Handler):
         return [r.getMessage() for r in self.records if r.levelno >= level]
 
 
-def _capture():
-    h = _Records()
-    log = logging.getLogger(C.__name__)
-    h.saved_level = log.level
+@contextlib.contextmanager
+def captured():
+    h, log = _Records(), logging.getLogger(C.__name__)
+    level = log.level
     log.setLevel(logging.DEBUG)
     log.addHandler(h)
-    return h
+    try:
+        yield h
+    finally:
+        log.removeHandler(h)
+        log.setLevel(level)
 
 
-def _release(h):
-    log = logging.getLogger(C.__name__)
-    log.removeHandler(h)
-    log.setLevel(h.saved_level)
+# --- A fake Open-Meteo on a fake clock --------------------------------------------
+
+def _seed(glat, glon):
+    return round((glat * 7.0 + glon * 3.0) % 20.0, 3)
 
 
-class _NoSleep:
-    """Pacer clock and sleep that never wait, but record what they were asked."""
-
-    def __init__(self):
-        self.t, self.sleeps = 0.0, []
-
-    def sleep(self, s):
-        self.sleeps.append(s)
-        self.t += s
-
-    def clock(self):
-        return self.t
+def wind_value(glat, glon, init, lead):
+    """(speed, direction) the fake serves for a wind run."""
+    return round(_seed(glat, glon) + 0.01 * lead, 3), float((init // H) % 360)
 
 
-def _pacer():
-    ns = _NoSleep()
-    return C.Pacer(C.SECONDS_PER_CHUNK, sleep=ns.sleep, clock=ns.clock), ns
-
-
-# --- A fake Open-Meteo ---------------------------------------------------------
-
-def _units(variables):
-    return {"time": "unixtime", **{v: C.EXPECTED_UNITS[v] for v in variables}}
-
-
-def _body(grid, lat, lon, variables, now, hours, nan=False, served_shift=0.0):
-    """What the API answers for one location: the cell's grid point, float32 like the API."""
-    glat, glon = grid.center_of(grid.cell_of(lat, lon))
-    glat += served_shift
-    seed = (glat * 7.0 + glon * 3.0) % 20.0
-
-    def value(i, h):
-        return None if nan else round(seed + i + 0.01 * h, 3)
-
-    times = [DAY0 + 3600 * h for h in range(hours)]
-    return {
-        "latitude": float(np.float32(glat)), "longitude": float(np.float32(glon)),
-        "generationtime_ms": 0.1, "utc_offset_seconds": 0, "timezone": "GMT",
-        "current_units": {**_units(variables), "interval": "seconds"},
-        "current": {"time": now, "interval": 900,
-                    **{v: value(i, 0) for i, v in enumerate(variables)}},
-        "hourly_units": _units(variables),
-        "hourly": {"time": times, **{v: [value(i, h) for h in range(hours)]
-                                     for i, v in enumerate(variables)}},
-    }
-
-
-class FakeApi:
-    """Answers forecast, marine and model-metadata URLs; records every URL."""
-
-    def __init__(self, now=T0, hours=24 * C.FORECAST_DAYS, current_hours=None,
-                 nan_cells=(), shifted_cells=(), errors=(), meta_fails=False):
-        self.now, self.hours = now, hours
-        self.current_hours = hours if current_hours is None else current_hours
-        self.nan_cells, self.shifted_cells = set(nan_cells), set(shifted_cells)
-        self.errors = list(errors)          # raised by the next weather requests
-        self.meta_fails = meta_fails
-        self.urls = []
-
-    def __call__(self, url):
-        self.urls.append(url)
-        parts = urllib.parse.urlsplit(url)
-        if parts.path.endswith("/static/meta.json"):
-            if self.meta_fails:
-                raise TimeoutError("timed out")
-            return {"last_run_initialisation_time": self.now - 8 * 3600,
-                    "last_run_availability_time": self.now - 2 * 3600}
-        if self.errors:
-            raise self.errors.pop(0)
-        q = urllib.parse.parse_qs(parts.query)
-        is_wind = url.startswith(WIND_GRID.api_url)
-        grid = WIND_GRID if is_wind else CURRENT_GRID
-        variables = q["hourly"][0].split(",")
-        lats = [float(x) for x in q["latitude"][0].split(",")]
-        lons = [float(x) for x in q["longitude"][0].split(",")]
-        bodies = []
-        for lat, lon in zip(lats, lons):
-            cell = (grid.name, grid.cell_of(lat, lon))
-            bodies.append(_body(grid, lat, lon, variables, self.now,
-                                self.hours if is_wind else self.current_hours,
-                                nan=cell in self.nan_cells,
-                                served_shift=1 / 12 if cell in self.shifted_cells else 0.0))
-        return bodies if len(bodies) > 1 else bodies[0]
+def current_value(glat, glon, run_day, t):
+    """(velocity, direction) the fake serves; the direction names the run that served it."""
+    return round(_seed(glat, glon) / 10 + 0.001 * ((t - run_day) // H), 4), float((run_day // 86400) % 360)
 
 
 def _http_error(code, reason):
@@ -165,496 +96,633 @@ def _http_error(code, reason):
     return urllib.error.HTTPError("https://example.test", code, "error", {}, body)
 
 
+class World:
+    """Fake clock and Open-Meteo. Runs become available at their publication time."""
+
+    def __init__(self, t):
+        self.t = float(t)
+        self.wind_published = {_hm(18, day=-1): _hm(0, 30), _hm(0): _hm(7, 30),
+                               _hm(6): _hm(12, 24), _hm(12): _hm(20, 1), _hm(18): _hm(0, 24, 1),
+                               _hm(0, day=1): _hm(7, 30, 1), _hm(6, day=1): _hm(12, 24, 1)}
+        self.current_published = {_hm(0, day=-1): _hm(12, 5, -1), _hm(0): _hm(12, 5),
+                                  _hm(0, day=1): _hm(12, 5, 1)}
+        self.nan_cells, self.shifted_cells = set(), set()
+        self.failures = []      # [predicate(url), exception factory, remaining count]
+        self.hooks = []         # called with each data URL before answering
+        self.urls = []
+
+    # clock
+    def clock(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+    def client(self):
+        return C.ApiClient(get=self, pacer=C.Pacer(C.SECONDS_PER_CHUNK, sleep=self.sleep,
+                                                   clock=self.clock), clock=self.clock)
+
+    def fail(self, predicate, factory, times=10**9):
+        self.failures.append([predicate, factory, times])
+
+    def _latest(self, published):
+        done = [(init, at) for init, at in published.items() if at <= self.t]
+        return max(done) if done else (-1, -1)
+
+    def data_urls(self, part=""):
+        return [u for u in self.urls if "/static/" not in u and part in u]
+
+    # the API
+    def __call__(self, url):
+        self.urls.append(url)
+        parts = urllib.parse.urlsplit(url)
+        if parts.path.endswith("/static/meta.json"):
+            init, at = self._latest(self.current_published if "marine" in parts.netloc
+                                    else self.wind_published)
+            return {"last_run_initialisation_time": init, "last_run_availability_time": at}
+        for hook in self.hooks:
+            hook(url)
+        for rule in self.failures:
+            if rule[2] > 0 and rule[0](url):
+                rule[2] -= 1
+                raise rule[1]()
+        q = {k: v[0] for k, v in urllib.parse.parse_qs(parts.query).items()}
+        lats = [float(x) for x in q["latitude"].split(",")]
+        lons = [float(x) for x in q["longitude"].split(",")]
+        if parts.netloc == "single-runs-api.open-meteo.com":
+            init = int(datetime.strptime(q["run"], "%Y-%m-%dT%H:%M")
+                       .replace(tzinfo=timezone.utc).timestamp())
+            if self.wind_published.get(init, math.inf) > self.t:
+                raise _http_error(400, f"The requested model run is not available. Model: "
+                                       f"ecmwf_ifs, run: {q['run']}Z")
+            times = [init + h * H for h in range(24 * int(q["forecast_days"]))]
+            last = C.WIND_LAST_LEAD_H[datetime.fromtimestamp(init, timezone.utc).hour]
+            bodies = [self._body(WIND_GRID, lat, lon, times, q["hourly"].split(","),
+                                 lambda g, t: wind_value(*g, init, (t - init) // H)
+                                 if (t - init) // H <= last else (None, None))
+                      for lat, lon in zip(lats, lons)]
+        elif parts.path == "/v1/marine":
+            start, end = (int(datetime.strptime(q[k], "%Y-%m-%dT%H:%M")
+                              .replace(tzinfo=timezone.utc).timestamp())
+                          for k in ("start_hour", "end_hour"))
+            run_day, _ = self._latest(self.current_published)
+            times = list(range(start, end + H, H))
+            bodies = [self._body(CURRENT_GRID, lat, lon, times, q["hourly"].split(","),
+                                 lambda g, t: current_value(*g, run_day, t))
+                      for lat, lon in zip(lats, lons)]
+        else:
+            raise _http_error(404, "unknown endpoint")
+        return bodies if len(bodies) > 1 else bodies[0]
+
+    def _body(self, grid, lat, lon, times, variables, value):
+        cell = grid.cell_of(lat, lon)
+        glat, glon = grid.center_of(cell)
+        if (grid.name, cell) in self.shifted_cells:
+            glat += 1 / 12
+        nan = (grid.name, cell) in self.nan_cells
+        rows = [(None, None) if nan else value((glat, glon), t) for t in times]
+        return {
+            "latitude": float(np.float32(glat)), "longitude": float(np.float32(glon)),
+            "generationtime_ms": 0.1, "utc_offset_seconds": 0, "timezone": "GMT",
+            "hourly_units": {"time": "unixtime", **{v: C.EXPECTED_UNITS[v] for v in variables}},
+            "hourly": {"time": times, **{v: [r[i] for r in rows] for i, v in enumerate(variables)}},
+        }
+
+
+def make_collector(world, path, plan=None, label="Short"):
+    plan = plan or C.build_sampling_plan(SHORT_ROUTE, route_key="short")
+    route = C.RouteRuns(label, plan, path, clock=world.clock)
+    return C.RunCollector([route], world.client(), clock=world.clock), route
+
+
+def run_until(world, coll, t_end, max_steps=2000):
+    for _ in range(max_steps):
+        wake = coll.step()
+        if wake > t_end:
+            world.t = max(world.t, t_end)
+            return
+        world.t = max(world.t, wake)
+    raise AssertionError("too many steps")
+
+
+@contextlib.contextmanager
+def chunk_size(n):
+    old, C.CHUNK_SIZE = C.CHUNK_SIZE, n
+    try:
+        yield
+    finally:
+        C.CHUNK_SIZE = old
+
+
+def _status(path, grid, init):
+    runs = A.read_runs(path)
+    row = runs[(runs.grid == grid) & (runs.run_init_unix == init)]
+    assert len(row) == 1, (grid, A.run_name(init), runs)
+    return row.iloc[0]
+
+
 # --- Sampling plan --------------------------------------------------------------
+
+def _on_subsegment(plan, i, lat, lon, tol_nm=1e-4):
+    """The point lies on subsegment i: its distances to both ends add up to its length."""
+    from shared.rhumb import RhumbLeg
+    s, (elat, elon) = plan.subsegments[i], plan.endpoints[i]
+    d = RhumbLeg(s.start_lat, s.start_lon, lat, lon).length_nm + RhumbLeg(lat, lon, elat, elon).length_nm
+    return abs(d - s.length_nm) < tol_nm
+
 
 def _check_plan(plan):
     subs = plan.subsegments
     for g, grid in plan.grids.items():
         queries = plan.queries[g]
         assert len(queries) == len({s.cells[g] for s in subs})
-        assert len({q.cell for q in queries}) == len(queries)
         seen = set()
         for k, q in enumerate(queries):
-            # Every subsegment of the query, and no other, lies in its cell.
             assert all(subs[i].cells[g] == q.cell for i in q.subsegments)
             assert all(plan.cell_index[g][i] == k for i in q.subsegments)
             seen.update(q.subsegments)
-            # The query point is in the cell, at the (rounded) midpoint of one of its subsegments.
             assert grid.cell_of(q.query_lat, q.query_lon) == q.cell, (g, q)
-            assert any(abs(plan.midpoints[i][0] - q.query_lat) < 1e-6 and
-                       abs(plan.midpoints[i][1] - q.query_lon) < 1e-6 for i in q.subsegments)
+            assert any(_on_subsegment(plan, i, q.query_lat, q.query_lon) for i in q.subsegments)
             assert (q.grid_lat, q.grid_lon) == grid.center_of(q.cell)
-            assert math.isclose(q.length_nm, sum(subs[i].length_nm for i in q.subsegments))
         assert seen == set(range(len(subs)))
-        # Queries are in order of first appearance along the route.
         firsts = [q.subsegments[0] for q in queries]
         assert firsts == sorted(firsts)
-        assert math.isclose(sum(q.length_nm for q in queries), sum(s.length_nm for s in subs))
-    for s in subs:
-        for g in plan.grids:
-            assert plan.queries[g][plan.cell_index[g][s.index]].cell == s.cells[g]
 
 
 def test_plan_groups_subsegments_by_cell():
     for route in ROUTES:
-        plan = C.build_sampling_plan(_waypoints(route), route_key=route)
-        _check_plan(plan)
-        # Most cells hold a single subsegment run, but cells are shared between subsegments:
-        # every subsegment boundary inside a leg changes exactly one grid's cell.
-        assert len(plan.subsegments) > max(len(q) for q in plan.queries.values())
+        _check_plan(C.build_sampling_plan(_waypoints(route), route_key=route))
 
 
-def _coarse_grids():
-    params = {"models": "test_model", "cell_selection": "sea"}
-    return {
-        C.WIND: RegularLatLonGrid("coarse_wind", 0.5, 0.5, 1.0, 1.0, 180, 360,
-                                  WIND_GRID.api_url, params),
-        C.CURRENT: RegularLatLonGrid("coarse_current", 0.25, 0.25, 0.5, 0.5, 360, 720,
-                                     CURRENT_GRID.api_url, params),
-    }
+def test_query_points_keep_away_from_cell_edges():
+    # The midpoint of the longest subsegment is used unless it lies within
+    # MIN_EDGE_MARGIN_NM of the cell's edge; a replacement is never closer to it.
+    for route in ROUTES:
+        plan = C.build_sampling_plan(_waypoints(route))
+        moved = 0
+        for g, grid in plan.grids.items():
+            for q in plan.queries[g]:
+                longest = max(q.subsegments, key=lambda i: plan.subsegments[i].length_nm)
+                mid = tuple(round(x, C.COORD_DECIMALS) for x in plan.midpoints[longest])
+                m_mid = C._edge_margin(grid, q.cell, *mid) if grid.cell_of(*mid) == q.cell else -1
+                m_q = C._edge_margin(grid, q.cell, q.query_lat, q.query_lon)
+                if (q.query_lat, q.query_lon) == mid:
+                    assert m_mid >= C.MIN_EDGE_MARGIN_NM or m_q >= m_mid
+                else:
+                    moved += 1
+                    assert m_mid < C.MIN_EDGE_MARGIN_NM and m_q > m_mid, (route, g, q.cell)
+        assert moved > 0
 
 
 def test_plan_queries_a_revisited_cell_once():
-    # A U-turn: east along 10.2 N, north, west along 10.8 N. The wind cell
-    # (10, 20) is entered at the start and again at the end.
-    grids = _coarse_grids()
-    route = [(10.2, 20.2), (10.2, 21.8), (10.8, 21.8), (10.8, 20.2)]
+    params = {"models": "test_model", "cell_selection": "sea"}
+    grids = {C.WIND: RegularLatLonGrid("coarse_wind", 0.5, 0.5, 1.0, 1.0, 180, 360,
+                                       WIND_GRID.api_url, params),
+             C.CURRENT: RegularLatLonGrid("coarse_current", 0.25, 0.25, 0.5, 0.5, 360, 720,
+                                          CURRENT_GRID.api_url, params)}
+    route = [(10.2, 20.2), (10.2, 21.8), (10.8, 21.8), (10.8, 20.2)]   # a U-turn
     plan = C.build_sampling_plan(route, grids=grids, port_trim_nm=0.0)
     _check_plan(plan)
-    wind_cells = [s.cells[C.WIND] for s in plan.subsegments]
-    assert wind_cells[0] == wind_cells[-1] == (10, 20)
-    q = plan.queries[C.WIND][plan.cell_index[C.WIND][0]]
-    assert plan.cell_index[C.WIND][len(plan.subsegments) - 1] == plan.cell_index[C.WIND][0]
-    assert q.subsegments[0] == 0 and q.subsegments[-1] == len(plan.subsegments) - 1
+    last = len(plan.subsegments) - 1
+    assert plan.subsegments[0].cells[C.WIND] == plan.subsegments[last].cells[C.WIND]
+    assert plan.cell_index[C.WIND][0] == plan.cell_index[C.WIND][last]
     assert len(plan.queries[C.WIND]) == 2
-    # The query point is the midpoint of the longest subsegment in the cell.
-    longest = max(q.subsegments, key=lambda i: plan.subsegments[i].length_nm)
-    assert (q.query_lat, q.query_lon) == tuple(round(x, C.COORD_DECIMALS)
-                                               for x in plan.midpoints[longest])
 
 
 def test_plan_fingerprint_tracks_the_route():
     a = C.build_sampling_plan(SHORT_ROUTE)
-    b = C.build_sampling_plan(list(SHORT_ROUTE))
+    assert a.fingerprint == C.build_sampling_plan(list(SHORT_ROUTE)).fingerprint
     c = C.build_sampling_plan(SHORT_ROUTE[:-1] + [(52.13, -33.62)])
     d = C.build_sampling_plan(SHORT_ROUTE, port_trim_nm=1.0)
-    assert a.fingerprint == b.fingerprint
     assert len({a.fingerprint, c.fingerprint, d.fingerprint}) == 3
 
 
-def test_plan_metadata_columns():
+def test_plan_tables():
+    plan = C.build_sampling_plan(_waypoints("st_johns_liverpool"))
+    subs, cells = C.plan_tables(plan)
+    assert list(subs["index"]) == list(range(len(plan.subsegments)))
+    for g in (C.WIND, C.CURRENT):
+        assert len(cells[g]) == len(plan.queries[g])
+        rows = cells[g].iloc[subs[f"{g}_cell"].values]
+        assert [tuple(x) for x in rows[["row", "col"]].values] == \
+            [s.cells[g] for s in plan.subsegments]
+        assert cells[g]["n_subsegments"].sum() == len(plan.subsegments)
+
+
+# --- Requests and budget ---------------------------------------------------------
+
+def test_run_params_pin_the_grids_and_the_window():
     plan = C.build_sampling_plan(SHORT_ROUTE)
-    md = C.plan_metadata(plan)
-    assert list(md["node_id"]) == [s.index for s in plan.subsegments]
-    assert list(md["segment"]) == [s.leg for s in plan.subsegments]
-    assert np.allclose(md["distance_from_start_nm"], [s.start_nm for s in plan.subsegments])
-    assert np.allclose(md["length_nm"], [s.length_nm for s in plan.subsegments])
-    for s, row in zip(plan.subsegments, md.itertuples()):
-        assert (row.wind_cell_row, row.wind_cell_col) == s.cells[C.WIND]
-        assert (row.current_cell_row, row.current_cell_col) == s.cells[C.CURRENT]
-        assert (row.wind_grid_lat, row.wind_grid_lon) == WIND_GRID.center_of(s.cells[C.WIND])
-        assert WIND_GRID.cell_of(row.lat, row.lon) == s.cells[C.WIND]       # midpoint
-        assert CURRENT_GRID.cell_of(row.lat, row.lon) == s.cells[C.CURRENT]
-    assert md["is_original"].tolist()[:1] == [True]
-    assert md["is_original"].sum() == len({s.leg for s in plan.subsegments})
-
-
-# --- Requests -------------------------------------------------------------------
-
-def test_request_params_pin_the_grids():
-    plan = C.build_sampling_plan(SHORT_ROUTE)
+    p = C.run_params(C.WIND, WIND_GRID, plan.queries[C.WIND], _hm(12))
+    assert p["run"] == "2026-10-14T12:00" and p["forecast_days"] == 16
+    assert p["hourly"] == "wind_speed_10m,wind_direction_10m" and "current" not in p
+    assert p["wind_speed_unit"] == "kmh" and p["timeformat"] == "unixtime"
+    p = C.run_params(C.CURRENT, CURRENT_GRID, plan.queries[C.CURRENT], _hm(0))
+    assert (p["start_hour"], p["end_hour"]) == ("2026-10-14T00:00", "2026-10-23T23:00")
+    assert "run" not in p and "forecast_days" not in p and "current" not in p
     for g, grid in ((C.WIND, WIND_GRID), (C.CURRENT, CURRENT_GRID)):
-        p = C.request_params(g, grid, plan.queries[g])
+        p = C.run_params(g, grid, plan.queries[g], _hm(0))
         for k, v in grid.api_params.items():
             assert p[k] == v
-        assert p["current"] == p["hourly"] == ",".join(C.API_FIELDS[g])
-        assert p["timeformat"] == "unixtime" and p["timezone"] == "GMT"
-        assert p["forecast_days"] == C.FORECAST_DAYS
-        lats = p["latitude"].split(",")
-        assert len(lats) == len(plan.queries[g])
-        assert all(len(x.split(".")[1]) == C.COORD_DECIMALS for x in lats)
-        assert [float(x) for x in lats] == [q.query_lat for q in plan.queries[g]]
-    # The grid's own parameters cannot be overridden, and must pin both settings.
-    clash = RegularLatLonGrid("clash", 0.5, 0.5, 1, 1, 180, 360, WIND_GRID.api_url,
-                              {"models": "m", "cell_selection": "sea", "wind_speed_unit": "ms"})
-    assert C.request_params(C.WIND, clash, plan.queries[C.WIND])["wind_speed_unit"] == "ms"
-    loose = RegularLatLonGrid("loose", 0.5, 0.5, 1, 1, 180, 360, WIND_GRID.api_url,
-                              {"models": "m"})
+        assert [float(x) for x in p["latitude"].split(",")] == [q.query_lat for q in plan.queries[g]]
+    assert C.run_url(C.WIND, WIND_GRID, plan.queries[C.WIND], _hm(0)).startswith(
+        "https://single-runs-api.open-meteo.com/v1/forecast?")
+    assert C.run_url(C.CURRENT, CURRENT_GRID, plan.queries[C.CURRENT], _hm(0)).startswith(
+        CURRENT_GRID.api_url + "?")
+    loose = RegularLatLonGrid("loose", 0.5, 0.5, 1, 1, 180, 360, WIND_GRID.api_url, {"models": "m"})
     try:
-        C.request_params(C.WIND, loose, plan.queries[C.WIND])
+        C.run_params(C.WIND, loose, plan.queries[C.WIND], _hm(0))
         raise AssertionError("expected ValueError")
     except ValueError:
         pass
 
 
-def test_fetch_cells_chunks_and_pins_every_request():
-    plan = C.build_sampling_plan(_waypoints("st_johns_liverpool"))
-    api = FakeApi()
-    pacer, ns = _pacer()
-    for g, grid in plan.grids.items():
-        bodies = C.fetch_cells(g, grid, plan.queries[g], pacer, api, chunk_size=100)
-        assert len(bodies) == len(plan.queries[g])
-        for q, b in zip(plan.queries[g], bodies):
-            assert abs(b["latitude"] - q.grid_lat) < 1e-4   # answers stay in order
-    n_requests = sum(-(-len(plan.queries[g]) // 100) for g in plan.grids)
-    assert len(api.urls) == n_requests
-    for url in api.urls:
-        grid = WIND_GRID if url.startswith(WIND_GRID.api_url + "?") else CURRENT_GRID
-        assert url.startswith(grid.api_url + "?")
-        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
-        for k, v in grid.api_params.items():
-            assert q[k] == [v], (url[:80], k)
-        assert len(q["latitude"][0].split(",")) <= 100
-    # Request starts are spaced SECONDS_PER_CHUNK apart: <= 400 calls per minute.
-    assert len(ns.sleeps) == n_requests - 1
-    assert all(math.isclose(s, C.SECONDS_PER_CHUNK) for s in ns.sleeps)
+def test_query_weight_and_daily_budget():
+    assert C.query_weight(2, 16) == 1.0 and C.query_weight(2, 10) == 1.0
+    assert math.isclose(C.query_weight(12, 7), 1.2) and math.isclose(C.query_weight(10, 28), 2.0)
+    assert C.WEIGHT == {C.WIND: 1.0, C.CURRENT: 1.0}
+    total = 0.0
+    for route in ROUTES:
+        plan = C.build_sampling_plan(_waypoints(route))
+        c = C.daily_calls(plan)
+        assert c["wind"] == 4 * len(plan.queries[C.WIND])
+        assert c["current"] == len(plan.queries[C.CURRENT])
+        total += c["wind"] + c["current"] + c["probes_max"]
+    assert total < C.API_LIMITS["day"]          # both routes fit on one machine
 
 
-def test_retries_and_rate_limits():
+def test_api_client_retries_and_counts():
+    w = World(_hm(12))
+    url = "https://single-runs-api.open-meteo.com/v1/forecast?x"
+    calls = []
+
+    def get(u):
+        calls.append(w.t)
+        if len(calls) == 1:
+            raise _http_error(429, "Minutely API request limit exceeded. Please try again in one minute.")
+        return {"ok": True}
+    client = C.ApiClient(get=get, pacer=C.Pacer(15, sleep=w.sleep, clock=w.clock), clock=w.clock)
+    with captured():
+        assert client.get_json(url, 3.0) == {"ok": True}
+    assert calls[1] - calls[0] == 60 and client.calls == 6.0 and client.requests == 2
+    assert client.calls_last_24h() == 6.0
+    w.t += 25 * H
+    assert client.calls_last_24h() == 0.0
+
+    for err, exc in ((_http_error(400, "The requested model run is not available. Model: "
+                                       "ecmwf_ifs, run: 2026-10-14T18:00Z"), C.RunNotAvailable),
+                     (_http_error(429, "Daily API request limit exceeded."), C.DailyLimitExceeded),
+                     (_http_error(400, "Cannot initialize WeatherVariable"), C.ApiError)):
+        client = C.ApiClient(get=lambda u, e=err: (_ for _ in ()).throw(e),
+                             pacer=C.Pacer(15, sleep=w.sleep, clock=w.clock), clock=w.clock)
+        try:
+            client.get_json(url, 1.0)
+            raise AssertionError(f"expected {exc.__name__}")
+        except exc:
+            assert client.requests == 1          # not retried
+    client = C.ApiClient(get=lambda u: (_ for _ in ()).throw(TimeoutError()),
+                         pacer=C.Pacer(15, sleep=w.sleep, clock=w.clock), clock=w.clock)
+    with captured():
+        try:
+            client.get_json(url, 1.0)
+            raise AssertionError("expected ApiError")
+        except C.ApiError:
+            assert client.requests == C.ATTEMPTS
+
+
+def test_cut_to_span_and_parse_errors():
+    run = C.GridRun(np.zeros(2), np.zeros(2), np.arange(6) * H,
+                    {"a": np.array([[np.nan, 1, 2, np.nan, np.nan, np.nan],
+                                    [np.nan, np.nan, 3, 4, np.nan, np.nan]])})
+    cut = C.cut_to_span(run)
+    assert list(cut.time) == [H, 2 * H, 3 * H] and cut.values["a"].shape == (2, 3)
+    assert C.find_nan_cells(cut) == {0: (1, 3), 1: (1, 3)}
+    w = World(_hm(13))
     plan = C.build_sampling_plan(SHORT_ROUTE)
-    queries = plan.queries[C.WIND]
-
-    # Minutely limit and a server error: retried after waiting.
-    api = FakeApi(errors=[_http_error(429, "Minutely API request limit exceeded. Please try "
-                                           "again in one minute."), _http_error(503, "busy")])
-    pacer, ns = _pacer()
-    h = _capture()
-    try:
-        bodies = C.fetch_cells(C.WIND, WIND_GRID, queries, pacer, api)
-    finally:
-        _release(h)
-    assert len(bodies) == len(queries) and len(api.urls) == 3
-    assert ns.sleeps == [60, 60]        # 60 s for the minutely limit, 30 s * attempt 2 for the 503
-    assert len(h.messages()) == 2
-
-    # Daily limit: no retry.
-    api = FakeApi(errors=[_http_error(429, "Daily API request limit exceeded. Please try "
-                                           "again tomorrow.")])
-    try:
-        C.fetch_cells(C.WIND, WIND_GRID, queries, _pacer()[0], api)
-        raise AssertionError("expected DailyLimitExceeded")
-    except C.DailyLimitExceeded:
-        assert len(api.urls) == 1
-
-    # A bad request is not retried.
-    api = FakeApi(errors=[_http_error(400, "Cannot initialize WeatherVariable")])
-    try:
-        C.fetch_cells(C.WIND, WIND_GRID, queries, _pacer()[0], api)
-        raise AssertionError("expected ApiError")
-    except C.ApiError as e:
-        assert "400" in str(e) and len(api.urls) == 1
-
-    # Persistent network failure: gives up after MAX_ATTEMPTS.
-    api = FakeApi(errors=[TimeoutError("timed out")] * C.MAX_ATTEMPTS)
-    h = _capture()
-    try:
-        C.fetch_cells(C.WIND, WIND_GRID, queries, _pacer()[0], api)
-        raise AssertionError("expected ApiError")
-    except C.ApiError:
-        assert len(api.urls) == C.MAX_ATTEMPTS
-    finally:
-        _release(h)
-
-    # A response for the wrong number of locations is rejected.
-    def short(url):
-        body = FakeApi()(url)
-        return body[:-1] if isinstance(body, list) else []
-    try:
-        C.fetch_cells(C.WIND, WIND_GRID, queries, _pacer()[0], short)
-        raise AssertionError("expected ApiError")
-    except C.ApiError:
-        pass
-
-
-def test_pacer_spaces_request_starts():
-    ns = _NoSleep()
-    pacer = C.Pacer(15.0, sleep=ns.sleep, clock=ns.clock)
-    pacer.wait()
-    ns.t += 4.0          # the request took 4 s
-    pacer.wait()
-    ns.t += 20.0         # this one took longer than the interval
-    pacer.wait()
-    assert ns.sleeps == [11.0]
-
-
-def test_model_run_metadata():
-    api = FakeApi()
-    init, avail = C.model_run(WIND_GRID, api)
-    assert (init, avail) == (T0 - 8 * 3600, T0 - 2 * 3600)
-    assert api.urls == ["https://api.open-meteo.com/data/ecmwf_ifs/static/meta.json"]
-    C.model_run(CURRENT_GRID, api)
-    assert api.urls[-1] == "https://marine-api.open-meteo.com/data/meteofrance_currents/static/meta.json"
-    h = _capture()
-    try:
-        assert C.model_run(WIND_GRID, FakeApi(meta_fails=True)) == (-1, -1)
-    finally:
-        _release(h)
-
-
-# --- Responses ------------------------------------------------------------------
-
-def _grid_weather(plan, g, api=None):
-    api = api or FakeApi()
-    return C.parse_responses(g, C.fetch_cells(g, plan.grids[g], plan.queries[g], _pacer()[0], api))
-
-
-def test_parse_and_nan_detection():
-    plan = C.build_sampling_plan(SHORT_ROUTE)
-    bad = plan.queries[C.CURRENT][1]
-    api = FakeApi(nan_cells={(CURRENT_GRID.name, bad.cell)})
-    gw = _grid_weather(plan, C.CURRENT, api)
-    n = len(plan.queries[C.CURRENT])
-    assert gw.hourly["ocean_current_velocity_kmh"].shape == (n, 24 * C.FORECAST_DAYS)
-    nan = C.find_nan_cells(gw)
-    assert list(nan) == [1]
-    cols, n_bad, n_all = nan[1]
-    assert cols == ["ocean_current_velocity_kmh", "ocean_current_direction_deg"]
-    assert n_bad == n_all == 2 * 24 * C.FORECAST_DAYS
-    assert C.find_nan_cells(_grid_weather(plan, C.WIND)) == {}
-
-    # One NaN hourly value is enough.
-    bodies = C.fetch_cells(C.WIND, WIND_GRID, plan.queries[C.WIND], _pacer()[0], FakeApi())
-    bodies[0]["hourly"]["wind_direction_10m"][5] = None
-    nan = C.find_nan_cells(C.parse_responses(C.WIND, bodies))
-    assert nan == {0: ([], 1, 2 * 24 * C.FORECAST_DAYS)}
-
-    # Wrong units, inconsistent time axes and malformed bodies are errors.
+    url = C.run_url(C.WIND, WIND_GRID, plan.queries[C.WIND], _hm(6))
     for spoil in (lambda b: b["hourly_units"].update(wind_speed_10m="m/s"),
                   lambda b: b["hourly"]["time"].pop(),
-                  lambda b: b.pop("current")):
-        bodies = C.fetch_cells(C.WIND, WIND_GRID, plan.queries[C.WIND], _pacer()[0], FakeApi())
+                  lambda b: b.pop("hourly")):
+        bodies = w(url)
         spoil(bodies[-1])
         try:
-            C.parse_responses(C.WIND, bodies)
+            C.parse_run(C.WIND, bodies)
             raise AssertionError("expected ApiError")
         except C.ApiError:
             pass
 
 
-def test_substitution_detection():
-    plan = C.build_sampling_plan(SHORT_ROUTE)
-    q = plan.queries[C.WIND][-1]
-    gw = _grid_weather(plan, C.WIND, FakeApi(shifted_cells={(WIND_GRID.name, q.cell)}))
-    assert C.find_substitutions(plan.queries[C.WIND], gw) == [len(plan.queries[C.WIND]) - 1]
-    assert C.find_substitutions(plan.queries[C.CURRENT], _grid_weather(plan, C.CURRENT)) == []
-    # Longitudes compare modulo 360, and NaN coordinates never match.
-    cq = C.CellQuery(C.WIND, (0, 0), 0.0, 180.0, 10.0, -180.0, (0,), 1.0)
-    one = C.GridWeather(np.array([10.0]), np.array([180.0]), {}, np.array([]), {})
-    assert C.find_substitutions([cq], one) == []
-    one.served_lat[0] = np.nan
-    assert C.find_substitutions([cq], one) == [0]
+# --- Wind ------------------------------------------------------------------------
 
-
-def test_beaufort_of_missing_wind_is_not_a_gale():
-    assert wind_speed_to_beaufort(float("nan")) == 12          # why the guard exists
-    assert C._beaufort(float("nan")) == C.BEAUFORT_MISSING == -1
-    for v in (0.0, 1.7, 20.0, 61.0, 200.0):
-        assert C._beaufort(v) == wind_speed_to_beaufort(v)
-
-
-# --- Rows -----------------------------------------------------------------------
-
-def test_rows_give_each_subsegment_its_cells_weather():
-    plan = C.build_sampling_plan(_waypoints("st_johns_liverpool"))
-    weather = {g: _grid_weather(plan, g) for g in plan.grids}
-    actual, predicted = C.build_rows(plan, weather, sample_hour=42, reference_unix=T0)
-    n, nt = len(plan.subsegments), 24 * C.FORECAST_DAYS
-    assert len(actual) == n and len(predicted) == n * nt
-    w, c = plan.cell_index[C.WIND], plan.cell_index[C.CURRENT]
-    W, K = weather[C.WIND], weather[C.CURRENT]
-    for s in plan.subsegments[::97]:
-        i = s.index
-        a = actual.iloc[i]
-        assert a.node_id == i and a.sample_hour == 42
-        assert a.wind_speed_10m_kmh == W.current["wind_speed_10m_kmh"][w[i]]
-        assert a.ocean_current_direction_deg == K.current["ocean_current_direction_deg"][c[i]]
-        assert a.beaufort_number == wind_speed_to_beaufort(a.wind_speed_10m_kmh)
-        assert (a.wind_served_lat, a.current_served_lon) == (W.served_lat[w[i]], K.served_lon[c[i]])
-        assert math.isnan(a.wave_height_m)
-        rows = predicted[predicted.node_id == i]
-        assert list(rows.forecast_hour) == list(range(-8, nt - 8))   # hours from 08:00 UTC
-        assert np.array_equal(rows.wind_direction_10m_deg.values,
-                              W.hourly["wind_direction_10m_deg"][w[i]])
-        assert np.array_equal(rows.ocean_current_velocity_kmh.values,
-                              K.hourly["ocean_current_velocity_kmh"][c[i]])
-        assert rows.wave_height_m.isna().all()
-    assert predicted.forecast_hour.dtype == np.int32 and actual.sample_hour.dtype == np.int32
-
-
-def test_rows_keep_only_hours_both_forecasts_cover():
-    plan = C.build_sampling_plan(SHORT_ROUTE)
-    api = FakeApi(current_hours=100)
-    weather = {g: _grid_weather(plan, g, api) for g in plan.grids}
-    h = _capture()
-    try:
-        _, predicted = C.build_rows(plan, weather, 0, T0)
-        try:
-            C.build_rows(plan, weather, 0, T0 + 1800)
-            raise AssertionError("expected ValueError: leads must be whole hours")
-        except ValueError:
-            pass
-    finally:
-        _release(h)
-    assert sorted(set(predicted.forecast_hour)) == list(range(-8, 92))
-    assert not predicted.ocean_current_velocity_kmh.isna().any()
-    assert any("differ in time span" in m for m in h.messages())
-
-
-# --- Scheduling and budget --------------------------------------------------------
-
-def test_previous_slot():
-    def at(day, hour, minute=0, second=0):
-        return datetime(2026, 10, day, hour, minute, second, tzinfo=timezone.utc).timestamp()
-    slot = lambda t: C.previous_slot(t, 6, 8)   # noqa: E731
-    assert slot(at(15, 8)) == at(15, 8)
-    assert slot(at(15, 7, 59, 59)) == at(15, 2)
-    assert slot(at(15, 13, 30)) == at(15, 8)
-    assert slot(at(15, 20, 0, 1)) == at(15, 20)
-    assert slot(at(15, 1)) == at(14, 20)
-    assert {datetime.fromtimestamp(slot(at(15, h)), timezone.utc).hour
-            for h in range(24)} == {2, 8, 14, 20}
-
-
-def test_query_weight_and_calls_per_sample():
-    assert C.query_weight(4, 7) == 1.0         # what the collector requests
-    assert C.query_weight(10, 7) == 1.0
-    assert math.isclose(C.query_weight(12, 7), 1.2)
-    assert math.isclose(C.query_weight(5, 7, n_models=2), 1.0)
-    assert math.isclose(C.query_weight(10, 28), 2.0)
-    plan = C.build_sampling_plan(SHORT_ROUTE)
-    assert C.calls_per_sample(plan) == {g: float(len(q)) for g, q in plan.queries.items()}
-
-
-# --- HDF5 -----------------------------------------------------------------------
-
-def test_collect_writes_a_readable_sample_and_resumes():
-    plan = C.build_sampling_plan(SHORT_ROUTE, route_key="short", route_name="Short test route")
-    nan_cell = plan.queries[C.CURRENT][-1]
-    shifted = plan.queries[C.WIND][0]
-    api = FakeApi(nan_cells={(CURRENT_GRID.name, nan_cell.cell)},
-                  shifted_cells={(WIND_GRID.name, shifted.cell)})
-    n, nt = len(plan.subsegments), 24 * C.FORECAST_DAYS
+def test_wind_probes_until_published_then_fetches_and_cuts():
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "out", "short.h5")
-        rc = C.RouteCollector("Short", plan, path, 6, 8, {C.WIND: 11.0}, get=api)
-        assert not rc.has_sample(T0)
-        h = _capture()
-        try:
-            assert rc.collect(T0, _pacer()[0])
-            api.now = T0 + 6 * 3600
-            assert rc.collect(T0 + 6 * 3600, _pacer()[0])
-        finally:
-            _release(h)
-        assert get_completed_runs(path) == [0, 6]
-        assert rc.has_sample(T0) and rc.has_sample(T0 + 6 * 3600)
-        assert not rc.has_sample(T0 + 12 * 3600)
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        coll, route = make_collector(w, path)
+        with captured() as log:
+            run_until(w, coll, _hm(13))
+        row = _status(path, "wind", _hm(6))
+        assert row.status == "complete"
+        assert row.probe_attempts == 4                       # 12:00, 12:10, 12:20 refused; 12:30 ok
+        assert _hm(12, 30) <= row.first_probe_success_unix < _hm(12, 31)
+        assert row.availability_unix == _hm(12, 24)          # from the metadata
+        n_wind = len(route.plan.queries[C.WIND])
+        assert row.fetch_requests == 1 and row.api_calls == 4 + n_wind
+        assert sum("not available yet" in m for m in log.messages(logging.INFO)) == 3
 
-        # NaN and substitution are both visible in the log.
-        warnings = h.messages(logging.WARNING)
-        assert any("NaN in model inputs at 1 of" in m for m in warnings)
-        assert any(f"cell {nan_cell.cell}" in m for m in warnings)
-        infos = h.messages(logging.INFO)
+        run = A.read_run(path, "wind", _hm(6))
+        assert run["time_unix"][0] == _hm(6) and len(run["time_unix"]) == 145   # cut at +144 h
+        assert run["wind_speed_10m_kmh"].shape == (n_wind, 145)
+        assert run["wind_speed_10m_kmh"].dtype == np.float32
+        for k, q in enumerate(route.plan.queries[C.WIND]):
+            assert abs(run["served_lat"][k] - q.grid_lat) < 1e-4
+            speed, direction = wind_value(q.grid_lat, q.grid_lon, _hm(6), 144)
+            assert math.isclose(run["wind_speed_10m_kmh"][k, -1], speed, rel_tol=1e-5)
+            assert run["wind_direction_10m_deg"][k, 0] == direction
+        at = run["attrs"]
+        assert at["run_init_unix"] == _hm(6) and at["availability_unix"] == _hm(12, 24)
+        assert at["last_lead_hours"] == 144 and at["nan_cells"] == 0 and not at["backfilled"]
+        assert json.loads(at["api_params_json"])["models"] == "ecmwf_ifs"
+
+        # The 12 UTC run, published 20:01, reaches +360 h.
+        run_until(w, coll, _hm(20, 30))
+        run = A.read_run(path, "wind", _hm(12))
+        assert len(run["time_unix"]) == 361 and run["attrs"]["last_lead_hours"] == 360
+        assert _status(path, "wind", _hm(12)).probe_attempts == 14   # 18:00 .. 20:10
+
+
+def test_wind_retries_only_failed_chunks():
+    with tempfile.TemporaryDirectory() as tmp, chunk_size(2):
+        w = World(_hm(12, 30))
+        coll, route = make_collector(w, os.path.join(tmp, "a.h5"))
+        q = route.plan.queries[C.WIND]
+        assert len(q) >= 3
+        second = f"latitude={q[2].query_lat:.6f}"
+        w.fail(lambda u: "single-runs" in u and second in u, lambda: _http_error(503, "busy"), 2)
+        with captured() as log:
+            coll.step()
+        assert _status(coll.routes[0].path, "wind", _hm(6)).status == "pending"
+        assert any("chunk 2/" in m for m in log.messages())
+        first_round = len(w.data_urls("single-runs"))
+        run_until(w, coll, _hm(13))
+        row = _status(coll.routes[0].path, "wind", _hm(6))
+        assert row.status == "complete"
+        retried = w.data_urls("single-runs")[first_round:]
+        assert len(retried) == 1 and second in retried[0]          # only the failed chunk
+        assert row.fetch_requests == first_round - 1 + 1           # probe excluded
+
+
+def test_wind_missed_at_deadline_then_backfilled():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        del w.wind_published[_hm(6)]                  # the 06 UTC run never shows up
+        coll, route = make_collector(w, path)
+        with captured() as log:
+            run_until(w, coll, _hm(20, 0))
+            assert _status(path, "wind", _hm(6)).status == "pending"
+            run_until(w, coll, _hm(20, 15))           # 12 UTC published at 20:01
+        row = _status(path, "wind", _hm(6))
+        assert row.status == "missed" and "backfill" in row.note
+        assert row.probe_attempts == 49                # 12:00 .. 20:00 every 10 minutes
+        assert any("wind run 2026-10-14T06 missed" in m for m in log.messages())
+        assert not A.has_run(path, "wind", _hm(6))
+
+        n_wind = len(route.plan.queries[C.WIND])
+        assert coll.backfill_wind(dry_run=True) == n_wind
+        assert _status(path, "wind", _hm(6)).status == "missed"
+        w.wind_published[_hm(6)] = _hm(12, 24)        # it is in the archive after all
+        with captured():
+            assert coll.backfill_wind() == n_wind
+        assert _status(path, "wind", _hm(6)).status == "complete"
+        run = A.read_run(path, "wind", _hm(6))
+        assert run["attrs"]["backfilled"] and run["attrs"]["first_probe_success_unix"] == -1
+        assert coll.backfill_wind(dry_run=True) == 0
+
+
+# --- Currents --------------------------------------------------------------------
+
+def test_current_waits_for_availability_then_fetches_the_full_span():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(11))
+        coll, route = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(12, 10))
+            assert _status(path, "current", _hm(0)).status == "pending"
+            assert not w.data_urls("/v1/marine")          # metadata only so far
+            run_until(w, coll, _hm(12, 20))
+        row = _status(path, "current", _hm(0))
+        assert row.status == "complete"
+        assert row.availability_unix == _hm(12, 5) and row.first_probe_success_unix == _hm(12, 10)
+        urls = w.data_urls("/v1/marine")
+        assert len(urls) == 1 and "start_hour=2026-10-14T00%3A00" in urls[0]
+        assert urllib.parse.parse_qs(urllib.parse.urlsplit(urls[0]).query)["end_hour"] == \
+            ["2026-10-23T23:00"]
+        run = A.read_run(path, "current", _hm(0))
+        assert run["time_unix"][0] == _hm(0) and len(run["time_unix"]) == 240
+        assert run["attrs"]["fetch_start_unix"] >= _hm(12, 15)        # availability + 10 min
+        assert (run["ocean_current_direction_deg"] == float((_hm(0) // 86400) % 360)).all()
+
+
+def test_current_late_retry_after_midnight_keeps_the_first_day():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        w.fail(lambda u: "/v1/marine" in u and w.t < _hm(0, 30, day=1),
+               lambda: _http_error(502, "bad gateway"))
+        coll, _ = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(1, 0, day=1))
+        assert _status(path, "current", _hm(0)).status == "complete"
+        run = A.read_run(path, "current", _hm(0))
+        assert run["time_unix"][0] == _hm(0) and len(run["time_unix"]) == 240
+        assert run["attrs"]["fetch_end_unix"] >= _hm(0, 30, day=1)
+
+
+def test_current_missed_at_the_hard_deadline():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        w.fail(lambda u: "/v1/marine" in u, lambda: _http_error(503, "busy"))
+        coll, _ = make_collector(w, path)
+        with captured() as log:
+            run_until(w, coll, _hm(12, 0, day=1))
+            assert _status(path, "current", _hm(0)).status == "pending"
+            run_until(w, coll, _hm(12, 30, day=1))   # run D + 1 published at 12:05
+        row = _status(path, "current", _hm(0))
+        assert row.status == "missed" and "no archive" in row.note
+        assert not A.has_run(path, "current", _hm(0))
+        assert any("current run 2026-10-14T00 missed" in m for m in log.messages(logging.ERROR))
+
+
+def test_current_discarded_if_the_run_changes_during_the_fetch():
+    with tempfile.TemporaryDirectory() as tmp, chunk_size(2):
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 15))
+        coll, route = make_collector(w, path)
+        assert len(route.plan.queries[C.CURRENT]) > 2
+
+        def publish_next_day(url):
+            if "/v1/marine" in url and len(w.data_urls("/v1/marine")) == 2:
+                w.current_published[_hm(0, day=1)] = w.t   # run D + 1 appears mid-fetch
+        w.hooks.append(publish_next_day)
+        with captured() as log:
+            coll.step()
+        row = _status(path, "current", _hm(0))
+        assert row.status == "discarded" and "could mix runs" in row.note
+        assert not A.has_run(path, "current", _hm(0))
+        assert any("discarded" in m for m in log.messages(logging.ERROR))
+
+
+def test_current_refetched_if_republished_during_the_fetch():
+    with tempfile.TemporaryDirectory() as tmp, chunk_size(2):
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 15))
+        coll, route = make_collector(w, path)
+        n_chunks = -(-len(route.plan.queries[C.CURRENT]) // 2)
+
+        def republish(url):
+            if "/v1/marine" in url and len(w.data_urls("/v1/marine")) == 2:
+                w.current_published[_hm(0)] = _hm(12, 14)   # same run, new availability time
+        w.hooks.append(republish)
+        with captured() as log:
+            run_until(w, coll, _hm(13))
+        assert _status(path, "current", _hm(0)).status == "complete"
+        assert len(w.data_urls("/v1/marine")) == 2 * n_chunks
+        assert A.read_run(path, "current", _hm(0))["attrs"]["availability_unix"] == _hm(12, 14)
+        assert any("republished" in m for m in log.messages())
+
+
+# --- Checks, restarts, limits ------------------------------------------------------
+
+def test_nan_and_substitutions_are_logged_and_counted():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 30))
+        plan = C.build_sampling_plan(SHORT_ROUTE)
+        nan_q, shifted_q = plan.queries[C.CURRENT][1], plan.queries[C.WIND][0]
+        w.nan_cells.add((CURRENT_GRID.name, nan_q.cell))
+        w.shifted_cells.add((WIND_GRID.name, shifted_q.cell))
+        coll, _ = make_collector(w, path, plan)
+        with captured() as log:
+            run_until(w, coll, _hm(13))
+        cur = A.read_run(path, "current", _hm(0))
+        assert cur["attrs"]["nan_cells"] == 1 and cur["attrs"]["substituted_cells"] == 0
+        assert np.isnan(cur["ocean_current_velocity_kmh"][1]).all()
+        assert len(cur["time_unix"]) == 240            # a NaN cell does not shorten the run
+        wind = A.read_run(path, "wind", _hm(6))
+        assert wind["attrs"]["substituted_cells"] == 1 and wind["attrs"]["nan_cells"] == 0
+        assert abs(wind["served_lat"][0] - (shifted_q.grid_lat + 1 / 12)) < 1e-4
+        assert any("NaN in model inputs at 1 of" in m for m in log.messages(logging.WARNING))
+        assert any(f"cell {nan_q.cell}" in m for m in log.messages(logging.WARNING))
         assert any("1 of %d cells served by another grid point" % len(plan.queries[C.WIND]) in m
-                   for m in infos)
-        assert any("same as last sample" in m for m in infos)
+                   for m in log.messages(logging.INFO))
 
-        attrs = get_attrs(path)
-        assert attrs["sampling"] == "subsegments" and attrs["epoch_unix"] == T0
-        assert attrs["plan_fingerprint"] == plan.fingerprint
+
+def test_restart_resumes_from_the_runs_table():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        coll, route = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(13))
+        assert _status(path, "wind", _hm(6)).status == "complete"
+        assert _status(path, "current", _hm(0)).status == "complete"
+
+        # Stopped for a day: the next restart happens on day D + 1 at 12:20.
+        w.t = _hm(12, 20, day=1)
+        n_before = len(w.data_urls())
+        coll, route = make_collector(w, path)
+        assert route.attrs["first_wind_run_unix"] == _hm(6)          # from the file
+        with captured() as log:
+            run_until(w, coll, _hm(13, 0, day=1))
+        status = {(r.grid, A.run_name(r.run_init_unix)): r.status
+                  for r in A.read_runs(path).itertuples()}
+        assert status == {("wind", "2026-10-14T06"): "complete",
+                          ("wind", "2026-10-14T12"): "missed",
+                          ("wind", "2026-10-14T18"): "missed",
+                          ("wind", "2026-10-15T00"): "complete",   # 06 UTC not out until 12:24
+                          ("wind", "2026-10-15T06"): "complete",
+                          ("current", "2026-10-14T00"): "complete",
+                          ("current", "2026-10-15T00"): "complete"}
+        new = w.data_urls()[n_before:]
+        assert not any("run=2026-10-14T06" in u for u in new)        # nothing fetched twice
+        assert sum("missed" in m for m in log.messages()) == 2
+        assert len(coll.missed_wind_runs()) == 2
+
+        # A crash after a run was stored but before /runs was updated.
+        w.t = _hm(0, 30, day=2)
+        coll.routes[0].add_due_runs(w.t)
+        coll.routes[0].flush()
+        stored = A.read_run(path, "wind", _hm(6, day=1))
+        A.write_run(path, "wind", _hm(12, day=1), stored["time_unix"],
+                    {k: stored[k] for k in ("wind_speed_10m_kmh", "wind_direction_10m_deg")},
+                    stored["served_lat"], stored["served_lon"])
+        assert _status(path, "wind", _hm(12, day=1)).status == "pending"
+        _, route = make_collector(w, path)
+        assert route.rows[("wind", _hm(12, day=1))]["status"] == "complete"
+
+
+def test_changed_route_is_refused():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        coll, _ = make_collector(w, path)
+        coll.routes[0].create(w.t)
+        other = C.build_sampling_plan(SHORT_ROUTE[:-1] + [(52.13, -33.62)])
+        try:
+            C.RouteRuns("Short", other, path)
+            raise AssertionError("expected PlanMismatch")
+        except C.PlanMismatch:
+            pass
+
+
+def test_daily_limit_stops_the_step():
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(_hm(12, 30))
+        w.fail(lambda u: True, lambda: _http_error(429, "Daily API request limit exceeded. "
+                                                        "Please try again tomorrow."))
+        coll, _ = make_collector(w, os.path.join(tmp, "a.h5"))
+        with captured() as log:
+            wake = coll.step()
+        assert len(w.data_urls()) == 1                       # nothing after the refusal
+        assert wake >= _hm(12, 40)
+        assert any("daily limit" in m for m in log.messages(logging.ERROR))
+
+
+def test_archive_round_trip():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        coll, route = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(20, 30))
+        attrs = A.read_attrs(path)
+        assert attrs["layout"] == A.LAYOUT and attrs["plan_fingerprint"] == route.plan.fingerprint
         assert json.loads(attrs["wind_api_params_json"]) == WIND_GRID.api_params
         assert json.loads(attrs["current_api_params_json"]) == CURRENT_GRID.api_params
-        assert "not collected" in attrs["wave_height_m"]
-
-        md = read_metadata(path)
-        assert list(md.node_id) == list(range(n))
-        assert md.waypoint_name.iloc[0].startswith("leg00_")
-        assert list(md.columns[:len(METADATA_DTYPE.names)]) == list(METADATA_DTYPE.names)
-
-        act = read_actual(path, sample_hour=6)
-        assert len(act) == n and act.sample_hour.dtype == np.int32
-        k = plan.cell_index[C.WIND][0]
-        assert abs(act.wind_served_lat.iloc[0] - (plan.queries[C.WIND][k].grid_lat + 1 / 12)) < 1e-4
-        bad = list(nan_cell.subsegments)
-        assert act.ocean_current_velocity_kmh.iloc[bad].isna().all()
-        assert not act.drop(index=bad).ocean_current_velocity_kmh.isna().any()
-        assert act.wave_height_m.isna().all()
-
-        pred = read_predicted(path, sample_hour=0)
-        assert len(pred) == n * nt and pred.forecast_hour.dtype == np.int32
-        assert set(pred.forecast_hour) == set(range(-8, nt - 8))
-        pred6 = read_predicted(path, sample_hour=6, forecast_hour=0)
-        assert len(pred6) == n                                  # 14:00 UTC, lead 0
-
-        samples = read_samples(path)
-        assert list(samples.sample_hour) == [0, 6]
-        s0 = samples.iloc[0]
-        assert s0.reference_time_unix == T0 and s0.wind_run_init_unix == T0 - 8 * 3600
-        assert s0.current_nan_cells == 1 and s0.wind_nan_cells == 0
-        assert s0.wind_substituted_cells == 1 and s0.current_substituted_cells == 0
-
-        # Restart: the epoch comes from the file, the next sample is hour 12.
-        rc2 = C.RouteCollector("Short", plan, path, 6, 8, get=FakeApi(now=T0 + 12 * 3600))
-        assert rc2.epoch_unix == T0 and rc2.sample_hour(T0 + 12 * 3600) == 12
-        assert rc2.collect(T0 + 12 * 3600, _pacer()[0])
-        assert get_completed_runs(path) == [0, 6, 12]
-
-        # A changed route or schedule must not be appended to the old file.
-        other = C.build_sampling_plan(SHORT_ROUTE[:-1] + [(52.13, -33.62)])
-        for args in ((other, 6, 8), (plan, 6, 7), (plan, 3, 8)):
-            try:
-                C.RouteCollector("Short", args[0], path, args[1], args[2], get=api)
-                raise AssertionError(f"expected PlanMismatch for {args[1:]}")
-            except C.PlanMismatch:
-                pass
-
-
-def test_failed_sample_writes_nothing():
-    plan = C.build_sampling_plan(SHORT_ROUTE)
-    api = FakeApi(errors=[_http_error(429, "Daily API request limit exceeded.")], meta_fails=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "x.h5")
-        rc = C.RouteCollector("X", plan, path, 6, 8, get=api)
-        h = _capture()
-        try:
-            assert not rc.collect(T0, _pacer()[0])
-        finally:
-            _release(h)
-        assert get_completed_runs(path) == [] and len(read_predicted(path)) == 0
-        assert len(read_samples(path)) == 0
-        assert any("not collected" in m for m in h.messages(logging.ERROR))
-        assert sum("Could not read model metadata" in m for m in h.messages()) == 2
-
-
-def test_legacy_schema_still_works():
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "legacy.h5")
-        md = pd.DataFrame({"node_id": [0, 1], "lon": [1.0, 2.0], "lat": [3.0, 4.0],
-                           "waypoint_name": ["A", "B"], "is_original": [True, False],
-                           "distance_from_start_nm": [0.0, 5.0], "segment": [0, 0]})
-        create_hdf5(path, md, {"route_name": "legacy"})
-        weather = {"wind_speed_10m_kmh": 10.0, "wind_direction_10m_deg": 90.0,
-                   "beaufort_number": 2, "wave_height_m": 1.0,
-                   "ocean_current_velocity_kmh": 1.0, "ocean_current_direction_deg": 45.0}
-        append_actual(path, pd.DataFrame([{"node_id": 0, "sample_hour": 0, **weather}]))
-        append_predicted(path, pd.DataFrame([{"node_id": 1, "forecast_hour": 3,
-                                              "sample_hour": 0, **weather}]))
-        assert list(read_metadata(path).columns) == list(METADATA_DTYPE.names)
-        assert read_metadata(path).waypoint_name.tolist() == ["A", "B"]
-        assert list(read_actual(path).columns) == list(ACTUAL_DTYPE.names)
-        assert list(read_predicted(path).columns) == list(PREDICTED_DTYPE.names)
-        assert get_completed_runs(path) == [0] and len(read_samples(path)) == 0
-        try:
-            create_hdf5(path, md.drop(columns="segment"))
-            raise AssertionError("expected ValueError for a missing metadata column")
-        except ValueError:
-            pass
+        assert attrs["wind_api_url"].startswith("https://single-runs-api")
+        assert "not collected" in attrs["wave_height"]
+        plan = A.read_plan(path)
+        assert len(plan["subsegments"]) == len(route.plan.subsegments)
+        assert list(plan["wind_cells"]["row"]) == [q.cell[0] for q in route.plan.queries[C.WIND]]
+        assert A.run_inits(path, "wind") == [_hm(6), _hm(12)]
+        assert A.run_inits(path, "current") == [_hm(0)]
+        runs = A.read_runs(path)
+        assert set(runs.status) == {"complete"} and runs.run_init_unix.dtype == np.int64
+        # The product builder's lookup: subsegment -> cell row of a run.
+        assert plan["subsegments"]["current_cell"].dtype == np.int32
+        k = int(plan["subsegments"]["current_cell"].iloc[-1])
+        cur = A.read_run(path, "current", _hm(0))
+        q = route.plan.queries[C.CURRENT][k]
+        assert math.isclose(cur["ocean_current_velocity_kmh"][k, 5],
+                            current_value(q.grid_lat, q.grid_lon, _hm(0), _hm(5))[0], rel_tol=1e-5)
 
 
 # --- run_all.py -----------------------------------------------------------------
 
-def _run_all_main(args):
-    """run_all.main(args) with its log output captured; returns (exit code, output)."""
-    import contextlib
+def _run_all(args):
     import run_all
     root = logging.getLogger()
     before, level = list(root.handlers), root.level
@@ -663,28 +731,32 @@ def _run_all_main(args):
         with contextlib.redirect_stderr(out):
             code = run_all.main(args)
     finally:
-        for hnd in root.handlers[:]:
-            if hnd not in before:
-                root.removeHandler(hnd)
+        for h in root.handlers[:]:
+            if h not in before:
+                root.removeHandler(h)
         root.setLevel(level)
     return code, out.getvalue()
 
 
-def test_run_all_dry_run_and_budget():
+def test_run_all_dry_run_and_backfill_report():
     import run_all
     with tempfile.TemporaryDirectory() as tmp:
-        for route in ("1", "2"):
-            code, out = _run_all_main(["--route", route, "--dry-run", "--data-dir", tmp])
-            assert code == 0 and f"Route {route}" in out and "ERROR" not in out
-        code, out = _run_all_main(["--route", "all", "--dry-run", "--data-dir", tmp])
-        assert code == 1 and "run one route per machine" in out     # over the daily limit
-        assert os.listdir(tmp) == []                                 # a dry run writes nothing
-    plans = run_all.build_plans(["1", "2"])
-    lines, per_day = run_all.budget_report(plans)
-    per_sample = {k: sum(C.calls_per_sample(p).values()) for k, p in plans.items()}
-    assert all(v * 4 < C.API_LIMITS["day"] for v in per_sample.values())
-    assert per_day == 4 * sum(per_sample.values()) > C.API_LIMITS["day"]
-    assert sum(per_sample.values()) < C.API_LIMITS["hour"]
+        code, out = _run_all(["--route", "all", "--dry-run", "--data-dir", tmp])
+        assert code == 0 and "Total:" in out and "ERROR" not in out
+        assert os.listdir(tmp) == []                                  # nothing written
+        code, out = _run_all(["--route", "2", "--backfill-wind", "--dry-run", "--data-dir", tmp])
+        assert code == 3 and "No archive" in out
+
+        # An archive for Route 2 with one missed wind run.
+        plan = run_all.build_plans(["2"])["2"]
+        route = C.RouteRuns("Route 2", plan, os.path.join(tmp, run_all.ROUTES["2"]["hdf5"]),
+                            clock=lambda: _hm(13))
+        route.create(_hm(13))
+        route.add_due_runs(_hm(13))
+        route.finish("wind", _hm(6), "missed", "test")
+        code, out = _run_all(["--route", "2", "--backfill-wind", "--dry-run", "--data-dir", tmp])
+        assert code == 0
+        assert f"Backfill: 1 missed wind runs, {len(plan.queries[C.WIND])} API calls" in out
 
 
 def test_legacy_collect_is_removed():
