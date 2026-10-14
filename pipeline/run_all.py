@@ -1,214 +1,272 @@
 #!/usr/bin/env python3
-"""Unified collector — runs Route 1, Route 2 sequentially per NWP cycle.
+"""Live weather collector for Route 1 and Route 2, sampled by subsegment.
 
-Avoids API rate limits by ensuring only one experiment hits the API at a time.
-Shares a single API client and respects a configurable delay between chunks.
+Every 6 hours, a few hours after each ECMWF IFS run becomes available, asks
+Open-Meteo once per distinct wind cell and once per distinct current cell of
+each selected route (collect/collector.py) and appends one sample to the
+route's HDF5 file, with one node per subsegment.
+
+The free API allows 10,000 calls per day per IP. Route 1 costs about 7,400
+calls per day and Route 2 about 5,200, so run one route per machine:
+
+    python3 run_all.py --route 1             # Route 1, Persian Gulf -> Strait of Malacca
+    python3 run_all.py --route 2             # Route 2, St. John's -> Liverpool
+    python3 run_all.py --route all --dry-run # partition and API budget only, no API calls
+    python3 run_all.py --route 2 --once --data-dir /tmp/smoke   # one sample now, then exit
+
+Routes are read from config/routes/<name>.yaml at start-up. If the waypoints
+have changed since an output file was created, the program refuses to append
+to it; start a new file instead.
+
+Stop with Ctrl+C or SIGTERM: the current sample is finished first (a second
+Ctrl+C stops at once). Restarting resumes the same files.
 """
-import os
-import sys
-import signal
-import time
+import argparse
 import logging
-from datetime import datetime, timezone, timedelta
+import os
+import signal
+import sys
+import time
+from pathlib import Path
 
-import pandas as pd
+PIPELINE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(PIPELINE_DIR))
 
-sys.path.insert(0, os.path.expanduser("~/Ami/pipeline"))
-
-from collect.collector import (
-    setup_api_client,
-    fetch_wind_bulk,
-    fetch_marine_bulk,
-    _parse_bulk_responses,
-    _nan_actual_row,
-    _next_nwp_time,
-    BULK_CHUNK_SIZE,
+from collect.collector import (  # noqa: E402
+    API_LIMITS,
+    CHUNK_SIZE,
+    CURRENT,
+    FORECAST_DAYS,
+    SECONDS_PER_CHUNK,
+    WAVE_HEIGHT_NOTE,
+    WIND,
+    Pacer,
+    PlanMismatch,
+    RouteCollector,
+    build_sampling_plan,
+    calls_per_sample,
+    previous_slot,
+    utc,
 )
-from collect.waypoints import generate_waypoints, load_route_config
-from shared.hdf5_io import create_hdf5, append_actual, append_predicted, get_completed_runs
+from collect.waypoints import load_route_config  # noqa: E402
+from shared.hdf5_io import PREDICTED_DTYPE  # noqa: E402
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("run_all")
 
 # ---------------------------------------------------------------------------
-# Experiment definitions
+# Routes
 # ---------------------------------------------------------------------------
 
-EXPERIMENTS = [
-    {
-        "name": "Route 1",
-        "route": "persian_gulf_malacca",
-        "interval_nm": 25,
-        "hdf5": "data/experiment_b_138wp.h5",
-    },
-    {
-        "name": "Route 2",
-        "route": "st_johns_liverpool",
-        "interval_nm": 5,
-        "hdf5": "data/experiment_d_391wp.h5",
-    },
-]
-
-# Shared settings
-API_DELAY = 5.0          # seconds between API chunks
-SAMPLE_INTERVAL = 6      # hours between samples
-NWP_OFFSET_UTC = 5       # GFS data arrives ~5h after cycle start
-INTER_EXPERIMENT_DELAY = 300  # 5 min pause between experiments (avoid API throttling)
-WIND_MARINE_DELAY = 60   # seconds pause between wind and marine bulk calls
+ROUTES = {
+    "1": {"name": "Route 1", "route": "persian_gulf_malacca", "hdf5": "route1_subsegments.h5"},
+    "2": {"name": "Route 2", "route": "st_johns_liverpool", "hdf5": "route2_subsegments.h5"},
+}
 
 # ---------------------------------------------------------------------------
-# Single-sample collection for one experiment
+# Timing
 # ---------------------------------------------------------------------------
 
-def collect_one_sample(client, exp, sample_hour, base_dir):
-    """Collect one sample_hour for one experiment. Returns True on success."""
-    hdf5_path = os.path.join(base_dir, exp["hdf5"])
-    route_config = load_route_config({"collection": {"route": exp["route"]}})
-    waypoints_df = generate_waypoints(route_config, interval_nm=exp["interval_nm"])
+SAMPLE_INTERVAL_HOURS = 6
 
-    # Create HDF5 if first run
-    if not os.path.exists(hdf5_path):
-        attrs = {
-            "route_name": route_config.get("name", "unknown"),
-            "interval_nm": exp["interval_nm"],
-            "planned_hours": 0,
-            "sample_interval_hours": SAMPLE_INTERVAL,
-            "source": "live_collection",
-        }
-        create_hdf5(hdf5_path, waypoints_df, attrs)
-        logger.info("[%s] Created HDF5: %s", exp["name"], hdf5_path)
+# Samples are taken at NWP_OFFSET_HOURS after each 00/06/12/18 UTC cycle,
+# i.e. at 02, 08, 14 and 20 UTC.
+#
+# Wind is ECMWF IFS (models=ecmwf_ifs): runs at 00/06/12/18 UTC, updated every
+# 6 h (open-meteo.com/en/docs/ecmwf-api). Open-Meteo's model metadata
+# (api.open-meteo.com/data/ecmwf_ifs/static/meta.json, read 2026-10-14) had
+# the 06 UTC run available on the API at 12:24 UTC, 6.4 h after the cycle
+# start. The 00 and 12 UTC runs reach 15 days, and ECMWF's dissemination
+# schedule ends them about 1 h later than the 144 h runs at 06 and 18 UTC
+# (07:34 vs 12:27 UTC), so they should arrive about 7.5 h after the cycle
+# start. 8 h leaves a margin for all four runs.
+#
+# Currents are Meteo-France SMOC (models=meteofrance_currents): one run per
+# day, updated every 24 h (open-meteo.com/en/docs/marine-weather-api); the
+# metadata had the 00 UTC run available at 12:05 UTC, so the 14 UTC sample is
+# the first to see each new run.
+#
+# Each sample logs and stores (/samples) the run it was served from, and
+# warns when that run is older than MAX_RUN_AGE_HOURS.
+NWP_OFFSET_HOURS = 8
+MAX_RUN_AGE_HOURS = {
+    WIND: NWP_OFFSET_HOURS + SAMPLE_INTERVAL_HOURS / 2,   # one ECMWF cycle behind
+    CURRENT: 36.0,                                         # one SMOC day behind
+}
 
-    # Skip if already collected
-    completed = get_completed_runs(hdf5_path)
-    if sample_hour in completed:
-        logger.info("[%s] sample_hour %d already collected, skipping", exp["name"], sample_hour)
-        return True
+# A cycle missed by a restart is still collected if it is at most this late;
+# the current conditions are then those of the query time.
+LATE_GRACE_SECONDS = 3600
 
-    n_wp = len(waypoints_df)
-    n_chunks = (n_wp + BULK_CHUNK_SIZE - 1) // BULK_CHUNK_SIZE
-    logger.info("[%s] Collecting sample_hour %d — %d waypoints (%d chunks)",
-                exp["name"], sample_hour, n_wp, n_chunks)
 
-    lats = waypoints_df["lat"].tolist()
-    lons = waypoints_df["lon"].tolist()
-    node_ids = waypoints_df["node_id"].tolist()
-    voyage_start_time = datetime.now()
+# ---------------------------------------------------------------------------
+# Set-up
+# ---------------------------------------------------------------------------
 
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            wind_responses = fetch_wind_bulk(client, lats, lons, API_DELAY)
-            time.sleep(WIND_MARINE_DELAY)
-            marine_responses = fetch_marine_bulk(client, lats, lons, API_DELAY)
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--route", required=True, choices=sorted(ROUTES) + ["all"],
+                    help="route to collect: 1, 2 or all (all exceeds the free daily API limit)")
+    ap.add_argument("--data-dir", default=str(PIPELINE_DIR / "data"),
+                    help="directory of the HDF5 output (default: pipeline/data)")
+    ap.add_argument("--log-file", help="log file (default: <data-dir>/collector_route<N>.log)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="partition the routes and print the API budget; no API calls")
+    ap.add_argument("--once", action="store_true",
+                    help="collect the most recent scheduled cycle now, however late, then exit")
+    ap.add_argument("--allow-over-budget", action="store_true",
+                    help="run even if the planned calls exceed the free daily limit")
+    return ap.parse_args(argv)
 
-            actual_rows, predicted_rows, failed = _parse_bulk_responses(
-                wind_responses, marine_responses, node_ids,
-                sample_hour, voyage_start_time,
-            )
-            successful = n_wp - failed
-            break
-        except Exception as e:
-            err_str = str(e).lower()
-            is_retryable = ("rate" in err_str or "limit" in err_str
-                            or "timeout" in err_str or "timed out" in err_str
-                            or "504" in err_str or "503" in err_str)
-            if is_retryable and attempt < max_retries - 1:
-                wait = 120 * (attempt + 1)  # 2min, 4min, 6min, 8min backoff
-                logger.warning("[%s] API error (attempt %d/%d), retrying in %ds: %s",
-                               exp["name"], attempt + 1, max_retries, wait, e)
-                time.sleep(wait)
-                continue
-            logger.error("[%s] API call failed (attempt %d/%d): %s",
-                         exp["name"], attempt + 1, max_retries, e)
-            actual_rows = [_nan_actual_row(nid, sample_hour) for nid in node_ids]
-            predicted_rows = []
-            failed = n_wp
-            successful = 0
-            break
 
-    append_actual(hdf5_path, pd.DataFrame(actual_rows))
-    if predicted_rows:
-        append_predicted(hdf5_path, pd.DataFrame(predicted_rows))
+def setup_logging(log_file=None):
+    fmt = logging.Formatter("%(asctime)sZ %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    fmt.converter = time.gmtime
+    handlers = [logging.StreamHandler()]
+    if log_file:
+        os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
+        handlers.append(logging.FileHandler(log_file))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    for h in handlers:
+        h.setFormatter(fmt)
+        root.addHandler(h)
 
-    h5_mb = os.path.getsize(hdf5_path) / (1024 * 1024)
-    total = len(completed) + 1
-    logger.info("[%s] Done: %d/%d OK, %d failed | predicted: %d rows | total samples: %d | %.1f MB",
-                exp["name"], successful, n_wp, failed, len(predicted_rows), total, h5_mb)
-    return failed < n_wp  # success if at least some waypoints succeeded
+
+def build_plans(keys):
+    plans = {}
+    for k in keys:
+        route = ROUTES[k]
+        cfg = load_route_config({"collection": {"route": route["route"]}})
+        plans[k] = build_sampling_plan(cfg["waypoints"], route_key=route["route"],
+                                       route_name=cfg.get("name", route["route"]))
+    return plans
+
+
+def budget_report(plans):
+    """Lines describing the API budget, and the planned calls per day."""
+    per_day = 24 // SAMPLE_INTERVAL_HOURS
+    lines, total = [], 0.0
+    for k, plan in plans.items():
+        calls = calls_per_sample(plan)
+        n = sum(calls.values())
+        total += n
+        chunks = sum(-(-len(plan.queries[g]) // CHUNK_SIZE) for g in plan.queries)
+        n_times = 24 * FORECAST_DAYS        # hourly values per subsegment and sample
+        mb = len(plan.subsegments) * n_times * PREDICTED_DTYPE.itemsize * per_day / 2**20
+        lines.append(
+            f"{ROUTES[k]['name']} ({plan.route_key}): {len(plan.waypoints)} waypoints, "
+            f"{sum(s.length_nm for s in plan.subsegments):.1f} NM after the port trim, "
+            f"{len(plan.subsegments)} subsegments, {len(plan.queries[WIND])} wind cells, "
+            f"{len(plan.queries[CURRENT])} current cells -> {n:.0f} calls per sample, "
+            f"{n * per_day:.0f} per day; {chunks} requests, about "
+            f"{chunks * SECONDS_PER_CHUNK / 60:.1f} min per sample; "
+            f"predicted_weather grows about {mb:.0f} MB per day before compression")
+    lines.append(f"Total: {total:.0f} calls per sample, {total * per_day:.0f} per day at "
+                 f"{per_day} samples per day (limits: {API_LIMITS['day']} per day, "
+                 f"{API_LIMITS['hour']} per hour, {API_LIMITS['minute']} per minute; "
+                 f"paced at <= {CHUNK_SIZE * 60 / SECONDS_PER_CHUNK:.0f} per minute)")
+    return lines, total * per_day
+
+
+class Shutdown:
+    """First SIGINT/SIGTERM: finish the current sample, then stop. Second: stop now."""
+
+    def __init__(self):
+        self.requested = False
+        signal.signal(signal.SIGINT, self._handler)
+        signal.signal(signal.SIGTERM, self._handler)
+
+    def _handler(self, signum, frame):
+        if self.requested:
+            raise KeyboardInterrupt
+        self.requested = True
+        logger.info("Shutdown requested (%s); finishing the current sample",
+                    signal.Signals(signum).name)
+
+    def sleep_until(self, t):
+        while not self.requested and time.time() < t:
+            time.sleep(min(30.0, max(0.0, t - time.time())))
 
 
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 
-def main():
-    base_dir = os.path.expanduser("~/Ami/pipeline")
+def main(argv=None):
+    args = parse_args(argv)
+    keys = sorted(ROUTES) if args.route == "all" else [args.route]
+    log_file = None
+    if not args.dry_run:
+        log_file = args.log_file or os.path.join(
+            args.data_dir, "collector_" + "_".join(f"route{k}" for k in keys) + ".log")
+    setup_logging(log_file)
 
-    # Graceful shutdown
-    shutdown = [False]
-    def _handler(signum, frame):
-        logger.info("Shutdown requested — finishing current experiment...")
-        shutdown[0] = True
-    signal.signal(signal.SIGINT, _handler)
-    signal.signal(signal.SIGTERM, _handler)
+    plans = build_plans(keys)
+    lines, calls_per_day = budget_report(plans)
+    for line in lines:
+        logger.info(line)
+    over = calls_per_day > API_LIMITS["day"]
+    if over:
+        logger.error("Planned %.0f calls per day exceed the free limit of %d per IP: run one "
+                     "route per machine (--route 1 / --route 2)", calls_per_day, API_LIMITS["day"])
+    if args.dry_run:
+        return 1 if over else 0
+    if over and not args.allow_over_budget:
+        return 2
 
-    client = setup_api_client()
+    try:
+        collectors = [
+            RouteCollector(ROUTES[k]["name"], plans[k], os.path.join(args.data_dir, ROUTES[k]["hdf5"]),
+                           SAMPLE_INTERVAL_HOURS, NWP_OFFSET_HOURS, MAX_RUN_AGE_HOURS)
+            for k in keys
+        ]
+    except PlanMismatch as e:
+        logger.error("%s", e)
+        return 3
 
-    # Determine next sample_hour from existing data (use Route 1 as reference)
-    ref_path = os.path.join(base_dir, EXPERIMENTS[0]["hdf5"])
-    if os.path.exists(ref_path):
-        completed = get_completed_runs(ref_path)
-        next_hour = (max(completed) + SAMPLE_INTERVAL) if completed else 0
-    else:
-        next_hour = 0
+    logger.info("Wave height: %s", WAVE_HEIGHT_NOTE)
+    logger.info("Sampling every %d h at %s UTC; output: %s", SAMPLE_INTERVAL_HOURS,
+                ", ".join(f"{(NWP_OFFSET_HOURS + i * SAMPLE_INTERVAL_HOURS) % 24:02d}:00"
+                          for i in range(24 // SAMPLE_INTERVAL_HOURS)),
+                ", ".join(c.path for c in collectors))
 
-    logger.info("Starting unified collector — next sample_hour: %d", next_hour)
-    logger.info("Experiments: %s", ", ".join(e["name"] for e in EXPERIMENTS))
-    logger.info("API delay: %.1fs, sample interval: %dh, NWP offset: %d UTC",
-                API_DELAY, SAMPLE_INTERVAL, NWP_OFFSET_UTC)
-
-    sample_hour = next_hour
-    while not shutdown[0]:
-        cycle_start = time.time()
-        logger.info("=== Cycle: sample_hour %d ===", sample_hour)
-
-        for i, exp in enumerate(EXPERIMENTS):
-            if shutdown[0]:
+    shutdown = Shutdown()
+    pacer = Pacer(SECONDS_PER_CHUNK)
+    attempted = set()
+    period = SAMPLE_INTERVAL_HOURS * 3600
+    while not shutdown.requested:
+        now = time.time()
+        slot = previous_slot(now, SAMPLE_INTERVAL_HOURS, NWP_OFFSET_HOURS)
+        due = [c for c in collectors
+               if (c.path, slot) not in attempted and not c.has_sample(slot)]
+        if due and (args.once or now - slot <= LATE_GRACE_SECONDS):
+            if now - slot > 600:
+                logger.warning("Collecting the %s cycle %.0f min late", utc(slot), (now - slot) / 60)
+            for c in due:
+                if shutdown.requested:
+                    break
+                attempted.add((c.path, slot))
+                try:
+                    c.collect(slot, pacer)
+                except Exception:
+                    logger.exception("[%s] sample at %s failed", c.label, utc(slot))
+            if args.once:
                 break
-            collect_one_sample(client, exp, sample_hour, base_dir)
-            # Pause between experiments to stay well under rate limits
-            if i < len(EXPERIMENTS) - 1:
-                time.sleep(INTER_EXPERIMENT_DELAY)
-
-        if shutdown[0]:
+            continue
+        if args.once:
+            logger.info("The %s cycle is already collected; nothing to do", utc(slot))
             break
-
-        cycle_elapsed = time.time() - cycle_start
-        logger.info("Cycle done in %.0fs", cycle_elapsed)
-
-        # Sleep until next NWP cycle
-        target = _next_nwp_time(NWP_OFFSET_UTC, SAMPLE_INTERVAL)
-        now = datetime.now(timezone.utc)
-        wait = max(0, (target - now).total_seconds())
-        logger.info("Next NWP update: %s UTC (waiting %.0f min)",
-                     target.strftime("%H:%M"), wait / 60)
-
-        if wait > 0:
-            try:
-                time.sleep(wait)
-            except (KeyboardInterrupt, SystemExit):
-                break
-            if shutdown[0]:
-                break
-
-        sample_hour += SAMPLE_INTERVAL
+        target = slot + period
+        logger.info("Next sample at %s (in %.0f min)", utc(target), (target - now) / 60)
+        shutdown.sleep_until(target)
 
     logger.info("Collector stopped.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        logger.info("Collector stopped at once.")
+        sys.exit(130)

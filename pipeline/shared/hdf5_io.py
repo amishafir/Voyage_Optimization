@@ -6,6 +6,15 @@ Schema:
     /actual_weather     — appendable: node_id, sample_hour, + 6 weather fields
     /predicted_weather  — appendable: node_id, forecast_hour, sample_hour, + 6 weather fields
     attrs               — voyage_start_time, route_name, created_at, source, etc.
+
+Files written by the subsegment collector (collect/collector.py, run_all.py)
+have one node per subsegment and extend this schema without changing it:
+    /metadata           the columns above + SUBSEGMENT_METADATA_FIELDS
+    /actual_weather     the columns above + SERVED_POINT_FIELDS
+    /predicted_weather  unchanged
+    /samples            appendable, one row per sample (SAMPLES_DTYPE)
+Readers that select columns by name work on both kinds of file. The append
+functions write with the dtype of the file they append to.
 """
 
 import logging
@@ -53,30 +62,86 @@ PREDICTED_DTYPE = np.dtype([
     ("sample_hour", "i4"),
 ] + WEATHER_FIELDS)
 
+# --- Extensions used by the subsegment collector -----------------------------
+
+# Extra /metadata columns: the subsegment's geometry, and for each weather grid
+# the cell (row, col) it lies in, the grid point predicted to serve that cell
+# (shared/weather_grids.py) and the position at which the API is queried.
+SUBSEGMENT_METADATA_FIELDS = [
+    ("length_nm", "f8"),
+    ("bearing_deg", "f8"),
+    ("start_lat", "f8"),
+    ("start_lon", "f8"),
+    ("end_lat", "f8"),
+    ("end_lon", "f8"),
+    ("wind_cell_row", "i4"),
+    ("wind_cell_col", "i4"),
+    ("wind_grid_lat", "f8"),
+    ("wind_grid_lon", "f8"),
+    ("wind_query_lat", "f8"),
+    ("wind_query_lon", "f8"),
+    ("current_cell_row", "i4"),
+    ("current_cell_col", "i4"),
+    ("current_grid_lat", "f8"),
+    ("current_grid_lon", "f8"),
+    ("current_query_lat", "f8"),
+    ("current_query_lon", "f8"),
+]
+
+# Extra /actual_weather columns: the grid points the APIs reported serving.
+SERVED_POINT_FIELDS = [
+    ("wind_served_lat", "f8"),
+    ("wind_served_lon", "f8"),
+    ("current_served_lat", "f8"),
+    ("current_served_lon", "f8"),
+]
+
+SUBSEGMENT_METADATA_DTYPE = np.dtype(METADATA_DTYPE.descr + SUBSEGMENT_METADATA_FIELDS)
+SUBSEGMENT_ACTUAL_DTYPE = np.dtype(ACTUAL_DTYPE.descr + SERVED_POINT_FIELDS)
+
+# One row per collected sample. Times are Unix seconds (UTC); -1 = unknown.
+SAMPLES_DTYPE = np.dtype([
+    ("sample_hour", "i4"),
+    ("reference_time_unix", "i8"),      # the time sample_hour stands for
+    ("query_start_unix", "i8"),
+    ("query_end_unix", "i8"),
+    ("wind_run_init_unix", "i8"),       # NWP run the API served, from Open-Meteo's metadata
+    ("current_run_init_unix", "i8"),
+    ("wind_nan_cells", "i4"),           # cells with NaN in a model input
+    ("current_nan_cells", "i4"),
+    ("wind_substituted_cells", "i4"),   # cells served by another grid point than predicted
+    ("current_substituted_cells", "i4"),
+])
+
 
 # ---------------------------------------------------------------------------
 # Create
 # ---------------------------------------------------------------------------
 
-def create_hdf5(path, metadata_df, attrs=None):
+def _appendable(f, name, dtype):
+    f.create_dataset(name, shape=(0,), maxshape=(None,), dtype=dtype,
+                     chunks=(10000,), compression="gzip")
+
+
+def create_hdf5(path, metadata_df, attrs=None, metadata_dtype=METADATA_DTYPE,
+                actual_dtype=ACTUAL_DTYPE, predicted_dtype=PREDICTED_DTYPE,
+                samples_dtype=None):
     """Create a new HDF5 file with metadata table and global attributes.
 
     Args:
         path: Output file path.
-        metadata_df: DataFrame with columns matching METADATA_DTYPE.
+        metadata_df: DataFrame with a column for every field of metadata_dtype.
         attrs: Optional dict of global attributes.
+        metadata_dtype, actual_dtype, predicted_dtype: Table layouts; the
+            defaults give the original schema.
+        samples_dtype: If given, also create an empty /samples table.
     """
+    missing = [n for n in metadata_dtype.names if n not in metadata_df.columns]
+    if missing:
+        raise ValueError(f"metadata_df lacks columns {missing}")
+    meta_arr = _df_to_structured(metadata_df, metadata_dtype)
+
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-
-    meta_arr = np.empty(len(metadata_df), dtype=METADATA_DTYPE)
-    meta_arr["node_id"] = metadata_df["node_id"].values
-    meta_arr["lon"] = metadata_df["lon"].values
-    meta_arr["lat"] = metadata_df["lat"].values
-    meta_arr["waypoint_name"] = metadata_df["waypoint_name"].astype(str).values.astype("S50")
-    meta_arr["is_original"] = metadata_df["is_original"].values
-    meta_arr["distance_from_start_nm"] = metadata_df["distance_from_start_nm"].values
-    meta_arr["segment"] = metadata_df["segment"].values
-
     with h5py.File(path, "w") as f:
         # Global attributes
         f.attrs["created_at"] = datetime.now().isoformat()
@@ -87,23 +152,11 @@ def create_hdf5(path, metadata_df, attrs=None):
         # Fixed metadata dataset
         f.create_dataset("metadata", data=meta_arr)
 
-        # Appendable weather datasets (start empty)
-        f.create_dataset(
-            "actual_weather",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=ACTUAL_DTYPE,
-            chunks=(10000,),
-            compression="gzip",
-        )
-        f.create_dataset(
-            "predicted_weather",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=PREDICTED_DTYPE,
-            chunks=(10000,),
-            compression="gzip",
-        )
+        # Appendable datasets (start empty)
+        _appendable(f, "actual_weather", actual_dtype)
+        _appendable(f, "predicted_weather", predicted_dtype)
+        if samples_dtype is not None:
+            _appendable(f, "samples", samples_dtype)
 
     logger.info("Created HDF5 file %s with %d nodes", path, len(metadata_df))
 
@@ -113,14 +166,26 @@ def create_hdf5(path, metadata_df, attrs=None):
 # ---------------------------------------------------------------------------
 
 def _df_to_structured(df, dtype):
-    """Convert a DataFrame to a structured NumPy array."""
+    """Convert a DataFrame to a structured NumPy array (missing columns -> 0)."""
     arr = np.empty(len(df), dtype=dtype)
     for name in dtype.names:
-        if name in df.columns:
-            arr[name] = df[name].values
-        else:
+        if name not in df.columns:
             arr[name] = 0
+        elif dtype[name].kind == "S":
+            arr[name] = df[name].astype(str).values.astype(dtype[name])
+        else:
+            arr[name] = df[name].values
     return arr
+
+
+def _append(f, name, dataframe):
+    """Append rows to table `name` of the open file, in the table's own dtype."""
+    ds = f[name]
+    arr = _df_to_structured(dataframe, ds.dtype)
+    old_len = ds.shape[0]
+    ds.resize(old_len + len(arr), axis=0)
+    ds[old_len:] = arr
+    logger.debug("Appended %d rows to %s (total %d)", len(arr), name, old_len + len(arr))
 
 
 def append_actual(path, dataframe):
@@ -130,13 +195,8 @@ def append_actual(path, dataframe):
         path: HDF5 file path.
         dataframe: DataFrame with columns: node_id, sample_hour, + 6 weather fields.
     """
-    arr = _df_to_structured(dataframe, ACTUAL_DTYPE)
     with h5py.File(path, "a") as f:
-        ds = f["actual_weather"]
-        old_len = ds.shape[0]
-        ds.resize(old_len + len(arr), axis=0)
-        ds[old_len:] = arr
-    logger.debug("Appended %d actual rows (total %d)", len(arr), old_len + len(arr))
+        _append(f, "actual_weather", dataframe)
 
 
 def append_predicted(path, dataframe):
@@ -146,13 +206,21 @@ def append_predicted(path, dataframe):
         path: HDF5 file path.
         dataframe: DataFrame with columns: node_id, forecast_hour, sample_hour, + 6 weather fields.
     """
-    arr = _df_to_structured(dataframe, PREDICTED_DTYPE)
     with h5py.File(path, "a") as f:
-        ds = f["predicted_weather"]
-        old_len = ds.shape[0]
-        ds.resize(old_len + len(arr), axis=0)
-        ds[old_len:] = arr
-    logger.debug("Appended %d predicted rows (total %d)", len(arr), old_len + len(arr))
+        _append(f, "predicted_weather", dataframe)
+
+
+def append_sample(path, actual_df, predicted_df, samples_df=None):
+    """Append one complete sample in a single file session.
+
+    /actual_weather is written last because get_completed_runs() reads it:
+    a sample counts as collected only once all its tables are written.
+    """
+    with h5py.File(path, "a") as f:
+        _append(f, "predicted_weather", predicted_df)
+        if samples_df is not None:
+            _append(f, "samples", samples_df)
+        _append(f, "actual_weather", actual_df)
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +237,21 @@ def read_metadata(path):
         arr = f["metadata"][:]
     df = pd.DataFrame(arr)
     # Decode bytes to str
-    df["waypoint_name"] = df["waypoint_name"].apply(
-        lambda b: b.decode("utf-8") if isinstance(b, bytes) else str(b)
-    )
+    for name in arr.dtype.names:
+        if arr.dtype[name].kind == "S":
+            df[name] = df[name].apply(
+                lambda b: b.decode("utf-8") if isinstance(b, bytes) else str(b)
+            )
     return df
+
+
+def read_samples(path):
+    """Read /samples (one row per sample) as DataFrame; empty if the file has none."""
+    with h5py.File(path, "r") as f:
+        if "samples" not in f:
+            return pd.DataFrame(columns=list(SAMPLES_DTYPE.names))
+        arr = f["samples"][:]
+    return pd.DataFrame(arr) if len(arr) else pd.DataFrame(columns=list(arr.dtype.names))
 
 
 def read_actual(path, sample_hour=None, node_id=None):
@@ -189,7 +268,7 @@ def read_actual(path, sample_hour=None, node_id=None):
     with h5py.File(path, "r") as f:
         arr = f["actual_weather"][:]
     if len(arr) == 0:
-        return pd.DataFrame(columns=[n for n in ACTUAL_DTYPE.names])
+        return pd.DataFrame(columns=list(arr.dtype.names))
     df = pd.DataFrame(arr)
     if sample_hour is not None:
         df = df[df["sample_hour"] == int(sample_hour)]
@@ -213,7 +292,7 @@ def read_predicted(path, sample_hour=None, forecast_hour=None, node_id=None):
     with h5py.File(path, "r") as f:
         arr = f["predicted_weather"][:]
     if len(arr) == 0:
-        return pd.DataFrame(columns=[n for n in PREDICTED_DTYPE.names])
+        return pd.DataFrame(columns=list(arr.dtype.names))
     df = pd.DataFrame(arr)
     if sample_hour is not None:
         df = df[df["sample_hour"] == int(sample_hour)]

@@ -3,6 +3,10 @@ Waypoint generation for the maritime route.
 
 Ported from: test_files/generate_intermediate_waypoints.py
 Key change: returns DataFrame (for HDF5 /metadata), not Node objects.
+
+generate_waypoints() samples at a fixed spacing along great circles; only the
+historical collectors use it. Live collection (run_all.py) samples by
+subsegment along rhumb lines instead (shared/subsegments.py, collect/collector.py).
 """
 
 import math
