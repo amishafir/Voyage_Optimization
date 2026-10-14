@@ -1,0 +1,9 @@
+# Weather collector on edison-pc (user "user"). Server time is UTC.
+# Install with: crontab ~/Ami/pipeline_v2/deploy/edison/collector.crontab
+# (this replaces the account's crontab; check crontab -l first).
+
+# Every 10 minutes: start the collector if it is not running (reboot, crash).
+*/10 * * * * /home/user/Ami/pipeline_v2/deploy/edison/ensure_collector.sh
+
+# Daily at 04:30 UTC, between fetches: copy the archives to the lab NAS.
+30 4 * * * /home/user/Ami/pipeline_v2/deploy/edison/backup_collector.sh
