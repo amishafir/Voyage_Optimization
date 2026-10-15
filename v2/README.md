@@ -11,7 +11,8 @@ re-planning is not written yet.
 Python reads the files and the command line; everything that costs time runs in
 the C++ core (`cpp/`), which Python calls through `ctypes`. The core needs only a
 C++17 compiler: `voyage_v2` compiles it on first use, and again whenever a C++
-source changes (`python3 -m voyage_v2.build` forces a rebuild). Tested on macOS
+source changes (`python3 -m voyage_v2.build` forces a rebuild). Each machine
+builds into its own `cpp/build/<host>/`, since the folder is shared by Dropbox. Tested on macOS
 (clang), edison (g++ 11, Python 3.10) and shlomo1 (g++ 8.3, Python 3.7).
 
 ## Command line
@@ -194,6 +195,39 @@ python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo 
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo        # both, compared
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --luo --epoch 4 --luo-csv luo.csv
 ```
+
+## Running on the lab machines
+
+**tsl2-mac** (Mac Studio, M3 Ultra) shares this Dropbox folder, so it runs the code in
+place. The route archives live in `pipeline/data/` (git-ignored, synced by Dropbox; refresh
+them from edison with `rsync -a edison:Ami/pipeline_v2/data/route*_runs.h5 pipeline/data/`).
+Its Python with numpy, h5py, pyyaml and pandas is the conda environment `voyage`:
+
+```bash
+ssh tsl2 'cd ~/Library/CloudStorage/Dropbox/research/SpeedControl/Voyage_Optimization && /opt/miniconda3/envs/voyage/bin/python v2/tools/benchmark.py pipeline/data'
+```
+
+Same benchmark (`v2/tools/benchmark.py`, data snapshot of 2026-10-15 12Z), one core; the plans and
+fuel are identical on all machines:
+
+| Solve | MacBook Air M3 | tsl2-mac (M3 Ultra) | shlomo1 (i9-9900K) |
+|---|---|---|---|
+| Route 1 full graph | 64 s | 58 s | 230 s |
+| Route 1 Luo 6 h / 1 h / 0.25 h | 3.3 / 24 / 117 s | 3.1 / 22 / 110 s | 9.8 / 62 / 267 s |
+| Route 2 full graph | 24 s | 22 s | 87 s |
+| Route 2 Luo 6 h / 1 h / 0.25 h | 1.3 / 10 / 45 s | 1.2 / 8.8 / 42 s | 3.9 / 25 / 107 s |
+
+**shlomo and other Linux machines** get a copy:
+
+```bash
+v2/deploy/sync_to_host.sh shlomo1            # code to ~/Ami/voyage, latest archives from edison to ~/Ami/voyage/data
+v2/deploy/sync_to_host.sh shlomo1 --code     # code only
+ssh shlomo1 'cd ~/Ami/voyage/v2 && python3 -m voyage_v2 ../data/route1_runs.h5 --start "2026-10-14 13:20" --eta 280 --solve --luo'
+```
+
+The layout under `~/Ami/voyage` mirrors the repository (`v2/`, `pipeline/shared/` for the
+tests, `data/`), so the tests run there unchanged. The C++ core is compiled on the host at
+first use. Archives are relayed from edison through the machine running the script.
 
 ## Tests
 

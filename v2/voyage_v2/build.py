@@ -1,6 +1,8 @@
 """
 Compile the C++ core (v2/cpp) into a shared library, with the system C++
 compiler and no other tools, whenever a source is newer than the library.
+Each machine builds into its own folder, cpp/build/<host>/, since the
+repository is shared through Dropbox between the laptop and tsl2-mac.
 
     python3 -m voyage_v2.build          # force a rebuild
 """
@@ -8,12 +10,14 @@ compiler and no other tools, whenever a source is newer than the library.
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
 
 CPP = Path(__file__).resolve().parents[1] / "cpp"
-LIBRARY = CPP / "build" / ("libvoyage_v2.dylib" if sys.platform == "darwin" else "libvoyage_v2.so")
+LIBRARY = (CPP / "build" / socket.gethostname().split(".")[0]
+           / ("libvoyage_v2.dylib" if sys.platform == "darwin" else "libvoyage_v2.so"))
 
 
 def _sources():
