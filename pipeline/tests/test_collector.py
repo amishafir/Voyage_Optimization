@@ -106,6 +106,8 @@ class World:
                                _hm(0, day=1): _hm(7, 30, 1), _hm(6, day=1): _hm(12, 24, 1)}
         self.current_published = {_hm(0, day=-1): _hm(12, 5, -1), _hm(0): _hm(12, 5),
                                   _hm(0, day=1): _hm(12, 5, 1)}
+        self.partial_after_s = 6 * H    # the archive serves a partial run from C + 6 h
+        self.archive_lag_s = 0          # the full run reaches the archive this long after publication
         self.nan_cells, self.shifted_cells = set(), set()
         self.failures = []      # [predicate(url), exception factory, remaining count]
         self.hooks = []         # called with each data URL before answering
@@ -152,11 +154,16 @@ class World:
         if parts.netloc == "single-runs-api.open-meteo.com":
             init = int(datetime.strptime(q["run"], "%Y-%m-%dT%H:%M")
                        .replace(tzinfo=timezone.utc).timestamp())
-            if self.wind_published.get(init, math.inf) > self.t:
+            # Like the real archive: a run answers from C + 6 h with its first 72 h
+            # while it streams in, and in full only once it is published.
+            published = self.wind_published.get(init, math.inf)
+            if self.t < min(published, init + self.partial_after_s):
                 raise _http_error(400, f"The requested model run is not available. Model: "
                                        f"ecmwf_ifs, run: {q['run']}Z")
             times = [init + h * H for h in range(24 * int(q["forecast_days"]))]
             last = C.WIND_LAST_LEAD_H[datetime.fromtimestamp(init, timezone.utc).hour]
+            if self.t < published + self.archive_lag_s:
+                last = min(last, 72)
             bodies = [self._body(WIND_GRID, lat, lon, times, q["hourly"].split(","),
                                  lambda g, t: wind_value(*g, init, (t - init) // H)
                                  if (t - init) // H <= last else (None, None))
@@ -423,12 +430,16 @@ def test_wind_probes_until_published_then_fetches_and_cuts():
             run_until(w, coll, _hm(13))
         row = _status(path, "wind", _hm(6))
         assert row.status == "complete"
-        assert row.probe_attempts == 4                       # 12:00, 12:10, 12:20 refused; 12:30 ok
-        assert _hm(12, 30) <= row.first_probe_success_unix < _hm(12, 31)
+        # The archive serves the run's first 72 h from 12:00, but the collector waits
+        # for the metadata (published 12:24) plus 10 minutes: metadata reads at 12:00,
+        # 12:10, 12:20, 12:30 and 12:34, then one archive probe.
+        assert row.probe_attempts == 6
+        assert _hm(12, 34) <= row.first_probe_success_unix < _hm(12, 35)
         assert row.availability_unix == _hm(12, 24)          # from the metadata
         n_wind = len(route.plan.queries[C.WIND])
-        assert row.fetch_requests == 1 and row.api_calls == 4 + n_wind
-        assert sum("not available yet" in m for m in log.messages(logging.INFO)) == 3
+        assert row.fetch_requests == 1 and row.api_calls == 1 + n_wind
+        assert sum("wind run" in m and "not published yet" in m
+                   for m in log.messages(logging.INFO)) == 3
 
         run = A.read_run(path, "wind", _hm(6))
         assert run["time_unix"][0] == _hm(6) and len(run["time_unix"]) == 145   # cut at +144 h
@@ -448,12 +459,12 @@ def test_wind_probes_until_published_then_fetches_and_cuts():
         run_until(w, coll, _hm(20, 30))
         run = A.read_run(path, "wind", _hm(12))
         assert len(run["time_unix"]) == 361 and run["attrs"]["last_lead_hours"] == 360
-        assert _status(path, "wind", _hm(12)).probe_attempts == 14   # 18:00 .. 20:10
+        assert _status(path, "wind", _hm(12)).probe_attempts == 16   # reads 18:00 .. 20:11, probe
 
 
 def test_wind_retries_only_failed_chunks():
     with tempfile.TemporaryDirectory() as tmp, chunk_size(2):
-        w = World(_hm(12, 30))
+        w = World(_hm(12, 35))
         coll, route = make_collector(w, os.path.join(tmp, "a.h5"))
         q = route.plan.queries[C.WIND]
         assert len(q) >= 3
@@ -483,8 +494,8 @@ def test_wind_missed_at_deadline_then_backfilled():
             assert _status(path, "wind", _hm(6)).status == "pending"
             run_until(w, coll, _hm(20, 15))           # 12 UTC published at 20:01
         row = _status(path, "wind", _hm(6))
-        assert row.status == "missed" and "backfill" in row.note
-        assert row.probe_attempts == 49                # 12:00 .. 20:00 every 10 minutes
+        assert row.status == "missed" and "archive" in row.note
+        assert row.probe_attempts == 50                # metadata reads 12:00 .. 20:10
         assert any("wind run 2026-10-14T06 missed" in m for m in log.messages())
         assert not A.has_run(path, "wind", _hm(6))
 
@@ -640,16 +651,17 @@ def test_restart_resumes_from_the_runs_table():
         status = {(r.grid, A.run_name(r.run_init_unix)): r.status
                   for r in A.read_runs(path).itertuples()}
         assert status == {("wind", "2026-10-14T06"): "complete",
-                          ("wind", "2026-10-14T12"): "missed",
-                          ("wind", "2026-10-14T18"): "missed",
+                          ("wind", "2026-10-14T12"): "complete",   # missed, a day old: backfilled
+                          ("wind", "2026-10-14T18"): "missed",     # not yet a day old
                           ("wind", "2026-10-15T00"): "complete",   # 06 UTC not out until 12:24
                           ("wind", "2026-10-15T06"): "complete",
                           ("current", "2026-10-14T00"): "complete",
                           ("current", "2026-10-15T00"): "complete"}
+        assert A.read_run(path, "wind", _hm(12))["attrs"]["backfilled"]
         new = w.data_urls()[n_before:]
         assert not any("run=2026-10-14T06" in u for u in new)        # nothing fetched twice
         assert sum("missed" in m for m in log.messages()) == 2
-        assert len(coll.missed_wind_runs()) == 2
+        assert len(coll.missed_wind_runs()) == 1
 
         # A crash after a run was stored but before /runs was updated.
         w.t = _hm(0, 30, day=2)
@@ -658,7 +670,7 @@ def test_restart_resumes_from_the_runs_table():
         stored = A.read_run(path, "wind", _hm(6, day=1))
         A.write_run(path, "wind", _hm(12, day=1), stored["time_unix"],
                     {k: stored[k] for k in ("wind_speed_10m_kmh", "wind_direction_10m_deg")},
-                    stored["served_lat"], stored["served_lon"])
+                    stored["served_lat"], stored["served_lon"], {"last_lead_hours": 360})
         assert _status(path, "wind", _hm(12, day=1)).status == "pending"
         _, route = make_collector(w, path)
         assert route.rows[("wind", _hm(12, day=1))]["status"] == "complete"
@@ -756,7 +768,91 @@ def test_run_all_dry_run_and_backfill_report():
         route.finish("wind", _hm(6), "missed", "test")
         code, out = _run_all(["--route", "2", "--backfill-wind", "--dry-run", "--data-dir", tmp])
         assert code == 0
-        assert f"Backfill: 1 missed wind runs, {len(plan.queries[C.WIND])} API calls" in out
+        assert (f"Backfill: 1 missed or incomplete wind runs, {len(plan.queries[C.WIND])} "
+                "API calls") in out
+
+
+def test_wind_waits_while_the_archive_still_holds_a_partial_run():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 30))
+        w.archive_lag_s = 20 * 60          # published 12:24, complete in the archive at 12:44
+        coll, route = make_collector(w, path)
+        with captured() as log:
+            run_until(w, coll, _hm(13, 30))
+        row = _status(path, "wind", _hm(6))
+        assert row.status == "complete"
+        assert _hm(12, 44) <= row.first_probe_success_unix < _hm(12, 45)
+        n_chunks = -(-len(route.plan.queries[C.WIND]) // C.CHUNK_SIZE)
+        assert row.fetch_requests == n_chunks                 # the full run fetched once
+        assert any("holds +0..+72 h of +144 h" in m for m in log.messages(logging.INFO))
+        assert len(A.read_run(path, "wind", _hm(6))["time_unix"]) == 145
+
+
+def _truncate(path, grid, init, hours):
+    run = A.read_run(path, grid, init)
+    attrs = dict(run["attrs"], last_lead_hours=hours - 1)
+    attrs.pop("complete", None)
+    cols = [k for k in run if k not in ("time_unix", "served_lat", "served_lon", "attrs")]
+    A.write_run(path, grid, init, run["time_unix"][:hours], {k: run[k][:, :hours] for k in cols},
+                run["served_lat"], run["served_lon"], attrs)
+
+
+def test_short_stored_run_is_marked_incomplete_and_backfilled():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 40))
+        coll, route = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(13))
+        _truncate(path, "wind", _hm(6), 73)             # as the old collector stored it
+        assert _status(path, "wind", _hm(6)).status == "complete"
+
+        w.t = _hm(7, 0, day=1)                          # restart a day later
+        with captured() as log:
+            coll, route = make_collector(w, path)
+            assert route.rows[("wind", _hm(6))]["status"] == "incomplete"
+            assert any("marked incomplete" in m for m in log.messages())
+            run_until(w, coll, _hm(9, 0, day=1))
+        row = _status(path, "wind", _hm(6))
+        assert row.status == "complete" and row.note == "backfilled"
+        run = A.read_run(path, "wind", _hm(6))
+        assert len(run["time_unix"]) == 145 and run["attrs"]["backfilled"]
+
+
+def test_auto_backfill_respects_the_budget_and_waits_for_currents():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 40))
+        coll, route = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(13))
+        _truncate(path, "wind", _hm(6), 73)
+
+        # Over the budget: the run waits, and is looked at again an hour later.
+        old, C.AUTO_BACKFILL_LIMIT = C.AUTO_BACKFILL_LIMIT, 1
+        try:
+            w.t = _hm(7, 0, day=1)
+            with captured() as log:
+                coll, route = make_collector(w, path)
+                wake = coll.step()
+            assert _status(path, "wind", _hm(6)).status == "incomplete"
+            assert any("waits for backfill" in m for m in log.messages(logging.INFO))
+            assert wake <= w.t + C.BACKFILL_RETRY_S
+        finally:
+            C.AUTO_BACKFILL_LIMIT = old
+
+        # A current run pending (day D+1, due at 11:00, published 12:05) comes first.
+        w.t = _hm(11, 30, day=1)
+        with captured():
+            coll, route = make_collector(w, path)
+            coll.step()
+        assert _status(path, "current", _hm(0, day=1)).status == "pending"
+        assert _status(path, "wind", _hm(6)).status == "incomplete"   # no backfill yet
+        with captured():
+            run_until(w, coll, _hm(13, 0, day=1))
+        assert _status(path, "current", _hm(0, day=1)).status == "complete"
+        assert _status(path, "wind", _hm(6)).status == "complete"
 
 
 def test_legacy_collect_is_removed():

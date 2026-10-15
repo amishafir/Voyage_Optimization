@@ -96,14 +96,26 @@ NOT_AVAILABLE = "model run is not available"   # reason of HTTP 400 for an unpub
 
 HOUR = 3600
 WIND_CYCLE_S = 6 * HOUR             # ECMWF runs at 00/06/12/18 UTC
-WIND_DUE_AFTER_S = 6 * HOUR         # first probe of run C at C + 6 h
+WIND_DUE_AFTER_S = 6 * HOUR         # first metadata read for run C at C + 6 h
 WIND_FORECAST_DAYS = 16             # request window; the run is cut at its last value
-WIND_LAST_LEAD_H = {0: 360, 6: 144, 12: 360, 18: 144}   # by cycle hour, for a check
+WIND_LAST_LEAD_H = {0: 360, 6: 144, 12: 360, 18: 144}   # by cycle hour: a complete run
 CURRENT_CYCLE_S = 24 * HOUR         # SMOC runs once a day, at 00 UTC
 CURRENT_DUE_AFTER_S = 11 * HOUR     # first metadata read for run D at D 11:00 UTC
 CURRENT_SPAN_H = 240                # D 00:00 .. D + 239 h
 SETTLE_S = 600                      # Open-Meteo: wait 10 min after the availability time
 RETRY_S = 600                       # probes, metadata reads and failed chunks
+# The Single Runs archive serves a run as soon as its first hours arrive (on
+# 2026-10-15 the 00 UTC run answered at 06:00 with +0..+72 h, hours before
+# Open-Meteo published it), so "available" is not "complete". A wind run is
+# fetched only once the metadata shows it published and a probe shows its full
+# span, and a short run is never stored as complete.
+# Missed and incomplete wind runs are refetched from the archive automatically,
+# one per step, once they are a day old (complete in the archive), while no
+# current run is pending, and only if the calls of the last 24 h plus the
+# refetch stay within AUTO_BACKFILL_LIMIT.
+BACKFILL_MIN_AGE_S = 24 * HOUR
+AUTO_BACKFILL_LIMIT = 9000
+BACKFILL_RETRY_S = HOUR
 
 COORD_DECIMALS = 6     # query coordinates as sent (about 0.1 m)
 MATCH_TOL_DEG = 1e-4   # served vs predicted grid point; the API reports float32
@@ -511,6 +523,25 @@ def parse_run(grid_key: str, bodies: Sequence[dict]) -> GridRun:
         raise ApiError(f"malformed {grid_key} response: {e!r}") from None
 
 
+def expected_last_lead(grid: str, init: int) -> int:
+    """Last lead (h) of a complete run of the grid started at init."""
+    if grid == WIND:
+        return WIND_LAST_LEAD_H[datetime.fromtimestamp(init, timezone.utc).hour]
+    return CURRENT_SPAN_H - 1
+
+
+def last_lead_in(body, init: int) -> int:
+    """Last lead (h) with a value in one location's response; -1 if none."""
+    body = body[0] if isinstance(body, list) else body
+    hourly = body["hourly"]
+    times = hourly["time"]
+    last = -1
+    for i, t in enumerate(times):
+        if any(hourly[v][i] is not None for v in hourly if v != "time"):
+            last = (int(t) - init) // HOUR
+    return last
+
+
 def cut_to_span(run: GridRun) -> GridRun:
     """Keep the hours from the run's first to its last non-null value (any cell)."""
     has = np.zeros(len(run.time), dtype=bool)
@@ -598,6 +629,15 @@ class RouteRuns:
             for (g, init), row in self.rows.items():
                 if row["status"] == "pending" and run_archive.has_run(path, g, init):
                     self._set(row, "complete", "found stored at restart")
+            for (g, init), row in self.rows.items():
+                if g == WIND and row["status"] == "complete" and run_archive.has_run(path, g, init):
+                    last = int(run_archive.read_run_attrs(path, g, init).get("last_lead_hours", -1))
+                    if last < expected_last_lead(g, init):
+                        self._set(row, "incomplete",
+                                  f"stored +0..+{last} h of +{expected_last_lead(g, init)} h; "
+                                  "refetched from the archive automatically")
+                        logger.warning("[%s] wind run %s holds only +0..+%d h; marked incomplete",
+                                       label, run_archive.run_name(init), last)
 
     def create(self, now: float) -> None:
         """Create the archive; the first expected runs are the newest already due."""
@@ -707,6 +747,7 @@ class RunCollector:
     def __init__(self, routes: Sequence[RouteRuns], client: ApiClient,
                  clock: Callable[[], float] = time.time):
         self.routes, self.client, self.clock = list(routes), client, clock
+        self._backfill_next_try = 0     # after a failed automatic backfill, wait an hour
 
     # --- scheduling -------------------------------------------------------
 
@@ -726,6 +767,9 @@ class RunCollector:
                         wake = handler(r, init)
                         if wake is not None:
                             wakes.append(wake)
+            wake = self._auto_backfill()
+            if wake is not None:
+                wakes.append(wake)
         except DailyLimitExceeded as e:
             later = int(self.clock()) + RETRY_S
             logger.error("Open-Meteo's daily limit is used up (%s); trying again at %s",
@@ -748,33 +792,49 @@ class RunCollector:
         now = int(self.clock())
         if now < w.next_try:
             return w.next_try
+        row["probe_attempts"] += 1
         meta_init, meta_avail = self.client.model_run(WIND_GRID)
         if meta_init >= init + WIND_CYCLE_S:
             note = (f"run {run_archive.run_name(init + WIND_CYCLE_S)} was published before this "
-                    "run was fetched; --backfill-wind can fetch it from the archive")
+                    "run was fetched; it is refetched from the archive automatically")
             logger.warning("[%s] wind run %s missed: %s", r.label, name, note)
             r.finish(WIND, init, "missed", note)
             return None
-        if meta_init == init:
-            w.availability = row["availability_unix"] = meta_avail
+        if meta_init < init:
+            w.next_try = now + RETRY_S
+            logger.info("[%s] wind run %s not published yet (newest %s); next check at %s",
+                        r.label, name, run_archive.run_name(meta_init) if meta_init > 0 else
+                        "unknown", utc(w.next_try))
+            return w.next_try
+        w.availability = row["availability_unix"] = meta_avail
+        if now < meta_avail + SETTLE_S:
+            w.next_try = meta_avail + SETTLE_S
+            logger.info("[%s] wind run %s published at %s; fetching from %s", r.label, name,
+                        utc(meta_avail), utc(w.next_try))
+            return w.next_try
         if w.first_probe_success < 0:
-            q = r.plan.queries[WIND][0]
+            q, expected = r.plan.queries[WIND][0], expected_last_lead(WIND, init)
             try:
-                self._request(r, row, "probe", run_url(WIND, WIND_GRID, [q], init), WEIGHT[WIND])
+                body = self._request(r, row, "probe", run_url(WIND, WIND_GRID, [q], init),
+                                     WEIGHT[WIND])
+                last = last_lead_in(body, init)
             except RunNotAvailable:
-                w.next_try = now + RETRY_S
-                logger.info("[%s] wind run %s not available yet (probe %d); next probe at %s",
-                            r.label, name, row["probe_attempts"], utc(w.next_try))
-                return w.next_try
+                last = -1
             except DailyLimitExceeded:
                 raise
-            except ApiError as e:
+            except (ApiError, KeyError, TypeError, ValueError) as e:
                 w.next_try = now + RETRY_S
                 logger.warning("[%s] wind run %s: probe failed: %s", r.label, name, e)
                 return w.next_try
+            if last < expected:
+                w.next_try = now + RETRY_S
+                logger.info("[%s] wind run %s published, but the archive holds +0..+%d h of "
+                            "+%d h so far; next probe at %s", r.label, name, last, expected,
+                            utc(w.next_try))
+                return w.next_try
             w.first_probe_success = row["first_probe_success_unix"] = int(self.clock())
-            logger.info("[%s] wind run %s available (probe %d at %s)", r.label, name,
-                        row["probe_attempts"], utc(w.first_probe_success))
+            logger.info("[%s] wind run %s complete in the archive (probe at %s)", r.label, name,
+                        utc(w.first_probe_success))
         if self._fetch(r, WIND, init, w) and self._store(r, WIND, init, w):
             return None
         w.next_try = int(self.clock()) + RETRY_S
@@ -900,8 +960,11 @@ class RunCollector:
                                q.query_lon, n_bad, n_all)
         return len(nan), len(subst)
 
-    def _store(self, r: RouteRuns, grid: str, init: int, w: _Work, backfilled: bool = False) -> bool:
-        """Parse, check and store a fully fetched run; False (chunks dropped) if malformed."""
+    def _store(self, r: RouteRuns, grid: str, init: int, w: _Work, backfilled: bool = False,
+               accept_short: bool = False) -> bool:
+        """Parse, check and store a fully fetched run; False (chunks dropped) if malformed,
+        or if it is a wind run shorter than a complete one and accept_short is False.
+        A short current run is stored anyway, with a warning: currents have no archive."""
         row, name = r.rows[(grid, init)], run_archive.run_name(init)
         bodies = [b for ci in sorted(w.chunks) for b in w.chunks[ci]]
         try:
@@ -912,11 +975,20 @@ class RunCollector:
             return False
         first_lead = int(run.time[0] - init) // HOUR
         last_lead = int(run.time[-1] - init) // HOUR
-        expected = (WIND_LAST_LEAD_H[datetime.fromtimestamp(init, timezone.utc).hour]
-                    if grid == WIND else CURRENT_SPAN_H - 1)
-        if first_lead != 0 or last_lead != expected:
-            logger.warning("[%s] %s run %s spans +%d..+%d h, expected +0..+%d h", r.label, grid,
-                           name, first_lead, last_lead, expected)
+        expected = expected_last_lead(grid, init)
+        if first_lead != 0 or last_lead < expected:
+            if grid == WIND and not accept_short:
+                logger.warning("[%s] wind run %s spans +%d..+%d h, expected +0..+%d h: not "
+                               "stored; fetching it again in %d min", r.label, name, first_lead,
+                               last_lead, expected, RETRY_S // 60)
+                w.chunks.clear()
+                w.first_probe_success = -1
+                return False
+            logger.warning("[%s] %s run %s spans +%d..+%d h, expected +0..+%d h; stored as it is",
+                           r.label, grid, name, first_lead, last_lead, expected)
+        elif last_lead > expected:
+            logger.warning("[%s] %s run %s spans +%d..+%d h, longer than the expected +%d h",
+                           r.label, grid, name, first_lead, last_lead, expected)
         n_nan, n_subst = self._check(r, grid, name, run)
         end = int(self.clock())
         params = run_params(grid, r.plan.grids[grid], [], init)
@@ -950,26 +1022,73 @@ class RunCollector:
     # --- backfill -----------------------------------------------------------
 
     def missed_wind_runs(self) -> List[Tuple[RouteRuns, int]]:
+        """Wind runs to refetch from the archive: missed, or stored incomplete."""
         return [(r, init) for r in self.routes for (g, init), row in sorted(r.rows.items())
-                if g == WIND and row["status"] == "missed"]
+                if g == WIND and row["status"] in ("missed", "incomplete")]
+
+    def _backfill_one(self, r: RouteRuns, init: int) -> bool:
+        """Refetch one wind run from the archive; True if it was stored."""
+        name = run_archive.run_name(init)
+        w = _Work(next_try=0)
+        old = self.clock() - init >= BACKFILL_MIN_AGE_S
+        if self._fetch(r, WIND, init, w) and self._store(r, WIND, init, w, backfilled=True,
+                                                         accept_short=old):
+            return True
+        row = r.rows[(WIND, init)]
+        row["note"] = f"backfill at {utc(self.clock())} failed; will try again"[:200]
+        logger.error("[%s] wind run %s: backfill failed", r.label, name)
+        return False
+
+    def calls_last_24h(self) -> float:
+        """API calls of the last 24 h: this process's count, or the /runs tables' (which
+        survive restarts), whichever is larger."""
+        cutoff = self.clock() - 24 * HOUR
+        table = sum(float(row["api_calls"]) for r in self.routes for row in r.rows.values()
+                    if int(row["updated_unix"]) >= cutoff)
+        return max(table, self.client.calls_last_24h())
+
+    def _auto_backfill(self) -> Optional[int]:
+        """Refetch the oldest missed or incomplete wind run that is a day old, if the
+        daily budget allows and no current run is pending. Returns when to look again."""
+        now = int(self.clock())
+        if now < self._backfill_next_try:
+            return self._backfill_next_try
+        todo = [(r, init) for r, init in self.missed_wind_runs()
+                if now - init >= BACKFILL_MIN_AGE_S]
+        if not todo:
+            pending = [init for r, init in self.missed_wind_runs()]
+            return min(pending) + BACKFILL_MIN_AGE_S if pending else None
+        if any(r.pending(CURRENT) for r in self.routes):
+            return now + BACKFILL_RETRY_S
+        r, init = todo[0]
+        cost = len(r.plan.queries[WIND]) * WEIGHT[WIND]
+        used = self.calls_last_24h()
+        if used + cost > AUTO_BACKFILL_LIMIT:
+            logger.info("[%s] wind run %s waits for backfill: %.0f calls in the last 24 h + %.0f "
+                        "would exceed %d", r.label, run_archive.run_name(init), used, cost,
+                        AUTO_BACKFILL_LIMIT)
+            return now + BACKFILL_RETRY_S
+        logger.info("[%s] backfilling wind run %s from the archive (%.0f calls)", r.label,
+                    run_archive.run_name(init), cost)
+        if not self._backfill_one(r, init):
+            self._backfill_next_try = int(self.clock()) + BACKFILL_RETRY_S
+            return self._backfill_next_try
+        return int(self.clock())
 
     def backfill_wind(self, dry_run: bool = False) -> float:
-        """Fetch missed wind runs from the Single Runs archive. Returns their cost in
-        API calls (planned with dry_run, else spent)."""
+        """Refetch missed and incomplete wind runs from the Single Runs archive now,
+        regardless of the budget. Returns their cost in API calls (planned with dry_run,
+        else spent)."""
         todo = self.missed_wind_runs()
         cost = sum(len(r.plan.queries[WIND]) * WEIGHT[WIND] for r, _ in todo)
-        logger.info("Backfill: %d missed wind runs, %.0f API calls%s", len(todo), cost,
-                    "".join(f"\n  [{r.label}] {run_archive.run_name(i)}" for r, i in todo))
+        logger.info("Backfill: %d missed or incomplete wind runs, %.0f API calls%s", len(todo),
+                    cost, "".join(f"\n  [{r.label}] {run_archive.run_name(i)}" for r, i in todo))
         if dry_run or not todo:
             return cost
         spent = self.client.calls
         try:
             for r, init in todo:
-                w = _Work(next_try=0)
-                if not (self._fetch(r, WIND, init, w) and self._store(r, WIND, init, w, backfilled=True)):
-                    note = f"backfill at {utc(self.clock())} incomplete; still missed"
-                    r.rows[(WIND, init)]["note"] = note
-                    logger.error("[%s] wind run %s: %s", r.label, run_archive.run_name(init), note)
+                self._backfill_one(r, init)
         except DailyLimitExceeded as e:
             logger.error("Backfill stopped, Open-Meteo's daily limit is used up: %s", e)
         finally:

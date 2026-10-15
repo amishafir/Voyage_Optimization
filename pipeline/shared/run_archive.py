@@ -69,13 +69,13 @@ CELL_DTYPE = np.dtype([
     ("n_subsegments", "i4"),
 ])
 
-STATUSES = ("pending", "complete", "missed", "discarded")
+STATUSES = ("pending", "complete", "missed", "incomplete", "discarded")
 
 RUNS_DTYPE = np.dtype([
     ("grid", "S8"),
     ("run_init_unix", "i8"),
     ("status", "S10"),
-    ("probe_attempts", "i4"),            # wind: Single Runs probes; current: metadata reads
+    ("probe_attempts", "i4"),            # metadata reads, plus Single Runs probes for wind
     ("fetch_requests", "i4"),            # chunk requests, retries included
     ("api_calls", "f8"),                 # Open-Meteo's count for probes and fetches
     ("first_probe_success_unix", "i8"),  # -1 = never
@@ -197,6 +197,13 @@ def run_inits(path: str, grid: str) -> List[int]:
     with h5py.File(path, "r") as f:
         return sorted(int(g.attrs["run_init_unix"]) for g in f[grid].values()
                       if g.attrs.get("complete", False))
+
+
+def read_run_attrs(path: str, grid: str, run_init_unix: int) -> Dict:
+    """The attributes of one stored run (run timing, leads, counts, API parameters)."""
+    with h5py.File(path, "r") as f:
+        g = f[f"{grid}/{run_name(run_init_unix)}"]
+        return {k: (v.decode("utf-8") if isinstance(v, bytes) else v) for k, v in g.attrs.items()}
 
 
 def read_run(path: str, grid: str, run_init_unix: int) -> Dict:
