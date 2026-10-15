@@ -165,7 +165,32 @@ On this (mostly forecast) weather the full graph saves only 0.03% (Route 1) and 
 the two grids are not nested, and the full graph's 4 s nodes on every subsegment boundary
 make its SOG jitter slightly from arc to arc, which a convex fuel curve penalises.
 
+### Pricing as Luo et al. do (`--luo-pricing start`)
+
+Luo et al. price a stage with the conditions at its starting node, assumed to hold for the
+whole stage. `--luo-pricing start` (`solve_luo(pricing="start")`) does the same: each arc at
+the bearing, cells and weather step where it starts. The plan it finds is then **realized**:
+its SOG profile sailed in the actual weather with every subsegment-by-step piece priced. Every
+plan reports both numbers (`planned_fuel_mt`, and `fuel_mt` = realized; they coincide for the
+piece-by-piece pricing in pseudo real-time, and also differ when planning used `--forecast`).
+`--luo-pricing both` runs the two side by side.
+
+Same start and data, realized fuel against the full graph (366.956 / 222.427 mt):
+
+| Luo variant | Route 1 planned / realized | vs full graph | Route 2 planned / realized | vs full graph |
+|---|---|---|---|---|
+| 6 h, piece by piece | 367.065 / 367.065 mt | +0.03% | 222.578 / 222.578 mt | +0.07% |
+| 6 h, start point | 359.028 / 370.249 mt | **+0.90%** | 215.688 / 225.989 mt | **+1.60%** |
+| 1 h, piece by piece | 366.951 / 366.951 mt | -0.00% | 222.441 / 222.441 mt | +0.01% |
+| 1 h, start point | 364.456 / 367.746 mt | +0.21% | 220.034 / 223.343 mt | +0.41% |
+| Constant SOG | 367.410 mt | +0.12% | 224.401 mt | +0.89% |
+
+Start-point pricing makes the DP over-optimistic (6 h: planned 2-5% below what the plan then
+burns) and steers it to plans that sail fast where the start conditions look good; at 6 h its
+realized fuel is above constant speed on both routes.
+
 ```bash
+python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo        # both, compared
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --luo --epoch 4 --luo-csv luo.csv
 ```

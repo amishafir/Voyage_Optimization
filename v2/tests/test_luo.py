@@ -26,7 +26,7 @@ from synthetic_route import ETA_H, LENGTHS, SHIP, START, write_archive  # noqa: 
 from voyage_v2 import Conditions, CoreError, Voyage, load_voyage_data, sws_from_sog  # noqa: E402
 
 
-def reference_luo(voyage, epoch_steps=24, dist_step_nm=None, band=3.0, forecast=False):
+def reference_luo(voyage, epoch_steps=24, dist_step_nm=None, band=3.0, forecast=False, pricing="integrated"):
     data = voyage.data
     lengths = [float(x) for x in data.subsegments["length_nm"]]
     bearing = [float(x) for x in data.subsegments["bearing_deg"]]
@@ -40,15 +40,18 @@ def reference_luo(voyage, epoch_steps=24, dist_step_nm=None, band=3.0, forecast=
     steps = list(range(0, M, epoch_steps)) + [M]
     conds = {}
 
-    def fcr(sub, step, v):
-        if (sub, step) not in conds:
-            d = voyage.arc_detail(sub, 12.0, step, 0 if forecast else step)
-            conds[sub, step] = Conditions(d["wind_speed_kmh"], d["wind_from_deg"], d["current_speed_kmh"],
-                                          d["current_to_deg"])
-        sws = sws_from_sog(SHIP, v, bearing[sub], conds[sub, step])
-        return SHIP.fcr_coefficient * sws ** 3 if 2 <= sws <= 25 else math.inf
+    def fcr(sub, step, v, actual=False, strict=True):
+        tau = step if actual or not forecast else 0
+        if (sub, step, tau) not in conds:
+            d = voyage.arc_detail(sub, 12.0, step, tau)
+            conds[sub, step, tau] = Conditions(d["wind_speed_kmh"], d["wind_from_deg"], d["current_speed_kmh"],
+                                               d["current_to_deg"])
+        sws = sws_from_sog(SHIP, v, bearing[sub], conds[sub, step, tau])
+        return SHIP.fcr_coefficient * sws ** 3 if 2 <= sws <= 25 or not strict else math.inf
 
-    def path_fuel(d0, d1, v, step0, n_steps):
+    def path_fuel(d0, d1, v, step0, n_steps, actual=False):
+        """Integrated along the path; with `actual`, in the actual weather and priced even where the
+        SWS leaves the range (evaluating a plan)."""
         if not vmin - 1e-9 <= v <= vmax + 1e-9:
             return math.inf
         cuts = {d0, d1} | {x for x in S if d0 < x < d1}
@@ -59,8 +62,17 @@ def reference_luo(voyage, epoch_steps=24, dist_step_nm=None, band=3.0, forecast=
             mid = (a + b) / 2
             sub = min(bisect.bisect_right(S, mid) - 1, len(lengths) - 1)
             step = step0 + min(int((mid - d0) / v / 0.25), n_steps - 1)
-            fuel += fcr(sub, step, v) * (b - a) / v
+            fuel += fcr(sub, step, v, actual, strict=not actual) * (b - a) / v
         return fuel
+
+    def start_fuel(d0, v, step0, dt):
+        """Luo et al.: the whole arc at the conditions where and when it starts."""
+        if not vmin - 1e-9 <= v <= vmax + 1e-9:
+            return math.inf
+        return fcr(min(bisect.bisect_right(S, d0) - 1, len(lengths) - 1), step0, v) * dt
+
+    def price(d0, d1, v, step0, n_steps, dt):
+        return start_fuel(d0, v, step0, dt) if pricing == "start" else path_fuel(d0, d1, v, step0, n_steps)
 
     def window(step):
         t = step * 0.25
@@ -81,25 +93,31 @@ def reference_luo(voyage, epoch_steps=24, dist_step_nm=None, band=3.0, forecast=
                 continue
             d0 = 0.0 if e == 0 else i * delta
             for ip in nxt:
-                f = path_fuel(d0, ip * delta, (ip * delta - d0) / dt, steps[e], n_steps)
+                f = price(d0, ip * delta, (ip * delta - d0) / dt, steps[e], n_steps, dt)
                 if c + f < cost.get((e + 1, ip), math.inf):
                     cost[e + 1, ip] = c + f
-            f = path_fuel(d0, L, (L - d0) / dt, steps[e], n_steps)
+            f = price(d0, L, (L - d0) / dt, steps[e], n_steps, dt)
             arrive[e + 1] = min(arrive.get(e + 1, math.inf), c + f)
     best = min(arrive.values())
-    return dict(fuel=best, nodes=nodes, path_fuel=path_fuel, steps=steps, delta=delta)
+    return dict(fuel=best, nodes=nodes, price=price, path_fuel=path_fuel, steps=steps, delta=delta)
 
 
 def _check(plan, ref):
+    """Planned fuel and every plan arc against the reference; realized fuel against the reference
+    integration in the actual weather."""
     assert plan.feasible and math.isfinite(ref["fuel"])
-    assert math.isclose(plan.fuel_mt, ref["fuel"], rel_tol=1e-10), (plan.fuel_mt, ref["fuel"])
+    assert math.isclose(plan.planned_fuel_mt, ref["fuel"], rel_tol=1e-10), (plan.planned_fuel_mt, ref["fuel"])
     assert plan.stats["nodes"] == ref["nodes"]
     P = plan.path
-    for q in range(len(P["fuel_mt"])):             # every plan arc, priced by the reference integration
+    for q in range(len(P["fuel_mt"])):
         e = ref["steps"].index(int(round(P["t0_h"][q] * 4)))
-        n_steps = ref["steps"][e + 1] - ref["steps"][e]
-        f = ref["path_fuel"](P["d0_nm"][q], P["d1_nm"][q], P["sog_kn"][q], ref["steps"][e], n_steps)
-        assert math.isclose(P["fuel_mt"][q], f, rel_tol=1e-10), (q, P["fuel_mt"][q], f)
+        s0, n_steps = ref["steps"][e], ref["steps"][e + 1] - ref["steps"][e]
+        args = (P["d0_nm"][q], P["d1_nm"][q], P["sog_kn"][q], s0, n_steps)
+        planned = ref["price"](*args, n_steps * 0.25)
+        realized = ref["path_fuel"](*args, actual=True)
+        assert math.isclose(P["planned_fuel_mt"][q], planned, rel_tol=1e-10), (q, P["planned_fuel_mt"][q], planned)
+        assert math.isclose(P["fuel_mt"][q], realized, rel_tol=1e-10), (q, P["fuel_mt"][q], realized)
+    assert math.isclose(P["planned_fuel_mt"].sum(), plan.planned_fuel_mt, rel_tol=1e-12)
     assert math.isclose(P["fuel_mt"].sum(), plan.fuel_mt, rel_tol=1e-12)
     assert np.all(P["t0_h"][1:] == P["t1_h"][:-1]) and np.all(P["d0_nm"][1:] == P["d1_nm"][:-1])
     assert P["t0_h"][0] == 0 and P["d0_nm"][0] == 0
@@ -130,6 +148,25 @@ def test_given_distance_step():
 
 def test_forecast_from_the_start():
     _check(VOYAGE.solve_luo(epoch_steps=2, forecast=True), reference_luo(VOYAGE, epoch_steps=2, forecast=True))
+
+
+def test_start_point_pricing():
+    _check(VOYAGE.solve_luo(epoch_steps=2, pricing="start"), reference_luo(VOYAGE, epoch_steps=2, pricing="start"))
+
+
+def test_start_point_pricing_partial_epoch_and_forecast():
+    _check(VOYAGE.solve_luo(epoch_steps=4, pricing="start"), reference_luo(VOYAGE, epoch_steps=4, pricing="start"))
+    _check(VOYAGE.solve_luo(epoch_steps=2, pricing="start", forecast=True),
+           reference_luo(VOYAGE, epoch_steps=2, pricing="start", forecast=True))
+
+
+def test_start_point_plan_cannot_beat_the_integrated_optimum():
+    # any start-priced plan is a path of the same graph, so in the actual weather it costs at least
+    # the optimum of the integrated pricing
+    for k in (1, 2, 4):
+        start = VOYAGE.solve_luo(epoch_steps=k, pricing="start")
+        best = VOYAGE.solve_luo(epoch_steps=k)
+        assert start.stats["realized_sws_violations"] > 0 or start.fuel_mt >= best.fuel_mt - 1e-12
 
 
 def test_one_epoch_is_constant_speed():

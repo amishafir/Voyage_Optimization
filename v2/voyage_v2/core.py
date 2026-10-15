@@ -53,17 +53,18 @@ class _DPOptions(ctypes.Structure):
 
 
 class _LuoOptions(ctypes.Structure):
-    _fields_ = [("sog_band_kn", c_double), ("epoch_steps", c_int), ("dist_step_nm", c_double), ("forecast", c_int)]
+    _fields_ = [("sog_band_kn", c_double), ("epoch_steps", c_int), ("dist_step_nm", c_double), ("forecast", c_int),
+                ("start_point_pricing", c_int)]
 
 
 class _DPSummary(ctypes.Structure):
-    _fields_ = [("feasible", c_int), ("fuel_mt", c_double), ("arrival_h", c_double),
+    _fields_ = [("feasible", c_int), ("fuel_mt", c_double), ("planned_fuel_mt", c_double), ("arrival_h", c_double),
                 ("constant_sog_fuel_mt", c_double), ("v_min_kn", c_double), ("v_max_kn", c_double),
                 ("n_segments", c_int), ("path_length", c_int),
                 ("nodes", ctypes.c_longlong), ("distance_line_nodes", ctypes.c_longlong),
                 ("time_line_nodes", ctypes.c_longlong), ("reached_nodes", ctypes.c_longlong),
                 ("arcs", ctypes.c_longlong), ("infeasible_arcs", ctypes.c_longlong),
-                ("sws_evaluations", ctypes.c_longlong),
+                ("sws_evaluations", ctypes.c_longlong), ("realized_sws_violations", ctypes.c_longlong),
                 ("setup_s", c_double), ("sweep_s", c_double), ("memory_mb", c_double)]
 
 
@@ -89,7 +90,7 @@ def _library():
             "v2_arc_detail": (c_int, [P, c_int, c_double, c_int, c_int, POINTER(_ArcInfo)]),
             "v2_dp_solve": (P, [P, POINTER(_DPOptions)]),
             "v2_dp_summary_of": (None, [P, POINTER(_DPSummary)]),
-            "v2_dp_path": (None, [P] + [POINTER(c_double)] * 7 + [POINTER(c_int)] * 2),
+            "v2_dp_path": (None, [P] + [POINTER(c_double)] * 8 + [POINTER(c_int)] * 2),
             "v2_dp_segments": (None, [P] + [POINTER(c_double)] * 3 + [POINTER(c_int)] * 3),
             "v2_dp_free": (None, [P]),
             "v2_luo_solve": (P, [P, POINTER(_LuoOptions)]),
@@ -175,15 +176,19 @@ def fcr_from_sog(ship: Ship, sog_kn: float, bearing_deg: float, c: Conditions) -
 
 @dataclass
 class Plan:
-    """Minimum-fuel plan: Voyage.solve (full graph, dp.hpp) or Voyage.solve_luo (luo.hpp)."""
+    """Minimum-fuel plan: Voyage.solve (full graph, dp.hpp) or Voyage.solve_luo (luo.hpp).
+    fuel_mt is realized: the plan's SOG profile in the actual (pseudo real-time) weather, every
+    subsegment-by-step piece priced; planned_fuel_mt is what the DP optimized. They differ when
+    planning used a forecast or start-point prices."""
     feasible: bool
     fuel_mt: float
+    planned_fuel_mt: float
     arrival_h: float
-    constant_sog_fuel_mt: float     # every subsegment at the mean SOG, same weather rules
+    constant_sog_fuel_mt: float     # every subsegment at the mean SOG, actual weather
     v_min_kn: float
     v_max_kn: float
     stats: Dict                     # nodes, arcs, timings, memory
-    path: Dict[str, np.ndarray]     # one entry per arc: t0_h, d0_nm, t1_h, d1_nm, sog_kn, sws_kn, fuel_mt, segment, step
+    path: Dict[str, np.ndarray]     # per arc: t0_h, d0_nm, t1_h, d1_nm, sog_kn, sws_kn, fuel_mt, planned_fuel_mt, segment, step
     segments: Dict[str, np.ndarray] # start_nm, length_nm, bearing_deg, first_sub, n_subs, dominant_sub
 
 
@@ -196,7 +201,8 @@ def _read_plan(handle) -> Plan:
         s = _DPSummary()
         lib.v2_dp_summary_of(handle, ctypes.byref(s))
         n = s.path_length
-        dbl = {k: np.empty(n) for k in ("t0_h", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt")}
+        dbl = {k: np.empty(n) for k in ("t0_h", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt",
+                                         "planned_fuel_mt")}
         ints = {k: np.empty(n, dtype=np.int32) for k in ("segment", "step")}
         lib.v2_dp_path(handle, *(_ptr(dbl[k], c_double) for k in dbl), *(_ptr(ints[k], c_int) for k in ints))
         g = s.n_segments
@@ -206,9 +212,10 @@ def _read_plan(handle) -> Plan:
     finally:
         lib.v2_dp_free(handle)
     stats = {k: getattr(s, k) for k, _ in _DPSummary._fields_
-             if k not in ("feasible", "fuel_mt", "arrival_h", "constant_sog_fuel_mt", "v_min_kn", "v_max_kn")}
-    return Plan(bool(s.feasible), s.fuel_mt, s.arrival_h, s.constant_sog_fuel_mt, s.v_min_kn, s.v_max_kn,
-                stats, {**dbl, **ints}, {**sd, **si})
+             if k not in ("feasible", "fuel_mt", "planned_fuel_mt", "arrival_h", "constant_sog_fuel_mt",
+                          "v_min_kn", "v_max_kn")}
+    return Plan(bool(s.feasible), s.fuel_mt, s.planned_fuel_mt, s.arrival_h, s.constant_sog_fuel_mt, s.v_min_kn,
+                s.v_max_kn, stats, {**dbl, **ints}, {**sd, **si})
 
 
 # ---------------------------------------------------------------------------
@@ -281,12 +288,17 @@ class Voyage:
         return _read_plan(_library().v2_dp_solve(self._handle, ctypes.byref(opts)))
 
     def solve_luo(self, epoch_steps: int = 24, dist_step_nm: Optional[float] = None, sog_band_kn: float = 3.0,
-                  forecast: bool = False) -> Plan:
+                  forecast: bool = False, pricing: str = "integrated") -> Plan:
         """Luo et al.'s multistage DP on this voyage (cpp/include/voyage_v2/luo.hpp): constant SOG
         within decision epochs of epoch_steps quarter hours (24 = 6 h), nodes only on the epoch
         boundaries every dist_step_nm (default 0.1 kn x epoch length, 0.6 NM for 6 h epochs).
-        The plan has one arc per epoch."""
-        opts = _LuoOptions(sog_band_kn, int(epoch_steps), float(dist_step_nm or 0.0), 1 if forecast else 0)
+        pricing="integrated" prices each arc piece by piece along its path; pricing="start" prices
+        the whole arc at the conditions where and when it starts, as Luo et al. do (the plan's
+        fuel_mt is still its realized fuel). The plan has one arc per epoch."""
+        if pricing not in ("integrated", "start"):
+            raise ValueError(f"pricing must be 'integrated' or 'start', got {pricing!r}")
+        opts = _LuoOptions(sog_band_kn, int(epoch_steps), float(dist_step_nm or 0.0), 1 if forecast else 0,
+                           1 if pricing == "start" else 0)
         return _read_plan(_library().v2_luo_solve(self._handle, ctypes.byref(opts)))
 
     def arc_detail(self, sub: int, sog: float, t: int, tau: Optional[int] = None) -> Dict:

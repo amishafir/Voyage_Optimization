@@ -126,14 +126,15 @@ v2_dp_result* v2_dp_solve(const v2_voyage* voyage, const v2_dp_options* options)
 void v2_dp_summary_of(const v2_dp_result* result, v2_dp_summary* out) {
     const v2::DPResult& r = result->result;
     const v2::DPStats& s = r.stats;
-    *out = {r.feasible ? 1 : 0, r.fuel_mt, r.arrival_h, r.constant_sog_fuel_mt, r.v_min_kn, r.v_max_kn,
-            static_cast<int>(r.segments.size()), static_cast<int>(r.path.size()),
+    *out = {r.feasible ? 1 : 0, r.fuel_mt, r.planned_fuel_mt, r.arrival_h, r.constant_sog_fuel_mt, r.v_min_kn,
+            r.v_max_kn, static_cast<int>(r.segments.size()), static_cast<int>(r.path.size()),
             s.nodes, s.distance_line_nodes, s.time_line_nodes, s.reached_nodes,
-            s.arcs, s.infeasible_arcs, s.sws_evaluations, s.setup_s, s.sweep_s, s.memory_mb};
+            s.arcs, s.infeasible_arcs, s.sws_evaluations, s.realized_sws_violations,
+            s.setup_s, s.sweep_s, s.memory_mb};
 }
 
 void v2_dp_path(const v2_dp_result* result, double* t0_h, double* d0_nm, double* t1_h, double* d1_nm,
-                double* sog_kn, double* sws_kn, double* fuel_mt, int* segment, int* step) {
+                double* sog_kn, double* sws_kn, double* fuel_mt, double* planned_fuel_mt, int* segment, int* step) {
     const auto& path = result->result.path;
     for (std::size_t i = 0; i < path.size(); ++i) {
         const v2::PlanArc& a = path[i];
@@ -144,6 +145,7 @@ void v2_dp_path(const v2_dp_result* result, double* t0_h, double* d0_nm, double*
         sog_kn[i] = a.sog_kn;
         sws_kn[i] = a.sws_kn;
         fuel_mt[i] = a.fuel_mt;
+        planned_fuel_mt[i] = a.planned_fuel_mt;
         segment[i] = a.segment;
         step[i] = a.step;
     }
@@ -171,6 +173,7 @@ v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* option
         o.epoch_steps = options->epoch_steps;
         o.dist_step_nm = options->dist_step_nm;
         o.forecast = options->forecast != 0;
+        o.start_point_pricing = options->start_point_pricing != 0;
         return new v2_dp_result{v2::solve_luo(voyage->voyage, o)};
     }, static_cast<v2_dp_result*>(nullptr));
 }

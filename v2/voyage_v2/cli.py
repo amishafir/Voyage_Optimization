@@ -90,14 +90,15 @@ def _plan_summary(data: VoyageData, plan: Plan, args) -> str:
     return "\n".join(lines)
 
 
-def _luo_summary(data: VoyageData, plan: Plan, args, sr: Optional[Plan]) -> str:
+def _luo_summary(data: VoyageData, plan: Plan, args, sr: Optional[Plan], pricing: str) -> str:
     s, p = plan.stats, plan.path
     hours = args.epoch * 0.25
     step = args.dist_step or 0.1 * hours
+    how = "arcs priced at their start point (Luo et al.)" if pricing == "start" else "arcs priced piece by piece"
     lines = [
         f"Luo      epochs of {hours:g} h ({args.epoch} steps), nodes every {step:g} NM on the epoch lines "
         f"(SOG steps {step / hours:.3f} kn), SOG {plan.v_min_kn:.2f}-{plan.v_max_kn:.2f} kn, "
-        f"{'forecast from the start' if args.forecast else 'pseudo real-time'}",
+        f"{'forecast from the start' if args.forecast else 'pseudo real-time'}; {how}",
         f"         nodes {s['nodes']:,}, reached {s['reached_nodes']:,}; arcs {s['arcs']:,} "
         f"({s['infeasible_arcs']:,} outside the SWS range); {s['sws_evaluations'] / 1e6:.1f} M SWS evaluations; "
         f"sweep {s['sweep_s']:.1f} s",
@@ -105,8 +106,14 @@ def _luo_summary(data: VoyageData, plan: Plan, args, sr: Optional[Plan]) -> str:
     if not plan.feasible:
         return "\n".join(lines + ["         infeasible: no path reaches the end of the route by the ETA"])
     gain = 100 * (1 - plan.fuel_mt / plan.constant_sog_fuel_mt)
+    if abs(plan.planned_fuel_mt - plan.fuel_mt) > 1e-9 * plan.fuel_mt:
+        lines.append(f"         planned {plan.planned_fuel_mt:.3f} mt; realized in the actual weather, every piece priced: "
+                     f"{plan.fuel_mt:.3f} mt ({100 * (plan.fuel_mt / plan.planned_fuel_mt - 1):+.3f}%)"
+                     + (f"; {s['realized_sws_violations']} pieces need an SWS outside 2-25 kn"
+                        if s["realized_sws_violations"] else ""))
     lines.append(f"         fuel {plan.fuel_mt:.3f} mt, arrival {plan.arrival_h:.2f} h, {len(p['fuel_mt'])} epochs, "
-                 f"SOG {p['sog_kn'].min():.2f}-{p['sog_kn'].max():.2f} kn; saves {gain:.2f}% against constant SOG")
+                 f"SOG {p['sog_kn'].min():.2f}-{p['sog_kn'].max():.2f} kn; "
+                 + (f"saves {gain:.2f}%" if gain >= 0 else f"uses {-gain:.2f}% more") + " against constant SOG")
     if sr is not None and sr.feasible:
         diff = 100 * (plan.fuel_mt / sr.fuel_mt - 1)
         lines.append(f"         {abs(diff):.3f}% {'more' if diff >= 0 else 'less'} fuel than the full graph "
@@ -118,13 +125,14 @@ def _write_plan(path: str, data: VoyageData, plan: Plan) -> None:
     p, seg = plan.path, plan.segments
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["t0_h", "t0_utc", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt", "segment",
-                    "subsegment", "bearing_deg", "step"])
+        w.writerow(["t0_h", "t0_utc", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt", "planned_fuel_mt",
+                    "segment", "subsegment", "bearing_deg", "step"])
         for q in range(len(p["fuel_mt"])):
             g = int(p["segment"][q])
             w.writerow([f"{p['t0_h'][q]:.6f}", f"{data.utc(0) + (data.utc(4) - data.utc(0)) * p['t0_h'][q]:%Y-%m-%d %H:%M:%S}",
                         f"{p['d0_nm'][q]:.6f}", f"{p['t1_h'][q]:.6f}", f"{p['d1_nm'][q]:.6f}",
-                        f"{p['sog_kn'][q]:.6f}", f"{p['sws_kn'][q]:.6f}", f"{p['fuel_mt'][q]:.9f}", g,
+                        f"{p['sog_kn'][q]:.6f}", f"{p['sws_kn'][q]:.6f}", f"{p['fuel_mt'][q]:.9f}",
+                        f"{p['planned_fuel_mt'][q]:.9f}", g,
                         int(seg['dominant_sub'][g]), f"{seg['bearing_deg'][g]:.4f}", int(p["step"][q])])
 
 
@@ -149,6 +157,9 @@ def main(argv=None) -> int:
     g.add_argument("--epoch", type=int, default=24, help="decision epoch in 0.25 h steps (default 24 = 6 h)")
     g.add_argument("--dist-step", type=float, default=None,
                    help="node spacing on the epoch lines [NM] (default 0.1 kn x epoch length, 0.6 NM for 6 h)")
+    g.add_argument("--luo-pricing", choices=("integrated", "start", "both"), default="integrated",
+                   help="price arcs piece by piece along their path (default), at their start point only as "
+                        "Luo et al. do, or both")
     g.add_argument("--luo-csv", metavar="FILE", help="write the Luo plan, one row per epoch")
     args = p.parse_args(argv)
 
@@ -181,14 +192,16 @@ def main(argv=None) -> int:
             _write_plan(args.plan_csv, data, plan)
             print(f"         plan written to {args.plan_csv}")
     if args.luo or args.luo_csv:
-        try:
-            luo = voyage.solve_luo(args.epoch, args.dist_step, args.sog_band, args.forecast)
-        except CoreError as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 1
-        print()
-        print(_luo_summary(data, luo, args, plan))
-        if args.luo_csv and luo.feasible:
-            _write_plan(args.luo_csv, data, luo)
-            print(f"         plan written to {args.luo_csv}")
+        for pricing in (("integrated", "start") if args.luo_pricing == "both" else (args.luo_pricing,)):
+            try:
+                luo = voyage.solve_luo(args.epoch, args.dist_step, args.sog_band, args.forecast, pricing)
+            except CoreError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 1
+            print()
+            print(_luo_summary(data, luo, args, plan, pricing))
+            if args.luo_csv and luo.feasible:
+                path = args.luo_csv if args.luo_pricing != "both" else args.luo_csv.replace(".csv", f"_{pricing}.csv")
+                _write_plan(path, data, luo)
+                print(f"         plan written to {path}")
     return 0

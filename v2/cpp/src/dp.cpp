@@ -36,11 +36,11 @@ private:
 
     bool merged(int s) const { return seg_[s].n_subs > 1; }
     const SpeedContext& context(int sub, int m);          // cached, for subsegment sub in step m
-    SpeedContext fresh_context(int sub, int m) const;
+    SpeedContext fresh_context(int sub, int m, bool actual = false) const;
     double arc_fuel(const SpeedContext& x, double sog, double dt_h);
     template <typename Ctx>
     double piecewise_fuel(int s, double x0, double x1, double sog, double dt_h, Ctx&& ctx,
-                          double* mean_sws = nullptr) const;
+                          double* mean_sws = nullptr, long long* violations = nullptr) const;
     void build_hh(int k, int m);
     const std::vector<double>& vv(int s, int m);
     // One arc of fuel f from a node of cost c to grid index idx of a line.
@@ -64,7 +64,7 @@ private:
     Node node(std::uint64_t id) const;
     double time_h(const Node& n) const;
     double dist_nm(const Node& n) const;
-    PlanArc plan_arc(const Node& a, const Node& b) const;
+    PlanArc plan_arc(const Node& a, const Node& b, long long* violations) const;
     double constant_sog_fuel() const;
 
     const Voyage& voyage_;
@@ -184,9 +184,11 @@ int Sweep::segment_of(double d) const {
     return std::min(static_cast<int>(it - D_.begin()) - 1, n_ - 1);
 }
 
-SpeedContext Sweep::fresh_context(int sub, int m) const {
+// The conditions the sweep prices with, or with `actual` the pseudo real-time ones.
+SpeedContext Sweep::fresh_context(int sub, int m, bool actual) const {
     const Subsegment& g = voyage_.subsegment(sub);
-    const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, m, o_.forecast ? 0 : m);
+    const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, m,
+                                                      o_.forecast && !actual ? 0 : m);
     return model_.context(g.bearing_deg, c);
 }
 
@@ -210,11 +212,12 @@ double Sweep::arc_fuel(const SpeedContext& x, double sog, double dt_h) {
 // Fuel at SOG `sog` for dt_h hours over [x0, x1] of segment s: each piece of the
 // segment at its own fuel rate for its share of the time (its share of the
 // distance, the SOG being constant). Optionally the time-weighted mean SWS. +inf
-// when the SOG leaves the band or a covered piece's SWS the vessel's range. On an
+// when the SOG leaves the band or a covered piece's SWS the vessel's range; given
+// `violations`, such pieces are counted and priced anyway (evaluating a plan). On an
 // unmerged segment this is arc_fuel with the segment's context, to the bit.
 template <typename Ctx>
 double Sweep::piecewise_fuel(int s, double x0, double x1, double sog, double dt_h, Ctx&& ctx,
-                             double* mean_sws) const {
+                             double* mean_sws, long long* violations) const {
     if (sog < vmin_ - kEps || sog > vmax_ + kEps) return kInf;
     const double span = x1 - x0;
     double rate = 0.0, sws_sum = 0.0;
@@ -223,7 +226,10 @@ double Sweep::piecewise_fuel(int s, double x0, double x1, double sog, double dt_
         if (share <= 1e-12) continue;
         ++evaluations_;
         const double sws = model_.sws(ctx(piece_sub_[q]), sog);
-        if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
+        if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) {
+            if (!violations) return kInf;
+            ++*violations;
+        }
         rate += model_.fcr_from_sws(sws) * share;
         sws_sum += sws * share;
     }
@@ -351,8 +357,9 @@ Sweep::Node Sweep::node(std::uint64_t id) const {
 double Sweep::time_h(const Node& n) const { return n.on_time_line ? n.line * kStepH : n.idx * tick_h_; }
 double Sweep::dist_nm(const Node& n) const { return n.on_time_line ? n.idx * zeta_ : D_[n.line]; }
 
-// One arc of the plan, priced with the same expressions as the sweep.
-PlanArc Sweep::plan_arc(const Node& a, const Node& b) const {
+// One arc of the plan, priced with the same expressions as the sweep (planned) and in
+// the actual weather (realized; the same when the sweep used the actual weather).
+PlanArc Sweep::plan_arc(const Node& a, const Node& b, long long* violations) const {
     PlanArc p{};
     p.t0_h = time_h(a);
     p.d0_nm = dist_nm(a);
@@ -387,15 +394,23 @@ PlanArc Sweep::plan_arc(const Node& a, const Node& b) const {
         }
     }
     p.sog_kn = sog;
-    if (merged(p.segment)) {
-        const int m = p.step;
-        p.fuel_mt = piecewise_fuel(p.segment, x0, x1, sog, dt, [&](int sub) { return fresh_context(sub, m); },
-                                   &p.sws_kn);
-        return p;
+    const int m = p.step;
+    for (bool actual : {false, true}) {
+        if (actual && !o_.forecast) break;              // planned in the actual weather already
+        double sws, fuel;
+        if (merged(p.segment)) {
+            long long* v = actual ? violations : nullptr;
+            fuel = piecewise_fuel(p.segment, x0, x1, sog, dt,
+                                  [&](int sub) { return fresh_context(sub, m, actual); }, &sws, v);
+        } else {
+            sws = model_.sws(fresh_context(seg_[p.segment].first_sub, m, actual), sog);
+            fuel = model_.fcr_from_sws(sws) * dt;
+            if (actual && !(sws >= kSwsMinKn && sws <= kSwsMaxKn)) ++*violations;
+        }
+        if (!actual) p.planned_fuel_mt = fuel;
+        p.sws_kn = sws;
+        p.fuel_mt = fuel;
     }
-    const SpeedContext x = fresh_context(seg_[p.segment].first_sub, p.step);
-    p.sws_kn = model_.sws(x, sog);
-    p.fuel_mt = model_.fcr_from_sws(p.sws_kn) * dt;
     return p;
 }
 
@@ -409,7 +424,7 @@ double Sweep::constant_sog_fuel() const {
         while (t < t_end - 1e-12) {
             const int m = std::min(static_cast<int>(std::floor(t / kStepH + kEps)), M_ - 1);
             const double t_next = std::min(t_end, (m + 1) * kStepH);
-            const double sws = model_.sws(fresh_context(piece_sub_[q], m), v);
+            const double sws = model_.sws(fresh_context(piece_sub_[q], m, true), v);
             if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
             total += model_.fcr_from_sws(sws) * (t_next - t);
             t = t_next;
@@ -466,13 +481,19 @@ DPResult Sweep::run() {
         }
     }
     r.feasible = best != kNone;
-    r.fuel_mt = best_cost;
+    r.planned_fuel_mt = r.fuel_mt = best_cost;
+    long long violations = 0;
     if (r.feasible) {
         std::vector<std::uint64_t> chain;
         for (std::uint64_t id = best; id != kNone; id = pred_[id]) chain.push_back(id);
         std::reverse(chain.begin(), chain.end());
         r.arrival_h = time_h(node(best));
-        for (std::size_t q = 1; q < chain.size(); ++q) r.path.push_back(plan_arc(node(chain[q - 1]), node(chain[q])));
+        for (std::size_t q = 1; q < chain.size(); ++q)
+            r.path.push_back(plan_arc(node(chain[q - 1]), node(chain[q]), &violations));
+        if (o_.forecast) {
+            r.fuel_mt = 0.0;
+            for (const PlanArc& a : r.path) r.fuel_mt += a.fuel_mt;
+        }
     }
     r.constant_sog_fuel_mt = constant_sog_fuel();
 
@@ -484,6 +505,7 @@ DPResult Sweep::run() {
     st.arcs = arcs_;
     st.infeasible_arcs = infeasible_;
     st.sws_evaluations = evaluations_;
+    st.realized_sws_violations = violations;
     st.sweep_s = sweep_s;
     st.memory_mb = cost_.size() * (sizeof(double) + sizeof(std::uint32_t)) / 1e6;
     return r;

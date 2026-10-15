@@ -33,11 +33,12 @@ private:
     };
 
     const SpeedContext& context(int sub, int step);
-    SpeedContext fresh_context(int sub, int step) const;
+    SpeedContext fresh_context(int sub, int step, bool actual = false) const;
     int subsegment_of(double d) const;
     template <typename Ctx>
     double path_fuel(double d0, double d1, double v, int step0, int n_steps, Ctx&& ctx,
-                     double* mean_sws = nullptr) const;
+                     double* mean_sws = nullptr, long long* violations = nullptr) const;
+    double start_fuel(const SpeedContext& x, double v, double dt_h) const;
     void relax(std::uint64_t id, double value, std::uint64_t src) {
         if (value < cost_[id]) {
             cost_[id] = value;
@@ -46,7 +47,8 @@ private:
     }
     double node_dist(int e, long long i) const { return e == 0 ? 0.0 : i * delta_; }
     int boundary_of(std::uint64_t id) const;
-    PlanArc plan_arc(int e, double d0, double d1) const;
+    PlanArc plan_arc(int e, double d0, double d1, long long* violations) const;
+    bool replans() const { return o_.forecast || o_.start_point_pricing; }   // planned != realized
     double constant_sog_fuel() const;
 
     const Voyage& voyage_;
@@ -115,9 +117,11 @@ LuoSweep::LuoSweep(const Voyage& voyage, const LuoOptions& o)
     ctx_stamp_.assign(static_cast<std::size_t>(n_) * K_, -1);
 }
 
-SpeedContext LuoSweep::fresh_context(int sub, int step) const {
+// The conditions the sweep prices with, or with `actual` the pseudo real-time ones.
+SpeedContext LuoSweep::fresh_context(int sub, int step, bool actual) const {
     const Subsegment& g = voyage_.subsegment(sub);
-    const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, step, o_.forecast ? 0 : step);
+    const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, step,
+                                                      o_.forecast && !actual ? 0 : step);
     return model_.context(g.bearing_deg, c);
 }
 
@@ -138,10 +142,11 @@ int LuoSweep::subsegment_of(double d) const {
 // Fuel of sailing [d0, d1] at constant SOG v from the start of weather step step0,
 // through n_steps steps: cut at every subsegment boundary and every step boundary,
 // each piece at its own subsegment's and step's fuel rate. +inf when v leaves the
-// band or a piece's SWS the vessel's range. Optionally the time-weighted mean SWS.
+// band or a piece's SWS the vessel's range; given `violations`, such pieces are
+// counted and priced anyway (evaluating a plan). Optionally the time-weighted mean SWS.
 template <typename Ctx>
 double LuoSweep::path_fuel(double d0, double d1, double v, int step0, int n_steps, Ctx&& ctx,
-                           double* mean_sws) const {
+                           double* mean_sws, long long* violations) const {
     if (v < vmin_ - kEps || v > vmax_ + kEps) return kInf;
     double fuel = 0.0, sws_time = 0.0, x = d0;
     int sub = subsegment_of(d0), k = 0;
@@ -151,7 +156,10 @@ double LuoSweep::path_fuel(double d0, double d1, double v, int step0, int n_step
         if (x_end > x) {
             ++evaluations_;
             const double sws = model_.sws(ctx(sub, step0 + std::min(k, n_steps - 1)), v);
-            if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
+            if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) {
+                if (!violations) return kInf;
+                ++*violations;
+            }
             const double dt = (x_end - x) / v;
             fuel += model_.fcr_from_sws(sws) * dt;
             sws_time += sws * dt;
@@ -168,13 +176,24 @@ double LuoSweep::path_fuel(double d0, double d1, double v, int step0, int n_step
     return fuel;
 }
 
+// Luo et al.'s price: the whole arc at the conditions where and when it starts.
+double LuoSweep::start_fuel(const SpeedContext& x, double v, double dt_h) const {
+    if (v < vmin_ - kEps || v > vmax_ + kEps) return kInf;
+    ++evaluations_;
+    const double sws = model_.sws(x, v);
+    if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
+    return model_.fcr_from_sws(sws) * dt_h;
+}
+
 int LuoSweep::boundary_of(std::uint64_t id) const {
     return static_cast<int>(std::upper_bound(b_.begin(), b_.end(), id,
                                              [](std::uint64_t v, const Boundary& b) { return v < b.offset; }) -
                             b_.begin()) - 1;
 }
 
-PlanArc LuoSweep::plan_arc(int e, double d0, double d1) const {
+// One epoch of the plan: its price as planned, and its fuel sailed in the actual
+// weather with every piece priced (the same when planning did exactly that).
+PlanArc LuoSweep::plan_arc(int e, double d0, double d1, long long* violations) const {
     const int s0 = b_[e].step, s1 = b_[e + 1].step;
     const double dt = (s1 - s0) * kStepH;
     PlanArc p{};
@@ -183,10 +202,17 @@ PlanArc LuoSweep::plan_arc(int e, double d0, double d1) const {
     p.d0_nm = d0;
     p.d1_nm = d1;
     p.sog_kn = (d1 - d0) / dt;
-    p.fuel_mt = path_fuel(d0, d1, p.sog_kn, s0, s1 - s0, [&](int sub, int step) { return fresh_context(sub, step); },
-                          &p.sws_kn);
     p.segment = subsegment_of(d0);
     p.step = s0;
+    p.planned_fuel_mt = o_.start_point_pricing
+        ? start_fuel(fresh_context(p.segment, s0), p.sog_kn, dt)
+        : path_fuel(d0, d1, p.sog_kn, s0, s1 - s0, [&](int sub, int step) { return fresh_context(sub, step); },
+                    &p.sws_kn);
+    p.fuel_mt = p.planned_fuel_mt;
+    if (replans())
+        p.fuel_mt = path_fuel(d0, d1, p.sog_kn, s0, s1 - s0,
+                              [&](int sub, int step) { return fresh_context(sub, step, true); }, &p.sws_kn,
+                              violations);
     return p;
 }
 
@@ -200,7 +226,7 @@ double LuoSweep::constant_sog_fuel() const {
         while (t < t_end - 1e-12) {
             const int m = std::min(static_cast<int>(std::floor(t / kStepH + kEps)), M_ - 1);
             const double t_next = std::min(t_end, (m + 1) * kStepH);
-            const double sws = model_.sws(fresh_context(q, m), v);
+            const double sws = model_.sws(fresh_context(q, m, true), v);
             if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
             total += model_.fcr_from_sws(sws) * (t_next - t);
             t = t_next;
@@ -225,11 +251,16 @@ DPResult LuoSweep::run() {
             const double c = cost_[id];
             if (c == kInf) continue;
             const double d0 = node_dist(e, i);
+            const SpeedContext* x0 = o_.start_point_pricing ? &context(subsegment_of(d0), from.step) : nullptr;
+            auto price = [&](double d1) {
+                const double v = (d1 - d0) / dt;
+                return x0 ? start_fuel(*x0, v, dt) : path_fuel(d0, d1, v, from.step, n_steps, ctx);
+            };
             // to the nodes of the next boundary
             const long long lo = std::max(i + q_lo, to.lo), hi = std::min(i + q_hi, to.hi);
             for (long long ip = lo; ip <= hi; ++ip) {
                 const double d1 = ip * delta_;
-                const double f = path_fuel(d0, d1, (d1 - d0) / dt, from.step, n_steps, ctx);
+                const double f = price(d1);
                 ++arcs_;
                 if (f == kInf) {
                     ++infeasible_;
@@ -240,7 +271,7 @@ DPResult LuoSweep::run() {
             // arriving at the end of the route at the next boundary
             const double v = (L_ - d0) / dt;
             if (v >= vmin_ - kEps && v <= vmax_ + kEps) {
-                const double f = path_fuel(d0, L_, v, from.step, n_steps, ctx);
+                const double f = price(L_);
                 ++arcs_;
                 if (f == kInf) ++infeasible_;
                 else if (c + f < arrive_cost_[e + 1]) {
@@ -263,7 +294,8 @@ DPResult LuoSweep::run() {
     for (int e = 1; e < static_cast<int>(b_.size()); ++e)
         if (arrive_cost_[e] < kInf && (best < 0 || arrive_cost_[e] < arrive_cost_[best])) best = e;
     r.feasible = best > 0;
-    r.fuel_mt = r.feasible ? arrive_cost_[best] : kInf;
+    r.planned_fuel_mt = r.fuel_mt = r.feasible ? arrive_cost_[best] : kInf;
+    long long violations = 0;
     if (r.feasible) {
         r.arrival_h = b_[best].step * kStepH;
         std::vector<std::pair<int, double>> pts{{best, L_}};    // (boundary, distance), end first
@@ -272,8 +304,12 @@ DPResult LuoSweep::run() {
             pts.push_back({e, node_dist(e, b_[e].lo + static_cast<long long>(id - b_[e].offset))});
         }
         std::reverse(pts.begin(), pts.end());
-        for (std::size_t q = 1; q < pts.size(); ++q) r.path.push_back(plan_arc(pts[q - 1].first, pts[q - 1].second,
-                                                                                pts[q].second));
+        for (std::size_t q = 1; q < pts.size(); ++q)
+            r.path.push_back(plan_arc(pts[q - 1].first, pts[q - 1].second, pts[q].second, &violations));
+        if (replans()) {
+            r.fuel_mt = 0.0;
+            for (const PlanArc& a : r.path) r.fuel_mt += a.fuel_mt;
+        }
     }
     r.constant_sog_fuel_mt = constant_sog_fuel();
 
@@ -284,6 +320,7 @@ DPResult LuoSweep::run() {
     st.arcs = arcs_;
     st.infeasible_arcs = infeasible_;
     st.sws_evaluations = evaluations_;
+    st.realized_sws_violations = violations;
     st.sweep_s = sweep_s;
     st.memory_mb = cost_.size() * (sizeof(double) + sizeof(std::uint32_t)) / 1e6;
     return r;

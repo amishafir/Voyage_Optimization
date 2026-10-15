@@ -167,17 +167,24 @@ def _node_of(ref, t_h, d_nm):
     return ("T", round(t_h / 0.25), round(d_nm / ref["zeta"]))
 
 
-def _check_against_reference(plan, ref):
+def _check_against_reference(plan, ref, actual=None):
+    """plan's planned fuel and arcs against ref; its realized fuel against `actual`, the reference
+    of the same graph in the actual weather (ref itself when planning used the actual weather)."""
+    actual = actual or ref
     assert plan.feasible and math.isfinite(ref["fuel"])
-    assert math.isclose(plan.fuel_mt, ref["fuel"], rel_tol=1e-10), (plan.fuel_mt, ref["fuel"])
+    assert math.isclose(plan.planned_fuel_mt, ref["fuel"], rel_tol=1e-10), (plan.planned_fuel_mt, ref["fuel"])
     P = plan.path
     for q in range(len(P["fuel_mt"])):             # every plan arc is an arc of the reference graph, same fuel
         a = _node_of(ref, P["t0_h"][q], P["d0_nm"][q])
         b = _node_of(ref, P["t1_h"][q], P["d1_nm"][q])
         assert (a, b) in ref["arcs"], (q, a, b)
-        assert math.isclose(P["fuel_mt"][q], ref["arcs"][a, b], rel_tol=1e-12)
+        assert math.isclose(P["planned_fuel_mt"][q], ref["arcs"][a, b], rel_tol=1e-12)
+        assert math.isclose(P["fuel_mt"][q], actual["arcs"][a, b], rel_tol=1e-12)
+    assert math.isclose(P["planned_fuel_mt"].sum(), plan.planned_fuel_mt, rel_tol=1e-12)
     assert math.isclose(P["fuel_mt"].sum(), plan.fuel_mt, rel_tol=1e-12)
-    assert math.isclose(plan.constant_sog_fuel_mt, ref["constant"], rel_tol=1e-10)
+    assert math.isclose(plan.constant_sog_fuel_mt, actual["constant"], rel_tol=1e-10)
+    if actual is ref:
+        assert plan.fuel_mt == plan.planned_fuel_mt
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +221,8 @@ def test_optimal_pseudo_real_time():
 
 
 def test_optimal_forecast_from_the_start():
-    _check_against_reference(VOYAGE.solve(forecast=True), reference_dp(VOYAGE, forecast=True))
+    # planned in the forecast known at the start, realized in the actual weather
+    _check_against_reference(VOYAGE.solve(forecast=True), reference_dp(VOYAGE, forecast=True), reference_dp(VOYAGE))
 
 
 def test_optimal_on_a_coarse_grid():

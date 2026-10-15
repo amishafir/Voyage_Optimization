@@ -60,10 +60,12 @@ typedef struct {
 
 typedef struct {
     int feasible;
-    double fuel_mt, arrival_h, constant_sog_fuel_mt, v_min_kn, v_max_kn;
+    double fuel_mt;                     /* realized: the plan in the actual weather, every piece priced */
+    double planned_fuel_mt;             /* the DP's objective */
+    double arrival_h, constant_sog_fuel_mt, v_min_kn, v_max_kn;
     int n_segments, path_length;
     long long nodes, distance_line_nodes, time_line_nodes, reached_nodes;
-    long long arcs, infeasible_arcs, sws_evaluations;
+    long long arcs, infeasible_arcs, sws_evaluations, realized_sws_violations;
     double setup_s, sweep_s, memory_mb;
 } v2_dp_summary;
 
@@ -73,7 +75,7 @@ v2_dp_result* v2_dp_solve(const v2_voyage* voyage, const v2_dp_options* options)
 void v2_dp_summary_of(const v2_dp_result* result, v2_dp_summary* out);
 /* arrays of length path_length */
 void v2_dp_path(const v2_dp_result* result, double* t0_h, double* d0_nm, double* t1_h, double* d1_nm,
-                double* sog_kn, double* sws_kn, double* fuel_mt, int* segment, int* step);
+                double* sog_kn, double* sws_kn, double* fuel_mt, double* planned_fuel_mt, int* segment, int* step);
 /* arrays of length n_segments */
 void v2_dp_segments(const v2_dp_result* result, double* start_nm, double* length_nm, double* bearing_deg,
                     int* first_sub, int* n_subs, int* dominant_sub);
@@ -85,6 +87,7 @@ typedef struct {
     int epoch_steps;                    /* decision epoch in 0.25 h steps (24 = 6 h) */
     double dist_step_nm;                /* node spacing on the epoch lines; 0 = 0.1 kn x epoch length */
     int forecast;
+    int start_point_pricing;            /* 1: price each arc at its start point only (Luo et al.) */
 } v2_luo_options;
 
 v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* options);

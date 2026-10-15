@@ -48,7 +48,10 @@ struct Segment {
 // One arc of the plan.
 struct PlanArc {
     double t0_h, d0_nm, t1_h, d1_nm;
-    double sog_kn, sws_kn, fuel_mt;     // sws_kn: time-weighted mean over the pieces of a merged segment
+    double sog_kn;
+    double sws_kn, fuel_mt;             // realized: actual (pseudo real-time) weather, every piece priced;
+                                        // sws_kn is the time-weighted mean over the pieces
+    double planned_fuel_mt;             // as priced when planning
     int segment, step;
 };
 
@@ -56,14 +59,18 @@ struct DPStats {
     long long nodes, distance_line_nodes, time_line_nodes, reached_nodes;
     long long arcs, infeasible_arcs;    // arcs generated; of them, SWS outside the vessel's range
     long long sws_evaluations;          // SWS inversions (tables shared by many arcs count once)
+    long long realized_sws_violations;  // plan pieces whose SWS leaves the vessel's range in actual weather
     double setup_s, sweep_s;
     double memory_mb;                   // node arrays
 };
 
+// fuel_mt is the plan's realized fuel: its SOG profile sailed in the actual (pseudo
+// real-time) weather, every subsegment-by-step piece priced. planned_fuel_mt is the
+// DP's objective. They coincide when planning used integrated prices in actual weather.
 struct DPResult {
     bool feasible;
-    double fuel_mt, arrival_h;
-    double constant_sog_fuel_mt;        // every piece at the mean SOG, same weather rules
+    double fuel_mt, planned_fuel_mt, arrival_h;
+    double constant_sog_fuel_mt;        // every piece at the mean SOG, actual weather
     double v_min_kn, v_max_kn;
     std::vector<Segment> segments;
     std::vector<PlanArc> path;

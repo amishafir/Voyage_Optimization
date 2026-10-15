@@ -16,6 +16,11 @@
 // forecast known at the start). An arc with any piece whose SWS falls outside
 // [kSwsMinKn, kSwsMaxKn] is left out. No subsegments are merged and the route
 // length is not snapped to the grid.
+//
+// With start_point_pricing, arcs are priced as in Luo et al.: the whole epoch at
+// the conditions where and when it starts (that subsegment's bearing and cells, that
+// weather step), feasibility checked there only. The plan is then evaluated as above
+// (DPResult::fuel_mt), so the cost of the cruder pricing shows.
 
 #include "voyage_v2/dp.hpp"
 
@@ -26,6 +31,7 @@ struct LuoOptions {
     int epoch_steps = 24;       // decision epoch in 0.25 h weather steps (24 = 6 h)
     double dist_step_nm = 0.0;  // node spacing on the epoch lines; 0 = 0.1 kn x epoch length
     bool forecast = false;      // false: pseudo real-time (tau = t); true: forecast known at the start
+    bool start_point_pricing = false;   // price each arc at its start point only (Luo et al.)
 };
 
 // The plan has one arc per epoch (segment = the subsegment it starts in, step =
