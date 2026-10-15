@@ -1,8 +1,9 @@
 """
 Load a voyage from a route's weather archive and print what was loaded;
-optionally evaluate arcs.
+optionally evaluate arcs and solve for the minimum-fuel plan.
 
     python3 -m voyage_v2 ARCHIVE --start "YYYY-MM-DD HH:MM" --eta HOURS [--arc SUB SOG T [TAU]] ...
+    python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve [--plan-csv FILE]
 
 ARCHIVE is a route archive written by the live collector (e.g. route1_runs.h5).
 --start is UTC and is rounded to the nearest quarter hour; --eta is in hours
@@ -13,9 +14,10 @@ the start; without TAU an arc uses pseudo real-time weather.
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 
-from .core import Ship, Voyage, DEFAULT_SHIP
+from .core import DEFAULT_SHIP, CoreError, Plan, Ship, Voyage
 from .loader import STEP_SECONDS, ReferenceTimeError, VoyageData, load_voyage_data
 
 
@@ -62,6 +64,44 @@ def _arc_table(voyage: Voyage, arcs) -> str:
     return "\n".join(rows)
 
 
+def _plan_summary(data: VoyageData, plan: Plan, args) -> str:
+    s, p = plan.stats, plan.path
+    lines = [
+        f"Graph    {s['n_segments']:,} segments (subsegments under {args.merge} NM merged), "
+        f"{args.tick} s on distance lines, {args.zeta:g} m on 0.25 h time lines, "
+        f"SOG {plan.v_min_kn:.2f}-{plan.v_max_kn:.2f} kn, {'forecast from the start' if args.forecast else 'pseudo real-time'}",
+        f"         nodes {s['nodes'] / 1e6:.1f} M ({s['distance_line_nodes'] / 1e6:.1f} M on distance lines, "
+        f"{s['time_line_nodes'] / 1e6:.1f} M on time lines), reached {s['reached_nodes'] / 1e6:.1f} M; "
+        f"arcs {s['arcs'] / 1e9:.2f} G ({s['infeasible_arcs']:,} outside the SWS range); "
+        f"node memory {s['memory_mb']:.0f} MB; sweep {s['sweep_s']:.1f} s",
+    ]
+    if not plan.feasible:
+        return "\n".join(lines + ["Plan     infeasible: no path reaches the end of the route by the ETA"])
+    gain = 100 * (1 - plan.fuel_mt / plan.constant_sog_fuel_mt)
+    lines += [
+        f"Plan     fuel {plan.fuel_mt:.3f} mt, arrival {plan.arrival_h:.2f} h ({data.utc(round(plan.arrival_h * 4)):%Y-%m-%d %H:%M} UTC), "
+        f"{len(p['fuel_mt']):,} arcs",
+        f"         constant SOG {data.subsegments['length_nm'].sum() / (data.eta_steps / 4):.2f} kn: "
+        f"{plan.constant_sog_fuel_mt:.3f} mt; the plan saves {gain:.2f}%",
+        f"         SOG {p['sog_kn'].min():.2f}-{p['sog_kn'].max():.2f} kn, SWS {p['sws_kn'].min():.2f}-{p['sws_kn'].max():.2f} kn",
+    ]
+    return "\n".join(lines)
+
+
+def _write_plan(path: str, data: VoyageData, plan: Plan) -> None:
+    p, seg = plan.path, plan.segments
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["t0_h", "t0_utc", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt", "segment",
+                    "subsegment", "bearing_deg", "step"])
+        for q in range(len(p["fuel_mt"])):
+            g = int(p["segment"][q])
+            w.writerow([f"{p['t0_h'][q]:.6f}", f"{data.utc(0) + (data.utc(4) - data.utc(0)) * p['t0_h'][q]:%Y-%m-%d %H:%M:%S}",
+                        f"{p['d0_nm'][q]:.6f}", f"{p['t1_h'][q]:.6f}", f"{p['d1_nm'][q]:.6f}",
+                        f"{p['sog_kn'][q]:.6f}", f"{p['sws_kn'][q]:.6f}", f"{p['fuel_mt'][q]:.9f}", g,
+                        int(seg['dominant_sub'][g]), f"{seg['bearing_deg'][g]:.4f}", int(p["step"][q])])
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python3 -m voyage_v2", description=__doc__.split("\n\n")[0].strip())
     p.add_argument("archive", help="route weather archive (HDF5, collector layout model-runs-v1)")
@@ -70,6 +110,14 @@ def main(argv=None) -> int:
     p.add_argument("--ship", default=str(DEFAULT_SHIP), help="ship particulars (YAML)")
     p.add_argument("--arc", nargs="+", action="append", metavar="SUB SOG T [TAU]", default=[],
                    help="evaluate an arc: subsegment, SOG [kn], step, information step (optional)")
+    g = p.add_argument_group("minimum-fuel plan (single core)")
+    g.add_argument("--solve", action="store_true", help="solve the DP on the full time-distance graph")
+    g.add_argument("--sog-band", type=float, default=3.0, help="SOG window: mean SOG +/- this [kn] (default 3)")
+    g.add_argument("--tick", type=int, default=4, help="node spacing on distance lines [s], divides 900 (default 4)")
+    g.add_argument("--zeta", type=float, default=25.0, help="node spacing on time lines [m] (default 25)")
+    g.add_argument("--merge", type=float, default=0.15, help="merge subsegments shorter than this [NM] (default 0.15)")
+    g.add_argument("--forecast", action="store_true", help="price arcs with the forecast known at the start")
+    g.add_argument("--plan-csv", metavar="FILE", help="write the plan, one row per arc")
     args = p.parse_args(argv)
 
     arcs = []
@@ -88,4 +136,15 @@ def main(argv=None) -> int:
     if arcs:
         print()
         print(_arc_table(voyage, arcs))
+    if args.solve or args.plan_csv:
+        try:
+            plan = voyage.solve(args.sog_band, args.tick, args.zeta, args.merge, args.forecast)
+        except CoreError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print()
+        print(_plan_summary(data, plan, args))
+        if args.plan_csv and plan.feasible:
+            _write_plan(args.plan_csv, data, plan)
+            print(f"         plan written to {args.plan_csv}")
     return 0

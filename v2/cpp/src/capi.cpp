@@ -5,10 +5,12 @@
 #include <string>
 #include <vector>
 
+#include "voyage_v2/dp.hpp"
 #include "voyage_v2/voyage.hpp"
 
 struct v2_archive { v2::WeatherArchive archive; };
 struct v2_voyage { v2::Voyage voyage; };
+struct v2_dp_result { v2::DPResult result; };
 
 namespace {
 
@@ -107,6 +109,59 @@ int v2_arc_detail(const v2_voyage* voyage, int sub, double sog_kn, int t, int ta
         return 0;
     }, 1);
 }
+
+v2_dp_result* v2_dp_solve(const v2_voyage* voyage, const v2_dp_options* options) {
+    return guarded([&] {
+        v2::DPOptions o;
+        o.sog_band_kn = options->sog_band_kn;
+        o.tick_s = options->tick_s;
+        o.zeta_m = options->zeta_m;
+        o.merge_nm = options->merge_nm;
+        o.forecast = options->forecast != 0;
+        return new v2_dp_result{v2::solve_dp(voyage->voyage, o)};
+    }, static_cast<v2_dp_result*>(nullptr));
+}
+
+void v2_dp_summary_of(const v2_dp_result* result, v2_dp_summary* out) {
+    const v2::DPResult& r = result->result;
+    const v2::DPStats& s = r.stats;
+    *out = {r.feasible ? 1 : 0, r.fuel_mt, r.arrival_h, r.constant_sog_fuel_mt, r.v_min_kn, r.v_max_kn,
+            static_cast<int>(r.segments.size()), static_cast<int>(r.path.size()),
+            s.nodes, s.distance_line_nodes, s.time_line_nodes, s.reached_nodes,
+            s.arcs, s.infeasible_arcs, s.sws_evaluations, s.setup_s, s.sweep_s, s.memory_mb};
+}
+
+void v2_dp_path(const v2_dp_result* result, double* t0_h, double* d0_nm, double* t1_h, double* d1_nm,
+                double* sog_kn, double* sws_kn, double* fuel_mt, int* segment, int* step) {
+    const auto& path = result->result.path;
+    for (std::size_t i = 0; i < path.size(); ++i) {
+        const v2::PlanArc& a = path[i];
+        t0_h[i] = a.t0_h;
+        d0_nm[i] = a.d0_nm;
+        t1_h[i] = a.t1_h;
+        d1_nm[i] = a.d1_nm;
+        sog_kn[i] = a.sog_kn;
+        sws_kn[i] = a.sws_kn;
+        fuel_mt[i] = a.fuel_mt;
+        segment[i] = a.segment;
+        step[i] = a.step;
+    }
+}
+
+void v2_dp_segments(const v2_dp_result* result, double* start_nm, double* length_nm, double* bearing_deg,
+                    int* first_sub, int* n_subs, int* dominant_sub) {
+    const auto& segs = result->result.segments;
+    for (std::size_t i = 0; i < segs.size(); ++i) {
+        start_nm[i] = segs[i].start_nm;
+        length_nm[i] = segs[i].length_nm;
+        bearing_deg[i] = segs[i].bearing_deg;
+        first_sub[i] = segs[i].first_sub;
+        n_subs[i] = segs[i].n_subs;
+        dominant_sub[i] = segs[i].dominant_sub;
+    }
+}
+
+void v2_dp_free(v2_dp_result* result) { delete result; }
 
 int v2_beaufort_number(double wind_speed_kmh) { return v2::beaufort_number(wind_speed_kmh); }
 

@@ -24,6 +24,20 @@ struct Conditions {
 // Beaufort number (0-12) from wind speed, WMO thresholds in m/s. -1 for NaN.
 int beaufort_number(double wind_speed_kmh);
 
+// The part of the SOG -> SWS inverse fixed by the conditions and the course
+// (SpeedModel::context), so that many SOGs under the same conditions cost one
+// context each plus a cheap SpeedModel::sws(context, sog).
+struct SpeedContext {
+    bool valid;             // false when a condition is NaN
+    double sog_div;         // 0.965 at Beaufort 5 and above, else 1
+    double along, cross;    // current along and across the course [kn]
+    double k;               // speed loss [%] = k * CU(SWS)
+    double floor_loss;      // loss fraction once CU sits at its 0.1 floor
+    double vw_floor;        // Vw from which CU sits at its floor
+    double vw_cap;          // Vw up to which the loss is capped at 50 %
+    double p3, p2, p1;      // the cubic p3 V^3 + p2 V^2 + p1 V - Vw = 0 between the two
+};
+
 class SpeedModel {
 public:
     explicit SpeedModel(const Ship& ship);   // throws std::invalid_argument for Cb > 0.80
@@ -36,6 +50,11 @@ public:
     // Still-water speed [kn] needed to make good sog_kn: the exact inverse of sog().
     // +inf when no SWS reaches sog_kn, NaN when a condition is NaN.
     double sws(double sog_kn, double bearing_deg, const Conditions& c) const;
+
+    // The same in two parts: what depends on the conditions and the course only,
+    // then the SWS for one SOG.
+    SpeedContext context(double bearing_deg, const Conditions& c) const;
+    double sws(const SpeedContext& x, double sog_kn) const;
 
     // FCR [mt/h] at a still-water speed.
     double fcr_from_sws(double sws_kn) const {

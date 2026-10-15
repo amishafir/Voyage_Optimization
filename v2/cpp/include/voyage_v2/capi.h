@@ -49,6 +49,36 @@ int v2_arc_costs(const v2_voyage* voyage, long n, const int* sub, const double* 
 int v2_arc_detail(const v2_voyage* voyage, int sub, double sog_kn, int t, int tau,
                   v2_arc_info* out);
 
+/* Minimum-fuel plan on the full time-distance graph (see dp.hpp) */
+typedef struct {
+    double sog_band_kn;
+    int tick_s;
+    double zeta_m;
+    double merge_nm;
+    int forecast;                       /* 0: pseudo real-time; 1: forecast known at the start */
+} v2_dp_options;
+
+typedef struct {
+    int feasible;
+    double fuel_mt, arrival_h, constant_sog_fuel_mt, v_min_kn, v_max_kn;
+    int n_segments, path_length;
+    long long nodes, distance_line_nodes, time_line_nodes, reached_nodes;
+    long long arcs, infeasible_arcs, sws_evaluations;
+    double setup_s, sweep_s, memory_mb;
+} v2_dp_summary;
+
+typedef struct v2_dp_result v2_dp_result;
+
+v2_dp_result* v2_dp_solve(const v2_voyage* voyage, const v2_dp_options* options);
+void v2_dp_summary_of(const v2_dp_result* result, v2_dp_summary* out);
+/* arrays of length path_length */
+void v2_dp_path(const v2_dp_result* result, double* t0_h, double* d0_nm, double* t1_h, double* d1_nm,
+                double* sog_kn, double* sws_kn, double* fuel_mt, int* segment, int* step);
+/* arrays of length n_segments */
+void v2_dp_segments(const v2_dp_result* result, double* start_nm, double* length_nm, double* bearing_deg,
+                    int* first_sub, int* n_subs, int* dominant_sub);
+void v2_dp_free(v2_dp_result* result);
+
 /* The speed and fuel model on its own */
 int v2_beaufort_number(double wind_speed_kmh);
 double v2_sog_from_sws(const v2_ship* ship, double sws_kn, double bearing_deg, const v2_conditions* c);

@@ -2,9 +2,10 @@
 
 Reads a route's weather archive, as written by the live collector on edison
 (`pipeline/data/route1_runs.h5`, `route2_runs.h5`; layout in
-`pipeline/shared/run_archive.py`), and prices arcs: the fuel to sail one
-subsegment at one SOG in the weather of a given time, as forecast at a given
-information time. The DP comes later.
+`pipeline/shared/run_archive.py`), prices arcs (the fuel to sail one subsegment
+at one SOG in the weather of a given time, as forecast at a given information
+time), and solves for the minimum-fuel plan on the full time-distance graph
+(single core). Rolling-horizon re-planning is not written yet.
 
 Python reads the files and the command line; everything that costs time runs in
 the C++ core (`cpp/`), which Python calls through `ctypes`. The core needs only a
@@ -24,6 +25,8 @@ python3 -m voyage_v2 route1_runs.h5 --start "2026-10-14 13:20" --eta 280 --arc 1
 - `--eta`: hours after the start, a multiple of 0.25.
 - `--arc SUB SOG T [TAU]`: subsegment, SOG [kn], step, information step; prints the conditions,
   SWS, fuel and the runs the weather came from.
+- `--solve`: the minimum-fuel plan (below); `--plan-csv FILE` writes it, one row per arc.
+  Options: `--sog-band 3` (kn), `--tick 4` (s), `--zeta 25` (m), `--merge 0.15` (NM), `--forecast`.
 
 It prints the route, the runs loaded and how far their data reaches. If the start
 is not covered by the archive's wind or current data it prints an error and exits
@@ -80,11 +83,53 @@ The model on its own: `fcr_from_sog(ship, sog, bearing, Conditions(...))`,
 
 Ship particulars: `config/ship.yaml` (`--ship` to use another file).
 
+## Minimum-fuel plan (`--solve`, `Voyage.solve`)
+
+A DP from the start to the end of the route, arriving by the ETA, on the full
+time-distance graph (`cpp/include/voyage_v2/dp.hpp`, `cpp/src/dp.cpp`):
+
+- **Distance lines** at every subsegment boundary, after each subsegment shorter
+  than 0.15 NM joins its shorter neighbour (the merged segment sails with the
+  bearing and weather cells of its longest piece). Nodes every 4 s.
+- **Time lines** every 0.25 h, at the weather steps. Nodes every 25 m.
+- Nodes only inside the window reachable with SOG in mean SOG +/- 3 kn that can
+  still arrive by the ETA.
+- **Arcs** at constant SOG to every node of the first line ahead, so each arc lies
+  in one segment and one weather step; fuel = FCR(SWS) x duration, with the weather
+  of that step (pseudo real-time, or with `--forecast` the forecast known at the
+  start). Arcs whose SWS falls outside 2-25 kn are left out.
+- The sweep visits nodes in time order and generates arcs as it goes; only each
+  node's fuel and predecessor are stored (12 bytes per node). Arcs from a distance
+  line to the next and between time lines share their fuel within a step, so those
+  come from small per-step tables.
+
+A grid on which some segment allows no arrival time inside the SOG band is
+refused, with the merge length it would need (e.g. 60 s ticks need about 0.35 NM).
+
+Measured on this Mac, one core, start 2026-10-14 13:15 UTC:
+
+| | Route 1 (3,415 NM, 280 h) | Route 2 (1,955 NM, 168 h) |
+|---|---|---|
+| Segments after merging | 1,767 | 1,221 |
+| Nodes | 116.4 M (71.1 M + 45.4 M) | 47.0 M (30.7 M + 16.2 M) |
+| Arcs | 5.0 G | 1.9 G |
+| Sweep time | 62 s | 23 s |
+| Peak memory | 1.4 GB | 0.6 GB |
+| Plan vs constant SOG | 366.96 vs 367.41 mt (-0.12%) | 222.43 vs 224.40 mt (-0.88%) |
+
+```python
+plan = voyage.solve()                        # sog_band_kn=3, tick_s=4, zeta_m=25, merge_nm=0.15, forecast=False
+plan.fuel_mt, plan.arrival_h, plan.constant_sog_fuel_mt
+plan.path["sog_kn"], plan.path["fuel_mt"]    # one entry per arc
+```
+
 ## Tests
 
 ```bash
 cd v2
 python3 tests/test_physics.py      # C++ model vs pipeline/shared/physics.py
 python3 tests/test_voyage.py       # loading and arc_cost vs a plain-Python statement of the rules
+python3 tests/test_dp.py           # the DP vs a Python DP that builds every node and arc explicitly
 V2_ARCHIVE=../pipeline/data/route1_runs.h5 python3 tests/test_voyage.py   # also on a real archive
+V2_ARCHIVE=../pipeline/data/route2_runs.h5 V2_ETA=168 python3 tests/test_dp.py
 ```

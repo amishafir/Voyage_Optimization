@@ -47,6 +47,22 @@ class _ArcInfo(ctypes.Structure):
                 ("wind_held", c_int), ("current_held", c_int)]
 
 
+class _DPOptions(ctypes.Structure):
+    _fields_ = [("sog_band_kn", c_double), ("tick_s", c_int), ("zeta_m", c_double),
+                ("merge_nm", c_double), ("forecast", c_int)]
+
+
+class _DPSummary(ctypes.Structure):
+    _fields_ = [("feasible", c_int), ("fuel_mt", c_double), ("arrival_h", c_double),
+                ("constant_sog_fuel_mt", c_double), ("v_min_kn", c_double), ("v_max_kn", c_double),
+                ("n_segments", c_int), ("path_length", c_int),
+                ("nodes", ctypes.c_longlong), ("distance_line_nodes", ctypes.c_longlong),
+                ("time_line_nodes", ctypes.c_longlong), ("reached_nodes", ctypes.c_longlong),
+                ("arcs", ctypes.c_longlong), ("infeasible_arcs", ctypes.c_longlong),
+                ("sws_evaluations", ctypes.c_longlong),
+                ("setup_s", c_double), ("sweep_s", c_double), ("memory_mb", c_double)]
+
+
 _lib = None
 
 
@@ -67,6 +83,11 @@ def _library():
             "v2_arc_costs": (c_int, [P, c_long, POINTER(c_int), POINTER(c_double), POINTER(c_int),
                                      POINTER(c_int), POINTER(c_double)]),
             "v2_arc_detail": (c_int, [P, c_int, c_double, c_int, c_int, POINTER(_ArcInfo)]),
+            "v2_dp_solve": (P, [P, POINTER(_DPOptions)]),
+            "v2_dp_summary_of": (None, [P, POINTER(_DPSummary)]),
+            "v2_dp_path": (None, [P] + [POINTER(c_double)] * 7 + [POINTER(c_int)] * 2),
+            "v2_dp_segments": (None, [P] + [POINTER(c_double)] * 3 + [POINTER(c_int)] * 3),
+            "v2_dp_free": (None, [P]),
             "v2_beaufort_number": (c_int, [c_double]),
             "v2_sog_from_sws": (c_double, [POINTER(_Ship), c_double, c_double, POINTER(_Conditions)]),
             "v2_sws_from_sog": (c_double, [POINTER(_Ship), c_double, c_double, POINTER(_Conditions)]),
@@ -144,6 +165,24 @@ def fcr_from_sog(ship: Ship, sog_kn: float, bearing_deg: float, c: Conditions) -
 
 
 # ---------------------------------------------------------------------------
+# Plan (result of Voyage.solve)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Plan:
+    """Minimum-fuel plan on the full time-distance graph (cpp/include/voyage_v2/dp.hpp)."""
+    feasible: bool
+    fuel_mt: float
+    arrival_h: float
+    constant_sog_fuel_mt: float     # every segment at the mean SOG, same weather rules
+    v_min_kn: float
+    v_max_kn: float
+    stats: Dict                     # nodes, arcs, timings, memory
+    path: Dict[str, np.ndarray]     # one entry per arc: t0_h, d0_nm, t1_h, d1_nm, sog_kn, sws_kn, fuel_mt, segment, step
+    segments: Dict[str, np.ndarray] # start_nm, length_nm, bearing_deg, first_sub, n_subs, dominant_sub
+
+
+# ---------------------------------------------------------------------------
 # Voyage
 # ---------------------------------------------------------------------------
 
@@ -202,6 +241,35 @@ class Voyage:
                                    _ptr(t, c_int), _ptr(tau, c_int), _ptr(out, c_double)):
             raise CoreError(_error())
         return out
+
+    def solve(self, sog_band_kn: float = 3.0, tick_s: int = 4, zeta_m: float = 25.0,
+              merge_nm: float = 0.15, forecast: bool = False) -> Plan:
+        """Minimum-fuel plan from the start to the end of the route by the ETA: nodes every
+        tick_s seconds on every segment boundary and every zeta_m metres on every 0.25 h time
+        line, SOG within mean +/- sog_band_kn, subsegments shorter than merge_nm merged. Weather
+        is pseudo real-time, or with forecast=True the forecast known at the start."""
+        lib = _library()
+        opts = _DPOptions(sog_band_kn, int(tick_s), zeta_m, merge_nm, 1 if forecast else 0)
+        handle = lib.v2_dp_solve(self._handle, ctypes.byref(opts))
+        if not handle:
+            raise CoreError(_error())
+        try:
+            s = _DPSummary()
+            lib.v2_dp_summary_of(handle, ctypes.byref(s))
+            n = s.path_length
+            dbl = {k: np.empty(n) for k in ("t0_h", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt")}
+            ints = {k: np.empty(n, dtype=np.int32) for k in ("segment", "step")}
+            lib.v2_dp_path(handle, *(_ptr(dbl[k], c_double) for k in dbl), *(_ptr(ints[k], c_int) for k in ints))
+            g = s.n_segments
+            sd = {k: np.empty(g) for k in ("start_nm", "length_nm", "bearing_deg")}
+            si = {k: np.empty(g, dtype=np.int32) for k in ("first_sub", "n_subs", "dominant_sub")}
+            lib.v2_dp_segments(handle, *(_ptr(sd[k], c_double) for k in sd), *(_ptr(si[k], c_int) for k in si))
+        finally:
+            lib.v2_dp_free(handle)
+        stats = {k: getattr(s, k) for k, _ in _DPSummary._fields_
+                 if k not in ("feasible", "fuel_mt", "arrival_h", "constant_sog_fuel_mt", "v_min_kn", "v_max_kn")}
+        return Plan(bool(s.feasible), s.fuel_mt, s.arrival_h, s.constant_sog_fuel_mt, s.v_min_kn, s.v_max_kn,
+                    stats, {**dbl, **ints}, {**sd, **si})
 
     def arc_detail(self, sub: int, sog: float, t: int, tau: Optional[int] = None) -> Dict:
         """Conditions, SWS, FCR and fuel of one arc, and the runs the weather came from."""

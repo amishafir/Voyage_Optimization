@@ -127,30 +127,50 @@ double SpeedModel::sog(double sws_kn, double bearing_deg, const Conditions& c) c
 //        otherwise the cubic (K*c/100)*V^3 + (K*b/100)*V^2 + (1 - K*a/100)*V - Vw = 0,
 //        whose only positive root (Descartes) comes from Cardano's formula.
 double SpeedModel::sws(double sog_kn, double bearing_deg, const Conditions& c) const {
-    if (std::isnan(sog_kn) || std::isnan(c.wind_speed_kmh) || std::isnan(c.wind_from_deg) ||
-        std::isnan(c.current_speed_kmh) || std::isnan(c.current_to_deg))
-        return std::numeric_limits<double>::quiet_NaN();
-    if (!(sog_kn > 0)) return kInf;
+    return sws(context(bearing_deg, c), sog_kn);
+}
+
+SpeedContext SpeedModel::context(double bearing_deg, const Conditions& c) const {
+    SpeedContext x{};
+    x.valid = !(std::isnan(c.wind_speed_kmh) || std::isnan(c.wind_from_deg) ||
+                std::isnan(c.current_speed_kmh) || std::isnan(c.current_to_deg));
+    if (!x.valid) return x;
 
     const Loss loss = loss_factor(bearing_deg, c);
-    const double s = loss.bn >= 5 ? sog_kn / 0.965 : sog_kn;
-
+    x.sog_div = loss.bn >= 5 ? 0.965 : 1.0;
     const double vc = c.current_speed_kmh / kKmhPerKnot;
     const double d = (bearing_deg - c.current_to_deg) * kDeg;
-    const double cross = vc * std::sin(d);
-    if (s * s < cross * cross) return kInf;              // cross current stronger than the target
-    const double vw = -vc * std::cos(d) + std::sqrt(s * s - cross * cross);
+    x.cross = vc * std::sin(d);
+    x.along = vc * std::cos(d);
+
+    x.k = loss.k;
+    if (x.k > 0 && x.k < 500.0) {
+        x.floor_loss = 0.1 * x.k / 100.0;                   // loss once CU sits at 0.1 (< 0.5)
+        x.vw_floor = v1_ * (1.0 - x.floor_loss);
+        const double cap = 50.0 / x.k;                      // CU at which the loss reaches 50 %
+        const double v2 = cap < a_ ? (-b_ + std::sqrt(b_ * b_ + 4.0 * c_ * (a_ - cap))) / (2.0 * c_) : 0.0;
+        x.vw_cap = 0.5 * v2;
+        x.p3 = x.k * c_ / 100.0;
+        x.p2 = x.k * b_ / 100.0;
+        x.p1 = 1.0 - x.k * a_ / 100.0;
+    }
+    return x;
+}
+
+double SpeedModel::sws(const SpeedContext& x, double sog_kn) const {
+    if (!x.valid || std::isnan(sog_kn)) return std::numeric_limits<double>::quiet_NaN();
+    if (!(sog_kn > 0)) return kInf;
+
+    const double s = sog_kn / x.sog_div;
+    if (s * s < x.cross * x.cross) return kInf;           // cross current stronger than the target
+    const double vw = -x.along + std::sqrt(s * s - x.cross * x.cross);
     if (!(vw > 1.0)) return kInf;                         // below the Vw >= 1 kn floor
 
-    const double k = loss.k;
-    if (k == 0) return vw;                                // BN 0: no speed loss
-    if (k >= 500.0) return 2.0 * vw;                      // loss capped at 50 % at every speed
-    const double floor_loss = 0.1 * k / 100.0;            // loss once CU sits at 0.1 (< 0.5)
-    if (vw >= v1_ * (1.0 - floor_loss)) return vw / (1.0 - floor_loss);
-    const double cap = 50.0 / k;                          // CU at which the loss reaches 50 %
-    const double v2 = cap < a_ ? (-b_ + std::sqrt(b_ * b_ + 4.0 * c_ * (a_ - cap))) / (2.0 * c_) : 0.0;
-    if (vw <= 0.5 * v2) return 2.0 * vw;
-    return largest_real_cubic_root(k * c_ / 100.0, k * b_ / 100.0, 1.0 - k * a_ / 100.0, -vw);
+    if (x.k == 0) return vw;                              // BN 0: no speed loss
+    if (x.k >= 500.0) return 2.0 * vw;                    // loss capped at 50 % at every speed
+    if (vw >= x.vw_floor) return vw / (1.0 - x.floor_loss);
+    if (vw <= x.vw_cap) return 2.0 * vw;
+    return largest_real_cubic_root(x.p3, x.p2, x.p1, -vw);
 }
 
 }  // namespace v2
