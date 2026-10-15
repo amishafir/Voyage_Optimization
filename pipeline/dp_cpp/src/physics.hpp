@@ -1,5 +1,6 @@
 #pragma once
 #include "common.hpp"
+#include <optional>
 
 // Physical constants
 static constexpr double GRAVITY            = 9.81;
@@ -51,10 +52,23 @@ double calculate_speed_over_ground(double sws, const WeatherDict& weather,
 // FCR = 0.000706 × SWS³  (mt/h, min 0.1)
 double calculate_fuel_consumption_rate(double sws);
 
-// Binary-search inverse: SWS → target_sog
+// Inverse: SWS that reaches target_sog. Exact closed form; falls back to the
+// binary search where the closed form does not apply (tolerance and max_iter
+// only affect the fallback).
 double calculate_sws_from_sog(double target_sog, const WeatherDict& weather,
                                double heading_deg, const ShipParameters& params,
                                double tolerance = 0.001, int max_iter = 50);
+
+// Closed-form inverse; nullopt when the target is unreachable or Cb > 0.80
+std::optional<double> calculate_sws_from_sog_closed_form(double target_sog,
+                                                         const WeatherDict& weather,
+                                                         double heading_deg,
+                                                         const ShipParameters& params);
+
+// Binary-search inverse (the original; now only the fallback)
+double calculate_sws_from_sog_bisection(double target_sog, const WeatherDict& weather,
+                                         double heading_deg, const ShipParameters& params,
+                                         double tolerance = 0.001, int max_iter = 50);
 
 // Beaufort number from wind speed (km/h)
 int wind_speed_to_beaufort(double wind_kmh);

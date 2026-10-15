@@ -95,3 +95,10 @@ target_link_libraries(dp_run_rh PRIVATE
     ${HDF5_LIBRARIES}
     yaml-cpp
 )
+
+# ---- Unit test: closed-form SOG -> SWS inverse (physics only, no HDF5/yaml) ----
+add_executable(test_sws_inverse tests/test_sws_inverse.cpp src/physics.cpp)
+target_include_directories(test_sws_inverse PRIVATE src)
+
+enable_testing()
+add_test(NAME sws_inverse COMMAND test_sws_inverse)

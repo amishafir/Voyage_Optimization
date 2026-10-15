@@ -9,8 +9,9 @@ All functions use explicit float parameters (not weather-dict style).
 The pipeline's transform layers unpack dicts before calling physics.
 """
 
+import functools
 import math
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 
 # Constants from the paper and maritime engineering
 GRAVITY = 9.81          # m/s²
@@ -20,6 +21,19 @@ KINEMATIC_VISCOSITY = 1.19e-6  # m²/s (seawater at 15°C)
 CO2_FACTOR = 3.17       # mt CO2 per mt fuel
 KNOTS_TO_MS = 0.5144    # knots -> m/s
 MS_TO_KNOTS = 1.944     # m/s -> knots
+
+# Used when a caller passes ship_parameters=None
+DEFAULT_SHIP_PARAMETERS = {
+    "length": 200.0,
+    "beam": 32.0,
+    "draft": 12.0,
+    "displacement": 50000.0,
+    "block_coefficient": 0.75,
+    "wetted_surface": 8000.0,
+    "rated_power": 10000.0,
+    "max_speed": 14.0,
+    "min_speed": 8.0,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -272,17 +286,7 @@ def calculate_speed_over_ground(
     # which this study does not model. It is still collected and logged as a route
     # descriptor; do not re-add it here as a speed-model input.
     if ship_parameters is None:
-        ship_parameters = {
-            "length": 200.0,
-            "beam": 32.0,
-            "draft": 12.0,
-            "displacement": 50000.0,
-            "block_coefficient": 0.75,
-            "wetted_surface": 8000.0,
-            "rated_power": 10000.0,
-            "max_speed": 14.0,
-            "min_speed": 8.0,
-        }
+        ship_parameters = DEFAULT_SHIP_PARAMETERS
 
     # Step 1: Weather direction angle (Eq 9)
     weather_angle_rad = calculate_weather_direction_angle(wind_direction, ship_heading)
@@ -400,9 +404,142 @@ def calculate_co2_emissions(fuel_consumption: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Inverse: SWS from SOG (binary search)
-# Ported from: Dynamic speed optimization/speed_control_optimizer.py:399-515
+# Inverse: SWS from SOG (closed form, binary search as fallback)
 # ---------------------------------------------------------------------------
+#
+# For a fixed weather state and heading, calculate_speed_over_ground is
+#     K    = Cβ(θ, BN) · CForm(BN)                  (does not depend on SWS)
+#     CU   = max(a − b·V − c·V², 0.1)                (Table 3, V = SWS in knots)
+#     loss = min(K · CU, 50) %
+#     Vw   = max(V · (1 − loss/100), 1)
+#     SOG  = |Vw·heading + current| · (0.965 if BN ≥ 5)
+# and each step can be undone exactly:
+#     1. divide by 0.965 when BN ≥ 5
+#     2. Vw = −Vc·cos Δ + sqrt(s² − Vc²·sin² Δ), with Δ = heading − current direction
+#     3. V from Vw, piecewise:  V ≥ V1 (CU at its 0.1 floor):  V = Vw / (1 − 0.001·K)
+#                               loss capped at 50 %:            V = 2·Vw
+#                               otherwise, the cubic
+#                               (K·c/100)·V³ + (K·b/100)·V² + (1 − K·a/100)·V − Vw = 0,
+#                               which has exactly one positive root (Descartes).
+# The cubic's root is found with Cardano's formula. The binary search remains as
+# the fallback for targets no SWS can reach (the Vw ≥ 1 floor, or a cross current
+# stronger than the target) and for Cb > 0.80, where CU is not monotone.
+
+
+def _cbrt(x: float) -> float:
+    return math.copysign(abs(x) ** (1.0 / 3.0), x)
+
+
+def _largest_real_cubic_root(p3: float, p2: float, p1: float, p0: float) -> float:
+    """Largest real root of p3·x³ + p2·x² + p1·x + p0 (p3 ≠ 0), by Cardano's formula."""
+    b, c, d = p2 / p3, p1 / p3, p0 / p3
+    p = c - b * b / 3.0
+    q = 2.0 * b ** 3 / 27.0 - b * c / 3.0 + d
+    disc = (q / 2.0) ** 2 + (p / 3.0) ** 3
+    if disc > 0:                      # one real root
+        r = math.sqrt(disc)
+        t = _cbrt(-q / 2.0 + r) + _cbrt(-q / 2.0 - r)
+    else:                             # three real roots; the k = 0 branch is the largest
+        m = math.sqrt(-p / 3.0)
+        t = 2.0 * m * math.cos(math.acos(max(-1.0, min(1.0, -q / (2.0 * m ** 3)))) / 3.0) if m > 0 else 0.0
+    x = t - b / 3.0
+    # One Newton step removes Cardano's rounding error
+    dfx = (3.0 * p3 * x + 2.0 * p2) * x + p1
+    if dfx != 0:
+        x -= (((p3 * x + p2) * x + p1) * x + p0) / dfx
+    return x
+
+
+@functools.lru_cache(maxsize=None)
+def _cu_quadratic(length: float, block_coefficient: float) -> Optional[Tuple[float, float, float, float]]:
+    """
+    Table 3 as CU(V) = a − b·V − c·V² with V = SWS in knots, plus V1, the SWS at
+    which CU reaches its 0.1 floor.
+
+    The coefficients are read off calculate_speed_reduction_coefficient at three
+    Froude numbers (all above the floor), so they cannot drift from the forward
+    model. Returns None when CU is not strictly decreasing (Cb > 0.80).
+    """
+    h = 0.05
+    cu0, cu1, cu2 = (calculate_speed_reduction_coefficient(i * h, block_coefficient, "normal")
+                     for i in range(3))
+    c_fn = -(cu2 - 2.0 * cu1 + cu0) / (2.0 * h * h)
+    b_fn = (cu0 - cu1) / h - c_fn * h
+    if c_fn <= 0 or b_fn < 0:
+        return None
+    fn_per_knot = KNOTS_TO_MS / math.sqrt(GRAVITY * length)
+    a, b, c = cu0, b_fn * fn_per_knot, c_fn * fn_per_knot ** 2
+    v1 = (-b + math.sqrt(b * b + 4.0 * c * (a - 0.1))) / (2.0 * c)
+    return a, b, c, v1
+
+
+def calculate_sws_from_sog_closed_form(
+    target_sog: float,
+    weather: Dict,
+    ship_heading_deg: float,
+    ship_parameters: Optional[Dict] = None,
+) -> Optional[float]:
+    """
+    Exact inverse of calculate_speed_over_ground (see the derivation above).
+
+    Args: as calculate_sws_from_sog.
+
+    Returns:
+        Required SWS in knots, or None when the closed form does not apply
+        (target unreachable, or Cb > 0.80).
+    """
+    if not target_sog > 0:
+        return None
+    if ship_parameters is None:
+        ship_parameters = DEFAULT_SHIP_PARAMETERS
+    cu = _cu_quadratic(float(ship_parameters["length"]), float(ship_parameters["block_coefficient"]))
+    if cu is None:
+        return None
+
+    beaufort = int(weather.get("beaufort_number", 3))
+    heading_rad = math.radians(ship_heading_deg)
+
+    # 1. BN ≥ 5 reduction
+    s = target_sog / 0.965 if beaufort >= 5 else target_sog
+
+    # 2. Current (Eqs 14-16)
+    current_speed_knots = weather.get("ocean_current_velocity_kmh", 0.0) / 1.852
+    delta = heading_rad - math.radians(weather.get("ocean_current_direction_deg", 0.0))
+    cross = current_speed_knots * math.sin(delta)
+    if s * s < cross * cross:
+        return None
+    vw = -current_speed_knots * math.cos(delta) + math.sqrt(s * s - cross * cross)
+    if not vw > 1.0:
+        return None
+
+    # 3. Speed loss (Eqs 7-8, Tables 2-4)
+    weather_angle_deg = math.degrees(calculate_weather_direction_angle(
+        math.radians(weather.get("wind_direction_10m_deg", 0.0)), heading_rad))
+    c_beta = calculate_direction_reduction_coefficient(weather_angle_deg, beaufort)
+    displacement_volume = ship_parameters["displacement"] * 1000 / 1025
+    k = c_beta * calculate_ship_form_coefficient(beaufort, displacement_volume, "normal")
+
+    if k == 0:                              # BN 0: no speed loss
+        sws = vw
+    elif k >= 500:                          # loss capped at 50 % at every speed
+        sws = 2.0 * vw
+    else:
+        a, b, c, v1 = cu
+        floor_loss = 0.1 * k / 100.0        # loss once CU sits at its 0.1 floor (< 0.5)
+        if vw >= v1 * (1.0 - floor_loss):
+            sws = vw / (1.0 - floor_loss)
+        else:
+            cap = 50.0 / k                  # CU at which the loss reaches 50 %
+            v2 = (-b + math.sqrt(b * b + 4.0 * c * (a - cap))) / (2.0 * c) if cap < a else 0.0
+            if vw <= 0.5 * v2:
+                sws = 2.0 * vw
+            else:
+                sws = _largest_real_cubic_root(k * c / 100.0, k * b / 100.0, 1.0 - k * a / 100.0, -vw)
+
+    if not (math.isfinite(sws) and sws > 0):
+        return None
+    return sws
+
 
 def calculate_sws_from_sog(
     target_sog: float,
@@ -413,9 +550,38 @@ def calculate_sws_from_sog(
     max_iterations: int = 50,
 ) -> float:
     """
+    Find the SWS required to achieve a target SOG.
+
+    This is the inverse of calculate_speed_over_ground. Uses the exact closed
+    form, and falls back to the binary search where the closed form does not
+    apply (tolerance and max_iterations only affect the fallback).
+
+    Args: as calculate_sws_from_sog_bisection.
+
+    Returns:
+        Required SWS in knots, or target_sog when no SWS reaches the target.
+    """
+    sws = calculate_sws_from_sog_closed_form(target_sog, weather, ship_heading_deg, ship_parameters)
+    if sws is not None:
+        return sws
+    return calculate_sws_from_sog_bisection(
+        target_sog, weather, ship_heading_deg, ship_parameters, tolerance, max_iterations
+    )
+
+
+# Ported from: Dynamic speed optimization/speed_control_optimizer.py:399-515
+def calculate_sws_from_sog_bisection(
+    target_sog: float,
+    weather: Dict,
+    ship_heading_deg: float,
+    ship_parameters: Optional[Dict] = None,
+    tolerance: float = 0.001,
+    max_iterations: int = 50,
+) -> float:
+    """
     Find the SWS required to achieve a target SOG via binary search.
 
-    This is the inverse of calculate_speed_over_ground.
+    The original inverse; calculate_sws_from_sog now uses it only as a fallback.
 
     Args:
         target_sog:      Desired SOG in knots.

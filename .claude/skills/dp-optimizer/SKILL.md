@@ -104,7 +104,13 @@ granularity:
 
 ## SWS-from-SOG Inverse (Binary Search)
 
-The DP optimizer includes logic to find the SWS that produces a given SOG:
+> **Since 2026-10-15** `pipeline/shared/physics.py` and `pipeline/dp_cpp/src/physics.cpp` invert
+> the forward model in closed form (`calculate_sws_from_sog_closed_form`: current triangle, then a
+> cubic in SWS by Cardano's formula; exact, about 10x faster). The binary search below survives as
+> `calculate_sws_from_sog_bisection`, used only as the fallback (unreachable targets, Cb > 0.80).
+> Tests: `pipeline/tests/test_sws_inverse.py`, `pipeline/dp_cpp/tests/test_sws_inverse.cpp`.
+
+The legacy DP optimizer includes logic to find the SWS that produces a given SOG:
 
 ```python
 # Binary search: given target_sog and weather, find SWS

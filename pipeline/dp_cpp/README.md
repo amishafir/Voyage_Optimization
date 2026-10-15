@@ -200,6 +200,6 @@ Implemented in `physics.cpp`, following the research paper (Eqs 7–16):
 2. **Weather-corrected speed**: `vw = SWS × (1 − Δv/100)`
 3. **SOG vector synthesis**: resolves `vw` and ocean current into ground speed
 4. **FCR**: `0.000706 × SWS³` [mt/h]
-5. **SWS from SOG**: binary-search inverse of the forward model (tolerance 0.001 kn, 50 iterations max)
+5. **SWS from SOG**: exact closed-form inverse of the forward model (current triangle, then a cubic in SWS solved by Cardano's formula). The old binary search (tolerance 0.001 kn, 50 iterations max) remains as the fallback for unreachable targets and for Cb > 0.80. Test: `cmake --build build --target test_sws_inverse && ./build/test_sws_inverse`
 
 Ship parameters are fixed in `ShipParameters` (`common.hpp`): 200 m length, 32 m beam, 10 000 kW, block coefficient 0.75.
