@@ -15,13 +15,14 @@ Layout:
     /plan/current_cells      one row per distinct current cell (CELL_DTYPE)
     /wind/<YYYY-MM-DDTHH>    one ECMWF IFS run, named by its start time (UTC)
     /current/<YYYY-MM-DDTHH> one SMOC currents run
+    /wave/<YYYY-MM-DDTHH>    one MFWAM waves run, on the current cells (same grid)
     /runs                    every expected run with its status (RUNS_DTYPE)
 
 A run group holds:
     time_unix                (n_hours,) int64, valid times (UTC, Unix seconds)
     <column>                 (n_cells, n_hours) float32 per variable, rows in the
-                             order of the grid's cell table; NaN where the API
-                             returned null
+                             order of the grid's cell table (CELL_TABLES); NaN
+                             where the API returned null
     served_lat, served_lon   (n_cells,) float32, the grid point the API reported
                              serving each cell
     attrs                    run_init_unix, availability_unix, fetch times, NaN and
@@ -37,14 +38,16 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import Dict, List, Mapping, Optional
+from typing import Dict, List, Mapping, Optional, Sequence
 
 import h5py
 import numpy as np
 import pandas as pd
 
 LAYOUT = "model-runs-v1"
-GRIDS = ("wind", "current")
+GRIDS = ("wind", "current", "wave")
+# The cell table whose rows a grid's runs follow. Waves come on the currents' grid.
+CELL_TABLES = {"wind": "wind_cells", "current": "current_cells", "wave": "current_cells"}
 
 SUBSEGMENT_DTYPE = np.dtype([
     ("index", "i4"),
@@ -118,7 +121,8 @@ def _frame(arr: np.ndarray) -> pd.DataFrame:
 
 def create_archive(path: str, subsegments: pd.DataFrame, cells: Mapping[str, pd.DataFrame],
                    attrs: Optional[Mapping] = None) -> None:
-    """Create a new archive with its plan tables and an empty /runs table."""
+    """Create a new archive with its plan tables and an empty /runs table.
+    `cells` holds the wind and current cell tables."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with h5py.File(path, "w-") as f:
         f.attrs["layout"] = LAYOUT
@@ -127,10 +131,24 @@ def create_archive(path: str, subsegments: pd.DataFrame, cells: Mapping[str, pd.
             f.attrs[k] = v
         plan = f.create_group("plan")
         plan.create_dataset("subsegments", data=_structured(subsegments, SUBSEGMENT_DTYPE))
+        for table in sorted(set(CELL_TABLES.values())):
+            plan.create_dataset(table, data=_structured(cells[table[:-len("_cells")]], CELL_DTYPE))
         for g in GRIDS:
-            plan.create_dataset(f"{g}_cells", data=_structured(cells[g], CELL_DTYPE))
             f.create_group(g)
         f.create_dataset("runs", shape=(0,), maxshape=(None,), dtype=RUNS_DTYPE, chunks=(256,))
+
+
+def add_grid(path: str, grid: str, attrs: Mapping, drop_attrs: Sequence[str] = ()) -> None:
+    """Add the group of a grid to an archive created before the grid was collected,
+    with the file attributes that describe it."""
+    with h5py.File(path, "a") as f:
+        if grid not in f:
+            f.create_group(grid)
+        for k in drop_attrs:
+            if k in f.attrs:
+                del f.attrs[k]
+        for k, v in attrs.items():
+            f.attrs[k] = v
 
 
 def read_attrs(path: str) -> Dict:
@@ -195,6 +213,8 @@ def has_run(path: str, grid: str, run_init_unix: int) -> bool:
 def run_inits(path: str, grid: str) -> List[int]:
     """Start times of the stored complete runs of a grid, in order."""
     with h5py.File(path, "r") as f:
+        if grid not in f:
+            return []
         return sorted(int(g.attrs["run_init_unix"]) for g in f[grid].values()
                       if g.attrs.get("complete", False))
 

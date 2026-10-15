@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Live weather collector: archive every model run for Route 1 and Route 2.
 
-Stores each ECMWF IFS wind run (00/06/12/18 UTC) and each Meteo-France SMOC
-currents run (00 UTC) once, with its full hourly series, for every distinct
-weather cell of the route's subsegments (collect/collector.py), in one HDF5
-archive per route (shared/run_archive.py).
+Stores each ECMWF IFS wind run (00/06/12/18 UTC), each Meteo-France SMOC
+currents run (00 UTC) and the 00 UTC Meteo-France MFWAM waves run (asked in the
+same requests as the currents) once, with its full hourly series, for every
+distinct weather cell of the route's subsegments (collect/collector.py), in one
+HDF5 archive per route (shared/run_archive.py).
 
     python3 run_all.py --route all                # both routes, until stopped
     python3 run_all.py --route all --dry-run      # partition and API budget only, no API calls
@@ -19,9 +20,10 @@ start a new file instead.
 The schedule survives restarts: the /runs table of each archive lists every
 expected run, and runs that came due while the program was stopped are
 fetched if still possible (wind until the next run is published, currents
-until the next day's run is published) and otherwise logged as missed.
-Missed wind runs can be fetched later with --backfill-wind; missed currents
-are lost.
+until the next day's run is published, waves until the 12 UTC run is
+published) and otherwise logged as missed. Missed wind runs are fetched later
+from the archive (automatically, or now with --backfill-wind); missed currents
+and waves are lost.
 
 Stop with Ctrl+C or SIGTERM: the current step is finished first (a second
 Ctrl+C stops at once).
@@ -43,7 +45,8 @@ from collect.collector import (  # noqa: E402
     CURRENT,
     CURRENT_SPAN_H,
     SECONDS_PER_CHUNK,
-    WAVE_HEIGHT_NOTE,
+    WAVE_LAST_LEAD_H,
+    WAVE_NOTE,
     WIND,
     WIND_LAST_LEAD_H,
     ApiClient,
@@ -113,16 +116,19 @@ def budget_report(plans):
     for k, plan in plans.items():
         c = daily_calls(plan)
         n_wind, n_cur = len(plan.queries[WIND]), len(plan.queries[CURRENT])
-        fetch = c["wind"] + c["current"]
+        fetch = c["wind"] + c["current"] + c["wave"]
         typical += fetch + c["probes_typical"]
         worst += fetch + c["probes_max"]
         burst += n_wind + n_cur
-        mb = (n_wind * wind_hours + n_cur * CURRENT_SPAN_H) * 2 * 4 / 2**20
+        mb = (n_wind * wind_hours * 2 + n_cur * CURRENT_SPAN_H * 2
+              + n_cur * (WAVE_LAST_LEAD_H + 1) * 3) * 4 / 2**20
         lines.append(
             f"{ROUTES[k]['name']} ({plan.route_key}): {len(plan.waypoints)} waypoints, "
             f"{sum(s.length_nm for s in plan.subsegments):.1f} NM after the port trim, "
             f"{len(plan.subsegments)} subsegments; per day {n_wind} wind cells x 4 runs = "
-            f"{c['wind']:.0f} calls, {n_cur} current cells x 1 run = {c['current']:.0f} calls, "
+            f"{c['wind']:.0f} calls, {n_cur} current cells x 1 run = {c['current']:.0f} calls "
+            f"(waves in the same requests: {c['wave']:+.0f}; {c['wave_alone']:.0f} if fetched "
+            f"alone), "
             f"probes about {c['probes_typical']:.0f} (at most {c['probes_max']:.0f}); "
             f"{fetch + c['probes_typical']:.0f} calls typical, {fetch + c['probes_max']:.0f} "
             f"at most; about {mb:.1f} MB of runs per day before compression")
@@ -192,7 +198,7 @@ def main(argv=None):
         collector.backfill_wind(dry_run=args.dry_run)
         return 0
 
-    logger.info("Wave height: %s", WAVE_HEIGHT_NOTE)
+    logger.info("Waves: %s", WAVE_NOTE)
     logger.info("Archives: %s", ", ".join(paths[k] for k in keys))
     if args.once:
         collector.step()

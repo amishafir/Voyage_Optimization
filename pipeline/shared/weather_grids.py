@@ -13,6 +13,14 @@ Wind and ocean currents come from different models on different grids:
            Regular lat-lon grid, 1/12 deg. Grid points sit at odd multiples
            of 1/24 deg, so cell edges fall on the multiples of 1/12 deg.
 
+  wave     Marine API, models=meteofrance_wave (Meteo-France MFWAM). The same
+           1/12 deg grid as the currents, so it adds no cell edges and wave
+           runs are stored on the current cells. Its land-sea mask differs
+           near coasts: on 2026-10-15, 48 of the 1,635 current cells of Routes
+           1 and 2 (south of Sri Lanka, off Banda Aceh, in the Strait of
+           Malacca and in the Irish Sea) got their waves from a neighbouring
+           sea point, none of them NaN.
+
   wind     Forecast API, models=ecmwf_ifs (ECMWF IFS HRES, about 9 km).
            Octahedral reduced Gaussian grid O1280: 2560 rows of latitude
            0.0703 deg apart, with 20 + 4i points on the i-th row from either
@@ -199,7 +207,7 @@ def boundaries_by_search(cell_of: Callable[[float, float], Hashable], leg: Rhumb
     return out
 
 
-# --- The two grids our weather comes on --------------------------------------
+# --- The grids our weather comes on --------------------------------------
 
 CURRENT_GRID = RegularLatLonGrid(
     name="meteofrance_currents",
@@ -216,4 +224,15 @@ WIND_GRID = OctahedralGaussianGrid(
     api_params={"models": "ecmwf_ifs", "cell_selection": "sea"},
 )
 
+WAVE_GRID = RegularLatLonGrid(
+    name="meteofrance_wave",
+    lat_first=CURRENT_GRID.lat_first, lon_first=CURRENT_GRID.lon_first,
+    dlat=CURRENT_GRID.dlat, dlon=CURRENT_GRID.dlon,
+    n_lat=CURRENT_GRID.n_lat, n_lon=CURRENT_GRID.n_lon,
+    api_url=MARINE_API_URL,
+    api_params={"models": "meteofrance_wave", "cell_selection": "sea"},
+)
+
+# The grids that split a route into subsegments. WAVE_GRID shares the current
+# grid's cells, so it is not listed.
 DEFAULT_GRIDS = {"wind": WIND_GRID, "current": CURRENT_GRID}

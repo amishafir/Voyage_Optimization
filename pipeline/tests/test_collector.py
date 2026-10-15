@@ -29,7 +29,7 @@ sys.path.insert(0, str(PIPELINE))
 
 from collect import collector as C  # noqa: E402
 from shared import run_archive as A  # noqa: E402
-from shared.weather_grids import CURRENT_GRID, WIND_GRID, RegularLatLonGrid  # noqa: E402
+from shared.weather_grids import CURRENT_GRID, WAVE_GRID, WIND_GRID, RegularLatLonGrid  # noqa: E402
 
 H = 3600
 D0 = int(datetime(2026, 10, 14, tzinfo=timezone.utc).timestamp())   # day D, 00:00 UTC
@@ -91,6 +91,22 @@ def current_value(glat, glon, run_day, t):
     return round(_seed(glat, glon) / 10 + 0.001 * ((t - run_day) // H), 4), float((run_day // 86400) % 360)
 
 
+def wave_value(glat, glon, run, t):
+    """(height, direction, period) the fake serves for a waves run; the direction names
+    the run. Like MFWAM, the period runs 3 h past the height and direction."""
+    lead = (t - run) // H
+    if lead > C.WAVE_LAST_LEAD_H + 3:
+        return None, None, None
+    period = round(5 + _seed(glat, glon) / 4 + 0.01 * lead, 3)
+    if lead > C.WAVE_LAST_LEAD_H:
+        return None, None, period
+    return round(_seed(glat, glon) / 5 + 0.001 * lead, 4), float((run // H) % 360), period
+
+
+MARINE_MODELS = {"meteofrance_currents": (CURRENT_GRID, C.API_FIELDS[C.CURRENT]),
+                 "meteofrance_wave": (WAVE_GRID, C.API_FIELDS[C.WAVE])}
+
+
 def _http_error(code, reason):
     body = io.BytesIO(json.dumps({"error": True, "reason": reason}).encode())
     return urllib.error.HTTPError("https://example.test", code, "error", {}, body)
@@ -106,6 +122,9 @@ class World:
                                _hm(0, day=1): _hm(7, 30, 1), _hm(6, day=1): _hm(12, 24, 1)}
         self.current_published = {_hm(0, day=-1): _hm(12, 5, -1), _hm(0): _hm(12, 5),
                                   _hm(0, day=1): _hm(12, 5, 1)}
+        self.wave_published = {_hm(0, day=-1): _hm(12, 4, -1), _hm(12, day=-1): _hm(0, 4),
+                               _hm(0): _hm(12, 4), _hm(12): _hm(0, 4, 1),
+                               _hm(0, day=1): _hm(12, 4, 1), _hm(12, day=1): _hm(0, 4, 2)}
         self.partial_after_s = 6 * H    # the archive serves a partial run from C + 6 h
         self.archive_lag_s = 0          # the full run reaches the archive this long after publication
         self.nan_cells, self.shifted_cells = set(), set()
@@ -139,8 +158,9 @@ class World:
         self.urls.append(url)
         parts = urllib.parse.urlsplit(url)
         if parts.path.endswith("/static/meta.json"):
-            init, at = self._latest(self.current_published if "marine" in parts.netloc
-                                    else self.wind_published)
+            init, at = self._latest({"ecmwf_ifs": self.wind_published,
+                                     "meteofrance_currents": self.current_published,
+                                     "meteofrance_wave": self.wave_published}[parts.path.split("/")[2]])
             return {"last_run_initialisation_time": init, "last_run_availability_time": at}
         for hook in self.hooks:
             hook(url)
@@ -172,14 +192,33 @@ class World:
             start, end = (int(datetime.strptime(q[k], "%Y-%m-%dT%H:%M")
                               .replace(tzinfo=timezone.utc).timestamp())
                           for k in ("start_hour", "end_hour"))
-            run_day, _ = self._latest(self.current_published)
             times = list(range(start, end + H, H))
-            bodies = [self._body(CURRENT_GRID, lat, lon, times, q["hourly"].split(","),
-                                 lambda g, t: current_value(*g, run_day, t))
-                      for lat, lon in zip(lats, lons)]
+            bodies = [self._marine_body(lat, lon, times, q["models"].split(","),
+                                        q["hourly"].split(",")) for lat, lon in zip(lats, lons)]
         else:
             raise _http_error(404, "unknown endpoint")
         return bodies if len(bodies) > 1 else bodies[0]
+
+    def _marine_body(self, lat, lon, times, models, variables):
+        """Like the Marine API: with several models every variable comes once per model,
+        suffixed _<model> (null where the model lacks it), and the reported grid point
+        is the first model's."""
+        hourly, units, first = {"time": times}, {"time": "unixtime"}, None
+        for m in models:
+            grid, fields = MARINE_MODELS[m]
+            if m == "meteofrance_currents":
+                run, _ = self._latest(self.current_published)
+                value = (lambda r: lambda g, t: current_value(*g, r, t))(run)
+            else:
+                run, _ = self._latest(self.wave_published)
+                value = (lambda r: lambda g, t: wave_value(*g, r, t))(run)
+            body = self._body(grid, lat, lon, times, [v for v in variables if v in fields], value)
+            first = first or body
+            sfx = f"_{m}" if len(models) > 1 else ""
+            for v in variables:
+                hourly[v + sfx] = body["hourly"][v] if v in fields else [None] * len(times)
+                units[v + sfx] = body["hourly_units"][v] if v in fields else "undefined"
+        return {**first, "hourly": hourly, "hourly_units": units}
 
     def _body(self, grid, lat, lon, times, variables, value):
         cell = grid.cell_of(lat, lon)
@@ -187,7 +226,7 @@ class World:
         if (grid.name, cell) in self.shifted_cells:
             glat += 1 / 12
         nan = (grid.name, cell) in self.nan_cells
-        rows = [(None, None) if nan else value((glat, glon), t) for t in times]
+        rows = [(None,) * len(variables) if nan else value((glat, glon), t) for t in times]
         return {
             "latitude": float(np.float32(glat)), "longitude": float(np.float32(glon)),
             "generationtime_ms": 0.1, "utc_offset_seconds": 0, "timezone": "GMT",
@@ -336,6 +375,16 @@ def test_run_params_pin_the_grids_and_the_window():
         "https://single-runs-api.open-meteo.com/v1/forecast?")
     assert C.run_url(C.CURRENT, CURRENT_GRID, plan.queries[C.CURRENT], _hm(0)).startswith(
         CURRENT_GRID.api_url + "?")
+    p = C.run_params(C.CURRENT, CURRENT_GRID, plan.queries[C.CURRENT], _hm(0), [(C.WAVE, WAVE_GRID)])
+    assert p["models"] == "meteofrance_currents,meteofrance_wave"
+    assert p["hourly"] == ("ocean_current_velocity,ocean_current_direction,"
+                           "wave_height,wave_direction,wave_period")
+    assert p["start_hour"] == "2026-10-14T00:00" and p["cell_selection"] == "sea"
+    try:
+        C.run_params(C.WIND, WIND_GRID, plan.queries[C.WIND], _hm(0), [(C.WAVE, WAVE_GRID)])
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
     loose = RegularLatLonGrid("loose", 0.5, 0.5, 1, 1, 180, 360, WIND_GRID.api_url, {"models": "m"})
     try:
         C.run_params(C.WIND, loose, plan.queries[C.WIND], _hm(0))
@@ -347,14 +396,18 @@ def test_run_params_pin_the_grids_and_the_window():
 def test_query_weight_and_daily_budget():
     assert C.query_weight(2, 16) == 1.0 and C.query_weight(2, 10) == 1.0
     assert math.isclose(C.query_weight(12, 7), 1.2) and math.isclose(C.query_weight(10, 28), 2.0)
-    assert C.WEIGHT == {C.WIND: 1.0, C.CURRENT: 1.0}
+    assert C.WEIGHT == {C.WIND: 1.0, C.CURRENT: 1.0, C.WAVE: 1.0}
+    # Currents and waves in one request: 5 variables x 2 models = 10, still one call.
+    assert C.WEIGHT_CURRENT_WITH_WAVE == 1.0 and C.query_weight(5, 10, n_models=2) == 1.0
+    assert math.isclose(C.query_weight(6, 10, n_models=2), 1.2)
     total = 0.0
     for route in ROUTES:
         plan = C.build_sampling_plan(_waypoints(route))
         c = C.daily_calls(plan)
         assert c["wind"] == 4 * len(plan.queries[C.WIND])
         assert c["current"] == len(plan.queries[C.CURRENT])
-        total += c["wind"] + c["current"] + c["probes_max"]
+        assert c["wave"] == 0 and c["wave_alone"] == len(plan.queries[C.CURRENT])
+        total += c["wind"] + c["current"] + c["wave"] + c["probes_max"]
     assert total < C.API_LIMITS["day"]          # both routes fit on one machine
 
 
@@ -404,6 +457,11 @@ def test_cut_to_span_and_parse_errors():
     cut = C.cut_to_span(run)
     assert list(cut.time) == [H, 2 * H, 3 * H] and cut.values["a"].shape == (2, 3)
     assert C.find_nan_cells(cut) == {0: (1, 3), 1: (1, 3)}
+    # Several variables: the span is where every one of them has a value somewhere.
+    run = C.GridRun(np.zeros(1), np.zeros(1), np.arange(5) * H,
+                    {"a": np.array([[1, 2, 3, np.nan, np.nan]]),
+                     "b": np.array([[1, 2, 3, 4, np.nan]])})
+    assert list(C.cut_to_span(run).time) == [0, H, 2 * H]
     w = World(_hm(13))
     plan = C.build_sampling_plan(SHORT_ROUTE)
     url = C.run_url(C.WIND, WIND_GRID, plan.queries[C.WIND], _hm(6))
@@ -625,7 +683,9 @@ def test_nan_and_substitutions_are_logged_and_counted():
         wind = A.read_run(path, "wind", _hm(6))
         assert wind["attrs"]["substituted_cells"] == 1 and wind["attrs"]["nan_cells"] == 0
         assert abs(wind["served_lat"][0] - (shifted_q.grid_lat + 1 / 12)) < 1e-4
-        assert any("NaN in model inputs at 1 of" in m for m in log.messages(logging.WARNING))
+        assert any("NaN values at 1 of" in m for m in log.messages(logging.WARNING))
+        wave = A.read_run(path, "wave", _hm(0))
+        assert wave["attrs"]["nan_cells"] == 0 and wave["attrs"]["substituted_cells"] == -1
         assert any(f"cell {nan_q.cell}" in m for m in log.messages(logging.WARNING))
         assert any("1 of %d cells served by another grid point" % len(plan.queries[C.WIND]) in m
                    for m in log.messages(logging.INFO))
@@ -656,7 +716,9 @@ def test_restart_resumes_from_the_runs_table():
                           ("wind", "2026-10-15T00"): "complete",   # 06 UTC not out until 12:24
                           ("wind", "2026-10-15T06"): "complete",
                           ("current", "2026-10-14T00"): "complete",
-                          ("current", "2026-10-15T00"): "complete"}
+                          ("current", "2026-10-15T00"): "complete",
+                          ("wave", "2026-10-14T00"): "complete",
+                          ("wave", "2026-10-15T00"): "complete"}
         assert A.read_run(path, "wind", _hm(12))["attrs"]["backfilled"]
         new = w.data_urls()[n_before:]
         assert not any("run=2026-10-14T06" in u for u in new)        # nothing fetched twice
@@ -715,12 +777,15 @@ def test_archive_round_trip():
         assert json.loads(attrs["wind_api_params_json"]) == WIND_GRID.api_params
         assert json.loads(attrs["current_api_params_json"]) == CURRENT_GRID.api_params
         assert attrs["wind_api_url"].startswith("https://single-runs-api")
-        assert "not collected" in attrs["wave_height"]
+        assert "wave_height" not in attrs and "MFWAM" in attrs["wave_note"]
+        assert attrs["wave_cell_table"] == "current_cells"
+        assert attrs["first_wave_run_unix"] == attrs["first_current_run_unix"]
         plan = A.read_plan(path)
         assert len(plan["subsegments"]) == len(route.plan.subsegments)
         assert list(plan["wind_cells"]["row"]) == [q.cell[0] for q in route.plan.queries[C.WIND]]
         assert A.run_inits(path, "wind") == [_hm(6), _hm(12)]
         assert A.run_inits(path, "current") == [_hm(0)]
+        assert A.run_inits(path, "wave") == [_hm(0)]
         runs = A.read_runs(path)
         assert set(runs.status) == {"complete"} and runs.run_init_unix.dtype == np.int64
         # The product builder's lookup: subsegment -> cell row of a run.
@@ -853,6 +918,135 @@ def test_auto_backfill_respects_the_budget_and_waits_for_currents():
             run_until(w, coll, _hm(13, 0, day=1))
         assert _status(path, "current", _hm(0, day=1)).status == "complete"
         assert _status(path, "wind", _hm(6)).status == "complete"
+
+
+# --- Waves -------------------------------------------------------------------------
+
+def _models(url):
+    return urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["models"][0]
+
+
+def test_waves_come_in_the_currents_requests():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(11))
+        coll, route = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(12, 30))
+        urls = w.data_urls("/v1/marine")
+        assert len(urls) == 1 and _models(urls[0]) == "meteofrance_currents,meteofrance_wave"
+        n = len(route.plan.queries[C.CURRENT])
+        cur, wav = _status(path, "current", _hm(0)), _status(path, "wave", _hm(0))
+        assert cur.status == wav.status == "complete"
+        assert cur.api_calls == n and wav.api_calls == 0         # the waves cost nothing extra
+        assert wav.availability_unix == _hm(12, 4) and "requests of current run" in wav.note
+        run = A.read_run(path, "wave", _hm(0))
+        hours = C.WAVE_LAST_LEAD_H + 1                           # period's extra hours cut
+        assert run["time_unix"][0] == _hm(0) and len(run["time_unix"]) == hours
+        assert run["wave_height_m"].shape == (n, hours)
+        for k, q in enumerate(route.plan.queries[C.CURRENT]):
+            height, direction, period = wave_value(q.grid_lat, q.grid_lon, _hm(0), _hm(5))
+            assert math.isclose(run["wave_height_m"][k, 5], height, rel_tol=1e-5)
+            assert math.isclose(run["wave_period_s"][k, 5], period, rel_tol=1e-5)
+            assert run["wave_direction_deg"][k, 0] == direction
+        at = run["attrs"]
+        assert np.isnan(run["served_lat"]).all() and not at["served_points_reported"]
+        assert at["substituted_cells"] == -1 and at["nan_cells"] == 0
+        assert at["request_grids"] == "current,wave" and at["cell_table"] == "current_cells"
+        assert at["fetch_start_unix"] == A.read_run_attrs(path, "current", _hm(0))["fetch_start_unix"]
+        assert json.loads(at["api_params_json"])["models"] == "meteofrance_currents,meteofrance_wave"
+        cur_run = A.read_run(path, "current", _hm(0))
+        assert len(cur_run["time_unix"]) == 240 and not np.isnan(cur_run["served_lat"]).any()
+
+
+def test_currents_wait_for_waves_published_a_little_later():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        w.wave_published[_hm(0)] = _hm(13, 30)
+        coll, _ = make_collector(w, path)
+        with captured() as log:
+            run_until(w, coll, _hm(14))
+        urls = w.data_urls("/v1/marine")
+        assert len(urls) == 1 and "meteofrance_wave" in _models(urls[0])
+        assert A.read_run_attrs(path, "current", _hm(0))["fetch_start_unix"] >= _hm(13, 40)
+        assert _status(path, "wave", _hm(0)).status == "complete"
+        assert any("waits for wave run" in m for m in log.messages(logging.INFO))
+
+
+def test_late_waves_are_fetched_alone_within_the_budget():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12))
+        w.wave_published[_hm(0)] = _hm(15)          # after the 2 h grace (currents: 12:05)
+        coll, route = make_collector(w, path)
+        old, C.WAVE_ALONE_LIMIT = C.WAVE_ALONE_LIMIT, 1
+        try:
+            with captured() as log:
+                run_until(w, coll, _hm(15, 30))
+            assert _status(path, "current", _hm(0)).status == "complete"
+            assert _status(path, "wave", _hm(0)).status == "pending"
+            assert any("would exceed" in m for m in log.messages())
+        finally:
+            C.WAVE_ALONE_LIMIT = old
+        with captured():
+            run_until(w, coll, _hm(17))
+        urls = w.data_urls("/v1/marine")
+        assert [_models(u) for u in urls] == ["meteofrance_currents", "meteofrance_wave"]
+        cur = A.read_run_attrs(path, "current", _hm(0))
+        assert _hm(14, 5) <= cur["fetch_start_unix"] < _hm(14, 20)
+        row = _status(path, "wave", _hm(0))
+        assert row.status == "complete" and row.api_calls == len(route.plan.queries[C.CURRENT])
+        run = A.read_run(path, "wave", _hm(0))
+        assert run["attrs"]["served_points_reported"] and run["attrs"]["substituted_cells"] == 0
+        assert not np.isnan(run["served_lat"]).any()
+
+
+def test_waves_missed_when_their_next_run_comes_first():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(11))
+        del w.wave_published[_hm(0)]                 # never published; 12 UTC at 00:04
+        coll, _ = make_collector(w, path)
+        with captured() as log:
+            run_until(w, coll, _hm(1, 0, day=1))
+        assert _status(path, "current", _hm(0)).status == "complete"
+        row = _status(path, "wave", _hm(0))
+        assert row.status == "missed" and "no archive" in row.note
+        assert not A.has_run(path, "wave", _hm(0))
+        assert any("wave run 2026-10-14T00 missed" in m for m in log.messages(logging.ERROR))
+        assert all(_models(u) == "meteofrance_currents" for u in w.data_urls("/v1/marine"))
+
+
+def test_archive_without_waves_gains_them_from_the_next_day():
+    import h5py
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(12, 30))
+        coll, _ = make_collector(w, path)
+        with captured():
+            run_until(w, coll, _hm(13))
+        # Make it look like an archive of the collector before waves.
+        with h5py.File(path, "a") as f:
+            del f["wave"]
+            for k in [k for k in f.attrs if k.startswith(("wave_", "first_wave_"))]:
+                del f.attrs[k]
+            f.attrs["wave_height"] = "not collected."
+        runs = A.read_runs(path)
+        A.write_runs(path, runs[runs.grid != "wave"].reset_index(drop=True))
+
+        w.t = _hm(13, 10)
+        with captured() as log:
+            coll, route = make_collector(w, path)
+        attrs = A.read_attrs(path)
+        assert attrs["first_wave_run_unix"] == _hm(0, day=1)   # today's currents came without
+        assert "wave_height" not in attrs and attrs["wave_cell_table"] == "current_cells"
+        assert any("waves collected from now on" in m for m in log.messages(logging.INFO))
+        with captured():
+            run_until(w, coll, _hm(13, 0, day=1))
+        assert _status(path, "wave", _hm(0, day=1)).status == "complete"
+        assert A.run_inits(path, "wave") == [_hm(0, day=1)]
+        assert set(A.read_runs(path).status) == {"complete"}
 
 
 def test_legacy_collect_is_removed():
