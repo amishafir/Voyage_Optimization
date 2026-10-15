@@ -57,7 +57,7 @@ $$V_g \;=\; V_s - \Delta V_\text{wind} - \Delta V_\text{wave} + V_{c,\parallel},
 
 Two properties of this relation are used later. First, for fixed weather, $V_g$ increases
 monotonically with $V_s$, so the relation is invertible: a target SOG implies a unique required
-SWS, $V_s = g^{-1}(V_g; w)$, obtained here by binary search [METHODS→§4]. Second, that required
+SWS, $V_s = g^{-1}(V_g; w)$, obtained here in closed form [METHODS→§4]. Second, that required
 SWS rises as conditions worsen — holding a target SOG through adverse weather demands more SWS.
 Both properties underlie the convexity mechanism of Section&nbsp;5.
 

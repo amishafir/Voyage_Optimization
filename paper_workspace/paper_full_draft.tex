@@ -1269,9 +1269,16 @@ coefficients are those of \citet{yang2020}.
 
 Two properties of Eq.~\eqref{eq:sog} are used in the body of the paper. First, for fixed conditions
 $V_g$ increases monotonically with $V_s$, so the relation is invertible: a target SOG implies a unique
-required SWS, $V_s=g^{-1}(V_g;w)$. The inverse has no closed form, because $\Delta V_{\text{wind}}$
-itself depends on $V_s$ through the Froude number, and is evaluated numerically by binary search on
-$V_s$. Second, the required SWS rises as the conditions worsen: holding a target SOG through adverse
+required SWS, $V_s=g^{-1}(V_g;w)$. The inverse is available in closed form: for fixed conditions and
+bearing, the direction and form coefficients of $\Delta V_{\text{wind}}$ do not depend on $V_s$; only
+the speed-reduction coefficient does, and it is a quadratic in the Froude number
+\citep[Table~3]{yang2020}. Undoing the correction therefore means dividing out the constant factor
+applied at Beaufort numbers of 5 and above, solving the quadratic that the velocity triangle of ship
+and current gives for the speed through the water, and solving a cubic in $V_s$ that has exactly one
+positive root by Descartes' rule of signs, which Cardano's formula gives explicitly. This holds for
+block coefficients up to 0.80, where the speed-reduction coefficient decreases with speed, and so
+for the vessel of Table~\ref{tab:ship}, with $C_b=0.75$. Second, the required SWS rises as the
+conditions worsen: holding a target SOG through adverse
 weather demands more still-water speed and hence, through the convex fuel law of
 \ref{app:fcr}, disproportionately more fuel. Together these are what make the granularity of
 the speed decision matter at all.

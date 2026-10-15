@@ -240,7 +240,7 @@ Appendix A is reachable only from Appendix B.
 | $\fcr(V_s)=0.000706\,V_s^{3}$ | **Ours.** The coefficient is calibrated for this vessel; no number in the paper reproduces without it |
 | Vessel particulars | Same |
 | Verification accuracy, 6.5\% max and 3.75\% mean | Lets a reader judge the fuel model instead of trusting it |
-| That the correction inverts, by binary search, no closed form | §4's method depends on it |
+| That the correction inverts, in closed form (Cardano's formula on a cubic in $V_s$; valid for $C_b \le 0.80$) | §4's method depends on it |
 | That FCR is strictly convex in SWS | §3's Jensen argument rests on it |
 | Assumptions and validity range | Says when the cubic stops being true |
 

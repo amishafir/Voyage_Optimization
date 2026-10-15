@@ -123,7 +123,7 @@ Wraps `shared/physics.py`. Two directions:
 | Function | Direction | Implementation |
 |----------|-----------|---------------|
 | `forward(sws, weather, heading)` | SWS → SOG + FCR | `calculate_speed_over_ground()` + `calculate_fuel_consumption_rate()` |
-| `inverse(target_sog, weather, heading)` | SOG → required SWS | `calculate_sws_from_sog()` (binary search) |
+| `inverse(target_sog, weather, heading)` | SOG → required SWS | `calculate_sws_from_sog()` (closed form, binary search as fallback) |
 
 Physics: Holtrop-Mennen resistance, Isherwood wind coefficients, wave added resistance, current vector projection. FCR = 0.000706 × V_s³.
 

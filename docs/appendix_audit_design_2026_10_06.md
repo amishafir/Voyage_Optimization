@@ -55,7 +55,7 @@ power chain exists to derive a cubic that the body takes as given.
 | $\fcr(V_s)=0.000706\,V_s^{3}$ | **Ours.** The coefficient is calibrated for this vessel; nobody can reproduce a single number in the paper without it | 1 equation |
 | The vessel particulars | Same reason | `tab:ship` |
 | Verification accuracy: max 6.5\%, mean 3.75\% | Lets a reader judge the fuel model rather than take it on trust | 2 sentences |
-| That the correction inverts, with no closed form, evaluated by binary search | §4's method depends on it; it is a property, not a derivation | 3 sentences |
+| That the correction inverts, in closed form (Cardano's formula on a cubic in $V_s$; valid for $C_b \le 0.80$) | §4's method depends on it; it is a property, not a derivation | 3 sentences |
 | That FCR is strictly convex in SWS | The Jensen argument in §3 rests on it | 1 sentence |
 | Assumptions and validity range | Tells a reader where the cubic stops being true | ~12 lines |
 
@@ -86,9 +86,11 @@ One section, **about 45 lines against 142**, carrying `app:fcr`:
 > speed over the ground, and the still-water speed determines the rate.
 >
 > *A.1 From speed over ground to still-water speed.* What the correction does, and **only the two
-> properties the paper uses**: it inverts, with no closed form, by binary search on $V_s$; and the
-> required SWS rises as conditions worsen. The resistance terms and coefficients are
-> \citet{yang2020}'s and are not reproduced.
+> properties the paper uses**: it inverts in closed form, since for fixed conditions and bearing only
+> the speed-reduction coefficient (a quadratic in the Froude number) depends on $V_s$, so the inverse
+> undoes the Beaufort-5 factor and the current triangle and solves a cubic with one positive root by
+> Cardano's formula, valid for $C_b \le 0.80$; and the required SWS rises as conditions worsen. The
+> resistance terms and coefficients are \citet{yang2020}'s and are not reproduced.
 >
 > *A.2 The fuel-consumption rate.* The calibrated cubic $\fcr(V_s)=0.000706\,V_s^{3}$, where it comes
 > from in one sentence, the vessel it is calibrated for, and the verification accuracy. Strict
