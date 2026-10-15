@@ -34,9 +34,13 @@ private:
     // A node: on distance line `line` at tick `idx`, or on time line `line` at grid position `idx`.
     struct Node { bool on_time_line; int line; long long idx; };
 
-    const SpeedContext& context(int s, int m);
-    SpeedContext fresh_context(int s, int m) const;
+    bool merged(int s) const { return seg_[s].n_subs > 1; }
+    const SpeedContext& context(int sub, int m);          // cached, for subsegment sub in step m
+    SpeedContext fresh_context(int sub, int m) const;
     double arc_fuel(const SpeedContext& x, double sog, double dt_h);
+    template <typename Ctx>
+    double piecewise_fuel(int s, double x0, double x1, double sog, double dt_h, Ctx&& ctx,
+                          double* mean_sws = nullptr) const;
     void build_hh(int k, int m);
     const std::vector<double>& vv(int s, int m);
     // One arc of fuel f from a node of cost c to grid index idx of a line.
@@ -68,20 +72,24 @@ private:
     DPOptions o_;
     std::vector<Segment> seg_;
     std::vector<double> D_;                     // distance lines D_[0] = 0 .. D_[n] = L
+    std::vector<int> piece_begin_;              // pieces of segment s: piece_begin_[s] .. piece_begin_[s+1]-1
+    std::vector<int> piece_sub_;                // a piece's subsegment
+    std::vector<double> piece_lo_, piece_hi_;   // a piece's extent along the route
     int n_, M_, P_;                             // segments, steps to the ETA, ticks per step
     double tick_h_, zeta_, eta_h_, L_, vmin_, vmax_;
     std::vector<Line> dl_, tl_;                 // distance lines 0..n; time lines 1..M-1 (tl_[0] empty)
     std::vector<double> cost_;
     std::vector<std::uint32_t> pred_;
 
-    std::vector<SpeedContext> ctx_;             // per segment, for step ctx_step_[s]
+    std::vector<SpeedContext> ctx_;             // per subsegment, for step ctx_step_[sub]
     std::vector<int> ctx_step_;
     std::vector<double> hh_;                    // distance-to-distance fuel by duration in ticks
     long long hh_min_ = 0, hh_max_ = -1;
-    std::vector<std::vector<double>> vv_;       // time-to-time fuel by grid advance, per segment
+    std::vector<std::vector<double>> vv_;       // time-to-time fuel by grid advance, per unmerged segment
     std::vector<int> vv_step_;
     long long vv_min_, vv_max_;
-    long long arcs_ = 0, infeasible_ = 0, evaluations_ = 0;
+    long long arcs_ = 0, infeasible_ = 0;
+    mutable long long evaluations_ = 0;
 };
 
 Sweep::Sweep(const Voyage& voyage, const DPOptions& o)
@@ -97,6 +105,20 @@ Sweep::Sweep(const Voyage& voyage, const DPOptions& o)
     D_.assign(n_ + 1, 0.0);
     for (int s = 0; s < n_; ++s) D_[s + 1] = D_[s] + seg_[s].length_nm;
     L_ = D_[n_];
+    piece_begin_.assign(n_ + 1, 0);
+    for (int s = 0; s < n_; ++s) {
+        piece_begin_[s] = static_cast<int>(piece_sub_.size());
+        double lo = D_[s];
+        for (int q = 0; q < seg_[s].n_subs; ++q) {
+            const int sub = seg_[s].first_sub + q;
+            const double hi = q + 1 == seg_[s].n_subs ? D_[s + 1] : lo + voyage.subsegment(sub).length_nm;
+            piece_sub_.push_back(sub);
+            piece_lo_.push_back(lo);
+            piece_hi_.push_back(hi);
+            lo = hi;
+        }
+    }
+    piece_begin_[n_] = static_cast<int>(piece_sub_.size());
     M_ = voyage.eta_steps();
     P_ = 900 / o.tick_s;
     tick_h_ = o.tick_s / 3600.0;
@@ -147,8 +169,8 @@ Sweep::Sweep(const Voyage& voyage, const DPOptions& o)
     pred_.assign(offset, kNone);
     cost_[0] = 0.0;
 
-    ctx_.resize(n_);
-    ctx_step_.assign(n_, -1);
+    ctx_.resize(voyage.n_subsegments());
+    ctx_step_.assign(voyage.n_subsegments(), -1);
     vv_min_ = std::max(1LL, ceil_idx(vmin_ * kStepH / zeta_));
     vv_max_ = floor_idx(vmax_ * kStepH / zeta_);
     vv_.assign(n_, {});
@@ -162,18 +184,18 @@ int Sweep::segment_of(double d) const {
     return std::min(static_cast<int>(it - D_.begin()) - 1, n_ - 1);
 }
 
-SpeedContext Sweep::fresh_context(int s, int m) const {
-    const Segment& g = seg_[s];
+SpeedContext Sweep::fresh_context(int sub, int m) const {
+    const Subsegment& g = voyage_.subsegment(sub);
     const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, m, o_.forecast ? 0 : m);
     return model_.context(g.bearing_deg, c);
 }
 
-const SpeedContext& Sweep::context(int s, int m) {
-    if (ctx_step_[s] != m) {
-        ctx_[s] = fresh_context(s, m);
-        ctx_step_[s] = m;
+const SpeedContext& Sweep::context(int sub, int m) {
+    if (ctx_step_[sub] != m) {
+        ctx_[sub] = fresh_context(sub, m);
+        ctx_step_[sub] = m;
     }
-    return ctx_[s];
+    return ctx_[sub];
 }
 
 // Fuel of one arc, or +inf when its SOG leaves the band or its SWS the vessel's range.
@@ -185,6 +207,30 @@ double Sweep::arc_fuel(const SpeedContext& x, double sog, double dt_h) {
     return model_.fcr_from_sws(sws) * dt_h;
 }
 
+// Fuel at SOG `sog` for dt_h hours over [x0, x1] of segment s: each piece of the
+// segment at its own fuel rate for its share of the time (its share of the
+// distance, the SOG being constant). Optionally the time-weighted mean SWS. +inf
+// when the SOG leaves the band or a covered piece's SWS the vessel's range. On an
+// unmerged segment this is arc_fuel with the segment's context, to the bit.
+template <typename Ctx>
+double Sweep::piecewise_fuel(int s, double x0, double x1, double sog, double dt_h, Ctx&& ctx,
+                             double* mean_sws) const {
+    if (sog < vmin_ - kEps || sog > vmax_ + kEps) return kInf;
+    const double span = x1 - x0;
+    double rate = 0.0, sws_sum = 0.0;
+    for (int q = piece_begin_[s]; q < piece_begin_[s + 1]; ++q) {
+        const double share = (std::min(x1, piece_hi_[q]) - std::max(x0, piece_lo_[q])) / span;
+        if (share <= 1e-12) continue;
+        ++evaluations_;
+        const double sws = model_.sws(ctx(piece_sub_[q]), sog);
+        if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
+        rate += model_.fcr_from_sws(sws) * share;
+        sws_sum += sws * share;
+    }
+    if (mean_sws) *mean_sws = sws_sum;
+    return rate * dt_h;
+}
+
 // Distance-to-distance fuel on segment k in step m, by duration in ticks: the
 // same for every node of line k in the step.
 void Sweep::build_hh(int k, int m) {
@@ -192,20 +238,28 @@ void Sweep::build_hh(int k, int m) {
     hh_min_ = std::max(1LL, ceil_idx(ell / vmax_ / tick_h_));
     hh_max_ = floor_idx(ell / vmin_ / tick_h_);
     hh_.assign(static_cast<std::size_t>(std::max(0LL, hh_max_ - hh_min_ + 1)), kInf);
-    const SpeedContext& x = context(k, m);
+    if (merged(k)) {
+        auto ctx = [&](int sub) -> const SpeedContext& { return context(sub, m); };
+        for (long long q = hh_min_; q <= hh_max_; ++q) {
+            const double dt = q * tick_h_;
+            hh_[q - hh_min_] = piecewise_fuel(k, D_[k], D_[k + 1], ell / dt, dt, ctx);
+        }
+        return;
+    }
+    const SpeedContext& x = context(seg_[k].first_sub, m);
     for (long long q = hh_min_; q <= hh_max_; ++q) {
         const double dt = q * tick_h_;
         hh_[q - hh_min_] = arc_fuel(x, ell / dt, dt);
     }
 }
 
-// Time-to-time fuel on segment s in step m, by grid advance: the same for every
-// node of time line m inside the segment.
+// Time-to-time fuel on unmerged segment s in step m, by grid advance: the same for
+// every node of time line m inside the segment.
 const std::vector<double>& Sweep::vv(int s, int m) {
     if (vv_step_[s] != m) {
         std::vector<double>& t = vv_[s];
         t.assign(static_cast<std::size_t>(std::max(0LL, vv_max_ - vv_min_ + 1)), kInf);
-        const SpeedContext& x = context(s, m);
+        const SpeedContext& x = context(seg_[s].first_sub, m);
         for (long long q = vv_min_; q <= vv_max_; ++q) {
             t[q - vv_min_] = arc_fuel(x, q * zeta_ / kStepH, kStepH);
         }
@@ -229,8 +283,12 @@ void Sweep::from_distance_node(int k, long long j, std::uint64_t id, double c, i
         const double dt = (t1 - j) * tick_h_;
         const long long ilo = std::max(ceil_idx((D_[k] + vmin_ * dt) / zeta_), nt.lo);
         const long long ihi = std::min({floor_idx((D_[k] + vmax_ * dt) / zeta_), below(D_[k + 1]), nt.hi});
-        if (ilo <= ihi) {
-            const SpeedContext& x = context(k, m);
+        if (ilo <= ihi && merged(k)) {
+            auto ctx = [&](int sub) -> const SpeedContext& { return context(sub, m); };
+            for (long long i = ilo; i <= ihi; ++i)
+                relax(nt, i, c, piecewise_fuel(k, D_[k], i * zeta_, (i * zeta_ - D_[k]) / dt, dt, ctx), id);
+        } else if (ilo <= ihi) {
+            const SpeedContext& x = context(seg_[k].first_sub, m);
             for (long long i = ilo; i <= ihi; ++i)
                 relax(nt, i, c, arc_fuel(x, (i * zeta_ - D_[k]) / dt, dt), id);
         }
@@ -241,27 +299,39 @@ void Sweep::from_time_node(int m, long long i, std::uint64_t id, double c, int& 
     const double d = i * zeta_;
     while (s + 1 < n_ && D_[s + 1] <= d) ++s;
     const double r = D_[s + 1] - d;
-    const SpeedContext& x = context(s, m);
     const long long t0 = static_cast<long long>(m) * P_, t1 = t0 + P_;
-
-    // to the next distance line, before the next time line
     const Line& dst = dl_[s + 1];
     const long long lo = std::max({ceil_idx(t0 + r / vmax_ / tick_h_), t0 + 1, dst.lo});
     const long long hi = std::min({floor_idx(t0 + r / vmin_ / tick_h_), t1, dst.hi});
+    long long ilo = 1, ihi = 0;
+    if (m + 1 < M_) {
+        ilo = std::max(i + vv_min_, tl_[m + 1].lo);
+        ihi = std::min({i + vv_max_, below(D_[s + 1]), tl_[m + 1].hi});
+    }
+
+    if (merged(s)) {
+        auto ctx = [&](int sub) -> const SpeedContext& { return context(sub, m); };
+        for (long long j = lo; j <= hi; ++j) {              // to the next distance line
+            const double dt = (j - t0) * tick_h_;
+            relax(dst, j, c, piecewise_fuel(s, d, D_[s + 1], r / dt, dt, ctx), id);
+        }
+        for (long long ip = ilo; ip <= ihi; ++ip)            // to the next time line
+            relax(tl_[m + 1], ip, c,
+                  piecewise_fuel(s, d, ip * zeta_, (ip - i) * zeta_ / kStepH, kStepH, ctx), id);
+        return;
+    }
+
+    // to the next distance line, before the next time line
+    const SpeedContext& x = context(seg_[s].first_sub, m);
     for (long long j = lo; j <= hi; ++j) {
         const double dt = (j - t0) * tick_h_;
         relax(dst, j, c, arc_fuel(x, r / dt, dt), id);
     }
 
     // to the next time line, short of the next distance line
-    if (m + 1 < M_) {
-        const Line& nt = tl_[m + 1];
-        const long long ilo = std::max(i + vv_min_, nt.lo);
-        const long long ihi = std::min({i + vv_max_, below(D_[s + 1]), nt.hi});
-        if (ilo <= ihi) {
-            const std::vector<double>& t = vv(s, m);
-            for (long long ip = ilo; ip <= ihi; ++ip) relax(nt, ip, c, t[ip - i - vv_min_], id);
-        }
+    if (ilo <= ihi) {
+        const std::vector<double>& t = vv(s, m);
+        for (long long ip = ilo; ip <= ihi; ++ip) relax(tl_[m + 1], ip, c, t[ip - i - vv_min_], id);
     }
 }
 
@@ -288,46 +358,58 @@ PlanArc Sweep::plan_arc(const Node& a, const Node& b) const {
     p.d0_nm = dist_nm(a);
     p.t1_h = time_h(b);
     p.d1_nm = dist_nm(b);
-    double sog, dt;
+    double sog, dt, x0, x1;
     if (!a.on_time_line) {
         p.segment = a.line;
         p.step = static_cast<int>(a.idx / P_);
+        x0 = D_[a.line];
         if (!b.on_time_line) {
             dt = (b.idx - a.idx) * tick_h_;
             sog = seg_[a.line].length_nm / dt;
+            x1 = D_[a.line + 1];
         } else {
             dt = (static_cast<long long>(p.step + 1) * P_ - a.idx) * tick_h_;
             sog = (b.idx * zeta_ - D_[a.line]) / dt;
+            x1 = b.idx * zeta_;
         }
     } else {
         p.segment = segment_of(p.d0_nm);
         p.step = a.line;
+        x0 = a.idx * zeta_;
         if (!b.on_time_line) {
             dt = (b.idx - static_cast<long long>(a.line) * P_) * tick_h_;
             sog = (D_[p.segment + 1] - a.idx * zeta_) / dt;
+            x1 = D_[p.segment + 1];
         } else {
             dt = kStepH;
             sog = (b.idx - a.idx) * zeta_ / kStepH;
+            x1 = b.idx * zeta_;
         }
     }
-    const SpeedContext x = fresh_context(p.segment, p.step);
     p.sog_kn = sog;
+    if (merged(p.segment)) {
+        const int m = p.step;
+        p.fuel_mt = piecewise_fuel(p.segment, x0, x1, sog, dt, [&](int sub) { return fresh_context(sub, m); },
+                                   &p.sws_kn);
+        return p;
+    }
+    const SpeedContext x = fresh_context(seg_[p.segment].first_sub, p.step);
     p.sws_kn = model_.sws(x, sog);
     p.fuel_mt = model_.fcr_from_sws(p.sws_kn) * dt;
     return p;
 }
 
-// Every segment at the mean SOG, split at the time lines, in the same weather.
+// Every piece at the mean SOG, split at the time lines, in its own weather.
 double Sweep::constant_sog_fuel() const {
     const double v = L_ / eta_h_;
     double total = 0.0;
-    for (int s = 0; s < n_; ++s) {
-        double t = D_[s] / v;
-        const double t_end = D_[s + 1] / v;
+    for (std::size_t q = 0; q < piece_sub_.size(); ++q) {
+        double t = piece_lo_[q] / v;
+        const double t_end = piece_hi_[q] / v;
         while (t < t_end - 1e-12) {
             const int m = std::min(static_cast<int>(std::floor(t / kStepH + kEps)), M_ - 1);
             const double t_next = std::min(t_end, (m + 1) * kStepH);
-            const double sws = model_.sws(fresh_context(s, m), v);
+            const double sws = model_.sws(fresh_context(piece_sub_[q], m), v);
             if (!(sws >= kSwsMinKn && sws <= kSwsMaxKn)) return kInf;
             total += model_.fcr_from_sws(sws) * (t_next - t);
             t = t_next;

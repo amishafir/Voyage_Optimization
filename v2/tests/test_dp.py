@@ -89,19 +89,37 @@ def reference_dp(voyage, band=3.0, tick_s=4, zeta_m=25.0, merge_nm=0.15, forecas
     vmin, vmax = L / eta_h - band, L / eta_h + band
     in_band = lambda v: vmin - 1e-9 <= v <= vmax + 1e-9
 
+    BEAR = [float(x) for x in data.subsegments["bearing_deg"]]
+    # the subsegments of each merged segment, with their extent along the route
+    parts = []
+    for s, (length, first, count, dom) in enumerate(pieces):
+        lo, ps = D[s], []
+        for q in range(count):
+            hi = D[s + 1] if q == count - 1 else lo + lengths[first + q]
+            ps.append((first + q, lo, hi))
+            lo = hi
+        parts.append(ps)
     conds = {}
 
-    def fuel(s, m, sog, dt):
+    def piece_fcr(sub, m, sog):
+        """FCR of subsegment sub at SOG sog in step m; inf outside the vessel's SWS range."""
+        if (sub, m) not in conds:
+            d = voyage.arc_detail(sub, 12.0, m, 0 if forecast else m)
+            conds[sub, m] = Conditions(d["wind_speed_kmh"], d["wind_from_deg"], d["current_speed_kmh"],
+                                       d["current_to_deg"])
+        sws = sws_from_sog(SHIP, sog, BEAR[sub], conds[sub, m])
+        return SHIP.fcr_coefficient * sws ** 3 if 2 <= sws <= 25 else math.inf
+
+    def fuel(s, m, x0, x1, sog, dt):
+        """Each piece of segment s at its own fuel rate for its share of [x0, x1]."""
         if not in_band(sog):
             return math.inf
-        if (s, m) not in conds:
-            d = voyage.arc_detail(pieces[s][3], 12.0, m, 0 if forecast else m)
-            conds[s, m] = Conditions(d["wind_speed_kmh"], d["wind_from_deg"], d["current_speed_kmh"],
-                                     d["current_to_deg"])
-        sws = sws_from_sog(SHIP, sog, BEAR[pieces[s][3]], conds[s, m])
-        return SHIP.fcr_coefficient * sws ** 3 * dt if 2 <= sws <= 25 else math.inf
-
-    BEAR = [float(x) for x in data.subsegments["bearing_deg"]]
+        rate = 0.0
+        for sub, lo, hi in parts[s]:
+            share = (min(x1, hi) - max(x0, lo)) / (x1 - x0)
+            if share > 1e-12:
+                rate += piece_fcr(sub, m, sog) * share
+        return rate * dt
     # windows: reachable within the band, still able to arrive by the ETA
     dwin = {0: (0, 0)}
     for k in range(1, n + 1):
@@ -138,12 +156,12 @@ def reference_dp(voyage, band=3.0, tick_s=4, zeta_m=25.0, merge_nm=0.15, forecas
             t_next = (m + 1) * P
             for jp in range(max(dwin[k + 1][0], j + 1), min(dwin[k + 1][1], t_next) + 1):
                 dt = (jp - j) * tick_h
-                relax(nd, ("D", k + 1, jp), fuel(s, m, pieces[s][0] / dt, dt))
+                relax(nd, ("D", k + 1, jp), fuel(s, m, D[k], D[k + 1], pieces[s][0] / dt, dt))
             if m + 1 < M:
                 dt = (t_next - j) * tick_h
                 for ip in range(twin[m + 1][0], twin[m + 1][1] + 1):
                     if d0 < ip * zeta < D[k + 1]:
-                        relax(nd, ("T", m + 1, ip), fuel(s, m, (ip * zeta - d0) / dt, dt))
+                        relax(nd, ("T", m + 1, ip), fuel(s, m, d0, ip * zeta, (ip * zeta - d0) / dt, dt))
         else:
             m, i = nd[1], nd[2]
             d0 = i * zeta
@@ -151,14 +169,24 @@ def reference_dp(voyage, band=3.0, tick_s=4, zeta_m=25.0, merge_nm=0.15, forecas
             r = D[s + 1] - d0
             for jp in range(max(dwin[s + 1][0], m * P + 1), min(dwin[s + 1][1], (m + 1) * P) + 1):
                 dt = (jp - m * P) * tick_h
-                relax(nd, ("D", s + 1, jp), fuel(s, m, r / dt, dt))
+                relax(nd, ("D", s + 1, jp), fuel(s, m, d0, D[s + 1], r / dt, dt))
             if m + 1 < M:
                 for ip in range(twin[m + 1][0], twin[m + 1][1] + 1):
                     if d0 < ip * zeta < D[s + 1]:
-                        relax(nd, ("T", m + 1, ip), fuel(s, m, (ip - i) * zeta / 0.25, 0.25))
+                        relax(nd, ("T", m + 1, ip), fuel(s, m, d0, ip * zeta, (ip - i) * zeta / 0.25, 0.25))
     best = min((cost[("D", n, j)] for j in range(dwin[n][0], dwin[n][1] + 1)), default=math.inf)
+    # every piece at the mean SOG, split at the time lines, in its own weather
+    vbar, const = L / eta_h, 0.0
+    for s in range(n):
+        for sub, lo, hi in parts[s]:
+            t, t_end = lo / vbar, hi / vbar
+            while t < t_end - 1e-12:
+                m = min(math.floor(t / 0.25 + 1e-9), M - 1)
+                t_next = min(t_end, (m + 1) * 0.25)
+                const += piece_fcr(sub, m, vbar) * (t_next - t)
+                t = t_next
     return dict(fuel=best, pieces=pieces, D=D, nodes=len(nodes), arcs=arcs, tick_h=tick_h, zeta=zeta, P=P,
-                reached=sum(c < math.inf for c in cost.values()))
+                reached=sum(c < math.inf for c in cost.values()), constant=const)
 
 
 def _node_of(ref, t_h, d_nm):
@@ -180,6 +208,7 @@ def _check_against_reference(plan, ref):
         assert (a, b) in ref["arcs"], (q, a, b)
         assert math.isclose(P["fuel_mt"][q], ref["arcs"][a, b], rel_tol=1e-12)
     assert math.isclose(P["fuel_mt"].sum(), plan.fuel_mt, rel_tol=1e-12)
+    assert math.isclose(plan.constant_sog_fuel_mt, ref["constant"], rel_tol=1e-10)
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +228,16 @@ def test_merge_matches_reference():
                                                           plan.segments["dominant_sub"]))
     assert np.allclose(plan.segments["length_nm"], [p[0] for p in ref], rtol=0, atol=1e-12)
     assert plan.segments["length_nm"].min() >= 0.15
+
+
+def test_merged_segments_are_priced_piece_by_piece():
+    # the merged pieces of the test route have their own bearings and cells, so pricing a
+    # merged segment with its longest piece alone would change the optimum
+    ref = reference_dp(VOYAGE)
+    assert any(p[2] > 1 for p in ref["pieces"])
+    plan = VOYAGE.solve()
+    on_merged = np.isin(plan.path["segment"], [s for s, p in enumerate(ref["pieces"]) if p[2] > 1])
+    assert on_merged.any()
 
 
 def test_optimal_pseudo_real_time():

@@ -89,15 +89,17 @@ A DP from the start to the end of the route, arriving by the ETA, on the full
 time-distance graph (`cpp/include/voyage_v2/dp.hpp`, `cpp/src/dp.cpp`):
 
 - **Distance lines** at every subsegment boundary, after each subsegment shorter
-  than 0.15 NM joins its shorter neighbour (the merged segment sails with the
-  bearing and weather cells of its longest piece). Nodes every 4 s.
+  than 0.15 NM joins its shorter neighbour. Merging only removes the line between
+  them: every piece is still priced with its own bearing and weather cells. Nodes
+  every 4 s.
 - **Time lines** every 0.25 h, at the weather steps. Nodes every 25 m.
 - Nodes only inside the window reachable with SOG in mean SOG +/- 3 kn that can
   still arrive by the ETA.
 - **Arcs** at constant SOG to every node of the first line ahead, so each arc lies
   in one segment and one weather step; fuel = FCR(SWS) x duration, with the weather
   of that step (pseudo real-time, or with `--forecast` the forecast known at the
-  start). Arcs whose SWS falls outside 2-25 kn are left out.
+  start). Over a merged segment each piece contributes its own FCR for the time the
+  arc spends on it. Arcs whose SWS falls outside 2-25 kn are left out.
 - The sweep visits nodes in time order and generates arcs as it goes; only each
   node's fuel and predecessor are stored (12 bytes per node). Arcs from a distance
   line to the next and between time lines share their fuel within a step, so those
@@ -113,9 +115,15 @@ Measured on this Mac, one core, start 2026-10-14 13:15 UTC:
 | Segments after merging | 1,767 | 1,221 |
 | Nodes | 116.4 M (71.1 M + 45.4 M) | 47.0 M (30.7 M + 16.2 M) |
 | Arcs | 5.0 G | 1.9 G |
-| Sweep time | 62 s | 23 s |
-| Peak memory | 1.4 GB | 0.6 GB |
+| Sweep time | 64 s | 24 s |
+| Peak memory | 1.5 GB | 0.6 GB |
 | Plan vs constant SOG | 366.96 vs 367.41 mt (-0.12%) | 222.43 vs 224.40 mt (-0.88%) |
+
+The weather in these runs is mostly long-lead forecasts (the archive then held runs
+up to Oct 15 00Z only), so the savings are not results yet; the sizes and times
+depend only on the route, the ETA and the SOG band. Pricing merged segments piece
+by piece rather than with their longest piece costs about 4% in time and moves fuel
+by about 0.002 mt.
 
 ```python
 plan = voyage.solve()                        # sog_band_kn=3, tick_s=4, zeta_m=25, merge_nm=0.15, forecast=False

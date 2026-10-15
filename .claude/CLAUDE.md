@@ -122,7 +122,7 @@ python3 tests/test_physics.py && python3 tests/test_voyage.py && python3 tests/t
 - Time = integer quarter-hour steps from the start (rounded to the nearest 0.25 h); ETA in hours, a multiple of 0.25.
 - Weather at step t known at step tau: newest run issued by tau that reaches t, else the next older one; u/v interpolation between hours; if no run reaches t, hold the latest value before t (Tal, 2026-10-15). A start not covered by the archive is an error.
 - `arc_cost(sub, sog, t, tau=None)` [mt]: SWS via the exact closed-form inverse, FCR = 0.000706 SWS^3; 9999 mt when the SWS is outside 2-25 kn (hardcoded for now).
-- `--solve` / `Voyage.solve()`: DP on the full graph (distance lines at every subsegment boundary after merging < 0.15 NM, 4 s nodes; time lines every 0.25 h, 25 m nodes; SOG mean +/- 3 kn; arcs generated on the fly, 12 B per node). One core: Route 1 116 M nodes, 5.0 G arcs, 62 s, 1.4 GB; Route 2 47 M nodes, 23 s, 0.6 GB. Matches an explicit Python DP exactly on a test archive (`v2/tests/test_dp.py`).
+- `--solve` / `Voyage.solve()`: DP on the full graph (distance lines at every subsegment boundary after merging < 0.15 NM, each merged piece still priced with its own cells and bearing, 4 s nodes; time lines every 0.25 h, 25 m nodes; SOG mean +/- 3 kn; arcs generated on the fly, 12 B per node). One core: Route 1 116 M nodes, 5.0 G arcs, 64 s, 1.5 GB; Route 2 47 M nodes, 24 s, 0.6 GB. Matches an explicit Python DP exactly on a test archive (`v2/tests/test_dp.py`).
 - Beaufort uses the WMO m/s table (`pipeline/shared/beaufort.py`); `pipeline/dp_cpp` uses a different km/h table.
 
 ## Output Format
