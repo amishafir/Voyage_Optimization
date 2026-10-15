@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "voyage_v2/dp.hpp"
+#include "voyage_v2/luo.hpp"
 #include "voyage_v2/voyage.hpp"
 
 struct v2_archive { v2::WeatherArchive archive; };
@@ -162,6 +163,17 @@ void v2_dp_segments(const v2_dp_result* result, double* start_nm, double* length
 }
 
 void v2_dp_free(v2_dp_result* result) { delete result; }
+
+v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* options) {
+    return guarded([&] {
+        v2::LuoOptions o;
+        o.sog_band_kn = options->sog_band_kn;
+        o.epoch_steps = options->epoch_steps;
+        o.dist_step_nm = options->dist_step_nm;
+        o.forecast = options->forecast != 0;
+        return new v2_dp_result{v2::solve_luo(voyage->voyage, o)};
+    }, static_cast<v2_dp_result*>(nullptr));
+}
 
 int v2_beaufort_number(double wind_speed_kmh) { return v2::beaufort_number(wind_speed_kmh); }
 

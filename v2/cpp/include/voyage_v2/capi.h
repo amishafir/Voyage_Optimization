@@ -79,6 +79,16 @@ void v2_dp_segments(const v2_dp_result* result, double* start_nm, double* length
                     int* first_sub, int* n_subs, int* dominant_sub);
 void v2_dp_free(v2_dp_result* result);
 
+/* Luo et al. multistage DP (see luo.hpp); its result is read with the v2_dp_* functions */
+typedef struct {
+    double sog_band_kn;
+    int epoch_steps;                    /* decision epoch in 0.25 h steps (24 = 6 h) */
+    double dist_step_nm;                /* node spacing on the epoch lines; 0 = 0.1 kn x epoch length */
+    int forecast;
+} v2_luo_options;
+
+v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* options);
+
 /* The speed and fuel model on its own */
 int v2_beaufort_number(double wind_speed_kmh);
 double v2_sog_from_sws(const v2_ship* ship, double sws_kn, double bearing_deg, const v2_conditions* c);

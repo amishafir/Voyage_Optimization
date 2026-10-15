@@ -52,6 +52,10 @@ class _DPOptions(ctypes.Structure):
                 ("merge_nm", c_double), ("forecast", c_int)]
 
 
+class _LuoOptions(ctypes.Structure):
+    _fields_ = [("sog_band_kn", c_double), ("epoch_steps", c_int), ("dist_step_nm", c_double), ("forecast", c_int)]
+
+
 class _DPSummary(ctypes.Structure):
     _fields_ = [("feasible", c_int), ("fuel_mt", c_double), ("arrival_h", c_double),
                 ("constant_sog_fuel_mt", c_double), ("v_min_kn", c_double), ("v_max_kn", c_double),
@@ -88,6 +92,7 @@ def _library():
             "v2_dp_path": (None, [P] + [POINTER(c_double)] * 7 + [POINTER(c_int)] * 2),
             "v2_dp_segments": (None, [P] + [POINTER(c_double)] * 3 + [POINTER(c_int)] * 3),
             "v2_dp_free": (None, [P]),
+            "v2_luo_solve": (P, [P, POINTER(_LuoOptions)]),
             "v2_beaufort_number": (c_int, [c_double]),
             "v2_sog_from_sws": (c_double, [POINTER(_Ship), c_double, c_double, POINTER(_Conditions)]),
             "v2_sws_from_sog": (c_double, [POINTER(_Ship), c_double, c_double, POINTER(_Conditions)]),
@@ -170,16 +175,40 @@ def fcr_from_sog(ship: Ship, sog_kn: float, bearing_deg: float, c: Conditions) -
 
 @dataclass
 class Plan:
-    """Minimum-fuel plan on the full time-distance graph (cpp/include/voyage_v2/dp.hpp)."""
+    """Minimum-fuel plan: Voyage.solve (full graph, dp.hpp) or Voyage.solve_luo (luo.hpp)."""
     feasible: bool
     fuel_mt: float
     arrival_h: float
-    constant_sog_fuel_mt: float     # every segment at the mean SOG, same weather rules
+    constant_sog_fuel_mt: float     # every subsegment at the mean SOG, same weather rules
     v_min_kn: float
     v_max_kn: float
     stats: Dict                     # nodes, arcs, timings, memory
     path: Dict[str, np.ndarray]     # one entry per arc: t0_h, d0_nm, t1_h, d1_nm, sog_kn, sws_kn, fuel_mt, segment, step
     segments: Dict[str, np.ndarray] # start_nm, length_nm, bearing_deg, first_sub, n_subs, dominant_sub
+
+
+def _read_plan(handle) -> Plan:
+    """Copy a v2_dp_result into a Plan and free it."""
+    lib = _library()
+    if not handle:
+        raise CoreError(_error())
+    try:
+        s = _DPSummary()
+        lib.v2_dp_summary_of(handle, ctypes.byref(s))
+        n = s.path_length
+        dbl = {k: np.empty(n) for k in ("t0_h", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt")}
+        ints = {k: np.empty(n, dtype=np.int32) for k in ("segment", "step")}
+        lib.v2_dp_path(handle, *(_ptr(dbl[k], c_double) for k in dbl), *(_ptr(ints[k], c_int) for k in ints))
+        g = s.n_segments
+        sd = {k: np.empty(g) for k in ("start_nm", "length_nm", "bearing_deg")}
+        si = {k: np.empty(g, dtype=np.int32) for k in ("first_sub", "n_subs", "dominant_sub")}
+        lib.v2_dp_segments(handle, *(_ptr(sd[k], c_double) for k in sd), *(_ptr(si[k], c_int) for k in si))
+    finally:
+        lib.v2_dp_free(handle)
+    stats = {k: getattr(s, k) for k, _ in _DPSummary._fields_
+             if k not in ("feasible", "fuel_mt", "arrival_h", "constant_sog_fuel_mt", "v_min_kn", "v_max_kn")}
+    return Plan(bool(s.feasible), s.fuel_mt, s.arrival_h, s.constant_sog_fuel_mt, s.v_min_kn, s.v_max_kn,
+                stats, {**dbl, **ints}, {**sd, **si})
 
 
 # ---------------------------------------------------------------------------
@@ -248,28 +277,17 @@ class Voyage:
         tick_s seconds on every segment boundary and every zeta_m metres on every 0.25 h time
         line, SOG within mean +/- sog_band_kn, subsegments shorter than merge_nm merged. Weather
         is pseudo real-time, or with forecast=True the forecast known at the start."""
-        lib = _library()
         opts = _DPOptions(sog_band_kn, int(tick_s), zeta_m, merge_nm, 1 if forecast else 0)
-        handle = lib.v2_dp_solve(self._handle, ctypes.byref(opts))
-        if not handle:
-            raise CoreError(_error())
-        try:
-            s = _DPSummary()
-            lib.v2_dp_summary_of(handle, ctypes.byref(s))
-            n = s.path_length
-            dbl = {k: np.empty(n) for k in ("t0_h", "d0_nm", "t1_h", "d1_nm", "sog_kn", "sws_kn", "fuel_mt")}
-            ints = {k: np.empty(n, dtype=np.int32) for k in ("segment", "step")}
-            lib.v2_dp_path(handle, *(_ptr(dbl[k], c_double) for k in dbl), *(_ptr(ints[k], c_int) for k in ints))
-            g = s.n_segments
-            sd = {k: np.empty(g) for k in ("start_nm", "length_nm", "bearing_deg")}
-            si = {k: np.empty(g, dtype=np.int32) for k in ("first_sub", "n_subs", "dominant_sub")}
-            lib.v2_dp_segments(handle, *(_ptr(sd[k], c_double) for k in sd), *(_ptr(si[k], c_int) for k in si))
-        finally:
-            lib.v2_dp_free(handle)
-        stats = {k: getattr(s, k) for k, _ in _DPSummary._fields_
-                 if k not in ("feasible", "fuel_mt", "arrival_h", "constant_sog_fuel_mt", "v_min_kn", "v_max_kn")}
-        return Plan(bool(s.feasible), s.fuel_mt, s.arrival_h, s.constant_sog_fuel_mt, s.v_min_kn, s.v_max_kn,
-                    stats, {**dbl, **ints}, {**sd, **si})
+        return _read_plan(_library().v2_dp_solve(self._handle, ctypes.byref(opts)))
+
+    def solve_luo(self, epoch_steps: int = 24, dist_step_nm: Optional[float] = None, sog_band_kn: float = 3.0,
+                  forecast: bool = False) -> Plan:
+        """Luo et al.'s multistage DP on this voyage (cpp/include/voyage_v2/luo.hpp): constant SOG
+        within decision epochs of epoch_steps quarter hours (24 = 6 h), nodes only on the epoch
+        boundaries every dist_step_nm (default 0.1 kn x epoch length, 0.6 NM for 6 h epochs).
+        The plan has one arc per epoch."""
+        opts = _LuoOptions(sog_band_kn, int(epoch_steps), float(dist_step_nm or 0.0), 1 if forecast else 0)
+        return _read_plan(_library().v2_luo_solve(self._handle, ctypes.byref(opts)))
 
     def arc_detail(self, sub: int, sog: float, t: int, tau: Optional[int] = None) -> Dict:
         """Conditions, SWS, FCR and fuel of one arc, and the runs the weather came from."""

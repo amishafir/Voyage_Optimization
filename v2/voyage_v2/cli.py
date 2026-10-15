@@ -4,6 +4,7 @@ optionally evaluate arcs and solve for the minimum-fuel plan.
 
     python3 -m voyage_v2 ARCHIVE --start "YYYY-MM-DD HH:MM" --eta HOURS [--arc SUB SOG T [TAU]] ...
     python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve [--plan-csv FILE]
+    python3 -m voyage_v2 ARCHIVE --start ... --eta ... --luo [--epoch 24] [--dist-step NM] [--luo-csv FILE]
 
 ARCHIVE is a route archive written by the live collector (e.g. route1_runs.h5).
 --start is UTC and is rounded to the nearest quarter hour; --eta is in hours
@@ -16,6 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from typing import Optional
 
 from .core import DEFAULT_SHIP, CoreError, Plan, Ship, Voyage
 from .loader import STEP_SECONDS, ReferenceTimeError, VoyageData, load_voyage_data
@@ -88,6 +90,30 @@ def _plan_summary(data: VoyageData, plan: Plan, args) -> str:
     return "\n".join(lines)
 
 
+def _luo_summary(data: VoyageData, plan: Plan, args, sr: Optional[Plan]) -> str:
+    s, p = plan.stats, plan.path
+    hours = args.epoch * 0.25
+    step = args.dist_step or 0.1 * hours
+    lines = [
+        f"Luo      epochs of {hours:g} h ({args.epoch} steps), nodes every {step:g} NM on the epoch lines "
+        f"(SOG steps {step / hours:.3f} kn), SOG {plan.v_min_kn:.2f}-{plan.v_max_kn:.2f} kn, "
+        f"{'forecast from the start' if args.forecast else 'pseudo real-time'}",
+        f"         nodes {s['nodes']:,}, reached {s['reached_nodes']:,}; arcs {s['arcs']:,} "
+        f"({s['infeasible_arcs']:,} outside the SWS range); {s['sws_evaluations'] / 1e6:.1f} M SWS evaluations; "
+        f"sweep {s['sweep_s']:.1f} s",
+    ]
+    if not plan.feasible:
+        return "\n".join(lines + ["         infeasible: no path reaches the end of the route by the ETA"])
+    gain = 100 * (1 - plan.fuel_mt / plan.constant_sog_fuel_mt)
+    lines.append(f"         fuel {plan.fuel_mt:.3f} mt, arrival {plan.arrival_h:.2f} h, {len(p['fuel_mt'])} epochs, "
+                 f"SOG {p['sog_kn'].min():.2f}-{p['sog_kn'].max():.2f} kn; saves {gain:.2f}% against constant SOG")
+    if sr is not None and sr.feasible:
+        diff = 100 * (plan.fuel_mt / sr.fuel_mt - 1)
+        lines.append(f"         {abs(diff):.3f}% {'more' if diff >= 0 else 'less'} fuel than the full graph "
+                     f"(--solve, {sr.fuel_mt:.3f} mt)")
+    return "\n".join(lines)
+
+
 def _write_plan(path: str, data: VoyageData, plan: Plan) -> None:
     p, seg = plan.path, plan.segments
     with open(path, "w", newline="") as f:
@@ -118,6 +144,12 @@ def main(argv=None) -> int:
     g.add_argument("--merge", type=float, default=0.15, help="merge subsegments shorter than this [NM] (default 0.15)")
     g.add_argument("--forecast", action="store_true", help="price arcs with the forecast known at the start")
     g.add_argument("--plan-csv", metavar="FILE", help="write the plan, one row per arc")
+    g = p.add_argument_group("Luo et al. multistage DP (single core)")
+    g.add_argument("--luo", action="store_true", help="solve with constant SOG within decision epochs")
+    g.add_argument("--epoch", type=int, default=24, help="decision epoch in 0.25 h steps (default 24 = 6 h)")
+    g.add_argument("--dist-step", type=float, default=None,
+                   help="node spacing on the epoch lines [NM] (default 0.1 kn x epoch length, 0.6 NM for 6 h)")
+    g.add_argument("--luo-csv", metavar="FILE", help="write the Luo plan, one row per epoch")
     args = p.parse_args(argv)
 
     arcs = []
@@ -136,6 +168,7 @@ def main(argv=None) -> int:
     if arcs:
         print()
         print(_arc_table(voyage, arcs))
+    plan = None
     if args.solve or args.plan_csv:
         try:
             plan = voyage.solve(args.sog_band, args.tick, args.zeta, args.merge, args.forecast)
@@ -147,4 +180,15 @@ def main(argv=None) -> int:
         if args.plan_csv and plan.feasible:
             _write_plan(args.plan_csv, data, plan)
             print(f"         plan written to {args.plan_csv}")
+    if args.luo or args.luo_csv:
+        try:
+            luo = voyage.solve_luo(args.epoch, args.dist_step, args.sog_band, args.forecast)
+        except CoreError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print()
+        print(_luo_summary(data, luo, args, plan))
+        if args.luo_csv and luo.feasible:
+            _write_plan(args.luo_csv, data, luo)
+            print(f"         plan written to {args.luo_csv}")
     return 0

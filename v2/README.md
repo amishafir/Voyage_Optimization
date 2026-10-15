@@ -5,7 +5,8 @@ Reads a route's weather archive, as written by the live collector on edison
 `pipeline/shared/run_archive.py`), prices arcs (the fuel to sail one subsegment
 at one SOG in the weather of a given time, as forecast at a given information
 time), and solves for the minimum-fuel plan on the full time-distance graph
-(single core). Rolling-horizon re-planning is not written yet.
+(single core), and the Luo et al. multistage benchmark on the same data. Rolling-horizon
+re-planning is not written yet.
 
 Python reads the files and the command line; everything that costs time runs in
 the C++ core (`cpp/`), which Python calls through `ctypes`. The core needs only a
@@ -131,6 +132,44 @@ plan.fuel_mt, plan.arrival_h, plan.constant_sog_fuel_mt
 plan.path["sog_kn"], plan.path["fuel_mt"]    # one entry per arc
 ```
 
+## Luo et al. multistage DP (`--luo`, `Voyage.solve_luo`)
+
+The benchmark of Luo et al. (2024) on the same data and arc pricing
+(`cpp/include/voyage_v2/luo.hpp`, `cpp/src/luo.cpp`):
+
+- **Decision epochs** of `--epoch K` weather steps (0.25 h each; default 24 = 6 h, as in
+  Luo et al.). The SOG is constant within an epoch; the last epoch ends at the ETA and
+  is shorter when the ETA is not a multiple of the epoch.
+- **Nodes only on the epoch lines**, every `--dist-step` NM from the start (default
+  0.1 kn x epoch length: 0.6 NM for 6 h epochs, so SOG choices 0.1 kn apart), inside the
+  same window as the full graph.
+- **Arcs** to every node of the next epoch line, and to the end of the route exactly at
+  the next epoch line (no later than the ETA), SOG within mean +/- 3 kn. Fuel is
+  integrated along the arc: cut at every subsegment boundary and every 15-minute weather
+  step, each piece priced with its own bearing, cells and weather. Nothing is merged and
+  the route length is not snapped to the grid (the earlier `pipeline/dp_cpp` version
+  snapped it and let the last arc fall below the SOG band).
+
+Measured on this Mac, one core, same start and data as above:
+
+| Epoch (grid) | Route 1 fuel | time | Route 2 fuel | time |
+|---|---|---|---|---|
+| 6 h (0.6 NM) | 367.065 mt (-0.09%) | 2.6 s | 222.578 mt (-0.81%) | 1.0 s |
+| 1 h (0.1 NM) | 366.951 mt (-0.12%) | 19 s | 222.441 mt (-0.87%) | 8 s |
+| 0.25 h (0.025 NM) | 366.943 mt (-0.13%) | 117 s | 222.422 mt (-0.88%) | 45 s |
+| Full graph (`--solve`) | 366.956 mt (-0.12%) | 64 s | 222.427 mt (-0.88%) | 24 s |
+| Constant SOG | 367.410 mt | | 224.401 mt | |
+
+On this (mostly forecast) weather the full graph saves only 0.03% (Route 1) and 0.07%
+(Route 2) over 6 h epochs. The 0.25 h epochs come out about 0.004% below the full graph:
+the two grids are not nested, and the full graph's 4 s nodes on every subsegment boundary
+make its SOG jitter slightly from arc to arc, which a convex fuel curve penalises.
+
+```bash
+python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo        # both, compared
+python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --luo --epoch 4 --luo-csv luo.csv
+```
+
 ## Tests
 
 ```bash
@@ -138,6 +177,7 @@ cd v2
 python3 tests/test_physics.py      # C++ model vs pipeline/shared/physics.py
 python3 tests/test_voyage.py       # loading and arc_cost vs a plain-Python statement of the rules
 python3 tests/test_dp.py           # the DP vs a Python DP that builds every node and arc explicitly
+python3 tests/test_luo.py          # the Luo DP vs a Python DP with its own path integration
 V2_ARCHIVE=../pipeline/data/route1_runs.h5 python3 tests/test_voyage.py   # also on a real archive
 V2_ARCHIVE=../pipeline/data/route2_runs.h5 V2_ETA=168 python3 tests/test_dp.py
 ```
