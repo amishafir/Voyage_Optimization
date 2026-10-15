@@ -1,0 +1,6 @@
+# Ship particulars used by the v2 speed and fuel model (the paper's vessel).
+# The still-water speed range (2-25 kn) is hardcoded in cpp/include/voyage_v2/voyage.hpp for now.
+length_m: 200.0
+displacement_t: 50000.0
+block_coefficient: 0.75          # the closed-form SOG -> SWS inverse needs Cb <= 0.80
+fcr_coefficient: 0.000706        # FCR [mt/h] = fcr_coefficient * SWS^3, SWS in knots

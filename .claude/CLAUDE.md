@@ -108,6 +108,21 @@ The optimizers will use 15-minute weather products built offline from the archiv
 - **Interpolation** of wind and current as east/north components, not speed and angle. Wind direction is "from", current direction is "to".
 - **Missed current run D**: real-time from Open-Meteo's history (it should still hold run D's leads 0-23 h; verify), fallback run D-1. Forecasts from run D-1, with the last day of the horizon taken from run D+1 (an accepted look-ahead in the tail). Record the source run of every value for sensitivity checks.
 
+## v2 (`v2/`, since 2026-10-15)
+
+A clean restart of the optimizer on the live collector's archives. Python (`v2/voyage_v2/`) reads the CLI and the HDF5 archive; the C++ core (`v2/cpp/`, no dependencies, compiled by Python on first use and called via `ctypes`) does the weather lookup and arc costs. The DP is not written yet. Details: `v2/README.md`.
+
+```bash
+cd v2
+python3 -m voyage_v2 ../pipeline/data/route1_runs.h5 --start "2026-10-14 13:20" --eta 280 --arc 100 12 40 20
+python3 tests/test_physics.py && python3 tests/test_voyage.py
+```
+
+- Time = integer quarter-hour steps from the start (rounded to the nearest 0.25 h); ETA in hours, a multiple of 0.25.
+- Weather at step t known at step tau: newest run issued by tau that reaches t, else the next older one; u/v interpolation between hours; if no run reaches t, hold the latest value before t (Tal, 2026-10-15). A start not covered by the archive is an error.
+- `arc_cost(sub, sog, t, tau=None)` [mt]: SWS via the exact closed-form inverse, FCR = 0.000706 SWS^3; 9999 mt when the SWS is outside 2-25 kn (hardcoded for now).
+- Beaufort uses the WMO m/s table (`pipeline/shared/beaufort.py`); `pipeline/dp_cpp` uses a different km/h table.
+
 ## Output Format
 
 Weather forecasting scripts produce Excel files with two sheets:
