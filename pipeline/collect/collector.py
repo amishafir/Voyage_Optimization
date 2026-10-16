@@ -122,8 +122,8 @@ CURRENT_DUE_AFTER_S = 11 * HOUR     # first metadata read for run D at D 11:00 U
 CURRENT_SPAN_H = 240                # D 00:00 .. D + 239 h; also the waves' request window
 WAVE_CYCLE_S = 24 * HOUR            # MFWAM runs at 00 and 12 UTC; the 00 UTC run is kept
 WAVE_DUE_AFTER_S = 11 * HOUR        # as the currents, whose requests it shares
-WAVE_LAST_LEAD_H = 227              # MFWAM as served hourly: height and direction to +227 h
-                                    # (period to +230 h), seen on the 2026-10-14 12 UTC run
+WAVE_LAST_LEAD_H = 239              # 00 UTC MFWAM runs fill the 240 h window (the 12 UTC runs,
+                                    # not kept, end at +227 h; period runs 3 h past height)
 WAVE_GRACE_S = 2 * HOUR             # currents wait this long after their publication for the waves
 WAVE_ALONE_AFTER_S = 18 * HOUR      # waves stop waiting for pending currents at D 18:00 UTC
 WAVE_ALONE_LIMIT = 9700             # a waves-only fetch only if the last 24 h stay below this
