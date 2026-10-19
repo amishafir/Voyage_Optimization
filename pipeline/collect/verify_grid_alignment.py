@@ -63,9 +63,9 @@ def served_points(grid, variable, points):
                     body = json.load(r)
                 break
             except urllib.error.HTTPError as e:
-                if e.code != 429 or attempt == 4:
+                if (e.code != 429 and e.code < 500) or attempt == 4:
                     raise
-                time.sleep(60)
+                time.sleep(60 if e.code == 429 else 30)   # rate limit, or a server error
         body = body if isinstance(body, list) else [body]
         out += [(b["latitude"], b["longitude"], b.get("current", {}).get(variable)) for b in body]
         if start + CHUNK < len(points):

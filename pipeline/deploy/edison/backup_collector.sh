@@ -6,9 +6,10 @@
 # successful backup. rsync replaces each file only once its copy is complete,
 # so an interrupted backup never damages the previous one.
 
-SRC=/home/user/Ami/pipeline_v2/data/
-DST=/tsl-disk/ami/voyage_weather_collector_backup
-LOG=/home/user/Ami/pipeline_v2/data/backup.log
+# Paths can be overridden from the environment (deploy/talraviv-pcl/collector.crontab does).
+SRC=${SRC:-/home/user/Ami/pipeline_v2/data/}
+DST=${DST:-/tsl-disk/ami/voyage_weather_collector_backup}
+LOG=${LOG:-/home/user/Ami/pipeline_v2/data/backup.log}
 WEEKLY_KEEP="3 months"   # GNU date: weekly copies dated before this long ago are deleted
 stamp() { date -u '+%Y-%m-%d %H:%M:%SZ'; }
 

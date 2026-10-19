@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live weather collector: archive every model run for Route 1 and Route 2.
+"""Live weather collector: archive every model run for a set of routes.
 
 Stores each ECMWF IFS wind run (00/06/12/18 UTC), each Meteo-France SMOC
 currents run (00 UTC) and the 00 UTC Meteo-France MFWAM waves run (asked in the
@@ -7,7 +7,8 @@ same requests as the currents) once, with its full hourly series, for every
 distinct weather cell of the route's subsegments (collect/collector.py), in one
 HDF5 archive per route (shared/run_archive.py).
 
-    python3 run_all.py --route all                # both routes, until stopped
+    python3 run_all.py --route all                # Routes 1 and 2 (edison), until stopped
+    python3 run_all.py --route volatile           # Routes 3, 4 and 5 (talraviv-pcl)
     python3 run_all.py --route all --dry-run      # partition and API budget only, no API calls
     python3 run_all.py --route 1 --once           # do whatever is pending now, then exit
     python3 run_all.py --route all --backfill-wind --dry-run   # missed wind runs and their cost
@@ -65,13 +66,35 @@ logger = logging.getLogger("run_all")
 ROUTES = {
     "1": {"name": "Route 1", "route": "persian_gulf_malacca", "hdf5": "route1_runs.h5"},
     "2": {"name": "Route 2", "route": "st_johns_liverpool", "hdf5": "route2_runs.h5"},
+    # Short, volatile winter routes (2026-10-19), traced along AIS commercial traffic lanes.
+    "3": {"name": "Route 3", "route": "tacoma_anchorage", "hdf5": "route3_runs.h5"},
+    "4": {"name": "Route 4", "route": "rotterdam_algeciras", "hdf5": "route4_runs.h5"},
+    "5": {"name": "Route 5", "route": "kaohsiung_yokohama", "hdf5": "route5_runs.h5"},
 }
+# Named route sets. "all" stays Routes 1 and 2, the set edison runs (its watchdog starts
+# "--route all"); each set must fit one machine's (one IP's) free API quota.
+ROUTE_SETS = {"all": ["1", "2"], "volatile": ["3", "4", "5"]}
+
+
+def route_keys(spec):
+    """Route keys for --route: a set name, one key, or keys joined by commas ("3,4,5")."""
+    if spec in ROUTE_SETS:
+        return list(ROUTE_SETS[spec])
+    keys = [k.strip() for k in spec.split(",") if k.strip()]
+    bad = [k for k in keys if k not in ROUTES]
+    if not keys or bad:
+        raise argparse.ArgumentTypeError(
+            f"unknown route {', '.join(bad) or spec!r}: use {', '.join(sorted(ROUTES))}, a comma-"
+            f"separated list of them, or a set ({', '.join(sorted(ROUTE_SETS))})")
+    return sorted(set(keys), key=keys.index)
 
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--route", required=True, choices=sorted(ROUTES) + ["all"],
-                    help="route to collect: 1, 2 or all")
+    ap.add_argument("--route", required=True, type=route_keys,
+                    help="routes to collect: a key (" + ", ".join(sorted(ROUTES)) + "), keys joined "
+                         "by commas, or a set: " + "; ".join(f"{k} = {','.join(v)}" for k, v in
+                                                            sorted(ROUTE_SETS.items())))
     ap.add_argument("--data-dir", default=str(PIPELINE_DIR / "data"),
                     help="directory of the archives (default: pipeline/data)")
     ap.add_argument("--log-file", help="log file (default: <data-dir>/collector_route<N>.log)")
@@ -163,7 +186,7 @@ class Shutdown:
 
 def main(argv=None):
     args = parse_args(argv)
-    keys = sorted(ROUTES) if args.route == "all" else [args.route]
+    keys = args.route
     log_file = None
     if not args.dry_run:
         log_file = args.log_file or os.path.join(

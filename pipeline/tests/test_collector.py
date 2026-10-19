@@ -837,6 +837,26 @@ def test_run_all_dry_run_and_backfill_report():
                 "API calls") in out
 
 
+def test_route_selection_and_each_set_fits_one_machine():
+    import argparse
+    import run_all
+    assert run_all.route_keys("all") == ["1", "2"]          # edison's watchdog starts "--route all"
+    assert run_all.route_keys("volatile") == ["3", "4", "5"]
+    assert run_all.route_keys("4") == ["4"] and run_all.route_keys("5,3") == ["5", "3"]
+    for bad in ("6", "1,x", ""):
+        try:
+            run_all.route_keys(bad)
+            raise AssertionError(f"expected an error for {bad!r}")
+        except argparse.ArgumentTypeError:
+            pass
+    for name, keys in run_all.ROUTE_SETS.items():
+        _, worst = run_all.budget_report(run_all.build_plans(keys))
+        assert worst < C.API_LIMITS["day"], (name, worst)
+    with tempfile.TemporaryDirectory() as tmp:
+        code, out = _run_all(["--route", "volatile", "--dry-run", "--data-dir", tmp])
+        assert code == 0 and "Route 5 (kaohsiung_yokohama)" in out and "ERROR" not in out
+
+
 def test_wind_waits_while_the_archive_still_holds_a_partial_run():
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "a.h5")
