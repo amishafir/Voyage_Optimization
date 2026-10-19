@@ -1,0 +1,50 @@
+name: Kaohsiung to Yokohama (Ryukyu chain and Kuroshio)
+description: >
+  Around southern Taiwan, along the Ryukyu chain and the Pacific coast of Japan into Tokyo Bay,
+  1,420 nm, ~4.9 days at 12 kn. Kuroshio (one of the strongest ocean currents), winter
+  north-east monsoon gales, and typhoons until about November.
+# Traced on 2026-10-19 along the World Bank / IMF Global Shipping Traffic Density, commercial
+# layer (AIS positions Jan 2015 - Feb 2021, 0.005 deg; CC BY 4.0; Cerdeiro et al. 2020), summed
+# to 0.02 deg cells: the cheapest sea path whose cost per NM is 1 on a local traffic ridge (log
+# density within 2 orders of magnitude of the maximum within 30 NM) and up to 21 off it, with
+# the weight chosen per stretch so the path is at most 5% longer than the shortest sea path; no
+# diagonal steps past land corners. Land is Natural Earth 1:10m land and minor islands. The path
+# was thinned to rhumb-line legs within 1.5 NM of it near land (up to 6 NM far offshore), each
+# leg at least 0.3 NM off land except the harbour approaches (pipeline/tools/routes/README.md).
+# Pass-through point (forced): south of Taiwan, so the route rounds Eluanbi instead of taking
+# the Taiwan Strait.
+waypoints:
+  - {lat: 22.5520, lon: 120.3050, name: "Kaohsiung"}
+  - {lat: 22.5126, lon: 120.2747, name: "AIS lane 01"}
+  - {lat: 22.3326, lon: 120.2947, name: "AIS lane 02"}
+  - {lat: 21.9926, lon: 120.5947, name: "AIS lane 03"}
+  - {lat: 21.7526, lon: 120.8747, name: "South of Taiwan (Eluanbi)"}
+  - {lat: 21.7726, lon: 120.9947, name: "AIS lane 04"}
+  - {lat: 22.2126, lon: 121.3747, name: "AIS lane 05"}
+  - {lat: 22.5926, lon: 121.5947, name: "AIS lane 06"}
+  - {lat: 24.4726, lon: 123.4947, name: "AIS lane 07"}
+  - {lat: 24.5126, lon: 123.7547, name: "AIS lane 08"}
+  - {lat: 24.4526, lon: 124.0547, name: "AIS lane 09"}
+  - {lat: 24.6326, lon: 124.2947, name: "AIS lane 10"}
+  - {lat: 24.8326, lon: 124.6747, name: "AIS lane 11"}
+  - {lat: 26.1926, lon: 127.5547, name: "AIS lane 12"}
+  - {lat: 26.2926, lon: 127.6547, name: "AIS lane 13"}
+  - {lat: 26.4326, lon: 127.6747, name: "AIS lane 14"}
+  - {lat: 26.5926, lon: 127.8147, name: "AIS lane 15"}
+  - {lat: 26.8326, lon: 127.9347, name: "AIS lane 16"}
+  - {lat: 30.2726, lon: 130.7147, name: "AIS lane 17"}
+  - {lat: 30.8126, lon: 130.9547, name: "AIS lane 18"}
+  - {lat: 30.9326, lon: 131.0547, name: "AIS lane 19"}
+  - {lat: 31.3326, lon: 131.4347, name: "AIS lane 20"}
+  - {lat: 32.6926, lon: 132.9747, name: "AIS lane 21"}
+  - {lat: 32.7126, lon: 133.0947, name: "AIS lane 22"}
+  - {lat: 33.2326, lon: 134.2347, name: "AIS lane 23"}
+  - {lat: 33.4126, lon: 135.8347, name: "AIS lane 24"}
+  - {lat: 34.1726, lon: 136.8547, name: "AIS lane 25"}
+  - {lat: 34.5526, lon: 137.2347, name: "AIS lane 26"}
+  - {lat: 34.5526, lon: 138.2947, name: "AIS lane 27"}
+  - {lat: 34.5726, lon: 138.8747, name: "AIS lane 28"}
+  - {lat: 34.6126, lon: 139.0347, name: "AIS lane 29"}
+  - {lat: 35.1926, lon: 139.7747, name: "AIS lane 30"}
+  - {lat: 35.3126, lon: 139.7347, name: "AIS lane 31"}
+  - {lat: 35.4400, lon: 139.7600, name: "Yokohama"}

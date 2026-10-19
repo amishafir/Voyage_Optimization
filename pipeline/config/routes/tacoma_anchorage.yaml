@@ -1,0 +1,48 @@
+name: Tacoma to Anchorage (Gulf of Alaska), planned from Admiralty Inlet
+description: >
+  Container and ro-ro route from Puget Sound across the Gulf of Alaska to Cook Inlet, planned
+  from Admiralty Inlet (off Port Townsend), 1,418 nm, ~4.9 days at 12 kn. Gulf of Alaska winter
+  storm track (Aleutian Low): frequent gales and high seas; strong tidal currents in Cook Inlet.
+# Traced on 2026-10-19 along the World Bank / IMF Global Shipping Traffic Density, commercial
+# layer (AIS positions Jan 2015 - Feb 2021, 0.005 deg; CC BY 4.0; Cerdeiro et al. 2020), summed
+# to 0.02 deg cells: the cheapest sea path whose cost per NM is 1 on a local traffic ridge (log
+# density within 2 orders of magnitude of the maximum within 30 NM) and up to 21 off it, with
+# the weight chosen per stretch so the path is at most 5% longer than the shortest sea path; no
+# diagonal steps past land corners. Land is Natural Earth 1:10m land and minor islands. The path
+# was thinned to rhumb-line legs within 1.5 NM of it near land (up to 6 NM far offshore), each
+# leg at least 0.3 NM off land except the harbour approaches (pipeline/tools/routes/README.md).
+# Pass-through points (forced): Strait of Juan de Fuca entrance and Kennedy Entrance. On the
+# Gulf crossing, cells within 20 NM of land count as off-lane (25 NM exempt around those
+# points), which keeps the route on the offshore lane instead of the coastal tug and barge
+# lanes. The route was traced from Tacoma (47.290, -122.450), but the voyage is planned from the
+# traced waypoint in Admiralty Inlet where the currents model (SMOC) has data: it has none in
+# Puget Sound (Tacoma to Admiralty Inlet, the first 46 NM; pilotage waters), Tal's choice,
+# 2026-10-19.
+waypoints:
+  - {lat: 48.0126, lon: -122.6253, name: "Admiralty Inlet (off Port Townsend)"}
+  - {lat: 48.1526, lon: -122.7053, name: "AIS lane 01"}
+  - {lat: 48.1926, lon: -122.7853, name: "AIS lane 02"}
+  - {lat: 48.1926, lon: -123.2053, name: "AIS lane 03"}
+  - {lat: 48.1726, lon: -123.3853, name: "AIS lane 04"}
+  - {lat: 48.2326, lon: -123.4453, name: "AIS lane 05"}
+  - {lat: 48.2926, lon: -123.9453, name: "AIS lane 06"}
+  - {lat: 48.4726, lon: -124.5653, name: "AIS lane 07"}
+  - {lat: 48.4726, lon: -124.9253, name: "Strait of Juan de Fuca entrance"}
+  - {lat: 48.5126, lon: -126.0253, name: "AIS lane 08"}
+  - {lat: 49.8926, lon: -128.5253, name: "AIS lane 09"}
+  - {lat: 50.6726, lon: -129.3453, name: "AIS lane 10"}
+  - {lat: 51.6126, lon: -131.0053, name: "AIS lane 11"}
+  - {lat: 51.6726, lon: -131.4453, name: "AIS lane 12"}
+  - {lat: 52.4726, lon: -132.6853, name: "AIS lane 13"}
+  - {lat: 55.0326, lon: -138.4453, name: "AIS lane 14"}
+  - {lat: 57.6126, lon: -146.0453, name: "AIS lane 15"}
+  - {lat: 59.0326, lon: -151.3453, name: "AIS lane 16"}
+  - {lat: 59.0326, lon: -151.7253, name: "AIS lane 17"}
+  - {lat: 59.0726, lon: -151.9053, name: "Kennedy Entrance"}
+  - {lat: 59.3126, lon: -152.1253, name: "AIS lane 18"}
+  - {lat: 59.7926, lon: -152.0253, name: "AIS lane 19"}
+  - {lat: 60.2126, lon: -151.7053, name: "AIS lane 20"}
+  - {lat: 60.3926, lon: -151.7253, name: "AIS lane 21"}
+  - {lat: 60.6926, lon: -151.5853, name: "AIS lane 22"}
+  - {lat: 61.1326, lon: -150.7453, name: "AIS lane 23"}
+  - {lat: 61.2350, lon: -149.9100, name: "Anchorage"}
