@@ -6,7 +6,7 @@
 # Every 10 minutes: start the collector if it is not running (reboot, crash).
 */10 * * * * /home/ami/voyage_collector/deploy/talraviv-pcl/ensure_collector.sh
 
-# Daily backup of the archives at 04:30 Israel time (01:30 or 02:30 UTC, between fetches):
-# enable once the lab NAS is mounted at /tsl-disk on this machine (it is not, as of
-# 2026-10-19). Uses edison's script with this machine's paths.
-# 30 4 * * * SRC=/home/ami/voyage_collector/data/ DST=/tsl-disk/ami/voyage_weather_collector_backup_talraviv-pcl LOG=/home/ami/voyage_collector/data/backup.log /home/ami/voyage_collector/deploy/edison/backup_collector.sh
+# Daily at 04:30 Israel time (01:30 or 02:30 UTC, between fetches): copy the archives to the
+# lab NAS, mounted at /tsl-disk from /etc/fstab (2026-10-19). Uses edison's script with this
+# machine's paths.
+30 4 * * * SRC=/home/ami/voyage_collector/data/ DST=/tsl-disk/ami/voyage_weather_collector_backup_talraviv-pcl LOG=/home/ami/voyage_collector/data/backup.log /home/ami/voyage_collector/deploy/edison/backup_collector.sh

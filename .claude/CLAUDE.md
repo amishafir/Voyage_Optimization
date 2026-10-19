@@ -103,7 +103,7 @@ python3 -m pytest tests/test_subsegments.py
 
 - Account `ami@talraviv-pcl.eng.tau.ac.il` (key `~/.ssh/id_ed25519_claude`; in the sudo group, but sudo needs its password, so root steps are Tal's). Its own public IP (132.66.50.222), so its own Open-Meteo quota. Ubuntu 24.04, Python 3.12; packages in the virtual environment `~/collector-venv` (numpy, h5py, pandas 3, PyYAML).
 - Code in `~/voyage_collector` (a copy of `pipeline/` without data), run as `~/collector-venv/bin/python run_all.py --route volatile` in tmux session `collector_volatile`; archives `data/route{3,4,5}_runs.h5`, log `data/collector_route3_route4_route5.log`.
-- Watchdog: `pipeline/deploy/talraviv-pcl/ensure_collector.sh` from `collector.crontab` (every 10 min; `touch ~/voyage_collector/STOP` to stop on purpose). The server clock is Israel time. `/tsl-disk` is not mounted there, so the backup line in that crontab is commented out until it is.
+- Started 2026-10-19 19:10 UTC (first runs: currents and waves 2026-10-19T00, wind 2026-10-19T12). Cron (`pipeline/deploy/talraviv-pcl/collector.crontab`, installed the same day): `ensure_collector.sh` every 10 min (`touch ~/voyage_collector/STOP` to stop on purpose), and edison's `backup_collector.sh` daily at 04:30 Israel time with this machine's paths, to `/tsl-disk/ami/voyage_weather_collector_backup_talraviv-pcl`. The server clock is Israel time. `/tsl-disk` (the lab NAS) is mounted from `/etc/fstab` (`auto,_netdev,nofail`).
 
 ### Weather products (design decided by Tal, 2026-10-14/15; builder not written yet)
 
