@@ -1,0 +1,39 @@
+Route    Route 1: Persian Gulf to Strait of Malacca  (../pipeline/data/snapshot_2026-10-19_12Z/route1_runs.h5)
+Start    2026-10-14 12:00 UTC
+ETA      280.00 h = 1120 steps, arrival by 2026-10-26 04:00 UTC
+Plan     1,859 subsegments, 3,415.1 NM, 936 wind cells, 914 current cells (mean SOG for the ETA 12.20 kn)
+Wind     run 2026-10-14T12  steps +0..+1120 (281 h x 936 cells)
+         run 2026-10-14T18  steps +24..+600 (145 h x 936 cells)
+         run 2026-10-15T00  steps +48..+1120 (269 h x 936 cells)
+         run 2026-10-15T06  steps +72..+648 (145 h x 936 cells)
+         run 2026-10-15T12  steps +96..+1120 (257 h x 936 cells)
+         run 2026-10-15T18  steps +120..+696 (145 h x 936 cells)
+         run 2026-10-16T00  steps +144..+1120 (245 h x 936 cells)
+         run 2026-10-16T06  steps +168..+744 (145 h x 936 cells)
+         run 2026-10-16T12  steps +192..+1120 (233 h x 936 cells)
+         run 2026-10-16T18  steps +216..+792 (145 h x 936 cells)
+         run 2026-10-17T00  steps +240..+1120 (221 h x 936 cells)
+         run 2026-10-17T06  steps +264..+840 (145 h x 936 cells)
+         run 2026-10-17T12  steps +288..+1120 (209 h x 936 cells)
+         run 2026-10-17T18  steps +312..+888 (145 h x 936 cells)
+         run 2026-10-18T00  steps +336..+1120 (197 h x 936 cells)
+         run 2026-10-18T06  steps +360..+936 (145 h x 936 cells)
+         run 2026-10-18T12  steps +384..+1120 (185 h x 936 cells)
+         run 2026-10-18T18  steps +408..+984 (145 h x 936 cells)
+         run 2026-10-19T00  steps +432..+1120 (173 h x 936 cells)
+         run 2026-10-19T06  steps +456..+1032 (145 h x 936 cells)
+Current  run 2026-10-14T00  steps +0..+908 (228 h x 914 cells)
+         run 2026-10-15T00  steps +48..+1004 (240 h x 914 cells)
+         run 2026-10-16T00  steps +144..+1100 (240 h x 914 cells)
+         run 2026-10-17T00  steps +240..+1120 (221 h x 914 cells)
+         run 2026-10-18T00  steps +336..+1120 (197 h x 914 cells)
+         run 2026-10-19T00  steps +432..+1120 (173 h x 914 cells)
+
+Luo      epochs of 1 h (4 steps), nodes every 0.1 NM on the epoch lines (SOG steps 0.100 kn), SOG 9.20-15.20 kn, pseudo real-time; arcs priced piece by piece
+         nodes 1,531,819, reached 1,507,112; arcs 89,782,074 (0 outside the SWS range); 952.1 M SWS evaluations; sweep 24.4 s
+         fuel 355.918 mt, arrival 280.00 h, 280 epochs, SOG 11.20-13.70 kn; saves 0.29% against constant SOG
+
+Luo      epochs of 1 h (4 steps), nodes every 0.1 NM on the epoch lines (SOG steps 0.100 kn), SOG 9.20-15.20 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 1,531,819, reached 1,507,112; arcs 89,782,074 (0 outside the SWS range); 89.8 M SWS evaluations; sweep 1.8 s
+         planned 353.198 mt; realized in the actual weather, every piece priced: 356.679 mt (+0.986%)
+         fuel 356.679 mt, arrival 280.00 h, 280 epochs, SOG 10.10-13.60 kn; saves 0.08% against constant SOG

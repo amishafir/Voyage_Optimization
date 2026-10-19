@@ -190,6 +190,22 @@ Start-point pricing makes the DP over-optimistic (6 h: planned 2-5% below what t
 burns) and steers it to plans that sail fast where the start conditions look good; at 6 h its
 realized fuel is above constant speed on both routes.
 
+**Rerun on the 2026-10-19 snapshot** (start 2026-10-14 12:00 UTC, the earliest the archives
+cover; ETA 280 h / 168 h; wind runs to Oct 19 06Z, so the weather is near-real for about the
+first 120 h of each voyage). Realized fuel against the full graph (355.910 / 215.511 mt);
+outputs, data checksums and commands in `results/2026-10-19_full_graph_vs_luo/`:
+
+| Luo variant | Route 1 planned / realized | vs full graph | Route 2 planned / realized | vs full graph |
+|---|---|---|---|---|
+| 6 h, piece by piece | 356.142 / 356.142 mt | +0.07% | 215.682 / 215.682 mt | +0.08% |
+| 6 h, start point | 345.994 / 360.789 mt | **+1.37%** | 208.781 / 221.335 mt | **+2.70%** |
+| 1 h, piece by piece | 355.918 / 355.918 mt | +0.00% | 215.530 / 215.530 mt | +0.01% |
+| 1 h, start point | 353.198 / 356.679 mt | +0.22% | 213.111 / 216.671 mt | +0.54% |
+| Constant SOG | 356.956 mt | +0.29% | 216.826 mt | +0.61% |
+
+The ranking is unchanged. With more near-real weather the 6 h start-point plans miss by more:
+planned 4.3% and 6.0% below what they burn, and 1.07% and 2.08% above constant SOG.
+
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo        # both, compared
