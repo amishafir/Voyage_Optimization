@@ -203,12 +203,17 @@ outputs, data checksums and commands in `results/2026-10-19_full_graph_vs_luo/`:
 | 1 h, start point | 353.198 / 356.679 mt | +0.22% | 213.111 / 216.671 mt | +0.54% |
 | 0.25 h, piece by piece | 355.898 / 355.898 mt | -0.00% | 215.505 / 215.505 mt | -0.00% |
 | 0.25 h, start point | 354.939 / 356.176 mt | +0.07% | 214.766 / 215.850 mt | +0.16% |
+| 0.25 h, 25 m step, piece by piece | 355.893 / 355.893 mt | -0.00% | 215.503 / 215.503 mt | -0.00% |
+| 0.25 h, 25 m step, start point | 354.925 / 356.140 mt | +0.06% | 214.753 / 215.839 mt | +0.15% |
 | Constant SOG | 356.956 mt | +0.29% | 216.826 mt | +0.61% |
 
 The ranking is unchanged. With more near-real weather the 6 h start-point plans miss by more:
 planned 4.3% and 6.0% below what they burn, and 1.07% and 2.08% above constant SOG. The
 start-point error shrinks with the epoch (planned below realized by 1.0% / 1.7% at 1 h, 0.35% /
 0.50% at 0.25 h), and at 0.25 h start-point Luo is within 0.07% / 0.16% of the full graph.
+Luo's nodes are 0.1 kn x epoch apart unless noted; with a 25 m step (`--dist-step 0.0135`, the
+full graph's time-line spacing) 0.25 h Luo gains at most 0.036 mt (0.01%) at 3.4 times the run
+time (Route 1 372 s, Route 2 145 s on tsl2-mac).
 
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
