@@ -95,7 +95,7 @@ python3 -m pytest tests/test_subsegments.py
 - Runs on `edison` (`edison-pc.eng.tau.ac.il`, user `user`) from `~/Ami/pipeline_v2` (a copy of `pipeline/`), as `python3 run_all.py --route all` in tmux session `collector_v2`.
 - Cron entries are in `pipeline/deploy/edison/collector.crontab` (installed 2026-10-14; server time is UTC):
   - `ensure_collector.sh`, every 10 min: starts the collector if it is not running (reboot, crash). To stop it on purpose, `touch ~/Ami/pipeline_v2/STOP`, then Ctrl+C in the tmux session. Delete `STOP` to let it restart.
-  - `backup_collector.sh`, daily at 04:30 UTC: rsyncs archives and logs to the lab NAS, `/tsl-disk/ami/voyage_weather_collector_backup` (`latest/` daily, `weekly/YYYY-MM-DD` on Sundays).
+  - `backup_collector.sh`, daily at 04:30 UTC: rsyncs archives and logs to the lab NAS, `/tsl-disk/ami/voyage_weather_collector_backup` (`latest/` daily, `weekly/YYYY-MM-DD` on Sundays; weekly copies older than 3 months are deleted).
 - Logs in `~/Ami/pipeline_v2/data/`: `collector_route1_route2.log`, `watchdog.log`, `backup.log`.
 
 ### Weather products (design decided by Tal, 2026-10-14/15; builder not written yet)
