@@ -1,4 +1,4 @@
-"""Write config/routes/<key>.yaml for Routes 3-5 from ais_route.py results (TRACE_DIR/r3.json, ...).
+"""Write config/routes/<key>.yaml for Routes 3-7 from ais_route.py results (TRACE_DIR/r3.json, ...).
 
     cd pipeline && python3 tools/routes/make_route_yaml.py TRACE_DIR
 """
@@ -40,6 +40,21 @@ ROUTES = [
      ("Kaohsiung", "Yokohama"), {1: "South of Taiwan (Eluanbi)"},
      "Pass-through point (forced): south of Taiwan, so the route rounds Eluanbi instead of taking the "
      "Taiwan Strait.", {}, 0),
+    ("r6", "durban_cape_town", "Durban to Cape Town (Agulhas Current)",
+     "Coastal route around the southern tip of Africa, {L:,.0f} nm, ~{d:.1f} days at 12 kn. The "
+     "Agulhas Current (up to 4 to 5 kn) runs along the shelf edge, and south-west gales against it "
+     "raise notorious seas off the Wild Coast and the Agulhas Bank; then the Cape of Good Hope.",
+     ("Durban (outside the harbour entrance)", "Cape Town (Table Bay)"), {},
+     "Starts just outside the Durban harbour entrance (-29.865, 31.075): on the 0.02 deg grid the "
+     "harbour basin is not connected to the sea.", {}, 0),
+    ("r7", "sydney_auckland", "Sydney (Port Botany) to Auckland (Tasman Sea)",
+     "Trans-Tasman route from Botany Bay around the northern tip of New Zealand and into the Hauraki "
+     "Gulf, {L:,.0f} nm, ~{d:.1f} days at 12 kn. Tasman Sea fronts and lows all year; strongest in "
+     "the southern winter.",
+     ("Sydney (Port Botany)", "Auckland"), {}, "",
+     {15: (-36.7874, 174.8350, "moved 1.0 NM east into the Rangitoto Channel: the traced steps ran along the North Shore coast"),
+      16: (-36.8074, 174.8350, "moved 1.0 NM east, as the previous waypoint"),
+      17: (-36.8350, 174.8350, "moved 1.1 NM south-east, south of North Head")}, 0),
 ]
 
 

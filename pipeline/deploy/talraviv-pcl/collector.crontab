@@ -1,4 +1,4 @@
-# Weather collector for Routes 3-5 on talraviv-pcl (account ami). The server clock is Israel
+# Weather collector for Routes 3-6 on talraviv-pcl (account ami). The server clock is Israel
 # time (Asia/Jerusalem), not UTC as on edison; the collector itself works in UTC.
 # Install with: crontab ~/voyage_collector/deploy/talraviv-pcl/collector.crontab
 # (this replaces the account's crontab; check crontab -l first).

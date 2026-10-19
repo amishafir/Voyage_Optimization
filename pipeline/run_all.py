@@ -8,7 +8,7 @@ distinct weather cell of the route's subsegments (collect/collector.py), in one
 HDF5 archive per route (shared/run_archive.py).
 
     python3 run_all.py --route all                # Routes 1 and 2 (edison), until stopped
-    python3 run_all.py --route volatile           # Routes 3, 4 and 5 (talraviv-pcl)
+    python3 run_all.py --route volatile           # Routes 3 to 6 (talraviv-pcl)
     python3 run_all.py --route all --dry-run      # partition and API budget only, no API calls
     python3 run_all.py --route 1 --once           # do whatever is pending now, then exit
     python3 run_all.py --route all --backfill-wind --dry-run   # missed wind runs and their cost
@@ -66,14 +66,18 @@ logger = logging.getLogger("run_all")
 ROUTES = {
     "1": {"name": "Route 1", "route": "persian_gulf_malacca", "hdf5": "route1_runs.h5"},
     "2": {"name": "Route 2", "route": "st_johns_liverpool", "hdf5": "route2_runs.h5"},
-    # Short, volatile winter routes (2026-10-19), traced along AIS commercial traffic lanes.
+    # Short, volatile routes (2026-10-19), traced along AIS commercial traffic lanes
+    # (tools/routes/README.md). Route 7 is in no set: with Routes 3-6 it would not fit one
+    # machine's quota with a safe margin.
     "3": {"name": "Route 3", "route": "tacoma_anchorage", "hdf5": "route3_runs.h5"},
     "4": {"name": "Route 4", "route": "rotterdam_algeciras", "hdf5": "route4_runs.h5"},
     "5": {"name": "Route 5", "route": "kaohsiung_yokohama", "hdf5": "route5_runs.h5"},
+    "6": {"name": "Route 6", "route": "durban_cape_town", "hdf5": "route6_runs.h5"},
+    "7": {"name": "Route 7", "route": "sydney_auckland", "hdf5": "route7_runs.h5"},
 }
 # Named route sets. "all" stays Routes 1 and 2, the set edison runs (its watchdog starts
 # "--route all"); each set must fit one machine's (one IP's) free API quota.
-ROUTE_SETS = {"all": ["1", "2"], "volatile": ["3", "4", "5"]}
+ROUTE_SETS = {"all": ["1", "2"], "volatile": ["3", "4", "5", "6"]}
 
 
 def route_keys(spec):

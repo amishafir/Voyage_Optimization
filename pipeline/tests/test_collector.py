@@ -841,9 +841,9 @@ def test_route_selection_and_each_set_fits_one_machine():
     import argparse
     import run_all
     assert run_all.route_keys("all") == ["1", "2"]          # edison's watchdog starts "--route all"
-    assert run_all.route_keys("volatile") == ["3", "4", "5"]
+    assert run_all.route_keys("volatile") == ["3", "4", "5", "6"]
     assert run_all.route_keys("4") == ["4"] and run_all.route_keys("5,3") == ["5", "3"]
-    for bad in ("6", "1,x", ""):
+    for bad in ("8", "1,x", ""):
         try:
             run_all.route_keys(bad)
             raise AssertionError(f"expected an error for {bad!r}")

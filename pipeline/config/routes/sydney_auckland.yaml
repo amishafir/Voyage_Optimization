@@ -1,0 +1,33 @@
+name: Sydney (Port Botany) to Auckland (Tasman Sea)
+description: >
+  Trans-Tasman route from Botany Bay around the northern tip of New Zealand and into the Hauraki
+  Gulf, 1,289 nm, ~4.5 days at 12 kn. Tasman Sea fronts and lows all year; strongest in the
+  southern winter.
+# Traced on 2026-10-19 along the World Bank / IMF Global Shipping Traffic Density, commercial
+# layer (AIS positions Jan 2015 - Feb 2021, 0.005 deg; CC BY 4.0; Cerdeiro et al. 2020), summed
+# to 0.02 deg cells: the cheapest sea path whose cost per NM is 1 on a local traffic ridge (log
+# density within 2 orders of magnitude of the maximum within 30 NM) and up to 21 off it, with
+# the weight chosen per stretch so the path is at most 5% longer than the shortest sea path; no
+# diagonal steps past land corners. Land is Natural Earth 1:10m land and minor islands. The path
+# was thinned to rhumb-line legs within 1.5 NM of it near land (up to 6 NM far offshore), each
+# leg at least 0.3 NM off land except the harbour approaches (pipeline/tools/routes/README.md).
+waypoints:
+  - {lat: -33.9750, lon: 151.2150, name: "Sydney (Port Botany)"}
+  - {lat: -34.0074, lon: 151.2147, name: "AIS lane 01"}
+  - {lat: -34.0074, lon: 151.2347, name: "AIS lane 02"}
+  - {lat: -34.0074, lon: 151.2547, name: "AIS lane 03"}
+  - {lat: -34.0074, lon: 153.0147, name: "AIS lane 04"}
+  - {lat: -34.3474, lon: 159.0747, name: "AIS lane 05"}
+  - {lat: -34.4474, lon: 172.0947, name: "AIS lane 06"}
+  - {lat: -34.3474, lon: 172.6347, name: "AIS lane 07"}
+  - {lat: -34.3474, lon: 173.1347, name: "AIS lane 08"}
+  - {lat: -35.1874, lon: 174.4747, name: "AIS lane 09"}
+  - {lat: -35.1874, lon: 174.5947, name: "AIS lane 10"}
+  - {lat: -35.5474, lon: 174.9347, name: "AIS lane 11"}
+  - {lat: -36.1874, lon: 174.9747, name: "AIS lane 12"}
+  - {lat: -36.6274, lon: 174.9547, name: "AIS lane 13"}
+  - {lat: -36.7674, lon: 174.8147, name: "AIS lane 14"}
+  - {lat: -36.7874, lon: 174.8350, name: "AIS lane 15"}   # moved 1.0 NM east into the Rangitoto Channel: the traced steps ran along the North Shore coast
+  - {lat: -36.8074, lon: 174.8350, name: "AIS lane 16"}   # moved 1.0 NM east, as the previous waypoint
+  - {lat: -36.8350, lon: 174.8350, name: "AIS lane 17"}   # moved 1.1 NM south-east, south of North Head
+  - {lat: -36.8400, lon: 174.7800, name: "Auckland"}

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run by cron every 10 minutes (collector.crontab): start the collector for the volatile
-# routes (Routes 3-5, "--route volatile") in tmux session collector_volatile if it is not
+# routes (Routes 3-6, "--route volatile") in tmux session collector_volatile if it is not
 # running, e.g. after a reboot or a crash. The collector resumes from the /runs table of its
 # archives.
 #
