@@ -1,0 +1,39 @@
+Route    Route 2: St. John's to Liverpool (North Atlantic Storm Track)  (../pipeline/data/snapshot_2026-10-19_12Z/route2_runs.h5)
+Start    2026-10-14 12:00 UTC
+ETA      168.00 h = 672 steps, arrival by 2026-10-21 12:00 UTC
+Plan     1,309 subsegments, 1,954.7 NM, 587 wind cells, 721 current cells (mean SOG for the ETA 11.63 kn)
+Wind     run 2026-10-14T12  steps +0..+672 (169 h x 587 cells)
+         run 2026-10-14T18  steps +24..+600 (145 h x 587 cells)
+         run 2026-10-15T00  steps +48..+672 (157 h x 587 cells)
+         run 2026-10-15T06  steps +72..+648 (145 h x 587 cells)
+         run 2026-10-15T12  steps +96..+672 (145 h x 587 cells)
+         run 2026-10-15T18  steps +120..+672 (139 h x 587 cells)
+         run 2026-10-16T00  steps +144..+672 (133 h x 587 cells)
+         run 2026-10-16T06  steps +168..+672 (127 h x 587 cells)
+         run 2026-10-16T12  steps +192..+672 (121 h x 587 cells)
+         run 2026-10-16T18  steps +216..+672 (115 h x 587 cells)
+         run 2026-10-17T00  steps +240..+672 (109 h x 587 cells)
+         run 2026-10-17T06  steps +264..+672 (103 h x 587 cells)
+         run 2026-10-17T12  steps +288..+672 (97 h x 587 cells)
+         run 2026-10-17T18  steps +312..+672 (91 h x 587 cells)
+         run 2026-10-18T00  steps +336..+672 (85 h x 587 cells)
+         run 2026-10-18T06  steps +360..+672 (79 h x 587 cells)
+         run 2026-10-18T12  steps +384..+672 (73 h x 587 cells)
+         run 2026-10-18T18  steps +408..+672 (67 h x 587 cells)
+         run 2026-10-19T00  steps +432..+672 (61 h x 587 cells)
+         run 2026-10-19T06  steps +456..+672 (55 h x 587 cells)
+Current  run 2026-10-14T00  steps +0..+672 (169 h x 721 cells)
+         run 2026-10-15T00  steps +48..+672 (157 h x 721 cells)
+         run 2026-10-16T00  steps +144..+672 (133 h x 721 cells)
+         run 2026-10-17T00  steps +240..+672 (109 h x 721 cells)
+         run 2026-10-18T00  steps +336..+672 (85 h x 721 cells)
+         run 2026-10-19T00  steps +432..+672 (61 h x 721 cells)
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.025 NM on the epoch lines (SOG steps 0.100 kn), SOG 8.63-14.63 kn, pseudo real-time; arcs priced piece by piece
+         nodes 8,772,076, reached 8,685,427; arcs 519,585,980 (0 outside the SWS range); 1530.9 M SWS evaluations; sweep 43.0 s
+         fuel 215.505 mt, arrival 168.00 h, 672 epochs, SOG 9.50-13.40 kn; saves 0.61% against constant SOG
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.025 NM on the epoch lines (SOG steps 0.100 kn), SOG 8.63-14.63 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 8,772,076, reached 8,685,427; arcs 519,585,980 (0 outside the SWS range); 519.6 M SWS evaluations; sweep 9.7 s
+         planned 214.766 mt; realized in the actual weather, every piece priced: 215.850 mt (+0.505%)
+         fuel 215.850 mt, arrival 168.00 h, 672 epochs, SOG 9.70-13.80 kn; saves 0.45% against constant SOG

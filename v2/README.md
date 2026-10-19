@@ -201,10 +201,14 @@ outputs, data checksums and commands in `results/2026-10-19_full_graph_vs_luo/`:
 | 6 h, start point | 345.994 / 360.789 mt | **+1.37%** | 208.781 / 221.335 mt | **+2.70%** |
 | 1 h, piece by piece | 355.918 / 355.918 mt | +0.00% | 215.530 / 215.530 mt | +0.01% |
 | 1 h, start point | 353.198 / 356.679 mt | +0.22% | 213.111 / 216.671 mt | +0.54% |
+| 0.25 h, piece by piece | 355.898 / 355.898 mt | -0.00% | 215.505 / 215.505 mt | -0.00% |
+| 0.25 h, start point | 354.939 / 356.176 mt | +0.07% | 214.766 / 215.850 mt | +0.16% |
 | Constant SOG | 356.956 mt | +0.29% | 216.826 mt | +0.61% |
 
 The ranking is unchanged. With more near-real weather the 6 h start-point plans miss by more:
-planned 4.3% and 6.0% below what they burn, and 1.07% and 2.08% above constant SOG.
+planned 4.3% and 6.0% below what they burn, and 1.07% and 2.08% above constant SOG. The
+start-point error shrinks with the epoch (planned below realized by 1.0% / 1.7% at 1 h, 0.35% /
+0.50% at 0.25 h), and at 0.25 h start-point Luo is within 0.07% / 0.16% of the full graph.
 
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
