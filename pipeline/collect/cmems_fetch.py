@@ -16,7 +16,9 @@ collector does not import the Copernicus client; the collector calls it as a sub
 CELLS.npy holds (n, 2) int rows and columns of the collector's current grid
 (shared/weather_grids.py CURRENT_GRID: points at -80 + 1/24 + row/12, -180 + 1/24 + col/12).
 Copernicus's grid points sit at -80 + i/12, -180 + j/12, half a cell off: the value used
-is the one at POINT (see below), or the nearest of the four surrounding points with data.
+is the one at POINT (see below), or the nearest of the four surrounding points with data,
+or, when all four are land (Copernicus's mask), the nearest point with data within
+SEARCH cells, as Open-Meteo's cell_selection=sea does.
 
 Exit status: 0 stored; 3 Copernicus's newest run is not RUN_INIT (nothing written);
 1 any other failure. Needs a Copernicus Marine login on the machine
@@ -42,6 +44,7 @@ VARIABLES = ("utotal", "vtotal")
 # (d_row, d_col) offsets from (row, col); set from the comparison of 2026-10-21.
 POINT = (0, 0)
 NEIGHBOURS = ((0, 0), (0, 1), (1, 0), (1, 1))
+SEARCH = 3             # rows and columns searched around a cell whose four points are land
 N_LON = 4320
 
 
@@ -85,15 +88,40 @@ def main(argv) -> int:
     pick = np.where(has[:, 0], 0, np.argmax(has, axis=1))             # first point with data
     rows = np.arange(len(cells))
     uu, vv = u[rows, pick], v[rows, pick]
-    uu[~has[rows, pick]] = np.nan
-    vv[~has[rows, pick]] = np.nan
+    pi, pj = I[rows, pick], J[rows, pick]
+    substituted = pick != 0
+    for k in np.flatnonzero(~has.any(axis=1)):
+        # All four points are land: the nearest point with data within SEARCH cells, by
+        # distance from the collector's grid point (at the centre of the four).
+        r, c = int(cells[k, 0]), int(cells[k, 1])
+        cosl = np.cos(np.radians(lat[r]))
+        cand = sorted(((di, dj) for di in range(-SEARCH + 1, SEARCH + 1)
+                       for dj in range(-SEARCH + 1, SEARCH + 1)
+                       if not (0 <= di <= 1 and 0 <= dj <= 1)),
+                      key=lambda o: (o[0] - 0.5) ** 2 + ((o[1] - 0.5) * cosl) ** 2)
+        ci = np.array([r + di for di, _ in cand])
+        cj = np.array([(c + dj) % N_LON for _, dj in cand])
+        ring = ds.isel(latitude=xr.DataArray(ci, dims="p"), longitude=xr.DataArray(cj, dims="p"))
+        if "depth" in ring.dims:
+            ring = ring.isel(depth=0)
+        ring = ring.load()
+        ru = ring[VARIABLES[0]].transpose("p", "time").values
+        rv = ring[VARIABLES[1]].transpose("p", "time").values
+        ok = np.flatnonzero(np.isfinite(ru).all(axis=1) & np.isfinite(rv).all(axis=1))
+        if len(ok):
+            q = ok[0]
+            uu[k], vv[k], pi[k], pj[k], substituted[k] = ru[q], rv[q], ci[q], cj[q], True
+        else:
+            uu[k] = vv[k] = np.nan
+    uu[~np.isfinite(uu).all(axis=1)] = np.nan
+    vv[~np.isfinite(vv).all(axis=1)] = np.nan
     np.savez_compressed(
         out, time_unix=times,
         velocity_kmh=(np.hypot(uu, vv) * 3.6).astype(np.float32),
         direction_deg=((np.degrees(np.arctan2(uu, vv)) + 360.0) % 360.0).astype(np.float32),
-        point_lat=lat[I[rows, pick]].astype(np.float32),
-        point_lon=lon[J[rows, pick]].astype(np.float32),
-        substituted=(pick != 0),
+        point_lat=lat[pi].astype(np.float32),
+        point_lon=lon[pj].astype(np.float32),
+        substituted=substituted,
         meta=json.dumps({"dataset_id": DATASET, "variables": VARIABLES, "point": POINT,
                          "run_end_utc": iso(last), "fetched_utc": iso(int(time.time()))}))
     return 0
