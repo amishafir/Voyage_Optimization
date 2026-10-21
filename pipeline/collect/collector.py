@@ -68,6 +68,8 @@ import json
 import logging
 import math
 import os
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -127,6 +129,13 @@ WAVE_LAST_LEAD_H = 239              # 00 UTC MFWAM runs fill the 240 h window (t
 WAVE_GRACE_S = 2 * HOUR             # currents wait this long after their publication for the waves
 WAVE_ALONE_AFTER_S = 18 * HOUR      # waves stop waiting for pending currents at D 18:00 UTC
 WAVE_ALONE_LIMIT = 9700             # a waves-only fetch only if the last 24 h stay below this
+# Backup source for currents: Copernicus Marine, which publishes the same SMOC model
+# (collect/cmems_fetch.py). Used for current run D when Open-Meteo has not published it
+# by D + CMEMS_AFTER_S, or has skipped it; Copernicus keeps only its newest run.
+CMEMS_AFTER_S = 18 * HOUR
+CMEMS_RETRY_S = HOUR
+CMEMS_TIMEOUT_S = 1800
+CMEMS_OTHER_RUN = 3     # cmems_fetch.py's exit status when Copernicus's newest run is another
 SCHEDULE = {WIND: (WIND_CYCLE_S, WIND_DUE_AFTER_S), CURRENT: (CURRENT_CYCLE_S, CURRENT_DUE_AFTER_S),
             WAVE: (WAVE_CYCLE_S, WAVE_DUE_AFTER_S)}      # grid -> (cycle, first check after start)
 SETTLE_S = 600                      # Open-Meteo: wait 10 min after the availability time
@@ -654,6 +663,7 @@ class _Work:
     chunks: Dict[int, list] = field(default_factory=dict)
     fetch_start: int = -1
     request: Tuple[str, ...] = ()       # grids asked in the chunks' requests; () = this grid alone
+    cmems_next_try: int = 0             # currents: next time to try Copernicus Marine
     riders_done: bool = False           # the other grids of `request` have been dealt with
 
 
@@ -830,12 +840,54 @@ class RouteRuns:
 # The collector
 # ---------------------------------------------------------------------------
 
+class CmemsFetcher:
+    """Fetches a currents run from Copernicus Marine by running collect/cmems_fetch.py
+    with `python`, an environment with the copernicusmarine client (and the account's
+    Copernicus login), so that the collector itself does not import the client.
+
+    Called as fetcher(cells, init, hours) with the (n, 2) rows and columns of the current
+    cells; returns ("ok", arrays), ("other-run", message) when Copernicus's newest run is
+    not run `init`, or ("error", message)."""
+
+    def __init__(self, python: str, script: Optional[str] = None, timeout: float = CMEMS_TIMEOUT_S):
+        self.python = python
+        self.script = script or os.path.join(os.path.dirname(os.path.abspath(__file__)), "cmems_fetch.py")
+        self.timeout = timeout
+
+    def __call__(self, cells: np.ndarray, init: int, hours: int):
+        with tempfile.TemporaryDirectory() as tmp:
+            cells_path, out = os.path.join(tmp, "cells.npy"), os.path.join(tmp, "run.npz")
+            np.save(cells_path, np.asarray(cells, dtype=np.int64))
+            try:
+                p = subprocess.run([self.python, self.script, cells_path, str(int(init)), str(hours), out],
+                                   capture_output=True, text=True, timeout=self.timeout)
+            except (OSError, subprocess.TimeoutExpired) as e:
+                return "error", repr(e)
+            lines = (p.stderr or "").strip().splitlines()
+            message = lines[-1][:300] if lines else ""
+            if p.returncode == 0:
+                with np.load(out) as z:
+                    return "ok", {k: z[k] for k in z.files}
+            return ("other-run" if p.returncode == CMEMS_OTHER_RUN else "error"), message
+
+
+def default_cmems_fetcher() -> Optional[CmemsFetcher]:
+    """The backup fetcher if this account has it set up: the environment
+    COLLECTOR_CMEMS_PYTHON, else ~/cmems-venv/bin/python, plus a Copernicus Marine login."""
+    python = os.environ.get("COLLECTOR_CMEMS_PYTHON") or os.path.expanduser("~/cmems-venv/bin/python")
+    login = os.path.expanduser("~/.copernicusmarine/.copernicusmarine-credentials")
+    if os.path.exists(python) and os.path.exists(login):
+        return CmemsFetcher(python)
+    return None
+
+
 class RunCollector:
     """Fetches and archives the runs of every route; drive it with step()."""
 
     def __init__(self, routes: Sequence[RouteRuns], client: ApiClient,
-                 clock: Callable[[], float] = time.time):
+                 clock: Callable[[], float] = time.time, cmems: Optional[Callable] = None):
         self.routes, self.client, self.clock = list(routes), client, clock
+        self.cmems = cmems              # backup source for currents (CmemsFetcher), or None
         self._backfill_next_try = 0     # after a failed automatic backfill, wait an hour
 
     # --- scheduling -------------------------------------------------------
@@ -999,9 +1051,19 @@ class RunCollector:
             w.next_try = now + RETRY_S
             return w.next_try
         if meta_init > init:
+            if grid == CURRENT and self.cmems is not None:
+                done = self._current_from_cmems(r, init, w, force=True)
+                if done == "stored":
+                    return None
+                if done == "error":              # Copernicus may still have it: try again later
+                    w.next_try = w.cmems_next_try
+                    return w.next_try
             self._marine_missed(r, grid, init, meta_init)
             return None
         if meta_init < init:
+            if grid == CURRENT and self.cmems is not None and now >= init + CMEMS_AFTER_S:
+                if self._current_from_cmems(r, init, w) == "stored":
+                    return None
             w.next_try = now + RETRY_S
             logger.info("[%s] %s run %s not published yet (newest %s); next check at %s",
                         r.label, grid, name, run_archive.run_name(meta_init), utc(w.next_try))
@@ -1062,6 +1124,67 @@ class RunCollector:
                 w.fetch_meta = None
         w.next_try = int(self.clock()) + RETRY_S
         return w.next_try
+
+    def _current_from_cmems(self, r: RouteRuns, init: int, w: _Work, force: bool = False) -> str:
+        """Fetch current run `init` from Copernicus Marine and store it. Returns "stored",
+        "other-run" (Copernicus's newest run is another one), "error", or "wait" (tried less
+        than CMEMS_RETRY_S ago; `force` tries anyway)."""
+        now = int(self.clock())
+        if now < w.cmems_next_try and not force:
+            return "wait"
+        w.cmems_next_try = now + CMEMS_RETRY_S
+        name = run_archive.run_name(init)
+        cells = np.array([q.cell for q in r.plan.queries[CURRENT]], dtype=np.int64)
+        status, data = self.cmems(cells, init, CURRENT_SPAN_H)
+        if status != "ok":
+            log = logger.info if status == "other-run" else logger.warning
+            log("[%s] current run %s from Copernicus Marine: %s (%s); next try at %s", r.label,
+                name, "not its newest run" if status == "other-run" else "failed", data,
+                utc(w.cmems_next_try))
+            return status
+        fields = API_FIELDS[CURRENT]
+        speed, direction = fields["ocean_current_velocity"], fields["ocean_current_direction"]
+        run = GridRun(np.asarray(data["point_lat"], dtype=float),
+                      np.asarray(data["point_lon"], dtype=float),
+                      np.asarray(data["time_unix"], dtype=np.int64),
+                      {speed: np.asarray(data["velocity_kmh"], dtype=float),
+                       direction: np.asarray(data["direction_deg"], dtype=float)})
+        if run.values[speed].shape != (len(cells), CURRENT_SPAN_H) or int(run.time[0]) != init:
+            logger.error("[%s] current run %s from Copernicus Marine: unexpected shape %s or start; "
+                         "not stored", r.label, name, run.values[speed].shape)
+            return "error"
+        nan = find_nan_cells(run)
+        n_subst = int(np.sum(data["substituted"]))
+        end = int(self.clock())
+        meta = json.loads(str(data["meta"]))
+        run_archive.write_run(r.path, CURRENT, init, run.time, run.values, run.served_lat,
+                              run.served_lon, {
+                                  "run_init_utc": utc(init),
+                                  "source": "copernicus_marine",
+                                  "availability_unix": -1,
+                                  "first_probe_success_unix": -1,
+                                  "fetch_start_unix": now,
+                                  "fetch_end_unix": end,
+                                  "first_lead_hours": 0,
+                                  "last_lead_hours": CURRENT_SPAN_H - 1,
+                                  "nan_cells": len(nan),
+                                  "substituted_cells": n_subst,
+                                  "api_url": "copernicusmarine:" + meta.get("dataset_id", ""),
+                                  "api_params_json": json.dumps(meta),
+                                  "request_grids": CURRENT,
+                                  "cell_table": run_archive.CELL_TABLES[CURRENT],
+                                  "served_points_reported": True,
+                                  "backfilled": False,
+                              })
+        row = r.rows[(CURRENT, init)]
+        row["fetch_start_unix"], row["fetch_end_unix"] = now, end
+        r.finish(CURRENT, init, "complete",
+                 "from Copernicus Marine: not on Open-Meteo by the fallback time")
+        logger.log(logging.WARNING if nan else logging.INFO,
+                   "[%s] current run %s stored from Copernicus Marine (%s): %d cells x %d h, "
+                   "NaN cells %d, substituted %d; %.1f min", r.label, name, meta.get("dataset_id"),
+                   len(cells), len(run.time), len(nan), n_subst, (end - now) / 60.0)
+        return "stored"
 
     def _store_rider(self, r: RouteRuns, grid: str, init: int, source: _Work) -> bool:
         """Store a run that came in the requests of another grid's run (`source`), if its
@@ -1225,6 +1348,7 @@ class RunCollector:
                                   "substituted_cells": n_subst,
                                   "api_url": RUN_API_URLS[grid],
                                   "api_params_json": json.dumps(params),
+                                  "source": "open-meteo",
                                   "request_grids": ",".join(request),
                                   "cell_table": run_archive.CELL_TABLES[grid],
                                   "served_points_reported": served_known,

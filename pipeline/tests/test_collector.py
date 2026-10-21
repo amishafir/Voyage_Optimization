@@ -1069,6 +1069,121 @@ def test_archive_without_waves_gains_them_from_the_next_day():
         assert set(A.read_runs(path).status) == {"complete"}
 
 
+# --- Copernicus Marine backup for currents ---------------------------------------------
+
+class FakeCmems:
+    """Stands in for CmemsFetcher: serves `run` (a run start) and records the calls."""
+
+    def __init__(self, world, run=None, fail=False):
+        self.world, self.run, self.fail, self.calls = world, run, fail, []
+
+    def __call__(self, cells, init, hours):
+        self.calls.append((self.world.t, init))
+        if self.fail:
+            return "error", "network down"
+        if self.run != init:
+            return "other-run", "newest run ends elsewhere"
+        n = len(cells)
+        t = init + np.arange(hours) * H
+        grid_lat = CURRENT_GRID.lat_first + cells[:, 0] / 12.0 - 1 / 24
+        grid_lon = CURRENT_GRID.lon_first + cells[:, 1] / 12.0 - 1 / 24
+        return "ok", {"time_unix": t, "velocity_kmh": np.full((n, hours), 1.5, np.float32),
+                      "direction_deg": np.full((n, hours), 90.0, np.float32),
+                      "point_lat": grid_lat.astype(np.float32), "point_lon": grid_lon.astype(np.float32),
+                      "substituted": np.zeros(n, bool),
+                      "meta": json.dumps({"dataset_id": "fake_smoc", "point": [0, 0]})}
+
+
+def _collector_with(world, path, cmems):
+    plan = C.build_sampling_plan(SHORT_ROUTE, route_key="short")
+    route = C.RouteRuns("Short", plan, path, clock=world.clock)
+    return C.RunCollector([route], world.client(), clock=world.clock, cmems=cmems), route
+
+
+def test_currents_come_from_copernicus_when_open_meteo_is_late():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(11))
+        del w.current_published[_hm(0)]               # Open-Meteo never gets run D
+        fake = FakeCmems(w, run=_hm(0))
+        coll, route = _collector_with(w, path, fake)
+        with captured() as log:
+            run_until(w, coll, _hm(17, 50))
+            assert _status(path, "current", _hm(0)).status == "pending" and not fake.calls
+            run_until(w, coll, _hm(18, 30))           # the fallback starts at D 18:00
+        row = _status(path, "current", _hm(0))
+        assert row.status == "complete" and "Copernicus" in row.note
+        assert len(fake.calls) == 1 and fake.calls[0][0] >= _hm(18)
+        run = A.read_run(path, "current", _hm(0))
+        assert run["attrs"]["source"] == "copernicus_marine" and len(run["time_unix"]) == 240
+        assert (run["ocean_current_velocity_kmh"] == np.float32(1.5)).all()
+        assert any("stored from Copernicus Marine" in m for m in log.messages(logging.INFO))
+        # The waves of day D are fetched on their own (Open-Meteo has them).
+        assert _status(path, "wave", _hm(0)).status == "complete"
+        # Open-Meteo runs are marked with their source too.
+        assert A.read_run_attrs(path, "wind", _hm(6))["source"] == "open-meteo"
+
+
+def test_copernicus_with_another_run_is_retried_hourly_then_missed():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(11))
+        del w.current_published[_hm(0)]
+        fake = FakeCmems(w, run=_hm(0, day=-1))       # Copernicus has moved on, or not yet
+        coll, route = _collector_with(w, path, fake)
+        with captured():
+            run_until(w, coll, _hm(21, 30))
+        assert _status(path, "current", _hm(0)).status == "pending"
+        tries = [t for t, init in fake.calls if init == _hm(0)]
+        assert len(tries) == 4 and all(b - a >= C.CMEMS_RETRY_S for a, b in zip(tries, tries[1:]))
+        with captured():
+            run_until(w, coll, _hm(12, 30, day=1))    # Open-Meteo publishes run D + 1
+        assert _status(path, "current", _hm(0)).status == "missed"
+        assert _status(path, "current", _hm(0, day=1)).status == "complete"
+
+
+def test_skipped_open_meteo_run_is_taken_from_copernicus_if_still_there():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "a.h5")
+        w = World(_hm(11))
+        del w.current_published[_hm(0)]
+        w.current_published[_hm(0, day=1)] = _hm(13)  # Open-Meteo jumps to run D + 1
+        fake = FakeCmems(w, run=_hm(0))
+        coll, route = _collector_with(w, path, fake)
+        with captured():
+            run_until(w, coll, _hm(13, 30))
+        assert _status(path, "current", _hm(0)).status == "complete"
+        assert A.read_run_attrs(path, "current", _hm(0))["source"] == "copernicus_marine"
+        # A failing Copernicus keeps the run pending (tried hourly) instead of missing it.
+        path2 = os.path.join(tmp, "b.h5")
+        w2 = World(_hm(11))
+        del w2.current_published[_hm(0)]
+        w2.current_published[_hm(0, day=1)] = _hm(13)
+        coll2, _ = _collector_with(w2, path2, FakeCmems(w2, run=_hm(0), fail=True))
+        with captured():
+            run_until(w2, coll2, _hm(13, 30))
+        assert _status(path2, "current", _hm(0)).status == "pending"
+
+
+def test_cmems_fetcher_runs_the_script_and_reads_its_result():
+    with tempfile.TemporaryDirectory() as tmp:
+        script = os.path.join(tmp, "fake_fetch.py")
+        with open(script, "w") as f:
+            f.write("import sys, json, numpy as np\n"
+                    "cells = np.load(sys.argv[1]); init, hours, out = int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]\n"
+                    "if init == 0: sys.stderr.write('Copernicus has another run\\n'); sys.exit(3)\n"
+                    "np.savez(out, time_unix=init + 3600 * np.arange(hours), velocity_kmh=np.ones((len(cells), hours)),\n"
+                    "         direction_deg=np.zeros((len(cells), hours)), point_lat=np.zeros(len(cells)),\n"
+                    "         point_lon=np.zeros(len(cells)), substituted=np.zeros(len(cells), bool), meta=json.dumps({}))\n")
+        fetch = C.CmemsFetcher(sys.executable, script)
+        status, data = fetch(np.array([[1, 2], [3, 4]]), 3600, 5)
+        assert status == "ok" and data["velocity_kmh"].shape == (2, 5) and data["time_unix"][0] == 3600
+        status, message = fetch(np.array([[1, 2]]), 0, 5)
+        assert status == "other-run" and "another run" in message
+        status, message = C.CmemsFetcher(sys.executable, os.path.join(tmp, "missing.py"))(np.zeros((1, 2)), 3600, 5)
+        assert status == "error"
+
+
 def test_legacy_collect_is_removed():
     try:
         C.collect({"collection": {"route": "st_johns_liverpool", "interval_nm": 5}})

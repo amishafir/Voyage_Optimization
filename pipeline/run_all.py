@@ -57,6 +57,7 @@ from collect.collector import (  # noqa: E402
     RunCollector,
     build_sampling_plan,
     daily_calls,
+    default_cmems_fetcher,
     utc,
 )
 from collect.waypoints import load_route_config  # noqa: E402
@@ -219,13 +220,17 @@ def main(argv=None):
     except PlanMismatch as e:
         logger.error("%s", e)
         return 3
-    collector = RunCollector(routes, ApiClient(pacer=Pacer(SECONDS_PER_CHUNK)))
+    cmems = None if args.backfill_wind else default_cmems_fetcher()
+    collector = RunCollector(routes, ApiClient(pacer=Pacer(SECONDS_PER_CHUNK)), cmems=cmems)
 
     if args.backfill_wind:
         collector.backfill_wind(dry_run=args.dry_run)
         return 0
 
     logger.info("Waves: %s", WAVE_NOTE)
+    logger.info("Currents backup: %s", f"Copernicus Marine via {cmems.python} (from 18 h after a "
+                "run's start, or when Open-Meteo skips a run)" if cmems else
+                "none (no ~/cmems-venv with a Copernicus Marine login on this account)")
     logger.info("Archives: %s", ", ".join(paths[k] for k in keys))
     if args.once:
         collector.step()
