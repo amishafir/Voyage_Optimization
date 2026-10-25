@@ -223,15 +223,25 @@ against the full graph; outputs, data checksums and commands in `results/2026-10
 |---|---|---|---|---|
 | Full graph | 151.436 mt | 178.314 mt | 171.315 mt | 86.078 mt |
 | Luo 0.25 h, piece by piece | -0.01% | +0.01% | +0.02% | +0.02% |
+| Luo 1 h, piece by piece | +0.01% | +0.12% | +0.10% | +0.10% |
 | Luo 6 h, piece by piece | +0.35% | +0.77% | +0.42% | +0.37% |
 | Luo 0.25 h, start point | +0.21% | +0.33% | +0.46% | +0.47% |
+| Luo 1 h, start point | +0.43% | +0.64% | +1.32% | +0.73% |
 | Luo 6 h, start point | +2.06% | +3.07% | **+6.81%** | +3.43% |
 | Constant SOG | +2.28% | +2.12% | +4.17% | +0.64% |
 
 On these volatile routes the full graph saves 0.6-4.0% against constant SOG (0.3% and 0.6% on
-Routes 1 and 2). Start-point Luo at 6 h plans 4-18% below what it burns (worst in the Kuroshio)
-and is worse than constant SOG on three of the four routes; at 0.25 h it beats constant SOG
-everywhere but stays 0.2-0.5% above the full graph.
+Routes 1 and 2). Start-point Luo plans below what it burns by up to 1.7% at 0.25 h, 4.0% at 1 h and
+18% at 6 h (worst in the Kuroshio); it is worse than constant SOG on Route 6 at 1 h and on Routes
+4-6 at 6 h, and at 0.25 h it beats constant SOG everywhere but stays 0.2-0.5% above the full graph.
+
+Run time is about the number of SWS evaluations (50-56 ns each). The full graph already shares an
+FCR among all arcs crossing a segment in a step at the same speed (its distance-to-distance and
+time-to-time tables), but 99% of its evaluations are on arcs whose speeds are all distinct. In Luo's
+graph an epoch has only about 61 speeds, so caching the FCR per (subsegment, step, speed) cuts the
+sweep 7.6-7.9x at 0.25 h (Route 3: 44.5 s to 5.6 s, same plans), making 0.25 h Luo priced piece by
+piece 6-7x faster than the full graph. The cache is a prototype patch, not applied yet:
+`results/2026-10-25_routes3-6/luo_fcr_cache.patch` (details in that folder's README).
 
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
