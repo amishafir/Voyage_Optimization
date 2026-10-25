@@ -15,7 +15,10 @@
 // is priced with its own bearing, cells and weather (pseudo real-time, or the
 // forecast known at the start). An arc with any piece whose SWS falls outside
 // [kSwsMinKn, kSwsMaxKn] is left out. No subsegments are merged and the route
-// length is not snapped to the grid.
+// length is not snapped to the grid. Within an epoch an arc between grid nodes has
+// one of a few SOGs (its grid advance q x dist_step / epoch length), so the FCR of each
+// (subsegment, step, q) is computed once per epoch and shared by all arcs that cross
+// that subsegment in that step at that SOG.
 //
 // With start_point_pricing, arcs are priced as in Luo et al.: the whole epoch at
 // the conditions where and when it starts (that subsegment's bearing and cells, that

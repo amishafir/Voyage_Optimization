@@ -39,6 +39,8 @@ private:
     double path_fuel(double d0, double d1, double v, int step0, int n_steps, Ctx&& ctx,
                      double* mean_sws = nullptr, long long* violations = nullptr) const;
     double start_fuel(const SpeedContext& x, double v, double dt_h) const;
+    double rate(int sub, int k, long long q, double v);
+    double grid_fuel(double d0, double d1, long long q, double v, int sub0, int n_steps);
     void relax(std::uint64_t id, double value, std::uint64_t src) {
         if (value < cost_[id]) {
             cost_[id] = value;
@@ -66,6 +68,11 @@ private:
     std::vector<SpeedContext> ctx_;             // [sub * K_ + step - epoch_step0_], current epoch
     std::vector<int> ctx_stamp_;
     int epoch_ = -1, epoch_step0_ = 0;
+    // FCR [mt/h] (+inf: SWS outside the vessel's range) at grid advance q of the current
+    // epoch, in subsegment sub during its k-th step: [((q - q_lo_) * K_ + k) * n_ + sub].
+    std::vector<double> rate_;
+    std::vector<int> rate_stamp_;
+    long long q_lo_ = 0;
     long long arcs_ = 0, infeasible_ = 0;
     mutable long long evaluations_ = 0;
 };
@@ -185,6 +192,45 @@ double LuoSweep::start_fuel(const SpeedContext& x, double v, double dt_h) const 
     return model_.fcr_from_sws(sws) * dt_h;
 }
 
+// The FCR of grid advance q (SOG v) in subsegment sub during step k of the current
+// epoch: the same for every arc of that advance that crosses the subsegment then, so
+// it is computed once per epoch.
+double LuoSweep::rate(int sub, int k, long long q, double v) {
+    const std::size_t i = (static_cast<std::size_t>(q - q_lo_) * K_ + k) * n_ + sub;
+    if (rate_stamp_[i] != epoch_) {
+        ++evaluations_;
+        const double sws = model_.sws(context(sub, epoch_step0_ + k), v);
+        rate_[i] = sws >= kSwsMinKn && sws <= kSwsMaxKn ? model_.fcr_from_sws(sws) : kInf;
+        rate_stamp_[i] = epoch_;
+    }
+    return rate_[i];
+}
+
+// path_fuel for an arc between grid nodes (advance q, SOG v = q * delta / dt), the
+// piece rates from the epoch's cache; sub0 is the subsegment of d0.
+double LuoSweep::grid_fuel(double d0, double d1, long long q, double v, int sub0, int n_steps) {
+    if (v < vmin_ - kEps || v > vmax_ + kEps) return kInf;
+    double fuel = 0.0, x = d0;
+    int sub = sub0, k = 0;
+    double step_end = d0 + v * kStepH;
+    while (x < d1) {
+        const double x_end = std::min({d1, S_[sub + 1], step_end});
+        if (x_end > x) {
+            const double r = rate(sub, std::min(k, n_steps - 1), q, v);
+            if (r == kInf) return kInf;
+            fuel += r * ((x_end - x) / v);
+        }
+        x = x_end;
+        if (x >= d1) break;
+        if (x == S_[sub + 1] && sub + 1 < n_) ++sub;
+        if (x == step_end) {
+            ++k;
+            step_end = d0 + v * kStepH * (k + 1);
+        }
+    }
+    return fuel;
+}
+
 int LuoSweep::boundary_of(std::uint64_t id) const {
     return static_cast<int>(std::upper_bound(b_.begin(), b_.end(), id,
                                              [](std::uint64_t v, const Boundary& b) { return v < b.offset; }) -
@@ -246,21 +292,31 @@ DPResult LuoSweep::run() {
         epoch_step0_ = from.step;
         auto ctx = [&](int sub, int step) -> const SpeedContext& { return context(sub, step); };
         const long long q_lo = ceil_idx(vmin_ * dt / delta_), q_hi = floor_idx(vmax_ * dt / delta_);
+        q_lo_ = q_lo;
+        const std::size_t cache = static_cast<std::size_t>(std::max(0LL, q_hi - q_lo + 1)) * K_ * n_;
+        if (rate_.size() < cache) {
+            rate_.resize(cache);
+            rate_stamp_.resize(cache, -1);
+        }
         for (long long i = from.lo; i <= from.hi; ++i) {
             const std::uint64_t id = from.offset + static_cast<std::uint64_t>(i - from.lo);
             const double c = cost_[id];
             if (c == kInf) continue;
             const double d0 = node_dist(e, i);
-            const SpeedContext* x0 = o_.start_point_pricing ? &context(subsegment_of(d0), from.step) : nullptr;
+            const int sub0 = subsegment_of(d0);
+            const SpeedContext* x0 = o_.start_point_pricing ? &context(sub0, from.step) : nullptr;
             auto price = [&](double d1) {
                 const double v = (d1 - d0) / dt;
                 return x0 ? start_fuel(*x0, v, dt) : path_fuel(d0, d1, v, from.step, n_steps, ctx);
             };
-            // to the nodes of the next boundary
+            // to the nodes of the next boundary, at the epoch's grid SOGs (cached rates)
             const long long lo = std::max(i + q_lo, to.lo), hi = std::min(i + q_hi, to.hi);
             for (long long ip = lo; ip <= hi; ++ip) {
                 const double d1 = ip * delta_;
-                const double f = price(d1);
+                const long long q = ip - i;
+                const double v = q * delta_ / dt;
+                const double f = x0 ? (v < vmin_ - kEps || v > vmax_ + kEps ? kInf : rate(sub0, 0, q, v) * dt)
+                                    : grid_fuel(d0, d1, q, v, sub0, n_steps);
                 ++arcs_;
                 if (f == kInf) {
                     ++infeasible_;
