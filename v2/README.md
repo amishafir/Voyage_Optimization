@@ -215,6 +215,24 @@ Luo's nodes are 0.1 kn x epoch apart unless noted; with a 25 m step (`--dist-ste
 full graph's time-line spacing) 0.25 h Luo gains at most 0.036 mt (0.01%) at 3.4 times the run
 time (Route 1 372 s, Route 2 145 s on tsl2-mac).
 
+**Routes 3-6** (2026-10-25 snapshot, start 2026-10-21 00:00 UTC, ETAs for about 12 kn: 118 /
+117 / 118 / 67 h; near-real weather except the last 9-10 h of wind on Routes 3-5). Realized fuel
+against the full graph; outputs, data checksums and commands in `results/2026-10-25_routes3-6/`:
+
+| Method | Route 3 | Route 4 | Route 5 | Route 6 |
+|---|---|---|---|---|
+| Full graph | 151.436 mt | 178.314 mt | 171.315 mt | 86.078 mt |
+| Luo 0.25 h, piece by piece | -0.01% | +0.01% | +0.02% | +0.02% |
+| Luo 6 h, piece by piece | +0.35% | +0.77% | +0.42% | +0.37% |
+| Luo 0.25 h, start point | +0.21% | +0.33% | +0.46% | +0.47% |
+| Luo 6 h, start point | +2.06% | +3.07% | **+6.81%** | +3.43% |
+| Constant SOG | +2.28% | +2.12% | +4.17% | +0.64% |
+
+On these volatile routes the full graph saves 0.6-4.0% against constant SOG (0.3% and 0.6% on
+Routes 1 and 2). Start-point Luo at 6 h plans 4-18% below what it burns (worst in the Kuroshio)
+and is worse than constant SOG on three of the four routes; at 0.25 h it beats constant SOG
+everywhere but stays 0.2-0.5% above the full graph.
+
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo        # both, compared
