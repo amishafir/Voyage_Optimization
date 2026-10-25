@@ -1,0 +1,36 @@
+Route    Route 4: Rotterdam to Algeciras (English Channel and Bay of Biscay)  (../pipeline/data/snapshot_2026-10-25_15Z/route4_runs.h5)
+Start    2026-10-21 00:00 UTC
+ETA      117.00 h = 468 steps, arrival by 2026-10-25 21:00 UTC
+Plan     785 subsegments, 1,400.1 NM, 351 wind cells, 417 current cells (mean SOG for the ETA 11.97 kn)
+Wind     run 2026-10-21T00  steps +0..+468 (118 h x 351 cells)
+         run 2026-10-21T06  steps +24..+468 (112 h x 351 cells)
+         run 2026-10-21T12  steps +48..+468 (106 h x 351 cells)
+         run 2026-10-21T18  steps +72..+468 (100 h x 351 cells)
+         run 2026-10-22T00  steps +96..+468 (94 h x 351 cells)
+         run 2026-10-22T06  steps +120..+468 (88 h x 351 cells)
+         run 2026-10-22T12  steps +144..+468 (82 h x 351 cells)
+         run 2026-10-22T18  steps +168..+468 (76 h x 351 cells)
+         run 2026-10-23T00  steps +192..+468 (70 h x 351 cells)
+         run 2026-10-23T06  steps +216..+468 (64 h x 351 cells)
+         run 2026-10-23T12  steps +240..+468 (58 h x 351 cells)
+         run 2026-10-23T18  steps +264..+468 (52 h x 351 cells)
+         run 2026-10-24T00  steps +288..+468 (46 h x 351 cells)
+         run 2026-10-24T06  steps +312..+468 (40 h x 351 cells)
+         run 2026-10-24T12  steps +336..+468 (34 h x 351 cells)
+         run 2026-10-24T18  steps +360..+468 (28 h x 351 cells)
+         run 2026-10-25T00  steps +384..+468 (22 h x 351 cells)
+         run 2026-10-25T06  steps +408..+468 (16 h x 351 cells)
+Current  run 2026-10-21T00  steps +0..+468 (118 h x 417 cells)
+         run 2026-10-22T00  steps +96..+468 (94 h x 417 cells)
+         run 2026-10-23T00  steps +192..+468 (70 h x 417 cells)
+         run 2026-10-24T00  steps +288..+468 (46 h x 417 cells)
+         run 2026-10-25T00  steps +384..+468 (22 h x 417 cells)
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.025 NM on the epoch lines (SOG steps 0.100 kn), SOG 8.97-14.97 kn, pseudo real-time; arcs priced piece by piece
+         nodes 4,269,479, reached 4,213,552; arcs 251,737,943 (0 outside the SWS range); 662.5 M SWS evaluations; sweep 20.1 s
+         fuel 178.338 mt, arrival 117.00 h, 468 epochs, SOG 9.10-14.90 kn; saves 2.07% against constant SOG
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.025 NM on the epoch lines (SOG steps 0.100 kn), SOG 8.97-14.97 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 4,269,479, reached 4,213,552; arcs 251,737,943 (0 outside the SWS range); 251.7 M SWS evaluations; sweep 5.2 s
+         planned 177.613 mt; realized in the actual weather, every piece priced: 178.910 mt (+0.730%)
+         fuel 178.910 mt, arrival 117.00 h, 468 epochs, SOG 9.00-14.90 kn; saves 1.75% against constant SOG

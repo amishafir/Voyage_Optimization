@@ -1,0 +1,36 @@
+Route    Route 3: Tacoma to Anchorage (Gulf of Alaska), planned from Admiralty Inlet  (../pipeline/data/snapshot_2026-10-25_15Z/route3_runs.h5)
+Start    2026-10-21 00:00 UTC
+ETA      118.00 h = 472 steps, arrival by 2026-10-25 22:00 UTC
+Plan     972 subsegments, 1,414.0 NM, 409 wind cells, 539 current cells (mean SOG for the ETA 11.98 kn)
+Wind     run 2026-10-21T00  steps +0..+472 (119 h x 409 cells)
+         run 2026-10-21T06  steps +24..+472 (113 h x 409 cells)
+         run 2026-10-21T12  steps +48..+472 (107 h x 409 cells)
+         run 2026-10-21T18  steps +72..+472 (101 h x 409 cells)
+         run 2026-10-22T00  steps +96..+472 (95 h x 409 cells)
+         run 2026-10-22T06  steps +120..+472 (89 h x 409 cells)
+         run 2026-10-22T12  steps +144..+472 (83 h x 409 cells)
+         run 2026-10-22T18  steps +168..+472 (77 h x 409 cells)
+         run 2026-10-23T00  steps +192..+472 (71 h x 409 cells)
+         run 2026-10-23T06  steps +216..+472 (65 h x 409 cells)
+         run 2026-10-23T12  steps +240..+472 (59 h x 409 cells)
+         run 2026-10-23T18  steps +264..+472 (53 h x 409 cells)
+         run 2026-10-24T00  steps +288..+472 (47 h x 409 cells)
+         run 2026-10-24T06  steps +312..+472 (41 h x 409 cells)
+         run 2026-10-24T12  steps +336..+472 (35 h x 409 cells)
+         run 2026-10-24T18  steps +360..+472 (29 h x 409 cells)
+         run 2026-10-25T00  steps +384..+472 (23 h x 409 cells)
+         run 2026-10-25T06  steps +408..+472 (17 h x 409 cells)
+Current  run 2026-10-21T00  steps +0..+472 (119 h x 539 cells)
+         run 2026-10-22T00  steps +96..+472 (95 h x 539 cells)
+         run 2026-10-23T00  steps +192..+472 (71 h x 539 cells)
+         run 2026-10-24T00  steps +288..+472 (47 h x 539 cells)
+         run 2026-10-25T00  steps +384..+472 (23 h x 539 cells)
+
+Luo      epochs of 0.5 h (2 steps), nodes every 0.05 NM on the epoch lines (SOG steps 0.100 kn), SOG 8.98-14.98 kn, pseudo real-time; arcs priced piece by piece
+         nodes 1,085,878, reached 1,070,002; arcs 63,658,866 (0 outside the SWS range); 4.5 M SWS evaluations; sweep 1.4 s
+         fuel 151.430 mt, arrival 118.00 h, 236 epochs, SOG 9.00-13.40 kn; saves 2.23% against constant SOG
+
+Luo      epochs of 0.5 h (2 steps), nodes every 0.05 NM on the epoch lines (SOG steps 0.100 kn), SOG 8.98-14.98 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 1,085,878, reached 1,070,002; arcs 63,658,866 (0 outside the SWS range); 2.2 M SWS evaluations; sweep 0.2 s
+         planned 150.065 mt; realized in the actual weather, every piece priced: 151.981 mt (+1.277%)
+         fuel 151.981 mt, arrival 118.00 h, 236 epochs, SOG 9.00-14.00 kn; saves 1.88% against constant SOG

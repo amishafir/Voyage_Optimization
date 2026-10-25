@@ -1,0 +1,28 @@
+Route    Route 6: Durban to Cape Town (Agulhas Current)  (../pipeline/data/snapshot_2026-10-25_15Z/route6_runs.h5)
+Start    2026-10-21 00:00 UTC
+ETA      67.00 h = 268 steps, arrival by 2026-10-23 19:00 UTC
+Plan     449 subsegments, 805.9 NM, 197 wind cells, 233 current cells (mean SOG for the ETA 12.03 kn)
+Wind     run 2026-10-21T00  steps +0..+268 (68 h x 197 cells)
+         run 2026-10-21T06  steps +24..+268 (62 h x 197 cells)
+         run 2026-10-21T12  steps +48..+268 (56 h x 197 cells)
+         run 2026-10-21T18  steps +72..+268 (50 h x 197 cells)
+         run 2026-10-22T00  steps +96..+268 (44 h x 197 cells)
+         run 2026-10-22T06  steps +120..+268 (38 h x 197 cells)
+         run 2026-10-22T12  steps +144..+268 (32 h x 197 cells)
+         run 2026-10-22T18  steps +168..+268 (26 h x 197 cells)
+         run 2026-10-23T00  steps +192..+268 (20 h x 197 cells)
+         run 2026-10-23T06  steps +216..+268 (14 h x 197 cells)
+         run 2026-10-23T12  steps +240..+268 (8 h x 197 cells)
+         run 2026-10-23T18  steps +264..+268 (2 h x 197 cells)
+Current  run 2026-10-21T00  steps +0..+268 (68 h x 233 cells)
+         run 2026-10-22T00  steps +96..+268 (44 h x 233 cells)
+         run 2026-10-23T00  steps +192..+268 (20 h x 233 cells)
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.025 NM on the epoch lines (SOG steps 0.100 kn), SOG 9.03-15.03 kn, pseudo real-time; arcs priced piece by piece
+         nodes 1,400,944, reached 1,388,094; arcs 82,669,389 (0 outside the SWS range); 1.2 M SWS evaluations; sweep 0.8 s
+         fuel 86.094 mt, arrival 67.00 h, 268 epochs, SOG 10.10-14.90 kn; saves 0.61% against constant SOG
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.025 NM on the epoch lines (SOG steps 0.100 kn), SOG 9.03-15.03 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 1,400,944, reached 1,388,094; arcs 82,669,389 (0 outside the SWS range); 1.1 M SWS evaluations; sweep 0.3 s
+         planned 85.059 mt; realized in the actual weather, every piece priced: 86.483 mt (+1.675%)
+         fuel 86.483 mt, arrival 67.00 h, 268 epochs, SOG 9.20-15.00 kn; saves 0.16% against constant SOG

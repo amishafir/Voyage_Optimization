@@ -1,0 +1,44 @@
+Route    Route 5: Kaohsiung to Yokohama (Ryukyu chain and Kuroshio)  (../pipeline/data/snapshot_2026-10-25_15Z/route5_runs.h5)
+Start    2026-10-21 00:00 UTC
+ETA      118.00 h = 472 steps, arrival by 2026-10-25 22:00 UTC
+Plan     797 subsegments, 1,416.1 NM, 355 wind cells, 411 current cells (mean SOG for the ETA 12.00 kn)
+Wind     run 2026-10-21T00  steps +0..+472 (119 h x 355 cells)
+         run 2026-10-21T06  steps +24..+472 (113 h x 355 cells)
+         run 2026-10-21T12  steps +48..+472 (107 h x 355 cells)
+         run 2026-10-21T18  steps +72..+472 (101 h x 355 cells)
+         run 2026-10-22T00  steps +96..+472 (95 h x 355 cells)
+         run 2026-10-22T06  steps +120..+472 (89 h x 355 cells)
+         run 2026-10-22T12  steps +144..+472 (83 h x 355 cells)
+         run 2026-10-22T18  steps +168..+472 (77 h x 355 cells)
+         run 2026-10-23T00  steps +192..+472 (71 h x 355 cells)
+         run 2026-10-23T06  steps +216..+472 (65 h x 355 cells)
+         run 2026-10-23T12  steps +240..+472 (59 h x 355 cells)
+         run 2026-10-23T18  steps +264..+472 (53 h x 355 cells)
+         run 2026-10-24T00  steps +288..+472 (47 h x 355 cells)
+         run 2026-10-24T06  steps +312..+472 (41 h x 355 cells)
+         run 2026-10-24T12  steps +336..+472 (35 h x 355 cells)
+         run 2026-10-24T18  steps +360..+472 (29 h x 355 cells)
+         run 2026-10-25T00  steps +384..+472 (23 h x 355 cells)
+         run 2026-10-25T06  steps +408..+472 (17 h x 355 cells)
+Current  run 2026-10-21T00  steps +0..+472 (119 h x 411 cells)
+         run 2026-10-22T00  steps +96..+472 (95 h x 411 cells)
+         run 2026-10-23T00  steps +192..+472 (71 h x 411 cells)
+         run 2026-10-24T00  steps +288..+472 (47 h x 411 cells)
+         run 2026-10-25T00  steps +384..+472 (23 h x 411 cells)
+
+Graph    751 segments (subsegments under 0.15 NM merged), 4 s on distance lines, 25 m on 0.25 h time lines, SOG 9.00-15.00 kn, pseudo real-time
+         nodes 20.9 M (12.9 M on distance lines, 8.0 M on time lines), reached 20.5 M; arcs 0.90 G (0 outside the SWS range); node memory 251 MB; sweep 12.0 s
+Plan     fuel 171.315 mt, arrival 118.00 h (2026-10-25 22:00 UTC), 1,200 arcs
+         constant SOG 12.00 kn: 178.461 mt; the plan saves 4.00%
+         SOG 9.83-15.00 kn, SWS 9.74-16.52 kn
+
+Luo      epochs of 6 h (24 steps), nodes every 0.6 NM on the epoch lines (SOG steps 0.100 kn), SOG 9.00-15.00 kn, pseudo real-time; arcs priced piece by piece
+         nodes 7,541, reached 7,505; arcs 406,119 (0 outside the SWS range); 3.3 M SWS evaluations; sweep 0.2 s
+         fuel 172.039 mt, arrival 118.00 h, 20 epochs, SOG 10.50-14.70 kn; saves 3.60% against constant SOG
+         0.422% more fuel than the full graph (--solve, 171.315 mt)
+
+Luo      epochs of 6 h (24 steps), nodes every 0.6 NM on the epoch lines (SOG steps 0.100 kn), SOG 9.00-15.00 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 7,541, reached 7,505; arcs 406,119 (0 outside the SWS range); 0.1 M SWS evaluations; sweep 0.0 s
+         planned 155.471 mt; realized in the actual weather, every piece priced: 182.990 mt (+17.700%)
+         fuel 182.990 mt, arrival 118.00 h, 20 epochs, SOG 9.10-14.90 kn; uses 2.54% more against constant SOG
+         6.814% more fuel than the full graph (--solve, 171.315 mt)

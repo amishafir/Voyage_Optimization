@@ -238,10 +238,12 @@ Routes 1 and 2). Start-point Luo plans below what it burns by up to 1.7% at 0.25
 Run time is about the number of SWS evaluations (50-56 ns each). The full graph already shares an
 FCR among all arcs crossing a segment in a step at the same speed (its distance-to-distance and
 time-to-time tables), but 99% of its evaluations are on arcs whose speeds are all distinct. In Luo's
-graph an epoch has only about 61 speeds, so caching the FCR per (subsegment, step, speed) cuts the
-sweep 7.6-7.9x at 0.25 h (Route 3: 44.5 s to 5.6 s, same plans), making 0.25 h Luo priced piece by
-piece 6-7x faster than the full graph. The cache is a prototype patch, not applied yet:
-`results/2026-10-25_routes3-6/luo_fcr_cache.patch` (details in that folder's README).
+graph an epoch has only about 61 speeds, so Luo caches the FCR per (subsegment, step, speed) once
+per epoch (since commit `4515546`; same plans). On tsl2 this cuts Luo's sweep 8.5x at 0.25 h (Route
+3: 23.0 s to 2.7 s, against 11.0 s for the full graph) and 7x at 0.5 h. A rerun on tsl2 adds 0.5 h
+epochs (piece by piece within 0.06% of the full graph, start point +0.36% to +0.72%) and, at 0.25 h,
+SOG steps of 0.2 and 0.05 kn (piece by piece within 0.04% and 0.02%: the step hardly matters). Tables
+and times in `results/2026-10-25_routes3-6/README.md`.
 
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both

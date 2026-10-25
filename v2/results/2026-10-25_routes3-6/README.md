@@ -76,7 +76,7 @@ point), Routes 3 / 4 / 5 / 6: full graph 33.8 / 35.0 / 33.9 / 10.9 s; Luo 6 h 1.
 (under 0.1 s); Luo 1 h 10.5 / 8.8 / 9.2 / 2.9 s (0.8 / 0.8 / 0.8 / 0.3 s); Luo 0.25 h 43.8 / 36.7 /
 38.6 / 12.2 s (12.9 / 12.4 / 12.7 / 4.1 s).
 
-## Why the times differ, and an FCR cache for Luo (prototype, not in v2 yet)
+## Why the times differ, and the FCR cache in Luo
 
 Each method's sweep time is about its number of SWS evaluations times 50-56 ns (the closed-form
 inverse: a square root, sometimes a cubic root, then the cubic FCR); relaxing an arc costs a few
@@ -99,9 +99,10 @@ Route 3), since a 0.25 h arc at constant SOG crosses about three subsegments.
 The FCR is fixed for a subsegment, a weather step and a speed. In Luo's graph every arc of an epoch
 has one of about 61 speeds (its grid advance q, SOG q x dist-step / epoch length), so caching the
 FCR per (subsegment, step, q) once per epoch removes almost all evaluations.
-`luo_fcr_cache.patch` (against `v2/cpp/src/luo.cpp`, `git apply` from the repository root) does
-that; arcs that end at the end of the route keep the uncached pricing. Timed one run at a time on
-shlomo7 (its load from other users rose from about 6 to 11 during the runs):
+v2 does this since commit `4515546` (the prototype it came from is kept as
+`luo_fcr_cache.patch`); arcs that end at the end of the route keep the uncached pricing. The
+prototype, timed one run at a time on shlomo7 (its load from other users rose from about 6 to 11
+during the runs):
 
 | Luo variant | Sweep, original / cached, Routes 3 / 4 / 5 / 6 | Speed-up | SWS evaluations, Route 3 |
 |---|---|---|---|
@@ -118,8 +119,56 @@ cached version computes the SOG as q x dist-step / epoch length instead of (d1 -
 length. With the cache, 0.25 h Luo priced piece by piece (within 0.02% of the full graph) is 6 to 7
 times faster than the full graph on these routes. The remaining time is the loop over each arc's
 pieces; cumulative fuel along the route per speed level would make an arc one subtraction.
-To adopt it: apply the patch, add a test that the cached Luo reproduces the uncached one, and
-rerun the timings.
+With the cache in v2 the v2 tests pass unchanged (`tests/test_luo.py` checks Luo against an
+explicit Python DP), and the tsl2 rerun below gives the same fuel in all 48 plans.
+
+## Rerun on tsl2: 0.5 h epochs, speed steps, and the cache
+
+Same snapshot (MD5s checked on tsl2), voyages and ETAs, on tsl2-mac (M3 Ultra) with
+`/opt/miniconda3/envs/voyage/bin/python`, one core per solve, the four routes in parallel and
+each route's runs one after the other. Added: Luo with 0.5 h epochs (`--epoch 2`), and at 0.25 h a
+node spacing of 0.05 NM (`--dist-step 0.05`, SOG steps 0.2 kn) and 0.0125 NM (`--dist-step
+0.0125`, SOG steps 0.05 kn) besides the default 0.025 NM (0.1 kn). Outputs: before the cache
+(v2 at `0088f1f`) in `../2026-10-25_routes3-6_tsl2/`, with the cache (`4515546`) in
+`../2026-10-25_routes3-6_tsl2_fcrcache/`. Every variant that also ran on shlomo7 gives the same
+fuel, and the cache changes no plan.
+
+| Method | Route 3 | Route 4 | Route 5 | Route 6 |
+|---|---|---|---|---|
+| Full graph | 151.436 mt | 178.314 mt | 171.315 mt | 86.078 mt |
+| Luo 0.5 h, piece by piece | 151.430 mt (-0.00%) | 178.424 mt (+0.06%) | 171.413 mt (+0.06%) | 86.123 mt (+0.05%) |
+| Luo 0.25 h, 0.2 kn steps, piece by piece | 151.427 mt (-0.01%) | 178.369 mt (+0.03%) | 171.379 mt (+0.04%) | 86.098 mt (+0.02%) |
+| Luo 0.25 h, 0.1 kn steps, piece by piece | 151.419 mt (-0.01%) | 178.338 mt (+0.01%) | 171.346 mt (+0.02%) | 86.094 mt (+0.02%) |
+| Luo 0.25 h, 0.05 kn steps, piece by piece | 151.418 mt (-0.01%) | 178.324 mt (+0.01%) | 171.334 mt (+0.01%) | 86.093 mt (+0.02%) |
+| Luo 0.5 h, start point | 151.981 mt (+0.36%) | 178.964 mt (+0.36%) | 172.532 mt (+0.71%) | 86.696 mt (+0.72%) |
+| Luo 0.25 h, 0.2 kn steps, start point | 151.749 mt (+0.21%) | 178.898 mt (+0.33%) | 172.356 mt (+0.61%) | 86.470 mt (+0.46%) |
+| Luo 0.25 h, 0.1 kn steps, start point | 151.753 mt (+0.21%) | 178.910 mt (+0.33%) | 172.105 mt (+0.46%) | 86.483 mt (+0.47%) |
+| Luo 0.25 h, 0.05 kn steps, start point | 151.746 mt (+0.20%) | 178.913 mt (+0.34%) | 171.977 mt (+0.39%) | 86.475 mt (+0.46%) |
+
+The start-point plans at 0.5 h plan 1.28%, 1.06%, 2.32% and 2.85% below what they burn (planned
+150.065, 177.079, 168.619, 84.297 mt). The SOG step hardly matters: priced piece by piece, 0.05 kn
+instead of 0.1 kn gains at most 0.012 mt (Route 5) and 0.2 kn loses at most 0.033 mt; priced at the
+start point, finer steps help only on Route 5 (Kuroshio: +0.61%, +0.46%, +0.39%), still far above
+piece-by-piece pricing, so start-point pricing's error is not a matter of speed resolution. The
+epoch length and the pricing dominate; 0.5 h priced piece by piece is within 0.06% of the full
+graph.
+
+Sweep times on tsl2, Routes 3 / 4 / 5 / 6, piece by piece (start point), before / with the cache:
+
+| Method | Before the cache | With the cache |
+|---|---|---|
+| Full graph (no cache possible) | 11.0 / 12.1 / 12.0 / 3.8 s | 11.0 / 12.1 / 12.0 / 3.7 s |
+| Luo 6 h | 0.7 / 0.6 / 0.6 / 0.2 s (under 0.1 s) | 0.2 / 0.2 / 0.2 / 0.1 s (under 0.1 s) |
+| Luo 1 h | 4.9 / 4.2 / 4.4 / 1.4 s (0.3 / 0.3 / 0.3 / 0.1 s) | 0.9 / 0.7 / 0.8 / 0.2 s (0.1 / 0.1 / 0.1 / under 0.1 s) |
+| Luo 0.5 h | 10.0 / 8.7 / 9.2 / 2.8 s (1.3 / 1.3 / 1.4 / 0.4 s) | 1.4 / 1.2 / 1.2 / 0.4 s (0.2 / 0.2 / 0.2 / 0.1 s) |
+| Luo 0.25 h, 0.2 kn steps | 5.9 / 5.2 / 5.5 / 1.7 s (1.4 / 1.4 / 1.4 / 0.5 s) | 0.8 / 0.7 / 0.7 / 0.2 s (0.3 / 0.3 / 0.3 / 0.1 s) |
+| Luo 0.25 h, 0.1 kn steps | 23.0 / 20.1 / 21.4 / 6.5 s (5.2 / 5.2 / 5.5 / 1.7 s) | 2.7 / 2.3 / 2.4 / 0.8 s (0.9 / 0.8 / 0.9 / 0.3 s) |
+| Luo 0.25 h, 0.05 kn steps | 90.5 / 79.0 / 83.4 / 25.2 s (18.6 / 20.3 / 20.6 / 6.7 s) | 9.7 / 8.3 / 8.6 / 2.7 s (2.8 / 2.9 / 2.9 / 0.9 s) |
+
+Halving the SOG step quadruples Luo's work (twice the nodes, each with twice the arcs). With the
+cache every Luo variant is faster than the full graph: 0.5 h piece by piece (within 0.06%) 8 to 10
+times, 0.25 h with 0.1 kn steps (within 0.02%) 4 to 5 times, 0.25 h with 0.05 kn steps 1.1 to 1.5
+times.
 
 Commands (from `v2/` on shlomo7, with the snapshot in `~/Ami/voyage/data/`, which is why the
 output files show `../data/...`; in the repository it is `../pipeline/data/...`):
@@ -137,4 +186,16 @@ python3 -m voyage_v2 ../data/snapshot_2026-10-25_15Z/route3_runs.h5 --start "202
 python3 -m voyage_v2 ../data/snapshot_2026-10-25_15Z/route4_runs.h5 --start "2026-10-21 00:00" --eta 117 --luo --epoch 1 --luo-pricing both  # r4_luo15min.txt
 python3 -m voyage_v2 ../data/snapshot_2026-10-25_15Z/route5_runs.h5 --start "2026-10-21 00:00" --eta 118 --luo --epoch 1 --luo-pricing both  # r5_luo15min.txt
 python3 -m voyage_v2 ../data/snapshot_2026-10-25_15Z/route6_runs.h5 --start "2026-10-21 00:00" --eta 67 --luo --epoch 1 --luo-pricing both   # r6_luo15min.txt
+```
+
+The tsl2 rerun (from `v2/` in the Dropbox folder, `P=/opt/miniconda3/envs/voyage/bin/python`,
+`D=../pipeline/data/snapshot_2026-10-25_15Z`), for each route and ETA (3 118, 4 117, 5 118, 6 67):
+
+```bash
+$P -m voyage_v2 $D/route3_runs.h5 --start "2026-10-21 00:00" --eta 118 --solve --luo --luo-pricing both                  # r3_full_luo6h.txt
+$P -m voyage_v2 $D/route3_runs.h5 --start "2026-10-21 00:00" --eta 118 --luo --epoch 4 --luo-pricing both                # r3_luo1h.txt
+$P -m voyage_v2 $D/route3_runs.h5 --start "2026-10-21 00:00" --eta 118 --luo --epoch 2 --luo-pricing both                # r3_luo30min.txt
+$P -m voyage_v2 $D/route3_runs.h5 --start "2026-10-21 00:00" --eta 118 --luo --epoch 1 --luo-pricing both                # r3_luo15min.txt
+$P -m voyage_v2 $D/route3_runs.h5 --start "2026-10-21 00:00" --eta 118 --luo --epoch 1 --dist-step 0.05 --luo-pricing both    # r3_luo15min_0.05nm.txt
+$P -m voyage_v2 $D/route3_runs.h5 --start "2026-10-21 00:00" --eta 118 --luo --epoch 1 --dist-step 0.0125 --luo-pricing both  # r3_luo15min_0.0125nm.txt
 ```
