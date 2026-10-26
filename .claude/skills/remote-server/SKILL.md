@@ -15,8 +15,23 @@
 
 | Server | Username | Password | Notes |
 |--------|----------|----------|-------|
-| `edison-pc.eng.tau.ac.il` | `user` | `greek` (same as Shlomo1) | Data-collection host, `collect_all` tmux session. Verified working 2026-08-16. |
+| `edison-pc.eng.tau.ac.il` | `user` | `greek` (same as Shlomo1) | Live weather collector since 2026-10-14: `~/Ami/pipeline_v2`, tmux session `collector_v2` (see CLAUDE.md, "Deployment on edison"). The old `collect_all` is stopped; do not restart it. Verified working 2026-10-19. |
 | `Shlomo2-pcl.eng.tau.ac.il` | `user` | `greek` (same as Shlomo1/Edison) | Data-collection host, runs its own independent `collect_all` copy. Verified working 2026-08-17 — a separate `amishafir` account also exists but its password is unconfirmed; don't bother with it, `user`/`greek` works fine. |
+| `talraviv-pcl.eng.tau.ac.il` | `ami` | `greek` (SSH key preferred, below) | Ubuntu 24.04, 12 cores, 31 GB RAM. Collects Routes 3-6 since 2026-10-19 (see CLAUDE.md, "Deployment on talraviv-pcl"): `~/voyage_collector`, venv `~/collector-venv`, tmux `collector_volatile`. Own public IP, so its own Open-Meteo quota. `/tsl-disk` (lab NAS) mounted; `/data` is a spare 1.8 TB disk. Server clock is Israel time. Verified working 2026-10-19. |
+
+### Key login to talraviv-pcl
+
+Ami's Mac has a key installed on talraviv-pcl and an alias in `~/.ssh/config`:
+
+```
+Host talraviv
+  HostName talraviv-pcl.eng.tau.ac.il
+  User ami
+  IdentityFile ~/.ssh/id_ed25519_claude
+  IdentitiesOnly yes
+```
+
+So `ssh talraviv`, `scp FILE talraviv:` and `rsync ... talraviv:` need no password. From another machine, install a key once with `ssh-copy-id -i KEY.pub ami@talraviv-pcl.eng.tau.ac.il`.
 
 ## Quick Commands
 
@@ -88,7 +103,7 @@ scp user@Shlomo1-pcl.eng.tau.ac.il:~/Ami/output_file ./
 ## Troubleshooting
 
 - **"Connection refused"**: Check VPN is connected (`ifconfig | grep utun`)
-- **"Permission denied"**: Password is `greek` for the `user` account on all three hosts (Shlomo1/Shlomo2/Edison).
+- **"Permission denied"**: Password is `greek` for the `user` account on Shlomo1/Shlomo2/Edison, and for `ami` on talraviv-pcl.
 - **"expect: command not found"**: `brew install expect`
 - **"Module not found" on server**: `ssh user@server "pip3 install --user package_name"`
 
