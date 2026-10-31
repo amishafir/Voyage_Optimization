@@ -1,0 +1,48 @@
+Route    Route 3: Tacoma to Anchorage (Gulf of Alaska), planned from Admiralty Inlet  (/Users/talraviv/voyage_data/snapshot_2026-10-31_15Z/route3_runs.h5)
+Start    2026-10-21 00:00 UTC
+ETA      118.00 h = 472 steps, arrival by 2026-10-25 22:00 UTC
+Plan     972 subsegments, 1,414.0 NM, 409 wind cells, 539 current cells (mean SOG for the ETA 11.98 kn)
+Wind     run 2026-10-21T00  steps +0..+472 (119 h x 409 cells)
+         run 2026-10-21T06  steps +24..+472 (113 h x 409 cells)
+         run 2026-10-21T12  steps +48..+472 (107 h x 409 cells)
+         run 2026-10-21T18  steps +72..+472 (101 h x 409 cells)
+         run 2026-10-22T00  steps +96..+472 (95 h x 409 cells)
+         run 2026-10-22T06  steps +120..+472 (89 h x 409 cells)
+         run 2026-10-22T12  steps +144..+472 (83 h x 409 cells)
+         run 2026-10-22T18  steps +168..+472 (77 h x 409 cells)
+         run 2026-10-23T00  steps +192..+472 (71 h x 409 cells)
+         run 2026-10-23T06  steps +216..+472 (65 h x 409 cells)
+         run 2026-10-23T12  steps +240..+472 (59 h x 409 cells)
+         run 2026-10-23T18  steps +264..+472 (53 h x 409 cells)
+         run 2026-10-24T00  steps +288..+472 (47 h x 409 cells)
+         run 2026-10-24T06  steps +312..+472 (41 h x 409 cells)
+         run 2026-10-24T12  steps +336..+472 (35 h x 409 cells)
+         run 2026-10-24T18  steps +360..+472 (29 h x 409 cells)
+         run 2026-10-25T00  steps +384..+472 (23 h x 409 cells)
+         run 2026-10-25T06  steps +408..+472 (17 h x 409 cells)
+         run 2026-10-25T12  steps +432..+472 (11 h x 409 cells)
+         run 2026-10-25T18  steps +456..+472 (5 h x 409 cells)
+Current  run 2026-10-21T00  steps +0..+472 (119 h x 539 cells)
+         run 2026-10-22T00  steps +96..+472 (95 h x 539 cells)
+         run 2026-10-23T00  steps +192..+472 (71 h x 539 cells)
+         run 2026-10-24T00  steps +288..+472 (47 h x 539 cells)
+         run 2026-10-25T00  steps +384..+472 (23 h x 539 cells)
+
+Rolling  decisions at the start and every 6 h on the UTC clock, each with the forecast known then (runs known from their start); SOG window 8.98-14.98 kn for every plan; fuel realized in the actual weather
+
+Full graph
+         perfect information (planned in the actual weather):    151.440 mt
+         departure forecast, no re-planning:                     151.595 mt (+0.10%; planned 152.462)
+         rolling horizon, 20 decisions:                          151.597 mt (+0.10%; planned 151.597; solves 78.7 s)
+
+Luo 6 h, piece by piece
+         perfect information (planned in the actual weather):    151.960 mt
+         departure forecast, no re-planning:                     152.053 mt (+0.06%; planned 153.030)
+         rolling horizon, 20 decisions:                          152.164 mt (+0.13%; planned 152.164; solves 1.7 s)
+
+Luo 6 h, start point
+         perfect information (planned in the actual weather):    154.576 mt
+         departure forecast, no re-planning:                     154.200 mt (-0.24%; planned 149.779)
+         rolling horizon, 20 decisions:                          155.652 mt (+0.70%; planned 150.957; solves 0.1 s)
+
+Constant SOG 11.98 kn: 154.733 mt

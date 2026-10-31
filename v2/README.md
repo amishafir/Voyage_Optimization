@@ -5,8 +5,8 @@ Reads a route's weather archive, as written by the live collector on edison
 `pipeline/shared/run_archive.py`), prices arcs (the fuel to sail one subsegment
 at one SOG in the weather of a given time, as forecast at a given information
 time), and solves for the minimum-fuel plan on the full time-distance graph
-(single core), and the Luo et al. multistage benchmark on the same data. Rolling-horizon
-re-planning is not written yet.
+(single core), and the Luo et al. multistage benchmark on the same data, each once or with
+rolling-horizon re-planning every 6 h.
 
 Python reads the files and the command line; everything that costs time runs in
 the C++ core (`cpp/`), which Python calls through `ctypes`. The core needs only a
@@ -28,6 +28,7 @@ python3 -m voyage_v2 route1_runs.h5 --start "2026-10-14 13:20" --eta 280 --arc 1
 - `--arc SUB SOG T [TAU]`: subsegment, SOG [kn], step, information step; prints the conditions,
   SWS, fuel and the runs the weather came from.
 - `--solve`: the minimum-fuel plan (below); `--plan-csv FILE` writes it, one row per arc.
+- `--rolling [--rolling-every 6]` with `--solve` and/or `--luo`: rolling-horizon re-planning (below).
   Options: `--sog-band 3` (kn), `--tick 4` (s), `--zeta 25` (m), `--merge 0.15` (NM), `--forecast`.
 
 It prints the route, the runs loaded and how far their data reaches. If the start
@@ -257,6 +258,33 @@ python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo 
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --luo --epoch 4 --luo-csv luo.csv
 ```
 
+## Rolling horizon
+
+`voyage_v2/rolling.py` (`solve_rolling`, CLI `--rolling`): decisions at the start and every
+`--rolling-every` hours on the UTC clock (default 6 h: 00/06/12/18 UTC, when the ECMWF runs are
+issued; a run is known from its start). Each decision re-plans from the ship's position to the end
+of the route by the same ETA, with the forecast known then (the full graph or Luo, `forecast=True`),
+and the plan is sailed until the next decision; the ship holds the planned SOG, so its position at
+the next decision is the plan's. The remaining route starts with the current subsegment cut at the
+ship's position. The voyage's fuel is the sailed SOG profile in the actual weather. Every plan of a
+voyage keeps the departure SOG window (mean +/- band), passed to the solvers as `sog_range_kn`
+(C++ `sog_min_kn` / `sog_max_kn`). With Luo the epochs must divide the decision interval. The CLI
+reports, per method, perfect information, the departure forecast sailed without re-planning, and
+rolling horizon. Re-planning with the actual weather (`forecast=False`) reproduces the
+perfect-information plan exactly without segment merging, and within 1e-4 with it (a cut piece
+under 0.15 NM merges with the next segment): `tests/test_rolling.py`.
+
+On Routes 3-6, 2026-10-31 snapshot, starts 21 Oct and 26 Oct (`results/2026-10-31_rolling/`), the
+full graph's realized fuel above perfect information drops from 0.10-0.96% with the departure
+forecast to 0.05-0.51% with re-planning; Luo 0.5 h priced piece by piece re-plans within 0.13% of
+it; Luo as published (6 h, start point) stays above constant SOG on 7 of 8 voyages. Caveat: the
+actual weather is the newest run at lead 0-5 h and decisions fall on the run times, so each sailed
+6 h is priced with the run it was planned with; only forecast errors beyond the next 6 h cost fuel.
+
+```bash
+python3 -m voyage_v2 ARCHIVE --start "2026-10-26 12:00" --eta 118 --solve --luo --luo-pricing both --rolling
+```
+
 ## Running on the lab machines
 
 **tsl2-mac** (Mac Studio, M3 Ultra) shares this Dropbox folder, so it runs the code in
@@ -298,6 +326,7 @@ python3 tests/test_physics.py      # C++ model vs pipeline/shared/physics.py
 python3 tests/test_voyage.py       # loading and arc_cost vs a plain-Python statement of the rules
 python3 tests/test_dp.py           # the DP vs a Python DP that builds every node and arc explicitly
 python3 tests/test_luo.py          # the Luo DP vs a Python DP with its own path integration
+python3 tests/test_rolling.py      # rolling horizon: oracle re-planning = perfect information; a mid-voyage run
 V2_ARCHIVE=../pipeline/data/route1_runs.h5 python3 tests/test_voyage.py   # also on a real archive
 V2_ARCHIVE=../pipeline/data/route2_runs.h5 V2_ETA=168 python3 tests/test_dp.py
 ```
