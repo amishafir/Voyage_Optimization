@@ -126,6 +126,11 @@ Sweep::Sweep(const Voyage& voyage, const DPOptions& o)
     eta_h_ = M_ * kStepH;
     vmin_ = L_ / eta_h_ - o.sog_band_kn;
     vmax_ = L_ / eta_h_ + o.sog_band_kn;
+    if (o.sog_min_kn > 0 && o.sog_max_kn > 0) {
+        if (!(o.sog_max_kn > o.sog_min_kn)) throw std::invalid_argument("sog_max_kn must exceed sog_min_kn");
+        vmin_ = o.sog_min_kn;
+        vmax_ = o.sog_max_kn;
+    }
     if (!(vmin_ > 0))
         throw std::invalid_argument("the SOG band reaches zero: mean SOG " + std::to_string(L_ / eta_h_) +
                                     " kn, band " + std::to_string(o.sog_band_kn) + " kn");

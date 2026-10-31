@@ -14,7 +14,7 @@ import math
 from ctypes import POINTER, c_double, c_float, c_int, c_long
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import yaml
@@ -49,12 +49,12 @@ class _ArcInfo(ctypes.Structure):
 
 class _DPOptions(ctypes.Structure):
     _fields_ = [("sog_band_kn", c_double), ("tick_s", c_int), ("zeta_m", c_double),
-                ("merge_nm", c_double), ("forecast", c_int)]
+                ("merge_nm", c_double), ("forecast", c_int), ("sog_min_kn", c_double), ("sog_max_kn", c_double)]
 
 
 class _LuoOptions(ctypes.Structure):
     _fields_ = [("sog_band_kn", c_double), ("epoch_steps", c_int), ("dist_step_nm", c_double), ("forecast", c_int),
-                ("start_point_pricing", c_int)]
+                ("start_point_pricing", c_int), ("sog_min_kn", c_double), ("sog_max_kn", c_double)]
 
 
 class _DPSummary(ctypes.Structure):
@@ -279,26 +279,32 @@ class Voyage:
         return out
 
     def solve(self, sog_band_kn: float = 3.0, tick_s: int = 4, zeta_m: float = 25.0,
-              merge_nm: float = 0.15, forecast: bool = False) -> Plan:
+              merge_nm: float = 0.15, forecast: bool = False,
+              sog_range_kn: Optional[Tuple[float, float]] = None) -> Plan:
         """Minimum-fuel plan from the start to the end of the route by the ETA: nodes every
         tick_s seconds on every segment boundary and every zeta_m metres on every 0.25 h time
         line, SOG within mean +/- sog_band_kn, subsegments shorter than merge_nm merged. Weather
-        is pseudo real-time, or with forecast=True the forecast known at the start."""
-        opts = _DPOptions(sog_band_kn, int(tick_s), zeta_m, merge_nm, 1 if forecast else 0)
+        is pseudo real-time, or with forecast=True the forecast known at the start. sog_range_kn
+        (min, max) fixes the SOG window instead of the band."""
+        lo, hi = sog_range_kn or (0.0, 0.0)
+        opts = _DPOptions(sog_band_kn, int(tick_s), zeta_m, merge_nm, 1 if forecast else 0, lo, hi)
         return _read_plan(_library().v2_dp_solve(self._handle, ctypes.byref(opts)))
 
     def solve_luo(self, epoch_steps: int = 24, dist_step_nm: Optional[float] = None, sog_band_kn: float = 3.0,
-                  forecast: bool = False, pricing: str = "integrated") -> Plan:
+                  forecast: bool = False, pricing: str = "integrated",
+                  sog_range_kn: Optional[Tuple[float, float]] = None) -> Plan:
         """Luo et al.'s multistage DP on this voyage (cpp/include/voyage_v2/luo.hpp): constant SOG
         within decision epochs of epoch_steps quarter hours (24 = 6 h), nodes only on the epoch
         boundaries every dist_step_nm (default 0.1 kn x epoch length, 0.6 NM for 6 h epochs).
         pricing="integrated" prices each arc piece by piece along its path; pricing="start" prices
         the whole arc at the conditions where and when it starts, as Luo et al. do (the plan's
-        fuel_mt is still its realized fuel). The plan has one arc per epoch."""
+        fuel_mt is still its realized fuel). The plan has one arc per epoch. sog_range_kn
+        (min, max) fixes the SOG window instead of the band."""
         if pricing not in ("integrated", "start"):
             raise ValueError(f"pricing must be 'integrated' or 'start', got {pricing!r}")
+        lo, hi = sog_range_kn or (0.0, 0.0)
         opts = _LuoOptions(sog_band_kn, int(epoch_steps), float(dist_step_nm or 0.0), 1 if forecast else 0,
-                           1 if pricing == "start" else 0)
+                           1 if pricing == "start" else 0, lo, hi)
         return _read_plan(_library().v2_luo_solve(self._handle, ctypes.byref(opts)))
 
     def arc_detail(self, sub: int, sog: float, t: int, tau: Optional[int] = None) -> Dict:

@@ -35,6 +35,8 @@ struct LuoOptions {
     double dist_step_nm = 0.0;  // node spacing on the epoch lines; 0 = 0.1 kn x epoch length
     bool forecast = false;      // false: pseudo real-time (tau = t); true: forecast known at the start
     bool start_point_pricing = false;   // price each arc at its start point only (Luo et al.)
+    double sog_min_kn = 0.0;    // fixed SOG window [sog_min_kn, sog_max_kn] instead of the band, when both > 0
+    double sog_max_kn = 0.0;    // (keeps one window across rolling-horizon re-plans)
 };
 
 // The plan has one arc per epoch (segment = the subsegment it starts in, step =

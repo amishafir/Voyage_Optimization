@@ -56,6 +56,7 @@ typedef struct {
     double zeta_m;
     double merge_nm;
     int forecast;                       /* 0: pseudo real-time; 1: forecast known at the start */
+    double sog_min_kn, sog_max_kn;      /* fixed SOG window instead of the band, when both > 0 */
 } v2_dp_options;
 
 typedef struct {
@@ -88,6 +89,7 @@ typedef struct {
     double dist_step_nm;                /* node spacing on the epoch lines; 0 = 0.1 kn x epoch length */
     int forecast;
     int start_point_pricing;            /* 1: price each arc at its start point only (Luo et al.) */
+    double sog_min_kn, sog_max_kn;      /* fixed SOG window instead of the band, when both > 0 */
 } v2_luo_options;
 
 v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* options);

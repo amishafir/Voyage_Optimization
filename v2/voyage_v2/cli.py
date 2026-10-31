@@ -5,6 +5,7 @@ optionally evaluate arcs and solve for the minimum-fuel plan.
     python3 -m voyage_v2 ARCHIVE --start "YYYY-MM-DD HH:MM" --eta HOURS [--arc SUB SOG T [TAU]] ...
     python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve [--plan-csv FILE]
     python3 -m voyage_v2 ARCHIVE --start ... --eta ... --luo [--epoch 24] [--dist-step NM] [--luo-csv FILE]
+    python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve --luo --rolling [--rolling-every 6]
 
 ARCHIVE is a route archive written by the live collector (e.g. route1_runs.h5).
 --start is UTC and is rounded to the nearest quarter hour; --eta is in hours
@@ -21,6 +22,7 @@ from typing import Optional
 
 from .core import DEFAULT_SHIP, CoreError, Plan, Ship, Voyage
 from .loader import STEP_SECONDS, ReferenceTimeError, VoyageData, load_voyage_data
+from .rolling import solve_rolling
 
 
 def _summary(data: VoyageData) -> str:
@@ -121,6 +123,46 @@ def _luo_summary(data: VoyageData, plan: Plan, args, sr: Optional[Plan], pricing
     return "\n".join(lines)
 
 
+def _rolling_report(args, data: VoyageData, voyage: Voyage, ship: Ship) -> str:
+    """Perfect information, the departure forecast sailed without re-planning, rolling horizon
+    and constant SOG, for each method asked (--solve: full graph; --luo: Luo with --epoch)."""
+    length = float(data.subsegments["length_nm"].sum())
+    mean = length / (data.eta_steps / 4)
+    window = (mean - args.sog_band, mean + args.sog_band)
+    lines = [f"Rolling  decisions at the start and every {args.rolling_every:g} h on the UTC clock, each with the "
+             f"forecast known then (runs known from their start); SOG window {window[0]:.2f}-{window[1]:.2f} kn "
+             f"for every plan; fuel realized in the actual weather"]
+    methods = []
+    if args.solve:
+        methods.append(("Full graph", "full", {"tick_s": args.tick, "zeta_m": args.zeta, "merge_nm": args.merge}))
+    if args.luo:
+        for pricing in (("integrated", "start") if args.luo_pricing == "both" else (args.luo_pricing,)):
+            how = "start point" if pricing == "start" else "piece by piece"
+            methods.append((f"Luo {args.epoch * 0.25:g} h, {how}", "luo",
+                            {"epoch_steps": args.epoch, "dist_step_nm": args.dist_step, "pricing": pricing}))
+    constant = None
+    for label, method, opts in methods:
+        solve = voyage.solve if method == "full" else voyage.solve_luo
+        perfect = solve(sog_range_kn=window, **opts)
+        once = solve(forecast=True, sog_range_kn=window, **opts)
+        r = solve_rolling(data.archive, f"{data.utc(0):%Y-%m-%d %H:%M}", data.eta_steps / 4, method,
+                          every_h=args.rolling_every, ship=ship, sog_range_kn=window, **opts)
+        constant = perfect.constant_sog_fuel_mt
+        pct = lambda x: f"{100 * (x / perfect.fuel_mt - 1):+.2f}%"
+        lines += [
+            "",
+            f"{label}",
+            f"         {'perfect information (planned in the actual weather):':<54}{perfect.fuel_mt:9.3f} mt",
+            f"         {'departure forecast, no re-planning:':<54}{once.fuel_mt:9.3f} mt ({pct(once.fuel_mt)}; "
+            f"planned {once.planned_fuel_mt:.3f})",
+            f"         {f'rolling horizon, {len(r.decisions)} decisions:':<54}{r.fuel_mt:9.3f} mt ({pct(r.fuel_mt)}; "
+            f"planned {r.planned_fuel_mt:.3f}; solves {sum(d.solve_s for d in r.decisions):.1f} s)",
+        ]
+    if constant is not None:
+        lines += ["", f"Constant SOG {mean:.2f} kn: {constant:.3f} mt"]
+    return "\n".join(lines)
+
+
 def _write_plan(path: str, data: VoyageData, plan: Plan) -> None:
     p, seg = plan.path, plan.segments
     with open(path, "w", newline="") as f:
@@ -161,6 +203,12 @@ def main(argv=None) -> int:
                    help="price arcs piece by piece along their path (default), at their start point only as "
                         "Luo et al. do, or both")
     g.add_argument("--luo-csv", metavar="FILE", help="write the Luo plan, one row per epoch")
+    g = p.add_argument_group("rolling horizon (with --solve and/or --luo)")
+    g.add_argument("--rolling", action="store_true",
+                   help="re-plan at every decision with the forecast known then, and compare with perfect "
+                        "information and with the departure forecast sailed without re-planning")
+    g.add_argument("--rolling-every", type=float, default=6.0,
+                   help="hours between decisions, on the UTC clock (default 6: 00/06/12/18 UTC)")
     args = p.parse_args(argv)
 
     arcs = []
@@ -175,7 +223,19 @@ def main(argv=None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     print(_summary(data))
-    voyage = Voyage(data, Ship.from_yaml(args.ship))
+    ship = Ship.from_yaml(args.ship)
+    voyage = Voyage(data, ship)
+    if args.rolling:
+        if not (args.solve or args.luo):
+            p.error("--rolling needs --solve and/or --luo")
+        try:
+            report = _rolling_report(args, data, voyage, ship)
+        except (CoreError, RuntimeError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print()
+        print(report)
+        return 0
     if arcs:
         print()
         print(_arc_table(voyage, arcs))
