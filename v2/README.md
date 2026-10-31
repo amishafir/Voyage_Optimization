@@ -245,6 +245,12 @@ epochs (piece by piece within 0.06% of the full graph, start point +0.36% to +0.
 SOG steps of 0.2 and 0.05 kn (piece by piece within 0.04% and 0.02%: the step hardly matters). Tables
 and times in `results/2026-10-25_routes3-6/README.md`.
 
+**Routes 3-6 on the 2026-10-31 snapshot** (`results/2026-10-31_routes3-6/`): the 21 Oct voyages,
+now with near-real weather to the end, hardly change; a second start, 26 Oct 12:00 UTC, is calmer
+on Routes 5 and 6 (full graph saves 2.24% / 2.57% / 1.33% / 0.78% against constant SOG) and
+confirms the pattern: Luo piece by piece within 0.03% from 0.5 h down, start point +0.15% to +0.50%
+at 0.25 h and +1.06% to +3.36% at 6 h.
+
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo --luo-pricing both
 python3 -m voyage_v2 ARCHIVE --start "2026-10-14 13:20" --eta 280 --solve --luo        # both, compared

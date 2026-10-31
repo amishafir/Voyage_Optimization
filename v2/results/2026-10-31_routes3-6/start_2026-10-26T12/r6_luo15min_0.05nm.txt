@@ -1,0 +1,29 @@
+Route    Route 6: Durban to Cape Town (Agulhas Current)  (/Users/talraviv/voyage_data/snapshot_2026-10-31_15Z/route6_runs.h5)
+Start    2026-10-26 12:00 UTC
+ETA      67.00 h = 268 steps, arrival by 2026-10-29 07:00 UTC
+Plan     449 subsegments, 805.9 NM, 197 wind cells, 233 current cells (mean SOG for the ETA 12.03 kn)
+Wind     run 2026-10-26T12  steps +0..+268 (68 h x 197 cells)
+         run 2026-10-26T18  steps +24..+268 (62 h x 197 cells)
+         run 2026-10-27T00  steps +48..+268 (56 h x 197 cells)
+         run 2026-10-27T06  steps +72..+268 (50 h x 197 cells)
+         run 2026-10-27T12  steps +96..+268 (44 h x 197 cells)
+         run 2026-10-27T18  steps +120..+268 (38 h x 197 cells)
+         run 2026-10-28T00  steps +144..+268 (32 h x 197 cells)
+         run 2026-10-28T06  steps +168..+268 (26 h x 197 cells)
+         run 2026-10-28T12  steps +192..+268 (20 h x 197 cells)
+         run 2026-10-28T18  steps +216..+268 (14 h x 197 cells)
+         run 2026-10-29T00  steps +240..+268 (8 h x 197 cells)
+         run 2026-10-29T06  steps +264..+268 (2 h x 197 cells)
+Current  run 2026-10-26T00  steps +0..+268 (68 h x 233 cells)
+         run 2026-10-27T00  steps +48..+268 (56 h x 233 cells)
+         run 2026-10-28T00  steps +144..+268 (32 h x 233 cells)
+         run 2026-10-29T00  steps +240..+268 (8 h x 233 cells)
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.05 NM on the epoch lines (SOG steps 0.200 kn), SOG 9.03-15.03 kn, pseudo real-time; arcs priced piece by piece
+         nodes 700,458, reached 689,447; arcs 20,531,684 (0 outside the SWS range); 0.6 M SWS evaluations; sweep 0.2 s
+         fuel 65.638 mt, arrival 67.00 h, 268 epochs, SOG 11.20-13.40 kn; saves 0.76% against constant SOG
+
+Luo      epochs of 0.25 h (1 steps), nodes every 0.05 NM on the epoch lines (SOG steps 0.200 kn), SOG 9.03-15.03 kn, pseudo real-time; arcs priced at their start point (Luo et al.)
+         nodes 700,458, reached 689,447; arcs 20,531,684 (0 outside the SWS range); 0.6 M SWS evaluations; sweep 0.1 s
+         planned 64.811 mt; realized in the actual weather, every piece priced: 65.957 mt (+1.768%)
+         fuel 65.957 mt, arrival 67.00 h, 268 epochs, SOG 10.00-14.20 kn; saves 0.28% against constant SOG
