@@ -57,6 +57,7 @@ typedef struct {
     double merge_nm;
     int forecast;                       /* 0: pseudo real-time; 1: forecast known at the start */
     double sog_min_kn, sog_max_kn;      /* fixed SOG window instead of the band, when both > 0 */
+    int forecast_lag_steps;             /* with forecast: known this many steps before the start */
 } v2_dp_options;
 
 typedef struct {
@@ -90,6 +91,7 @@ typedef struct {
     int forecast;
     int start_point_pricing;            /* 1: price each arc at its start point only (Luo et al.) */
     double sog_min_kn, sog_max_kn;      /* fixed SOG window instead of the band, when both > 0 */
+    int forecast_lag_steps;             /* with forecast: known this many steps before the start */
 } v2_luo_options;
 
 v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* options);

@@ -121,6 +121,7 @@ v2_dp_result* v2_dp_solve(const v2_voyage* voyage, const v2_dp_options* options)
         o.forecast = options->forecast != 0;
         o.sog_min_kn = options->sog_min_kn;
         o.sog_max_kn = options->sog_max_kn;
+        o.forecast_lag_steps = options->forecast_lag_steps;
         return new v2_dp_result{v2::solve_dp(voyage->voyage, o)};
     }, static_cast<v2_dp_result*>(nullptr));
 }
@@ -178,6 +179,7 @@ v2_dp_result* v2_luo_solve(const v2_voyage* voyage, const v2_luo_options* option
         o.start_point_pricing = options->start_point_pricing != 0;
         o.sog_min_kn = options->sog_min_kn;
         o.sog_max_kn = options->sog_max_kn;
+        o.forecast_lag_steps = options->forecast_lag_steps;
         return new v2_dp_result{v2::solve_luo(voyage->voyage, o)};
     }, static_cast<v2_dp_result*>(nullptr));
 }

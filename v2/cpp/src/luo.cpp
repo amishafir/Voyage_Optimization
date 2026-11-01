@@ -92,6 +92,7 @@ LuoSweep::LuoSweep(const Voyage& voyage, const LuoOptions& o)
     eta_h_ = M_ * kStepH;
     vmin_ = L_ / eta_h_ - o.sog_band_kn;
     vmax_ = L_ / eta_h_ + o.sog_band_kn;
+    if (o.forecast_lag_steps < 0) throw std::invalid_argument("forecast_lag_steps must be >= 0");
     if (o.sog_min_kn > 0 && o.sog_max_kn > 0) {
         if (!(o.sog_max_kn > o.sog_min_kn)) throw std::invalid_argument("sog_max_kn must exceed sog_min_kn");
         vmin_ = o.sog_min_kn;
@@ -133,7 +134,7 @@ LuoSweep::LuoSweep(const Voyage& voyage, const LuoOptions& o)
 SpeedContext LuoSweep::fresh_context(int sub, int step, bool actual) const {
     const Subsegment& g = voyage_.subsegment(sub);
     const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, step,
-                                                      o_.forecast && !actual ? 0 : step);
+                                                      o_.forecast && !actual ? -o_.forecast_lag_steps : step);
     return model_.context(g.bearing_deg, c);
 }
 

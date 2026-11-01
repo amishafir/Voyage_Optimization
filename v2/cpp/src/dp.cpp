@@ -126,6 +126,7 @@ Sweep::Sweep(const Voyage& voyage, const DPOptions& o)
     eta_h_ = M_ * kStepH;
     vmin_ = L_ / eta_h_ - o.sog_band_kn;
     vmax_ = L_ / eta_h_ + o.sog_band_kn;
+    if (o.forecast_lag_steps < 0) throw std::invalid_argument("forecast_lag_steps must be >= 0");
     if (o.sog_min_kn > 0 && o.sog_max_kn > 0) {
         if (!(o.sog_max_kn > o.sog_min_kn)) throw std::invalid_argument("sog_max_kn must exceed sog_min_kn");
         vmin_ = o.sog_min_kn;
@@ -193,7 +194,7 @@ int Sweep::segment_of(double d) const {
 SpeedContext Sweep::fresh_context(int sub, int m, bool actual) const {
     const Subsegment& g = voyage_.subsegment(sub);
     const Conditions c = voyage_.weather().conditions(g.wind_cell, g.current_cell, m,
-                                                      o_.forecast && !actual ? 0 : m);
+                                                      o_.forecast && !actual ? -o_.forecast_lag_steps : m);
     return model_.context(g.bearing_deg, c);
 }
 

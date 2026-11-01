@@ -13,8 +13,19 @@ whatever the weather. The voyage's fuel is the sailed SOG profile in the actual
 realized fuel of the arcs it sailed. The SOG window stays fixed over the voyage
 (the first plan's mean SOG +/- the band) rather than moving with each re-plan.
 
+With info_lag_h (the conservative variant; 6 h with 6 h decisions), the plan for
+each block between decisions uses only the information available info_lag_h
+before the block starts: the forecast known then, i.e. the runs issued by then.
+Since the ship holds the planned SOG, where it will be at the block's start is
+known in advance, so this is the same as planning at the block's start with the
+forecast known info_lag_h earlier (which is how it is computed). The first block
+is planned with the forecast known info_lag_h before departure. Realized fuel is
+still priced in the actual weather, so the sailed blocks now carry forecast error
+too (with no lag, a block is planned with the very run it is priced with).
+
     r = solve_rolling(archive, "2026-10-21 00:00", 118, method="full")
     r = solve_rolling(archive, "2026-10-21 00:00", 118, method="luo", epoch_steps=2)
+    r = solve_rolling(archive, "2026-10-21 00:00", 118, method="full", info_lag_h=6)
 """
 
 from __future__ import annotations
@@ -51,6 +62,7 @@ class RollingResult:
     fuel_mt: float              # realized: the sailed SOG profile in the actual weather
     arrival_h: float
     sog_range_kn: Tuple[float, float]
+    info_lag_h: float = 0.0
     decisions: List[Decision] = field(default_factory=list)
     path: Dict[str, np.ndarray] = field(default_factory=dict)   # sailed arcs, voyage hours and distances
 
@@ -79,37 +91,40 @@ def _utc(unix: int) -> str:
 
 def solve_rolling(archive: str, start: str, eta_hours: float, method: str = "full", every_h: float = 6.0,
                   forecast: bool = True, ship: Optional[Ship] = None, sog_band_kn: float = 3.0,
-                  sog_range_kn: Optional[Tuple[float, float]] = None, verbose: bool = False,
-                  **solver_options) -> RollingResult:
+                  sog_range_kn: Optional[Tuple[float, float]] = None, info_lag_h: float = 0.0,
+                  verbose: bool = False, **solver_options) -> RollingResult:
     """Rolling-horizon voyage with method "full" (Voyage.solve) or "luo" (Voyage.solve_luo;
     solver_options e.g. epoch_steps, dist_step_nm, pricing). forecast=False re-plans with the
     actual weather (an oracle; equals one perfect-information plan up to ties), a check of the
     mechanism. Luo's epochs must divide the decision interval, and with them the start must be
-    on the decision clock, so that the decisions fall on epoch boundaries."""
+    on the decision clock, so that the decisions fall on epoch boundaries. info_lag_h > 0 plans
+    each block with the forecast known that many hours before the block starts."""
     if method not in ("full", "luo"):
         raise ValueError(f"method must be 'full' or 'luo', got {method!r}")
     ship = ship or Ship.from_yaml()
     every_s = int(round(every_h * 3600))
     if every_s <= 0 or every_s % STEP_SECONDS:
         raise ValueError(f"the decision interval must be a positive multiple of 0.25 h, got {every_h}")
-    data = load_voyage_data(archive, start, eta_hours)
+    data = load_voyage_data(archive, start, eta_hours, info_lag_h)
     start_unix, end_unix = data.start_unix, data.end_unix
     length = float(data.subsegments["length_nm"].sum())
     if sog_range_kn is None:
         mean = length / (data.eta_steps / 4)
         sog_range_kn = (mean - sog_band_kn, mean + sog_band_kn)
 
+    lag = info_lag_h if forecast else 0.0
+
     def solve(voyage: Voyage) -> Plan:
         if method == "full":
-            return voyage.solve(forecast=forecast, sog_range_kn=sog_range_kn, **solver_options)
-        return voyage.solve_luo(forecast=forecast, sog_range_kn=sog_range_kn, **solver_options)
+            return voyage.solve(forecast=forecast, sog_range_kn=sog_range_kn, forecast_lag_h=lag, **solver_options)
+        return voyage.solve_luo(forecast=forecast, sog_range_kn=sog_range_kn, forecast_lag_h=lag, **solver_options)
 
-    result = RollingResult(method, True, 0.0, float("nan"), sog_range_kn)
+    result = RollingResult(method, True, 0.0, float("nan"), sog_range_kn, lag)
     sailed = {k: [] for k in ARC_FIELDS}
     t_unix, d = start_unix, 0.0
     while True:
         if t_unix > start_unix:
-            data = load_voyage_data(archive, _utc(t_unix), (end_unix - t_unix) / 3600)
+            data = load_voyage_data(archive, _utc(t_unix), (end_unix - t_unix) / 3600, info_lag_h)
         data.subsegments = remaining_route(data, d)
         clock = time.perf_counter()
         plan = solve(Voyage(data, ship))

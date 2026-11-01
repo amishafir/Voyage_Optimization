@@ -5,7 +5,7 @@ optionally evaluate arcs and solve for the minimum-fuel plan.
     python3 -m voyage_v2 ARCHIVE --start "YYYY-MM-DD HH:MM" --eta HOURS [--arc SUB SOG T [TAU]] ...
     python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve [--plan-csv FILE]
     python3 -m voyage_v2 ARCHIVE --start ... --eta ... --luo [--epoch 24] [--dist-step NM] [--luo-csv FILE]
-    python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve --luo --rolling [--rolling-every 6]
+    python3 -m voyage_v2 ARCHIVE --start ... --eta ... --solve --luo --rolling [--rolling-every 6] [--info-lag 6]
 
 ARCHIVE is a route archive written by the live collector (e.g. route1_runs.h5).
 --start is UTC and is rounded to the nearest quarter hour; --eta is in hours
@@ -129,8 +129,10 @@ def _rolling_report(args, data: VoyageData, voyage: Voyage, ship: Ship) -> str:
     length = float(data.subsegments["length_nm"].sum())
     mean = length / (data.eta_steps / 4)
     window = (mean - args.sog_band, mean + args.sog_band)
-    lines = [f"Rolling  decisions at the start and every {args.rolling_every:g} h on the UTC clock, each with the "
-             f"forecast known then (runs known from their start); SOG window {window[0]:.2f}-{window[1]:.2f} kn "
+    known = (f"the forecast known {args.info_lag:g} h before the block it plans" if args.info_lag
+             else "the forecast known then")
+    lines = [f"Rolling  decisions at the start and every {args.rolling_every:g} h on the UTC clock, each with "
+             f"{known} (runs known from their start); SOG window {window[0]:.2f}-{window[1]:.2f} kn "
              f"for every plan; fuel realized in the actual weather"]
     methods = []
     if args.solve:
@@ -140,20 +142,22 @@ def _rolling_report(args, data: VoyageData, voyage: Voyage, ship: Ship) -> str:
             how = "start point" if pricing == "start" else "piece by piece"
             methods.append((f"Luo {args.epoch * 0.25:g} h, {how}", "luo",
                             {"epoch_steps": args.epoch, "dist_step_nm": args.dist_step, "pricing": pricing}))
+    departure = f"forecast {args.info_lag:g} h before departure" if args.info_lag else "departure forecast"
     constant = None
     for label, method, opts in methods:
         solve = voyage.solve if method == "full" else voyage.solve_luo
         perfect = solve(sog_range_kn=window, **opts)
-        once = solve(forecast=True, sog_range_kn=window, **opts)
+        once = solve(forecast=True, sog_range_kn=window, forecast_lag_h=args.info_lag, **opts)
         r = solve_rolling(data.archive, f"{data.utc(0):%Y-%m-%d %H:%M}", data.eta_steps / 4, method,
-                          every_h=args.rolling_every, ship=ship, sog_range_kn=window, **opts)
+                          every_h=args.rolling_every, ship=ship, sog_range_kn=window,
+                          info_lag_h=args.info_lag, **opts)
         constant = perfect.constant_sog_fuel_mt
         pct = lambda x: f"{100 * (x / perfect.fuel_mt - 1):+.2f}%"
         lines += [
             "",
             f"{label}",
             f"         {'perfect information (planned in the actual weather):':<54}{perfect.fuel_mt:9.3f} mt",
-            f"         {'departure forecast, no re-planning:':<54}{once.fuel_mt:9.3f} mt ({pct(once.fuel_mt)}; "
+            f"         {departure + ', no re-planning:':<54}{once.fuel_mt:9.3f} mt ({pct(once.fuel_mt)}; "
             f"planned {once.planned_fuel_mt:.3f})",
             f"         {f'rolling horizon, {len(r.decisions)} decisions:':<54}{r.fuel_mt:9.3f} mt ({pct(r.fuel_mt)}; "
             f"planned {r.planned_fuel_mt:.3f}; solves {sum(d.solve_s for d in r.decisions):.1f} s)",
@@ -209,6 +213,9 @@ def main(argv=None) -> int:
                         "information and with the departure forecast sailed without re-planning")
     g.add_argument("--rolling-every", type=float, default=6.0,
                    help="hours between decisions, on the UTC clock (default 6: 00/06/12/18 UTC)")
+    g.add_argument("--info-lag", type=float, default=0.0, metavar="H",
+                   help="plan each block between decisions (and the departure forecast plan) with the forecast "
+                        "known H hours before the block starts (default 0; 6 = the conservative variant)")
     args = p.parse_args(argv)
 
     arcs = []
@@ -218,7 +225,7 @@ def main(argv=None) -> int:
         arcs.append((int(a[0]), float(a[1]), int(a[2]), int(a[3]) if len(a) == 4 else None))
 
     try:
-        data = load_voyage_data(args.archive, args.start, args.eta)
+        data = load_voyage_data(args.archive, args.start, args.eta, args.info_lag if args.rolling else 0.0)
     except (ReferenceTimeError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

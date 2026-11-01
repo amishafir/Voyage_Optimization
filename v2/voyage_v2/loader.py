@@ -5,7 +5,9 @@ run, only the runs and hours a voyage from `start` to `start + ETA` can use, at
 their native hourly granularity on the native grid cells.
 
 Time is counted in 15-minute steps from the voyage start, which is rounded to
-the nearest quarter hour. A run issued at step i is known from step i on.
+the nearest quarter hour. A run issued at step i is known from step i on. With
+info_lag_h, the data also hold the runs a forecast made that many hours before
+the start draws on (issued at negative steps).
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import h5py
 import numpy as np
@@ -62,6 +64,7 @@ class VoyageData:
     subsegments: np.ndarray                 # /plan/subsegments rows
     n_cells: Dict[str, int]
     runs: Dict[str, List[RunSlice]] = field(default_factory=dict)
+    info_unix: Optional[int] = None         # earliest information time the runs serve (None: start_unix)
 
     @property
     def end_unix(self) -> int:
@@ -114,10 +117,11 @@ def _step(unix: int, start_unix: int) -> int:
     return d // STEP_SECONDS
 
 
-def _select_runs(f: h5py.File, grid: str, start_unix: int, end_unix: int, path: str) -> List[RunSlice]:
-    """The runs a voyage can draw on: every run issued after the start and by the end,
-    and, among the runs issued by the start, the newest and each older one that
-    reaches further in time, until one reaches the end."""
+def _select_runs(f: h5py.File, grid: str, start_unix: int, end_unix: int, path: str,
+                 info_unix: int) -> List[RunSlice]:
+    """The runs a voyage can draw on: every run issued after info_unix (<= the start) and
+    by the end, and, among the runs issued by info_unix, the newest and each older one
+    that reaches further in time, until one reaches the end."""
     hour_lo = start_unix // 3600 * 3600                 # hours that bracket the voyage
     hour_hi = -(-end_unix // 3600) * 3600
     runs = []
@@ -128,7 +132,7 @@ def _select_runs(f: h5py.File, grid: str, start_unix: int, end_unix: int, path: 
     runs.sort()
 
     keep, reach = [], None
-    for init, name, first, last in reversed([r for r in runs if r[0] <= start_unix]):
+    for init, name, first, last in reversed([r for r in runs if r[0] <= info_unix]):
         if reach is None or last > reach:
             keep.append((init, name))
             reach = last
@@ -141,7 +145,7 @@ def _select_runs(f: h5py.File, grid: str, start_unix: int, end_unix: int, path: 
         raise ReferenceTimeError(
             f"the start time {_iso(start_unix)} is not covered by the {grid} data in {path} "
             f"(stored {grid} runs: {spans})")
-    keep += [(init, name) for init, name, _, _ in runs if start_unix < init <= end_unix]
+    keep += [(init, name) for init, name, _, _ in runs if info_unix < init <= end_unix]
 
     out = []
     for init, name in sorted(keep):
@@ -164,21 +168,27 @@ def _iso(unix: int) -> str:
     return datetime.fromtimestamp(int(unix), timezone.utc).strftime("%Y-%m-%d %H:%M")
 
 
-def load_voyage_data(path: str, start: str, eta_hours: float) -> VoyageData:
+def load_voyage_data(path: str, start: str, eta_hours: float, info_lag_h: float = 0.0) -> VoyageData:
     """Route and weather for a voyage from `start` (UTC, rounded to the nearest
-    quarter hour) with an ETA of `eta_hours` (a multiple of 0.25 h) after it."""
+    quarter hour) with an ETA of `eta_hours` (a multiple of 0.25 h) after it; with
+    info_lag_h (a multiple of 0.25 h), also the runs for forecasts made up to that
+    many hours before the start."""
     requested = parse_start(start)
     start_unix = round_to_step(requested)
     eta_steps = eta_to_steps(eta_hours)
+    lag_steps = round(info_lag_h * 4)
+    if lag_steps < 0 or abs(info_lag_h * 4 - lag_steps) > 1e-9:
+        raise ValueError(f"info_lag_h must be a non-negative multiple of 0.25 h, got {info_lag_h}")
+    info_unix = start_unix - lag_steps * STEP_SECONDS
     with h5py.File(path, "r") as f:
         attrs = {k: (v.decode() if isinstance(v, bytes) else v) for k, v in f.attrs.items()}
         if attrs.get("layout") != LAYOUT:
             raise ValueError(f"{path} is not a {LAYOUT} archive (layout={attrs.get('layout')!r})")
         data = VoyageData(archive=str(path), attrs=attrs, requested_start_unix=requested,
-                          start_unix=start_unix, eta_steps=eta_steps,
+                          start_unix=start_unix, eta_steps=eta_steps, info_unix=info_unix,
                           subsegments=f["plan/subsegments"][()],
                           n_cells={"wind": len(f["plan/wind_cells"]),
                                    "current": len(f["plan/current_cells"])})
         for grid in GRIDS:
-            data.runs[grid] = _select_runs(f, grid, start_unix, data.end_unix, str(path))
+            data.runs[grid] = _select_runs(f, grid, start_unix, data.end_unix, str(path), info_unix)
     return data

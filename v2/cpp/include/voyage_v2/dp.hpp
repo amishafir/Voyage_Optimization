@@ -37,6 +37,7 @@ struct DPOptions {
     bool forecast = false;      // false: pseudo real-time (tau = t); true: forecast known at the start
     double sog_min_kn = 0.0;    // fixed SOG window [sog_min_kn, sog_max_kn] instead of the band, when both > 0
     double sog_max_kn = 0.0;    // (keeps one window across rolling-horizon re-plans)
+    int forecast_lag_steps = 0; // with forecast: the forecast known this many steps before the start
 };
 
 // The stretch of route between two consecutive distance lines.

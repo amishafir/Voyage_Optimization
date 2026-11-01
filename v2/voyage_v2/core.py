@@ -20,7 +20,7 @@ import numpy as np
 import yaml
 
 from .build import ensure_library
-from .loader import GRIDS, VoyageData
+from .loader import GRIDS, STEP_SECONDS, VoyageData
 
 DEFAULT_SHIP = Path(__file__).resolve().parents[1] / "config" / "ship.yaml"
 INFEASIBLE_FUEL_MT = 9999.0     # cost of an arc whose SOG needs an SWS outside 2-25 kn
@@ -49,12 +49,14 @@ class _ArcInfo(ctypes.Structure):
 
 class _DPOptions(ctypes.Structure):
     _fields_ = [("sog_band_kn", c_double), ("tick_s", c_int), ("zeta_m", c_double),
-                ("merge_nm", c_double), ("forecast", c_int), ("sog_min_kn", c_double), ("sog_max_kn", c_double)]
+                ("merge_nm", c_double), ("forecast", c_int), ("sog_min_kn", c_double), ("sog_max_kn", c_double),
+                ("forecast_lag_steps", c_int)]
 
 
 class _LuoOptions(ctypes.Structure):
     _fields_ = [("sog_band_kn", c_double), ("epoch_steps", c_int), ("dist_step_nm", c_double), ("forecast", c_int),
-                ("start_point_pricing", c_int), ("sog_min_kn", c_double), ("sog_max_kn", c_double)]
+                ("start_point_pricing", c_int), ("sog_min_kn", c_double), ("sog_max_kn", c_double),
+                ("forecast_lag_steps", c_int)]
 
 
 class _DPSummary(ctypes.Structure):
@@ -280,32 +282,45 @@ class Voyage:
 
     def solve(self, sog_band_kn: float = 3.0, tick_s: int = 4, zeta_m: float = 25.0,
               merge_nm: float = 0.15, forecast: bool = False,
-              sog_range_kn: Optional[Tuple[float, float]] = None) -> Plan:
+              sog_range_kn: Optional[Tuple[float, float]] = None, forecast_lag_h: float = 0.0) -> Plan:
         """Minimum-fuel plan from the start to the end of the route by the ETA: nodes every
         tick_s seconds on every segment boundary and every zeta_m metres on every 0.25 h time
         line, SOG within mean +/- sog_band_kn, subsegments shorter than merge_nm merged. Weather
-        is pseudo real-time, or with forecast=True the forecast known at the start. sog_range_kn
-        (min, max) fixes the SOG window instead of the band."""
+        is pseudo real-time, or with forecast=True the forecast known at the start (forecast_lag_h
+        hours before it, from data loaded with info_lag_h at least that). sog_range_kn (min, max)
+        fixes the SOG window instead of the band."""
         lo, hi = sog_range_kn or (0.0, 0.0)
-        opts = _DPOptions(sog_band_kn, int(tick_s), zeta_m, merge_nm, 1 if forecast else 0, lo, hi)
+        opts = _DPOptions(sog_band_kn, int(tick_s), zeta_m, merge_nm, 1 if forecast else 0, lo, hi,
+                          self._lag_steps(forecast_lag_h))
         return _read_plan(_library().v2_dp_solve(self._handle, ctypes.byref(opts)))
 
     def solve_luo(self, epoch_steps: int = 24, dist_step_nm: Optional[float] = None, sog_band_kn: float = 3.0,
                   forecast: bool = False, pricing: str = "integrated",
-                  sog_range_kn: Optional[Tuple[float, float]] = None) -> Plan:
+                  sog_range_kn: Optional[Tuple[float, float]] = None, forecast_lag_h: float = 0.0) -> Plan:
         """Luo et al.'s multistage DP on this voyage (cpp/include/voyage_v2/luo.hpp): constant SOG
         within decision epochs of epoch_steps quarter hours (24 = 6 h), nodes only on the epoch
         boundaries every dist_step_nm (default 0.1 kn x epoch length, 0.6 NM for 6 h epochs).
         pricing="integrated" prices each arc piece by piece along its path; pricing="start" prices
         the whole arc at the conditions where and when it starts, as Luo et al. do (the plan's
         fuel_mt is still its realized fuel). The plan has one arc per epoch. sog_range_kn
-        (min, max) fixes the SOG window instead of the band."""
+        (min, max) fixes the SOG window instead of the band; forecast_lag_h as in solve."""
         if pricing not in ("integrated", "start"):
             raise ValueError(f"pricing must be 'integrated' or 'start', got {pricing!r}")
         lo, hi = sog_range_kn or (0.0, 0.0)
         opts = _LuoOptions(sog_band_kn, int(epoch_steps), float(dist_step_nm or 0.0), 1 if forecast else 0,
-                           1 if pricing == "start" else 0, lo, hi)
+                           1 if pricing == "start" else 0, lo, hi, self._lag_steps(forecast_lag_h))
         return _read_plan(_library().v2_luo_solve(self._handle, ctypes.byref(opts)))
+
+    def _lag_steps(self, lag_h: float) -> int:
+        steps = round(lag_h * 4)
+        if steps < 0 or abs(lag_h * 4 - steps) > 1e-9:
+            raise ValueError(f"forecast_lag_h must be a non-negative multiple of 0.25 h, got {lag_h}")
+        info = self.data.start_unix if self.data.info_unix is None else self.data.info_unix
+        if info > self.data.start_unix - steps * STEP_SECONDS:
+            have = (self.data.start_unix - info) / 3600
+            raise ValueError(f"a forecast {lag_h:g} h before the start needs the data loaded with "
+                             f"info_lag_h >= {lag_h:g} (loaded with {have:g})")
+        return steps
 
     def arc_detail(self, sub: int, sog: float, t: int, tau: Optional[int] = None) -> Dict:
         """Conditions, SWS, FCR and fuel of one arc, and the runs the weather came from."""
