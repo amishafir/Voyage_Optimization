@@ -47,7 +47,8 @@ after each decision are priced with the very run they were planned with (the re-
 realized fuel are equal). Rolling horizon here loses fuel only through forecast errors beyond the
 next 6 h, which misguide how the remaining time is spread. For the sailed stretches to carry
 forecast error too, the realizations need another source, e.g. runs available only some hours after
-their start (as real ECMWF delivery), or a later run's analysis as the truth.
+their start (as real ECMWF delivery), or a later run's analysis as the truth. The conservative variant, each
+block planned with the forecast known 6 h before it starts, is in `../2026-10-31_rolling_lag6h/`.
 
 Commands (from `v2/` in the Dropbox folder on tsl2; `P=/opt/miniconda3/envs/voyage/bin/python`,
 `D=~/voyage_data/snapshot_2026-10-31_15Z`), for each start, route and ETA (3 118, 4 117, 5 118,

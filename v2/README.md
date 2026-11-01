@@ -28,7 +28,7 @@ python3 -m voyage_v2 route1_runs.h5 --start "2026-10-14 13:20" --eta 280 --arc 1
 - `--arc SUB SOG T [TAU]`: subsegment, SOG [kn], step, information step; prints the conditions,
   SWS, fuel and the runs the weather came from.
 - `--solve`: the minimum-fuel plan (below); `--plan-csv FILE` writes it, one row per arc.
-- `--rolling [--rolling-every 6]` with `--solve` and/or `--luo`: rolling-horizon re-planning (below).
+- `--rolling [--rolling-every 6] [--info-lag 6]` with `--solve` and/or `--luo`: rolling-horizon re-planning (below).
   Options: `--sog-band 3` (kn), `--tick 4` (s), `--zeta 25` (m), `--merge 0.15` (NM), `--forecast`.
 
 It prints the route, the runs loaded and how far their data reaches. If the start
@@ -281,8 +281,27 @@ it; Luo as published (6 h, start point) stays above constant SOG on 7 of 8 voyag
 actual weather is the newest run at lead 0-5 h and decisions fall on the run times, so each sailed
 6 h is priced with the run it was planned with; only forecast errors beyond the next 6 h cost fuel.
 
+**Information lag** (`--info-lag H`, `solve_rolling(..., info_lag_h=H)`; the conservative variant
+with 6 h): each block between decisions is planned with the forecast known H hours before it starts,
+and the departure plan with the forecast known H hours before departure. The ship's position at a
+block's start is known in advance (it holds the planned SOG), so this is computed at the block's
+start with the runs issued by H hours earlier. The solvers take `forecast_lag_h` (C++
+`forecast_lag_steps`: the forecast is read at information step -lag), and `load_voyage_data(...,
+info_lag_h=H)` also loads the older runs that forecast draws on (`VoyageData.info_unix`); a solve
+refuses data loaded without them. With a 6 h lag the sailed blocks carry forecast error, which
+removes the caveat above. Tested in `tests/test_rolling.py`: a lagged forecast gives exactly the
+plan of an archive without the later runs, and lagged rolling picks up a new run one block later.
+
+With a 6 h lag (`results/2026-10-31_rolling_lag6h/`, same voyages), the full graph's realized fuel
+above perfect information rises to 0.15-0.82% (mean 0.44%, against 0.22% without the lag), still
+below constant SOG on 7 of 8 voyages. The plan made 6 h before departure and sailed without
+re-planning does about as well on average (+0.43%; re-planning wins on 5 voyages and loses on 3),
+since single runs differ in quality. Luo 0.5 h piece by piece stays within 0.03% of the full graph;
+Luo as published stays above constant SOG on 7 of 8.
+
 ```bash
 python3 -m voyage_v2 ARCHIVE --start "2026-10-26 12:00" --eta 118 --solve --luo --luo-pricing both --rolling
+python3 -m voyage_v2 ARCHIVE --start "2026-10-26 12:00" --eta 118 --solve --luo --luo-pricing both --rolling --info-lag 6
 ```
 
 ## Running on the lab machines
@@ -326,7 +345,7 @@ python3 tests/test_physics.py      # C++ model vs pipeline/shared/physics.py
 python3 tests/test_voyage.py       # loading and arc_cost vs a plain-Python statement of the rules
 python3 tests/test_dp.py           # the DP vs a Python DP that builds every node and arc explicitly
 python3 tests/test_luo.py          # the Luo DP vs a Python DP with its own path integration
-python3 tests/test_rolling.py      # rolling horizon: oracle re-planning = perfect information; a mid-voyage run
+python3 tests/test_rolling.py      # rolling horizon: oracle re-planning = perfect information; a mid-voyage run; information lag
 V2_ARCHIVE=../pipeline/data/route1_runs.h5 python3 tests/test_voyage.py   # also on a real archive
 V2_ARCHIVE=../pipeline/data/route2_runs.h5 V2_ETA=168 python3 tests/test_dp.py
 ```
