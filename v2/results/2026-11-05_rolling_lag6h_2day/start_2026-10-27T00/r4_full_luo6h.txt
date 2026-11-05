@@ -1,0 +1,50 @@
+Route    Route 4: Rotterdam to Algeciras (English Channel and Bay of Biscay)  (/home/ami/voyage_collector/data/snapshots/2026-11-05_09Z/route4_runs.h5)
+Start    2026-10-27 00:00 UTC
+ETA      117.00 h = 468 steps, arrival by 2026-10-31 21:00 UTC
+Plan     785 subsegments, 1,400.1 NM, 351 wind cells, 417 current cells (mean SOG for the ETA 11.97 kn)
+Wind     run 2026-10-26T18  steps +0..+468 (118 h x 351 cells)
+         run 2026-10-27T00  steps +0..+468 (118 h x 351 cells)
+         run 2026-10-27T06  steps +24..+468 (112 h x 351 cells)
+         run 2026-10-27T12  steps +48..+468 (106 h x 351 cells)
+         run 2026-10-27T18  steps +72..+468 (100 h x 351 cells)
+         run 2026-10-28T00  steps +96..+468 (94 h x 351 cells)
+         run 2026-10-28T06  steps +120..+468 (88 h x 351 cells)
+         run 2026-10-28T12  steps +144..+468 (82 h x 351 cells)
+         run 2026-10-28T18  steps +168..+468 (76 h x 351 cells)
+         run 2026-10-29T00  steps +192..+468 (70 h x 351 cells)
+         run 2026-10-29T06  steps +216..+468 (64 h x 351 cells)
+         run 2026-10-29T12  steps +240..+468 (58 h x 351 cells)
+         run 2026-10-29T18  steps +264..+468 (52 h x 351 cells)
+         run 2026-10-30T00  steps +288..+468 (46 h x 351 cells)
+         run 2026-10-30T06  steps +312..+468 (40 h x 351 cells)
+         run 2026-10-30T12  steps +336..+468 (34 h x 351 cells)
+         run 2026-10-30T18  steps +360..+468 (28 h x 351 cells)
+         run 2026-10-31T00  steps +384..+468 (22 h x 351 cells)
+         run 2026-10-31T06  steps +408..+468 (16 h x 351 cells)
+         run 2026-10-31T12  steps +432..+468 (10 h x 351 cells)
+         run 2026-10-31T18  steps +456..+468 (4 h x 351 cells)
+Current  run 2026-10-26T00  steps +0..+468 (118 h x 417 cells)
+         run 2026-10-27T00  steps +0..+468 (118 h x 417 cells)
+         run 2026-10-28T00  steps +96..+468 (94 h x 417 cells)
+         run 2026-10-29T00  steps +192..+468 (70 h x 417 cells)
+         run 2026-10-30T00  steps +288..+468 (46 h x 417 cells)
+         run 2026-10-31T00  steps +384..+468 (22 h x 417 cells)
+
+Rolling  decisions at the start and every 6 h on the UTC clock, each with the forecast known 6 h before the block it plans (runs known from their start); SOG window 8.97-14.97 kn for every plan; fuel realized in the actual weather
+
+Full graph
+         perfect information (planned in the actual weather):    166.407 mt
+         forecast 6 h before departure, no re-planning:          167.012 mt (+0.36%; planned 173.433)
+         rolling horizon, 20 decisions:                          166.855 mt (+0.27%; planned 166.791; solves 390.3 s)
+
+Luo 6 h, piece by piece
+         perfect information (planned in the actual weather):    167.832 mt
+         forecast 6 h before departure, no re-planning:          167.956 mt (+0.07%; planned 174.625)
+         rolling horizon, 20 decisions:                          168.067 mt (+0.14%; planned 168.241; solves 4.7 s)
+
+Luo 6 h, start point
+         perfect information (planned in the actual weather):    175.451 mt
+         forecast 6 h before departure, no re-planning:          174.710 mt (-0.42%; planned 166.427)
+         rolling horizon, 20 decisions:                          173.400 mt (-1.17%; planned 165.870; solves 0.3 s)
+
+Constant SOG 11.97 kn: 171.637 mt
