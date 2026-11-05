@@ -18,41 +18,72 @@ horizon with decisions every 6 h on the UTC clock, each 6 h block planned with t
 - Voyages crossing 20 Oct use the 19 Oct current run for that day (the 20 Oct run is lost); the 21
   and 22 Oct current runs are from Copernicus Marine.
 
-Realized fuel above the full graph with perfect information:
+Realized fuel above the full graph with perfect information, each route on its own (the routes
+differ in length, fuel and weather, so voyages are not pooled across routes). "vs ours" is the
+method's realized fuel over the full graph with rolling horizon, per voyage; "ours lower on" counts
+the voyages where ours burns less.
 
-| Method | R3 mean (n=6) | R4 mean (n=6) | R5 mean (n=6) | R6 mean (n=7) | All: mean | median | sd | min | max | beats const. SOG | within 0.05% of ours |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Full graph, departure forecast 6 h before, no re-planning | +0.45% | +0.67% | +0.77% | +0.30% | +0.54% | +0.46% | 0.44 | +0.12% | +2.23% | 23/25 | 5/25 |
-| **Full graph, rolling horizon (ours)** | **+0.44%** | **+0.33%** | **+0.75%** | **+0.30%** | **+0.45%** | **+0.36%** | 0.40 | +0.08% | +2.04% | 23/25 | 25/25 |
-| Luo 0.5 h, piece by piece, rolling | +0.45% | +0.34% | +0.73% | +0.29% | +0.45% | +0.35% | 0.40 | +0.10% | +2.03% | 23/25 | 22/25 |
-| Luo 6 h, piece by piece, rolling | +0.75% | +0.92% | +0.86% | +0.45% | +0.73% | +0.68% | 0.38 | +0.24% | +1.87% | 22/25 | 1/25 |
-| Luo 0.5 h, start point, rolling | +0.80% | +0.53% | +1.16% | +0.98% | +0.87% | +0.80% | 0.44 | +0.32% | +2.17% | 16/25 | 1/25 |
-| Luo 6 h, start point (Luo et al.), rolling | +2.70% | +4.02% | +4.55% | +2.38% | +3.37% | +3.16% | 1.46 | +1.07% | +6.88% | 0/25 | 0/25 |
-| Constant SOG | +1.94% | +2.37% | +1.46% | +0.66% | +1.57% | +1.33% | 0.99 | +0.34% | +4.16% | - | 0/25 |
+### Route 3: 6 voyages (2026-10-21, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-29, 2026-10-31); perfect information 143.9-171.5 mt
 
-Head to head against the full graph with rolling horizon, per voyage:
+| Method | mean | median | sd | min | max | vs ours (mean) | ours lower on | beats const. SOG |
+|---|---|---|---|---|---|---|---|---|
+| Full graph, departure forecast 6 h before, no re-planning | +0.45% | +0.45% | 0.26 | +0.12% | +0.85% | +0.01% | 2/6 | 6/6 |
+| **Full graph, rolling horizon (ours)** | +0.44% | +0.34% | 0.29 | +0.18% | +0.99% | - | - | 6/6 |
+| Luo 0.5 h, piece by piece, rolling | +0.45% | +0.34% | 0.31 | +0.17% | +1.05% | +0.01% | 2/6 | 6/6 |
+| Luo 6 h, piece by piece, rolling | +0.75% | +0.76% | 0.22 | +0.49% | +1.08% | +0.30% | 6/6 | 6/6 |
+| Luo 0.5 h, start point, rolling | +0.80% | +0.74% | 0.42 | +0.35% | +1.58% | +0.35% | 6/6 | 6/6 |
+| Luo 6 h, start point (Luo et al.), rolling | +2.70% | +2.40% | 1.09 | +1.61% | +4.70% | +2.25% | 6/6 | 0/6 |
+| Constant SOG | +1.94% | +2.09% | 0.49 | +1.33% | +2.43% | +1.50% | 6/6 | - |
 
-| Method | Mean excess over ours | Ours lower on |
-|---|---|---|
-| Full graph, departure forecast, no re-planning | +0.09% | 16/25 |
-| Luo 0.5 h, piece by piece | -0.00% | 12/25 (a tie) |
-| Luo 6 h, piece by piece | +0.29% | 23/25 |
-| Luo 0.5 h, start point | +0.42% | 25/25 |
-| Luo 6 h, start point (Luo et al.) | +2.91% | 25/25 |
-| Constant SOG | +1.12% | 23/25 |
+### Route 4: 6 voyages (2026-10-21, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-29, 2026-10-31); perfect information 144.9-182.9 mt
 
-Findings:
+| Method | mean | median | sd | min | max | vs ours (mean) | ours lower on | beats const. SOG |
+|---|---|---|---|---|---|---|---|---|
+| Full graph, departure forecast 6 h before, no re-planning | +0.67% | +0.84% | 0.29 | +0.23% | +0.88% | +0.34% | 6/6 | 6/6 |
+| **Full graph, rolling horizon (ours)** | +0.33% | +0.31% | 0.17 | +0.09% | +0.59% | - | - | 6/6 |
+| Luo 0.5 h, piece by piece, rolling | +0.34% | +0.32% | 0.17 | +0.10% | +0.61% | +0.01% | 5/6 | 6/6 |
+| Luo 6 h, piece by piece, rolling | +0.92% | +0.90% | 0.24 | +0.60% | +1.22% | +0.59% | 6/6 | 6/6 |
+| Luo 0.5 h, start point, rolling | +0.53% | +0.53% | 0.15 | +0.32% | +0.71% | +0.20% | 6/6 | 6/6 |
+| Luo 6 h, start point (Luo et al.), rolling | +4.02% | +3.97% | 0.97 | +2.51% | +5.20% | +3.68% | 6/6 | 0/6 |
+| Constant SOG | +2.37% | +2.28% | 0.69 | +1.40% | +3.15% | +2.04% | 6/6 | - |
 
-- **Ours with re-planning**: +0.45% above perfect information on average (median +0.36%, 0.08% to
-  2.04%), 1.12% below constant SOG on average, and below it on 23 of 25 voyages. The two exceptions:
-  Route 6 from 21 Oct (+0.82% against +0.64%) and Route 5 from 23 Oct (+2.04% against +1.28%, the
-  worst voyage for every method that uses a forecast).
-- **Luo et al. as published** (6 h epochs, start-point pricing) is worse than constant SOG on all
-  25 voyages, by 1.8% on average, and 2.9% above ours.
-- **Luo at 0.5 h priced piece by piece ties the full graph** (mean difference 0.00%, within 0.05% on
-  22 of 25). The losses of published Luo come from the 6 h epochs (+0.29%) and above all from
-  start-point pricing (+0.42% at 0.5 h, +2.9% at 6 h).
-- **Re-planning now gains a little**: with the lag, the plan made 6 h before departure and sailed
-  unchanged averages +0.54%, against +0.45% with rolling horizon; rolling is better on 16 of 25.
-  On Tal's 8 voyages the two were even (+0.43% / +0.44%).
-- Neighbouring voyages overlap (48 h apart, 67-118 h long), so the 25 are not independent samples.
+### Route 5: 6 voyages (2026-10-21, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-29, 2026-10-31); perfect information 146.7-171.1 mt
+
+| Method | mean | median | sd | min | max | vs ours (mean) | ours lower on | beats const. SOG |
+|---|---|---|---|---|---|---|---|---|
+| Full graph, departure forecast 6 h before, no re-planning | +0.77% | +0.67% | 0.76 | +0.15% | +2.23% | +0.02% | 4/6 | 5/6 |
+| **Full graph, rolling horizon (ours)** | +0.75% | +0.57% | 0.65 | +0.29% | +2.04% | - | - | 5/6 |
+| Luo 0.5 h, piece by piece, rolling | +0.73% | +0.54% | 0.65 | +0.27% | +2.03% | -0.02% | 0/6 | 5/6 |
+| Luo 6 h, piece by piece, rolling | +0.86% | +0.65% | 0.55 | +0.33% | +1.87% | +0.11% | 5/6 | 5/6 |
+| Luo 0.5 h, start point, rolling | +1.16% | +0.93% | 0.60 | +0.68% | +2.17% | +0.41% | 6/6 | 3/6 |
+| Luo 6 h, start point (Luo et al.), rolling | +4.55% | +4.10% | 1.43 | +3.05% | +6.88% | +3.77% | 6/6 | 0/6 |
+| Constant SOG | +1.46% | +0.98% | 1.34 | +0.63% | +4.16% | +0.71% | 5/6 | - |
+
+### Route 6: 7 voyages (2026-10-21, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-29, 2026-10-31, 2026-11-02); perfect information 63.1-86.1 mt
+
+| Method | mean | median | sd | min | max | vs ours (mean) | ours lower on | beats const. SOG |
+|---|---|---|---|---|---|---|---|---|
+| Full graph, departure forecast 6 h before, no re-planning | +0.30% | +0.20% | 0.19 | +0.12% | +0.59% | +0.00% | 4/7 | 6/7 |
+| **Full graph, rolling horizon (ours)** | +0.30% | +0.22% | 0.26 | +0.08% | +0.82% | - | - | 6/7 |
+| Luo 0.5 h, piece by piece, rolling | +0.29% | +0.22% | 0.25 | +0.10% | +0.83% | -0.00% | 5/7 | 6/7 |
+| Luo 6 h, piece by piece, rolling | +0.45% | +0.38% | 0.31 | +0.24% | +1.14% | +0.16% | 6/7 | 5/7 |
+| Luo 0.5 h, start point, rolling | +0.98% | +0.88% | 0.27 | +0.59% | +1.43% | +0.68% | 7/7 | 1/7 |
+| Luo 6 h, start point (Luo et al.), rolling | +2.38% | +1.75% | 1.29 | +1.07% | +4.68% | +2.07% | 7/7 | 0/7 |
+| Constant SOG | +0.66% | +0.64% | 0.19 | +0.34% | +0.88% | +0.36% | 6/7 | - |
+
+Findings, route by route:
+
+- **Ours beats constant SOG on every voyage of Routes 3 and 4** (by 1.50% and 2.04% on average),
+  on 5 of 6 on Route 5 (0.71%) and 6 of 7 on Route 6 (0.36%). The exceptions are Route 5 from
+  23 Oct (+2.04% against +1.28%, the worst voyage for every method that uses a forecast) and
+  Route 6 from 21 Oct (+0.82% against +0.64%).
+- **Luo et al. as published** (6 h epochs, start-point pricing) is above constant SOG on every
+  voyage of every route, and above ours by 2.25% (Route 3), 3.68% (Route 4), 3.77% (Route 5)
+  and 2.07% (Route 6).
+- **Luo 0.5 h priced piece by piece ties the full graph on every route** (mean differences
+  -0.02% to +0.01%). Most of published Luo's loss is start-point pricing; the 6 h epochs add
+  0.11-0.59%.
+- **Re-planning pays only on Route 4** (+0.34% for the plan made 6 h before departure and sailed
+  unchanged, worse than rolling on 6 of 6). On Routes 3, 5 and 6 the two are within 0.02%.
+- Neighbouring voyages of a route overlap (48 h apart, 67-118 h long), so the 6-7 voyages per
+  route are not independent samples.

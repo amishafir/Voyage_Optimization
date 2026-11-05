@@ -68,32 +68,29 @@ def main():
     def pct(r, label):
         return 100 * (r[label] / r["perfect_info_mt"] - 1)
 
-    routes = sorted({r["route"] for r in rows})
-    n = {k: sum(r["route"] == k for r in rows) for k in routes}
-    print(f"{len(rows)} voyages: " + ", ".join(f"R{k} {n[k]}" for k in routes))
-    head = ["Method"] + [f"R{k} mean (n={n[k]})" for k in routes] + \
-        ["All: mean", "median", "sd", "min", "max", "beats const. SOG", "within 0.05% of ours"]
-    print("| " + " | ".join(head) + " |")
-    print("|" + "---|" * len(head))
+    # Every route is summarized on its own (routes differ in length, fuel and weather; no pooling).
     ours = "Full graph, rolling horizon (ours)"
-    for label, *_ in METHODS:
-        p = [pct(r, label) for r in rows]
-        by = [st.mean(pct(r, label) for r in rows if r["route"] == k) for k in routes]
-        beats = sum(r[label] < r["Constant SOG"] for r in rows)
-        near = sum(abs(r[label] / r[ours] - 1) <= 0.0005 for r in rows)
-        cells = [f"+{x:.2f}%" for x in by] + [f"+{st.mean(p):.2f}%", f"+{st.median(p):.2f}%",
-                                              f"{st.stdev(p):.2f}", f"{min(p):+.2f}%", f"{max(p):+.2f}%",
-                                              "-" if label == "Constant SOG" else f"{beats}/{len(rows)}",
-                                              f"{near}/{len(rows)}"]
-        print(f"| {label} | " + " | ".join(cells) + " |")
-    # Head to head: ours vs each method, per voyage
-    print()
-    for label, *_ in METHODS:
-        if label == ours:
-            continue
-        d = [100 * (r[label] / r[ours] - 1) for r in rows]
-        win = sum(x > 0 for x in d)
-        print(f"{label}: vs ours mean {st.mean(d):+.2f}%, ours lower on {win}/{len(rows)}")
+    routes = sorted({r["route"] for r in rows})
+    for k in routes:
+        rs = [r for r in rows if r["route"] == k]
+        pis = [r["perfect_info_mt"] for r in rs]
+        print(f"\n### Route {k}: {len(rs)} voyages ({', '.join(r['start'][:10] for r in rs)}); "
+              f"perfect information {min(pis):.1f}-{max(pis):.1f} mt\n")
+        head = ["Method", "mean", "median", "sd", "min", "max", "vs ours (mean)", "ours lower on",
+                "beats const. SOG"]
+        print("| " + " | ".join(head) + " |")
+        print("|" + "---|" * len(head))
+        for label, *_ in METHODS:
+            p = [pct(r, label) for r in rs]
+            d = [100 * (r[label] / r[ours] - 1) for r in rs]
+            beats = sum(r[label] < r["Constant SOG"] for r in rs)
+            cells = [f"{st.mean(p):+.2f}%", f"{st.median(p):+.2f}%", f"{st.stdev(p):.2f}",
+                     f"{min(p):+.2f}%", f"{max(p):+.2f}%",
+                     "-" if label == ours else f"{st.mean(d):+.2f}%",
+                     "-" if label == ours else f"{sum(x > 0 for x in d)}/{len(rs)}",
+                     "-" if label == "Constant SOG" else f"{beats}/{len(rs)}"]
+            name = f"**{label}**" if label == ours else label
+            print(f"| {name} | " + " | ".join(cells) + " |")
 
 
 if __name__ == "__main__":
