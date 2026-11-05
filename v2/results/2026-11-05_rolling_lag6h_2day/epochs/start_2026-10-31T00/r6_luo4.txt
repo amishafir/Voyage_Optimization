@@ -1,0 +1,35 @@
+Route    Route 6: Durban to Cape Town (Agulhas Current)  (/home/ami/voyage_collector/data/snapshots/2026-11-05_09Z/route6_runs.h5)
+Start    2026-10-31 00:00 UTC
+ETA      67.00 h = 268 steps, arrival by 2026-11-02 19:00 UTC
+Plan     449 subsegments, 805.9 NM, 197 wind cells, 233 current cells (mean SOG for the ETA 12.03 kn)
+Wind     run 2026-10-30T18  steps +0..+268 (68 h x 197 cells)
+         run 2026-10-31T00  steps +0..+268 (68 h x 197 cells)
+         run 2026-10-31T06  steps +24..+268 (62 h x 197 cells)
+         run 2026-10-31T12  steps +48..+268 (56 h x 197 cells)
+         run 2026-10-31T18  steps +72..+268 (50 h x 197 cells)
+         run 2026-11-01T00  steps +96..+268 (44 h x 197 cells)
+         run 2026-11-01T06  steps +120..+268 (38 h x 197 cells)
+         run 2026-11-01T12  steps +144..+268 (32 h x 197 cells)
+         run 2026-11-01T18  steps +168..+268 (26 h x 197 cells)
+         run 2026-11-02T00  steps +192..+268 (20 h x 197 cells)
+         run 2026-11-02T06  steps +216..+268 (14 h x 197 cells)
+         run 2026-11-02T12  steps +240..+268 (8 h x 197 cells)
+         run 2026-11-02T18  steps +264..+268 (2 h x 197 cells)
+Current  run 2026-10-30T00  steps +0..+268 (68 h x 233 cells)
+         run 2026-10-31T00  steps +0..+268 (68 h x 233 cells)
+         run 2026-11-01T00  steps +96..+268 (44 h x 233 cells)
+         run 2026-11-02T00  steps +192..+268 (20 h x 233 cells)
+
+Rolling  decisions at the start and every 6 h on the UTC clock, each with the forecast known 6 h before the block it plans (runs known from their start); SOG window 9.03-15.03 kn for every plan; fuel realized in the actual weather
+
+Luo 1 h, piece by piece
+         perfect information (planned in the actual weather):     68.909 mt
+         forecast 6 h before departure, no re-planning:           68.984 mt (+0.11%; planned 68.393)
+         rolling horizon, 12 decisions:                           69.047 mt (+0.20%; planned 69.182; solves 4.0 s)
+
+Luo 1 h, start point
+         perfect information (planned in the actual weather):     69.614 mt
+         forecast 6 h before departure, no re-planning:           69.573 mt (-0.06%; planned 65.585)
+         rolling horizon, 12 decisions:                           69.494 mt (-0.17%; planned 66.404; solves 0.4 s)
+
+Constant SOG 12.03 kn: 69.495 mt
